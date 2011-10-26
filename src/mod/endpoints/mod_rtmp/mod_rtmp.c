@@ -590,7 +590,7 @@ switch_call_cause_t rtmp_outgoing_channel(switch_core_session_t *session, switch
 		goto fail;
 	}
 	
-	if (!(*newsession = switch_core_session_request(rtmp_globals.rtmp_endpoint_interface, flags, SWITCH_CALL_DIRECTION_OUTBOUND, inpool))) {
+	if (!(*newsession = switch_core_session_request(rtmp_globals.rtmp_endpoint_interface, SWITCH_CALL_DIRECTION_OUTBOUND, flags, inpool))) {
 		goto fail;
 	}
 	
@@ -843,7 +843,7 @@ switch_call_cause_t rtmp_session_create_call(rtmp_session_t *rsession, switch_co
 	switch_channel_t *channel;
 	const char *dialplan, *context;
 	
-	if (!(*newsession = switch_core_session_request(rtmp_globals.rtmp_endpoint_interface, SOF_NONE, SWITCH_CALL_DIRECTION_INBOUND, NULL))) {
+	if (!(*newsession = switch_core_session_request(rtmp_globals.rtmp_endpoint_interface, SWITCH_CALL_DIRECTION_INBOUND, SOF_NONE, NULL))) {
 		return SWITCH_CAUSE_DESTINATION_OUT_OF_ORDER;
 	}
 
