@@ -614,8 +614,7 @@ static void clear_line(void)
 
 static void redisplay(void)
 {
-#ifdef WIN32
-#else
+#ifndef WIN32
 	const LineInfo *lf = el_line(el);
 	const char *c = lf->buffer;
 	if (!(write_str(prompt_str))) goto done;
@@ -1357,7 +1356,12 @@ int main(int argc, char *argv[])
 	}
 	global_handle = &handle;
 	global_profile = profile;
-	esl_thread_create_detached(msg_thread_run, &handle);
+
+	if (esl_thread_create_detached(msg_thread_run, &handle) != ESL_SUCCESS) {
+		printf("Error starting thread!\n");
+		esl_disconnect(&handle);
+		return 0;
+	}
 
 #ifdef HAVE_EDITLINE
 	el = el_init(__FILE__, stdin, stdout, stderr);

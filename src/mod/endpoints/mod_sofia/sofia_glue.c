@@ -1142,6 +1142,37 @@ sofia_transport_t sofia_glue_str2transport(const char *str)
 	return SOFIA_TRANSPORT_UNKNOWN;
 }
 
+enum tport_tls_verify_policy sofia_glue_str2tls_verify_policy(const char * str){
+	char *ptr_next;
+	int len;
+	enum tport_tls_verify_policy ret;
+	char *ptr_cur = (char *) str;
+	ret = TPTLS_VERIFY_NONE;
+
+	while (ptr_cur) {
+		if ((ptr_next = strchr(ptr_cur, '|'))) {
+			len = ptr_next++ - ptr_cur;
+		} else {
+			len = strlen(ptr_cur);
+		}
+		if (!strncasecmp(ptr_cur, "in",len)) {
+			ret |= TPTLS_VERIFY_IN;
+		} else if (!strncasecmp(ptr_cur, "out",len)) {
+			ret |= TPTLS_VERIFY_OUT;
+		} else if (!strncasecmp(ptr_cur, "all",len)) {
+			ret |= TPTLS_VERIFY_ALL;
+		} else if (!strncasecmp(ptr_cur, "subjects_in",len)) {
+			ret |= TPTLS_VERIFY_SUBJECTS_IN;
+		} else if (!strncasecmp(ptr_cur, "subjects_out",len)) {
+			ret |= TPTLS_VERIFY_SUBJECTS_OUT;
+		} else if (!strncasecmp(ptr_cur, "subjects_all",len)) {
+			ret |= TPTLS_VERIFY_SUBJECTS_ALL;
+		}
+		ptr_cur = ptr_next;
+	}
+	return ret;
+}
+
 char *sofia_glue_find_parameter_value(switch_core_session_t *session, const char *str, const char *param)
 {
 	const char *param_ptr;
@@ -2894,7 +2925,7 @@ switch_status_t sofia_glue_tech_set_codec(private_object_t *tech_pvt, int force)
 	tech_pvt->read_codec.agreed_pt = tech_pvt->agreed_pt;
 
 	if (force != 2) {
-		switch_core_session_set_read_codec(tech_pvt->session, &tech_pvt->read_codec);
+		switch_core_session_set_real_read_codec(tech_pvt->session, &tech_pvt->read_codec);
 		switch_core_session_set_write_codec(tech_pvt->session, &tech_pvt->write_codec);
 	}
 
@@ -5684,7 +5715,6 @@ static int recover_callback(void *pArg, int argc, char **argv, char **columnName
 int sofia_glue_recover(switch_bool_t flush)
 {
 	sofia_profile_t *profile;
-	char *sql;
 	int r = 0;
 	switch_console_callback_match_t *matches;
 
@@ -5693,34 +5723,44 @@ int sofia_glue_recover(switch_bool_t flush)
 		switch_console_callback_match_node_t *m;
 		for (m = matches->head; m; m = m->next) {
 			if ((profile = sofia_glue_find_profile(m->val))) {
-
-				struct recover_helper h = { 0 };
-				h.profile = profile;
-				h.total = 0;
-
-				sofia_clear_pflag_locked(profile, PFLAG_STANDBY);
-
-				if (flush) {
-					sql = switch_mprintf("delete from sip_recovery where profile_name='%q'", profile->name);
-					sofia_glue_execute_sql_now(profile, &sql, SWITCH_TRUE);
-				} else {
-
-					sql = switch_mprintf("select profile_name, hostname, uuid, metadata "
-										 "from sip_recovery where runtime_uuid!='%q' and profile_name='%q'", switch_core_get_uuid(), profile->name);
-
-					sofia_glue_execute_sql_callback(profile, profile->ireg_mutex, sql, recover_callback, &h);
-					r += h.total;
-					free(sql);
-					sql = NULL;
-
-					sql = switch_mprintf("delete "
-										 "from sip_recovery where runtime_uuid!='%q' and profile_name='%q'", switch_core_get_uuid(), profile->name);
-
-					sofia_glue_execute_sql_now(profile, &sql, SWITCH_TRUE);
-				}
+				r += sofia_glue_profile_recover(profile, flush);
 			}
 		}
 		switch_console_free_matches(&matches);
+	}
+	return r;
+}
+
+int sofia_glue_profile_recover(sofia_profile_t *profile, switch_bool_t flush)
+{
+	char *sql;				
+	int r = 0;
+
+	if (profile) {
+		struct recover_helper h = { 0 };
+		h.profile = profile;
+		h.total = 0;
+
+		sofia_clear_pflag_locked(profile, PFLAG_STANDBY);
+
+		if (flush) {
+			sql = switch_mprintf("delete from sip_recovery where profile_name='%q'", profile->name);
+			sofia_glue_execute_sql_now(profile, &sql, SWITCH_TRUE);
+		} else {
+
+			sql = switch_mprintf("select profile_name, hostname, uuid, metadata "
+								 "from sip_recovery where runtime_uuid!='%q' and profile_name='%q'", switch_core_get_uuid(), profile->name);
+
+			sofia_glue_execute_sql_callback(profile, profile->ireg_mutex, sql, recover_callback, &h);
+			r += h.total;
+			free(sql);
+			sql = NULL;
+
+			sql = switch_mprintf("delete "
+								 "from sip_recovery where runtime_uuid!='%q' and profile_name='%q'", switch_core_get_uuid(), profile->name);
+
+			sofia_glue_execute_sql_now(profile, &sql, SWITCH_TRUE);
+		}
 	}
 
 	return r;
@@ -5854,7 +5894,8 @@ int sofia_glue_init_sql(sofia_profile_t *profile)
 		"   mwi_user         VARCHAR(255),\n"
 		"   mwi_host         VARCHAR(255),\n"
 		"   orig_server_host VARCHAR(255),\n"
-		"   orig_hostname    VARCHAR(255)\n"
+		"   orig_hostname    VARCHAR(255),\n"
+		"   sub_host         VARCHAR(255)\n"
 		");\n";
 
 	char recovery_sql[] =
@@ -5971,6 +6012,7 @@ int sofia_glue_init_sql(sofia_profile_t *profile)
 		"create index sr_call_id on sip_registrations (call_id)",
 		"create index sr_sip_user on sip_registrations (sip_user)",
 		"create index sr_sip_host on sip_registrations (sip_host)",
+		"create index sr_sub_host on sip_registrations (sub_host)",
 		"create index sr_mwi_user on sip_registrations (mwi_user)",
 		"create index sr_mwi_host on sip_registrations (mwi_host)",
 		"create index sr_profile_name on sip_registrations (profile_name)",
@@ -6054,7 +6096,7 @@ int sofia_glue_init_sql(sofia_profile_t *profile)
 							  "or status like '%%TCP%%' or status like '%%TLS%%') and hostname='%q' "
 							  "and network_ip like '%%' and network_port like '%%' and sip_username "
 							  "like '%%' and mwi_user  like '%%' and mwi_host like '%%' "
-							  "and orig_server_host like '%%' and orig_hostname like '%%'", mod_sofia_globals.hostname);
+							  "and orig_server_host like '%%' and orig_hostname like '%%' and sub_host like '%%'", mod_sofia_globals.hostname);
 
 
 	switch_cache_db_test_reactive(dbh, test_sql, "drop table sip_registrations", reg_sql);
@@ -6512,6 +6554,7 @@ switch_status_t sofia_glue_send_notify(sofia_profile_t *profile, const char *use
 			   NUTAG_NEWSUB(1),
 			   TAG_IF(dst->route_uri, NUTAG_PROXY(route_uri)), TAG_IF(dst->route, SIPTAG_ROUTE_STR(dst->route)),
 			   TAG_IF(user_via, SIPTAG_VIA_STR(user_via)),
+			   SIPTAG_SUBSCRIPTION_STATE_STR("terminated;reason=noresource"),
 			   TAG_IF(event, SIPTAG_EVENT_STR(event)),
 			   TAG_IF(contenttype, SIPTAG_CONTENT_TYPE_STR(contenttype)), TAG_IF(body, SIPTAG_PAYLOAD_STR(body)), TAG_END());
 

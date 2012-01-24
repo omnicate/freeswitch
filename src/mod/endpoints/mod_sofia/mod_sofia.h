@@ -122,6 +122,7 @@ typedef struct private_object private_object_t;
 #include <sofia-sip/auth_module.h>
 #include <sofia-sip/su_md5.h>
 #include <sofia-sip/su_log.h>
+#include <sofia-sip/su_strlst.h>
 #include <sofia-sip/nea.h>
 #include <sofia-sip/msg_addr.h>
 #include <sofia-sip/tport_tag.h>
@@ -131,9 +132,7 @@ typedef struct private_object private_object_t;
 #include "sofia-sip/sip_parser.h"
 #include "sofia-sip/tport_tag.h"
 #include <sofia-sip/msg.h>
-#ifndef WIN32
 #include <sofia-sip/uniqueid.h>
-#endif
 
 typedef enum {
 	DTMF_2833,
@@ -248,7 +247,7 @@ typedef enum {
 	PFLAG_T38_PASSTHRU,
 	PFLAG_CID_IN_1XX,
 	PFLAG_IN_DIALOG_CHAT,
-	PFLAG_DEL_SUBS_ON_REG,
+	PFLAG_DEL_SUBS_ON_REG_REUSE,
 	PFLAG_IGNORE_183NOSDP,
 	PFLAG_PRESENCE_PROBE_ON_REGISTER,
 	PFLAG_PRESENCE_ON_REGISTER,
@@ -639,6 +638,16 @@ struct sofia_profile {
 	switch_mutex_t *gw_mutex;
 	uint32_t queued_events;
 	uint32_t cseq_base;
+	int tls_only;
+	int tls_verify_date;
+	enum tport_tls_verify_policy tls_verify_policy;
+	int tls_verify_depth;
+	char *tls_passphrase;
+	char *tls_verify_in_subjects_str;
+	su_strlst_t *tls_verify_in_subjects;
+	uint32_t sip_force_expires;
+	uint32_t sip_expires_max_deviation;
+	int ireg_seconds;
 };
 
 struct private_object {
@@ -1038,6 +1047,7 @@ void sofia_reg_release_gateway__(const char *file, const char *func, int line, s
 sofia_transport_t sofia_glue_via2transport(const sip_via_t * via);
 sofia_transport_t sofia_glue_url2transport(const url_t *url);
 sofia_transport_t sofia_glue_str2transport(const char *str);
+enum tport_tls_verify_policy sofia_glue_str2tls_verify_policy(const char * str);
 
 const char *sofia_glue_transport2str(const sofia_transport_t tp);
 char *sofia_glue_find_parameter(const char *str, const char *param);
@@ -1111,6 +1121,7 @@ int sofia_sla_supported(sip_t const *sip);
 void sofia_glue_tech_untrack(sofia_profile_t *profile, switch_core_session_t *session, switch_bool_t force);
 void sofia_glue_tech_track(sofia_profile_t *profile, switch_core_session_t *session);
 int sofia_glue_recover(switch_bool_t flush);
+int sofia_glue_profile_recover(sofia_profile_t *profile, switch_bool_t flush);
 void sofia_profile_destroy(sofia_profile_t *profile);
 switch_status_t sip_dig_function(_In_opt_z_ const char *cmd, _In_opt_ switch_core_session_t *session, _In_ switch_stream_handle_t *stream);
 const char *sofia_gateway_status_name(sofia_gateway_status_t status);

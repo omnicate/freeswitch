@@ -49,6 +49,9 @@
 #ifdef __APPLE__
 #include <util.h>
 #include <sys/ioctl.h>
+#elif defined(__FreeBSD__)
+#include <libutil.h>
+#include <termios.h>
 #else
 #include <pty.h>
 #endif
@@ -66,6 +69,7 @@
 #define bswap_16 OSSwapInt16
 #define bswap_32 OSSwapInt32
 #define bswap_64 OSSwapInt64
+#elif defined (__UCLIBC__)
 #else
 #define bswap_16(value)  \
 	((((value) & 0xff) << 8) | ((value) >> 8))
@@ -143,7 +147,7 @@ typedef struct modem modem_t;
 
 char *modem_state2name(int state);
 int modem_close(struct modem *fm);
-int modem_init(struct modem *fm, modem_control_handler_t control_handler);
+switch_status_t modem_init(struct modem *fm, modem_control_handler_t control_handler);
 
 #endif //MODEM_SUPPORT
 
