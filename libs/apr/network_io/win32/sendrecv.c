@@ -190,12 +190,18 @@ APR_DECLARE(apr_status_t) apr_socket_recvfrom(apr_sockaddr_t *from,
 {
     apr_ssize_t rv;
 
+    from->salen = sizeof(from->sa);
+
     rv = recvfrom(sock->socketdes, buf, (int)*len, flags, 
                   (struct sockaddr*)&from->sa, &from->salen);
     if (rv == SOCKET_ERROR) {
         (*len) = 0;
         return apr_get_netos_error();
     }
+
+    apr_sockaddr_vars_set(from, from->sa.sin.sin_family, 
+                          ntohs(from->sa.sin.sin_port));
+
     (*len) = rv;
     if (rv == 0 && sock->type == SOCK_STREAM)
         return APR_EOF;
@@ -204,6 +210,7 @@ APR_DECLARE(apr_status_t) apr_socket_recvfrom(apr_sockaddr_t *from,
 }
 
 
+#if APR_HAS_SENDFILE
 static apr_status_t collapse_iovec(char **off, apr_size_t *len, 
                                    struct iovec *iovec, int numvec, 
                                    char *buf, apr_size_t buflen)
@@ -234,7 +241,6 @@ static apr_status_t collapse_iovec(char **off, apr_size_t *len,
 }
 
 
-#if APR_HAS_SENDFILE
 /*
  * apr_status_t apr_socket_sendfile(apr_socket_t *, apr_file_t *, apr_hdtr_t *, 
  *                                 apr_off_t *, apr_size_t *, apr_int32_t flags)
@@ -260,7 +266,6 @@ APR_DECLARE(apr_status_t) apr_socket_sendfile(apr_socket_t *sock,
     DWORD dwFlags = 0;
     apr_size_t nbytes;
     TRANSMIT_FILE_BUFFERS tfb, *ptfb = NULL;
-    int ptr = 0;
     apr_size_t bytes_to_send;   /* Bytes to send out of the file (not including headers) */
     int disconnected = 0;
     int sendv_trailers = 0;

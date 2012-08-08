@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "win32/apr_arch_threadproc.h"
+#include "apr_arch_threadproc.h"
 #include "apr_thread_proc.h"
 #include "apr_general.h"
 #include "apr_lib.h"
@@ -41,7 +41,7 @@ APR_DECLARE(apr_status_t) apr_threadkey_private_create(apr_threadkey_t **key,
 APR_DECLARE(apr_status_t) apr_threadkey_private_get(void **new,
                                                  apr_threadkey_t *key)
 {
-    if ((*new) = TlsGetValue(key->key)) {
+    if (((*new) = TlsGetValue(key->key))) {
         return APR_SUCCESS;
     }
     return apr_get_os_error();

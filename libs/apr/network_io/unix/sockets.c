@@ -31,12 +31,20 @@ static char generic_inaddr_any[16] = {0}; /* big enough for IPv4 or IPv6 */
 static apr_status_t socket_cleanup(void *sock)
 {
     apr_socket_t *thesocket = sock;
+    int sd = thesocket->socketdes;
 
-    if (close(thesocket->socketdes) == 0) {
-        thesocket->socketdes = -1;
+    /* Set socket descriptor to -1 before close(), so that there is no
+     * chance of returning an already closed FD from apr_os_sock_get().
+     */
+    thesocket->socketdes = -1;
+
+    if (close(sd) == 0) {
         return APR_SUCCESS;
     }
     else {
+        /* Restore, close() was not successful. */
+        thesocket->socketdes = sd;
+
         return errno;
     }
 }
@@ -83,7 +91,11 @@ apr_status_t apr_socket_protocol_get(apr_socket_t *sock, int *protocol)
 apr_status_t apr_socket_create(apr_socket_t **new, int ofamily, int type,
                                int protocol, apr_pool_t *cont)
 {
-    int family = ofamily;
+    int family = ofamily, flags = 0;
+
+#ifdef HAVE_SOCK_CLOEXEC
+    flags |= SOCK_CLOEXEC;
+#endif
 
     if (family == APR_UNSPEC) {
 #if APR_HAVE_IPV6
@@ -96,19 +108,19 @@ apr_status_t apr_socket_create(apr_socket_t **new, int ofamily, int type,
     alloc_socket(new, cont);
 
 #ifndef BEOS_R5
-    (*new)->socketdes = socket(family, type, protocol);
+    (*new)->socketdes = socket(family, type|flags, protocol);
 #else
     /* For some reason BeOS R5 has an unconventional protocol numbering,
      * so we need to translate here. */
     switch (protocol) {
     case 0:
-        (*new)->socketdes = socket(family, type, 0);
+        (*new)->socketdes = socket(family, type|flags, 0);
         break;
     case APR_PROTO_TCP:
-        (*new)->socketdes = socket(family, type, IPPROTO_TCP);
+        (*new)->socketdes = socket(family, type|flags, IPPROTO_TCP);
         break;
     case APR_PROTO_UDP:
-        (*new)->socketdes = socket(family, type, IPPROTO_UDP);
+        (*new)->socketdes = socket(family, type|flags, IPPROTO_UDP);
         break;
     case APR_PROTO_SCTP:
     default:
@@ -121,7 +133,7 @@ apr_status_t apr_socket_create(apr_socket_t **new, int ofamily, int type,
 #if APR_HAVE_IPV6
     if ((*new)->socketdes < 0 && ofamily == APR_UNSPEC) {
         family = APR_INET;
-        (*new)->socketdes = socket(family, type, protocol);
+        (*new)->socketdes = socket(family, type|flags, protocol);
     }
 #endif
 
@@ -129,6 +141,19 @@ apr_status_t apr_socket_create(apr_socket_t **new, int ofamily, int type,
         return errno;
     }
     set_socket_vars(*new, family, type, protocol);
+
+#ifndef HAVE_SOCK_CLOEXEC
+    {
+        int flags;
+
+        if ((flags = fcntl((*new)->socketdes, F_GETFD)) == -1)
+            return errno;
+
+        flags |= FD_CLOEXEC;
+        if (fcntl((*new)->socketdes, F_SETFD, flags) == -1)
+            return errno;
+    }
+#endif
 
     (*new)->timeout = -1;
     (*new)->inherit = 0;
@@ -176,29 +201,47 @@ apr_status_t apr_socket_listen(apr_socket_t *sock, apr_int32_t backlog)
 apr_status_t apr_socket_accept(apr_socket_t **new, apr_socket_t *sock,
                                apr_pool_t *connection_context)
 {
+    int s;
+    apr_sockaddr_t sa;
+
+    sa.salen = sizeof(sa.sa);
+
+#ifdef HAVE_ACCEPT4
+    s = accept4(sock->socketdes, (struct sockaddr *)&sa.sa, &sa.salen, SOCK_CLOEXEC);
+#else
+    s = accept(sock->socketdes, (struct sockaddr *)&sa.sa, &sa.salen);
+#endif
+
+    if (s < 0) {
+        return errno;
+    }
+#ifdef TPF
+    if (s == 0) { 
+        /* 0 is an invalid socket for TPF */
+        return APR_EINTR;
+    }
+#endif
     alloc_socket(new, connection_context);
-    set_socket_vars(*new, sock->local_addr->sa.sin.sin_family, SOCK_STREAM, sock->protocol);
+
+    /* Set up socket variables -- note that it may be possible for
+     * *new to be an AF_INET socket when sock is AF_INET6 in some
+     * dual-stack configurations, so ensure that the remote_/local_addr
+     * structures are adjusted for the family of the accepted
+     * socket: */
+    set_socket_vars(*new, sa.sa.sin.sin_family, SOCK_STREAM, sock->protocol);
 
 #ifndef HAVE_POLL
     (*new)->connected = 1;
 #endif
     (*new)->timeout = -1;
-    
-    (*new)->socketdes = accept(sock->socketdes, 
-                               (struct sockaddr *)&(*new)->remote_addr->sa,
-                               &(*new)->remote_addr->salen);
-
-    if ((*new)->socketdes < 0) {
-        return errno;
-    }
-#ifdef TPF
-    if ((*new)->socketdes == 0) { 
-        /* 0 is an invalid socket for TPF */
-        return APR_EINTR;
-    }
-#endif
 
     (*new)->remote_addr_unknown = 0;
+
+    (*new)->socketdes = s;
+
+    /* Copy in peer's address. */
+    (*new)->remote_addr->sa = sa.sa;
+    (*new)->remote_addr->salen = sa.salen;
 
     *(*new)->local_addr = *sock->local_addr;
 
@@ -247,6 +290,19 @@ apr_status_t apr_socket_accept(apr_socket_t **new, apr_socket_t *sock,
         (*new)->local_interface_unknown = 1;
     }
 
+#ifndef HAVE_ACCEPT4
+    {
+        int flags;
+
+        if ((flags = fcntl((*new)->socketdes, F_GETFD)) == -1)
+            return errno;
+
+        flags |= FD_CLOEXEC;
+        if (fcntl((*new)->socketdes, F_SETFD, flags) == -1)
+            return errno;
+    }
+#endif
+
     (*new)->inherit = 0;
     apr_pool_cleanup_register((*new)->pool, (void *)(*new), socket_cleanup,
                               socket_cleanup);
@@ -288,18 +344,18 @@ apr_status_t apr_socket_connect(apr_socket_t *sock, apr_sockaddr_t *sa)
 #endif /* SO_ERROR */
     }
 
-    if (rc == -1 && errno != EISCONN) {
-        return errno;
-    }
 
     if (memcmp(sa->ipaddr_ptr, generic_inaddr_any, sa->ipaddr_len)) {
         /* A real remote address was passed in.  If the unspecified
          * address was used, the actual remote addr will have to be
          * determined using getpeername() if required. */
-        /* ### this should probably be a structure copy + fixup as per
-         * _accept()'s handling of local_addr */
-        sock->remote_addr = sa;
         sock->remote_addr_unknown = 0;
+
+        /* Copy the address structure details in. */
+        sock->remote_addr->sa = sa->sa;
+        sock->remote_addr->salen = sa->salen;
+        /* Adjust ipaddr_ptr et al. */
+        apr_sockaddr_vars_set(sock->remote_addr, sa->family, sa->port);
     }
 
     if (sock->local_addr->port == 0) {
@@ -314,6 +370,11 @@ apr_status_t apr_socket_connect(apr_socket_t *sock, apr_sockaddr_t *sa)
          */
         sock->local_interface_unknown = 1;
     }
+
+    if (rc == -1 && errno != EISCONN) {
+        return errno;
+    }
+
 #ifndef HAVE_POLL
     sock->connected=1;
 #endif

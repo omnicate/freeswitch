@@ -18,18 +18,19 @@
 #include "apr_general.h"
 #include "apr_pools.h"
 #include "apr_signal.h"
-#include "ShellAPI.h"
+#include "shellapi.h"
 
 #include "apr_arch_misc.h"       /* for WSAHighByte / WSALowByte */
 #include "wchar.h"
-#include "apr_arch_file_io.h"
-#include "crtdbg.h"
+#include "apr_arch_file_io.h"    /* bring in unicode-ness */
+#include "apr_arch_threadproc.h" /* bring in apr_threadproc_init */
 #include "assert.h"
 
 /* This symbol is _private_, although it must be exported.
  */
 int APR_DECLARE_DATA apr_app_init_complete = 0;
 
+#if !defined(_WIN32_WCE)
 /* Used by apr_app_initialize to reprocess the environment
  *
  * An internal apr function to convert a double-null terminated set
@@ -44,7 +45,9 @@ static int warrsztoastr(const char * const * *retarr,
     apr_size_t totlen;
     apr_size_t newlen;
     apr_size_t wsize;
-    char **newarr;
+    char **env;
+    char *pstrs;
+    char *strs;
     int arg;
 
     if (args < 0) {
@@ -54,39 +57,43 @@ static int warrsztoastr(const char * const * *retarr,
     }
     wsize = 1 + wch - arrsz;
 
-    newarr = _malloc_dbg((args + 1) * sizeof(char *),
-                         _CRT_BLOCK, __FILE__, __LINE__);
-
-    /* This is a safe max allocation, we will realloc after
-     * processing and return the excess to the free store.
+    /* This is a safe max allocation, we will alloc each
+     * string exactly after processing and return this
+     * temporary buffer to the free store.
      * 3 ucs bytes hold any single wchar_t value (16 bits)
      * 4 ucs bytes will hold a wchar_t pair value (20 bits)
      */
     newlen = totlen = wsize * 3 + 1;
-    newarr[0] = _malloc_dbg(newlen * sizeof(char),
-                            _CRT_BLOCK, __FILE__, __LINE__);
+    pstrs = strs = apr_malloc_dbg(newlen * sizeof(char),
+                                  __FILE__, __LINE__);
 
-    (void)apr_conv_ucs2_to_utf8(arrsz, &wsize,
-                                newarr[0], &newlen);
+    (void)apr_conv_ucs2_to_utf8(arrsz, &wsize, strs, &newlen);
 
     assert(newlen && !wsize);
-    /* Return to the free store if the heap realloc is the least bit optimized
-     */
-    newarr[0] = _realloc_dbg(newarr[0], totlen - newlen,
-                             _CRT_BLOCK, __FILE__, __LINE__);
 
-    for (arg = 1; arg < args; ++arg) {
-        newarr[arg] = newarr[arg - 1] + 2;
-        while (*(newarr[arg]++)) {
-            /* continue */;
-        }
+    *retarr = env = apr_malloc_dbg((args + 1) * sizeof(char*),
+                                   __FILE__, __LINE__);
+    for (arg = 0; arg < args; ++arg) {
+        char* p = pstrs;
+        int len = 0;
+        while (*p++)
+            ++len;
+        len += 1;
+
+        *env = apr_malloc_dbg(len * sizeof(char),
+                              __FILE__, __LINE__);
+        memcpy(*env, pstrs, len * sizeof(char));
+
+        pstrs += len;
+        ++env;
     }
 
-    newarr[arg] = NULL;
+    *env = NULL;
+    free(strs);
 
-    *retarr = newarr;
     return args;
 }
+#endif
 
 /* Reprocess the arguments to main() for a completely apr-ized application
  */
@@ -101,7 +108,9 @@ APR_DECLARE(apr_status_t) apr_app_initialize(int *argc,
         return rv;
     }
 
-#if APR_HAS_UNICODE_FS
+#if defined(_WIN32_WCE)
+    apr_app_init_complete = 1;
+#elif APR_HAS_UNICODE_FS
     IF_WIN_OS_IS_UNICODE
     {
         apr_wchar_t **wstrs;
@@ -128,8 +137,8 @@ APR_DECLARE(apr_status_t) apr_app_initialize(int *argc,
         dupenv = warrsztoastr(&_environ, sysstr, -1);
 
         if (env) {
-            *env = _malloc_dbg((dupenv + 1) * sizeof (char *),
-                               _CRT_BLOCK, __FILE__, __LINE__ );
+            *env = apr_malloc_dbg((dupenv + 1) * sizeof (char *),
+                                  __FILE__, __LINE__ );
             memcpy((void*)*env, _environ, (dupenv + 1) * sizeof (char *));
         }
         else {
@@ -200,6 +209,8 @@ APR_DECLARE(apr_status_t) apr_initialize(void)
     }
 
     apr_signal_init(pool);
+
+    apr_threadproc_init(pool);
 
     return APR_SUCCESS;
 }

@@ -125,7 +125,7 @@ static char *apr_error_string(apr_status_t statcode)
     case APR_EABOVEROOT:
         return "The given path was above the root path";
     case APR_EBADPATH:
-        return "The given path misformatted or contained invalid characters";
+        return "The given path is misformatted or contained invalid characters";
     case APR_EPATHWILD:
         return "The given path contained wildcard characters";
     case APR_EPROC_UNKNOWN:
@@ -162,7 +162,7 @@ static char *apr_os_strerror(char* buf, apr_size_t bufsize, int err)
       pos = result;
   
       if (len >= sizeof(result))
-        len = sizeof(result-1);
+        len = sizeof(result) - 1;
 
       for (c=0; c<len; c++) {
 	  /* skip multiple whitespace */
@@ -189,56 +189,56 @@ static const struct {
     apr_status_t code;
     const char *msg;
 } gaErrorList[] = {
-    WSAEINTR,           "Interrupted system call",
-    WSAEBADF,           "Bad file number",
-    WSAEACCES,          "Permission denied",
-    WSAEFAULT,          "Bad address",
-    WSAEINVAL,          "Invalid argument",
-    WSAEMFILE,          "Too many open sockets",
-    WSAEWOULDBLOCK,     "Operation would block",
-    WSAEINPROGRESS,     "Operation now in progress",
-    WSAEALREADY,        "Operation already in progress",
-    WSAENOTSOCK,        "Socket operation on non-socket",
-    WSAEDESTADDRREQ,    "Destination address required",
-    WSAEMSGSIZE,        "Message too long",
-    WSAEPROTOTYPE,      "Protocol wrong type for socket",
-    WSAENOPROTOOPT,     "Bad protocol option",
-    WSAEPROTONOSUPPORT, "Protocol not supported",
-    WSAESOCKTNOSUPPORT, "Socket type not supported",
-    WSAEOPNOTSUPP,      "Operation not supported on socket",
-    WSAEPFNOSUPPORT,    "Protocol family not supported",
-    WSAEAFNOSUPPORT,    "Address family not supported",
-    WSAEADDRINUSE,      "Address already in use",
-    WSAEADDRNOTAVAIL,   "Can't assign requested address",
-    WSAENETDOWN,        "Network is down",
-    WSAENETUNREACH,     "Network is unreachable",
-    WSAENETRESET,       "Net connection reset",
-    WSAECONNABORTED,    "Software caused connection abort",
-    WSAECONNRESET,      "Connection reset by peer",
-    WSAENOBUFS,         "No buffer space available",
-    WSAEISCONN,         "Socket is already connected",
-    WSAENOTCONN,        "Socket is not connected",
-    WSAESHUTDOWN,       "Can't send after socket shutdown",
-    WSAETOOMANYREFS,    "Too many references, can't splice",
-    WSAETIMEDOUT,       "Connection timed out",
-    WSAECONNREFUSED,    "Connection refused",
-    WSAELOOP,           "Too many levels of symbolic links",
-    WSAENAMETOOLONG,    "File name too long",
-    WSAEHOSTDOWN,       "Host is down",
-    WSAEHOSTUNREACH,    "No route to host",
-    WSAENOTEMPTY,       "Directory not empty",
-    WSAEPROCLIM,        "Too many processes",
-    WSAEUSERS,          "Too many users",
-    WSAEDQUOT,          "Disc quota exceeded",
-    WSAESTALE,          "Stale NFS file handle",
-    WSAEREMOTE,         "Too many levels of remote in path",
-    WSASYSNOTREADY,     "Network system is unavailable",
-    WSAVERNOTSUPPORTED, "Winsock version out of range",
-    WSANOTINITIALISED,  "WSAStartup not yet called",
-    WSAEDISCON,         "Graceful shutdown in progress",
-    WSAHOST_NOT_FOUND,  "Host not found",
-    WSANO_DATA,         "No host data of that type was found",
-    0,                  NULL
+    {WSAEINTR,           "Interrupted system call"},
+    {WSAEBADF,           "Bad file number"},
+    {WSAEACCES,          "Permission denied"},
+    {WSAEFAULT,          "Bad address"},
+    {WSAEINVAL,          "Invalid argument"},
+    {WSAEMFILE,          "Too many open sockets"},
+    {WSAEWOULDBLOCK,     "Operation would block"},
+    {WSAEINPROGRESS,     "Operation now in progress"},
+    {WSAEALREADY,        "Operation already in progress"},
+    {WSAENOTSOCK,        "Socket operation on non-socket"},
+    {WSAEDESTADDRREQ,    "Destination address required"},
+    {WSAEMSGSIZE,        "Message too long"},
+    {WSAEPROTOTYPE,      "Protocol wrong type for socket"},
+    {WSAENOPROTOOPT,     "Bad protocol option"},
+    {WSAEPROTONOSUPPORT, "Protocol not supported"},
+    {WSAESOCKTNOSUPPORT, "Socket type not supported"},
+    {WSAEOPNOTSUPP,      "Operation not supported on socket"},
+    {WSAEPFNOSUPPORT,    "Protocol family not supported"},
+    {WSAEAFNOSUPPORT,    "Address family not supported"},
+    {WSAEADDRINUSE,      "Address already in use"},
+    {WSAEADDRNOTAVAIL,   "Can't assign requested address"},
+    {WSAENETDOWN,        "Network is down"},
+    {WSAENETUNREACH,     "Network is unreachable"},
+    {WSAENETRESET,       "Net connection reset"},
+    {WSAECONNABORTED,    "Software caused connection abort"},
+    {WSAECONNRESET,      "Connection reset by peer"},
+    {WSAENOBUFS,         "No buffer space available"},
+    {WSAEISCONN,         "Socket is already connected"},
+    {WSAENOTCONN,        "Socket is not connected"},
+    {WSAESHUTDOWN,       "Can't send after socket shutdown"},
+    {WSAETOOMANYREFS,    "Too many references, can't splice"},
+    {WSAETIMEDOUT,       "Connection timed out"},
+    {WSAECONNREFUSED,    "Connection refused"},
+    {WSAELOOP,           "Too many levels of symbolic links"},
+    {WSAENAMETOOLONG,    "File name too long"},
+    {WSAEHOSTDOWN,       "Host is down"},
+    {WSAEHOSTUNREACH,    "No route to host"},
+    {WSAENOTEMPTY,       "Directory not empty"},
+    {WSAEPROCLIM,        "Too many processes"},
+    {WSAEUSERS,          "Too many users"},
+    {WSAEDQUOT,          "Disc quota exceeded"},
+    {WSAESTALE,          "Stale NFS file handle"},
+    {WSAEREMOTE,         "Too many levels of remote in path"},
+    {WSASYSNOTREADY,     "Network system is unavailable"},
+    {WSAVERNOTSUPPORTED, "Winsock version out of range"},
+    {WSANOTINITIALISED,  "WSAStartup not yet called"},
+    {WSAEDISCON,         "Graceful shutdown in progress"},
+    {WSAHOST_NOT_FOUND,  "Host not found"},
+    {WSANO_DATA,         "No host data of that type was found"},
+    {0,                  NULL}
 };
 
 
@@ -247,14 +247,34 @@ static char *apr_os_strerror(char *buf, apr_size_t bufsize, apr_status_t errcode
     apr_size_t len=0, i;
 
 #ifndef NETWARE
-    len = FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM 
+#ifndef _WIN32_WCE
+    len = FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM 
                       | FORMAT_MESSAGE_IGNORE_INSERTS,
                         NULL,
                         errcode,
                         MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), /* Default language */
-                        (LPTSTR) buf,
+                        buf,
                         (DWORD)bufsize,
                         NULL);
+#else /* _WIN32_WCE speaks unicode */
+     LPTSTR msg = (LPTSTR) buf;
+     len = FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM 
+                       | FORMAT_MESSAGE_IGNORE_INSERTS,
+                         NULL,
+                         errcode,
+                         MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), /* Default language */
+                         msg,
+                         (DWORD) (bufsize/sizeof(TCHAR)),
+                         NULL);
+     /* in-place convert to US-ASCII, substituting '?' for non ASCII   */
+     for(i = 0; i <= len; i++) {
+        if (msg[i] < 0x80 && msg[i] >= 0) {
+            buf[i] = (char) msg[i];
+        } else {
+            buf[i] = '?';
+        }
+    }
+#endif
 #endif
 
     if (!len) {

@@ -20,9 +20,6 @@
 #include "apr_network_io.h"
 #include "apr_general.h"
 #include "apr_poll.h"
-#ifdef _MSC_VER
-#undef MCAST_JOIN_SOURCE_GROUP
-#endif
 
 typedef struct sock_userdata_t sock_userdata_t;
 struct sock_userdata_t {
@@ -67,8 +64,9 @@ typedef struct _WSABUF {
 } WSABUF, FAR * LPWSABUF;
 #endif
 #else
-/* Not sure if this is the right place to define this */
+#ifdef _MSC_VER
 #define HAVE_STRUCT_IPMREQ
+#endif
 #endif
 
 apr_status_t status_from_res_error(int);

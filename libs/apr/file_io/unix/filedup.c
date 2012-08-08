@@ -25,13 +25,36 @@ static apr_status_t file_dup(apr_file_t **new_file,
                              int which_dup)
 {
     int rv;
-    
+#ifdef HAVE_DUP3
+    int flags = 0;
+#endif
+
     if (which_dup == 2) {
         if ((*new_file) == NULL) {
             /* We can't dup2 unless we have a valid new_file */
             return APR_EINVAL;
         }
+#ifdef HAVE_DUP3
+        if (!((*new_file)->flags & (APR_FOPEN_NOCLEANUP|APR_INHERIT)))
+            flags |= O_CLOEXEC;
+        rv = dup3(old_file->filedes, (*new_file)->filedes, flags);
+#else
         rv = dup2(old_file->filedes, (*new_file)->filedes);
+        if (!((*new_file)->flags & (APR_FOPEN_NOCLEANUP|APR_INHERIT))) {
+            int flags;
+
+            if (rv == -1)
+                return errno;
+
+            if ((flags = fcntl((*new_file)->filedes, F_GETFD)) == -1)
+                return errno;
+
+            flags |= FD_CLOEXEC;
+            if (fcntl((*new_file)->filedes, F_SETFD, flags) == -1)
+                return errno;
+
+        }
+#endif
     } else {
         rv = dup(old_file->filedes);
     }
@@ -62,7 +85,8 @@ static apr_status_t file_dup(apr_file_t **new_file,
      * got one.
      */
     if ((*new_file)->buffered && !(*new_file)->buffer) {
-        (*new_file)->buffer = apr_palloc(p, APR_FILE_BUFSIZE);
+        (*new_file)->buffer = apr_palloc(p, old_file->bufsize);
+        (*new_file)->bufsize = old_file->bufsize;
     }
 
     /* this is the way dup() works */
@@ -82,16 +106,16 @@ static apr_status_t file_dup(apr_file_t **new_file,
     }
 
     /* apr_file_dup() retains all old_file flags with the exceptions
-     * of APR_INHERIT and APR_FILE_NOCLEANUP.
+     * of APR_INHERIT and APR_FOPEN_NOCLEANUP.
      * The user must call apr_file_inherit_set() on the dupped 
      * apr_file_t when desired.
      */
     (*new_file)->flags = old_file->flags
-                       & ~(APR_INHERIT | APR_FILE_NOCLEANUP);
+                       & ~(APR_INHERIT | APR_FOPEN_NOCLEANUP);
 
     apr_pool_cleanup_register((*new_file)->pool, (void *)(*new_file),
                               apr_unix_file_cleanup, 
-                              apr_unix_file_cleanup);
+                              apr_unix_child_file_cleanup);
 #ifndef WAITIO_USES_POLL
     /* Start out with no pollset.  apr_wait_for_io_or_timeout() will
      * initialize the pollset if needed.
@@ -121,7 +145,8 @@ APR_DECLARE(apr_status_t) apr_file_setaside(apr_file_t **new_file,
     memcpy(*new_file, old_file, sizeof(apr_file_t));
     (*new_file)->pool = p;
     if (old_file->buffered) {
-        (*new_file)->buffer = apr_palloc(p, APR_FILE_BUFSIZE);
+        (*new_file)->buffer = apr_palloc(p, old_file->bufsize);
+        (*new_file)->bufsize = old_file->bufsize;
         if (old_file->direction == 1) {
             memcpy((*new_file)->buffer, old_file->buffer, old_file->bufpos);
         }
@@ -139,12 +164,12 @@ APR_DECLARE(apr_status_t) apr_file_setaside(apr_file_t **new_file,
     if (old_file->fname) {
         (*new_file)->fname = apr_pstrdup(p, old_file->fname);
     }
-    if (!(old_file->flags & APR_FILE_NOCLEANUP)) {
+    if (!(old_file->flags & APR_FOPEN_NOCLEANUP)) {
         apr_pool_cleanup_register(p, (void *)(*new_file), 
                                   apr_unix_file_cleanup,
                                   ((*new_file)->flags & APR_INHERIT)
                                      ? apr_pool_cleanup_null
-                                     : apr_unix_file_cleanup);
+                                     : apr_unix_child_file_cleanup);
     }
 
     old_file->filedes = -1;

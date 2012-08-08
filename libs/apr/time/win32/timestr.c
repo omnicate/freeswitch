@@ -14,9 +14,13 @@
  * limitations under the License.
  */
 
-#include "win32/apr_arch_atime.h"
+#include "apr_arch_atime.h"
 #include "apr_portable.h"
 #include "apr_strings.h"
+
+#if APR_HAVE_STDLIB_H
+#include <stdlib.h>
+#endif
 
 APR_DECLARE_DATA const char apr_month_snames[12][4] =
 {
@@ -120,8 +124,8 @@ APR_DECLARE(apr_status_t) apr_ctime(char *date_str, apr_time_t t)
 
 #ifndef _WIN32_WCE
 
-apr_size_t win32_strftime_extra(char *s, size_t max, const char *format,
-                                const struct tm *tm) 
+static apr_size_t win32_strftime_extra(char *s, size_t max, const char *format,
+                                       const struct tm *tm) 
 {
    /* If the new format string is bigger than max, the result string won't fit
     * anyway. If format strings are added, made sure the padding below is

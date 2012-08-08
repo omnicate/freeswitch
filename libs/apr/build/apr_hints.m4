@@ -35,7 +35,7 @@ dnl
 dnl  Generally, we force the setting of CC, and add flags
 dnl  to CFLAGS, CPPFLAGS, LIBS and LDFLAGS. 
 dnl
-AC_DEFUN([APR_PRELOAD], [
+AC_DEFUN(APR_PRELOAD, [
 if test "x$apr_preload_done" != "xyes" ; then
 
   apr_preload_done="yes"
@@ -97,12 +97,13 @@ if test "x$apr_preload_done" != "xyes" ; then
 	APR_SETVAR(SHELL, [sh])
 	APR_SETIFNULL(apr_gethostbyname_is_thread_safe, [yes])
 	APR_SETIFNULL(apr_gethostbyaddr_is_thread_safe, [yes])
+	APR_SETIFNULL(apr_getservbyname_is_thread_safe, [yes])
 	;;
     *-hi-hiux)
 	APR_ADDTO(CPPFLAGS, [-DHIUX])
 	;;
     *-hp-hpux11.*)
-	APR_ADDTO(CPPFLAGS, [-DHPUX11 -D_REENTRANT -D_XOPEN_SOURCE_EXTENDED])
+	APR_ADDTO(CPPFLAGS, [-DHPUX11 -D_REENTRANT -D_HPUX_SOURCE])
 	;;
     *-hp-hpux10.*)
  	case $host in
@@ -117,7 +118,7 @@ dnl	       # Not a problem in 10.20.  Otherwise, who knows?
     *-hp-hpux*)
 	APR_ADDTO(CPPFLAGS, [-DHPUX -D_REENTRANT])
 	;;
-    *-linux-*)
+    *-linux*)
         case `uname -r` in
 	    2.* )  APR_ADDTO(CPPFLAGS, [-DLINUX=2])
 	           ;;
@@ -176,6 +177,9 @@ dnl	       # Not a problem in 10.20.  Otherwise, who knows?
           APR_SETIFNULL(ac_cv_func_kqueue, no)
         fi
 	;;
+    *-k*bsd*-gnu)
+        APR_ADDTO(CPPFLAGS, [-D_REENTRANT -D_GNU_SOURCE])
+        ;;
     *-next-nextstep*)
 	APR_SETIFNULL(CFLAGS, [-O])
 	APR_ADDTO(CPPFLAGS, [-DNEXT])
@@ -188,14 +192,21 @@ dnl	       # Not a problem in 10.20.  Otherwise, who knows?
 	APR_ADDTO(CPPFLAGS, [-DRHAPSODY])
 	;;
     *-apple-darwin*)
-	APR_ADDTO(CPPFLAGS, [-DDARWIN -DSIGPROCMASK_SETS_THREAD_MASK -no-cpp-precomp])
-	APR_SETIFNULL(apr_posixsem_is_global, [yes])
-        APR_SETIFNULL(ac_cv_func_poll, [no]) # See issue 34332
-
-        # kqueue is broken on OS X, the poll tests work, but the socket tests
-        # hang when it's turned on.  if you decide to reenable this please be
-        # sure to test that ALL the tests continue to work with it turned on.
-        APR_SETIFNULL(ac_cv_func_kqueue, [no]) 
+        APR_ADDTO(CPPFLAGS, [-DDARWIN -DSIGPROCMASK_SETS_THREAD_MASK -no-cpp-precomp])
+        APR_SETIFNULL(apr_posixsem_is_global, [yes])
+        case $host in
+            *-apple-darwin[[1-9]].*)
+                # APR's use of kqueue has triggered kernel panics for some
+                # 10.5.x (Darwin 9.x) users when running the entire test suite.
+                # In 10.4.x, use of kqueue would cause the socket tests to hang.
+                # 10.6+ (Darwin 10.x is supposed to fix the KQueue issues
+                APR_SETIFNULL(ac_cv_func_kqueue, [no]) 
+                APR_SETIFNULL(ac_cv_func_poll, [no]) # See issue 34332
+            ;;
+            *-apple-darwin1[[01]].*)
+                APR_ADDTO(CPPFLAGS, [-DDARWIN_10])
+            ;;
+        esac
 	;;
     *-dec-osf*)
 	APR_ADDTO(CPPFLAGS, [-DOSF1])
@@ -235,7 +246,14 @@ dnl	       # Not a problem in 10.20.  Otherwise, who knows?
     *-solaris2*)
     	PLATOSVERS=`echo $host | sed 's/^.*solaris2.//'`
 	APR_ADDTO(CPPFLAGS, [-DSOLARIS2=$PLATOSVERS -D_POSIX_PTHREAD_SEMANTICS -D_REENTRANT])
-        APR_SETIFNULL(apr_lock_method, [USE_FCNTL_SERIALIZE])
+        if test $PLATOSVERS -ge 10; then
+            APR_SETIFNULL(apr_lock_method, [USE_PROC_PTHREAD_SERIALIZE])
+        else
+            APR_SETIFNULL(apr_lock_method, [USE_FCNTL_SERIALIZE])
+        fi
+        # readdir64_r error handling seems broken on Solaris (at least
+        # up till 2.8) -- it will return -1 at end-of-directory.
+        APR_SETIFNULL(ac_cv_func_readdir64_r, [no])
 	;;
     *-sunos4*)
 	APR_ADDTO(CPPFLAGS, [-DSUNOS4])
@@ -387,7 +405,7 @@ dnl	       # Not a problem in 10.20.  Otherwise, who knows?
                 APR_ADDTO(LIBS, [-lbind -lsocket])
                 ;;
 	esac
-	APR_ADDTO(CPPFLAGS, [-DSIGPROCMASK_SETS_THREAD_MASK -DAP_AUTH_DBM_USE_APR])
+	APR_ADDTO(CPPFLAGS, [-DSIGPROCMASK_SETS_THREAD_MASK])
         ;;
     4850-*.*)
 	APR_ADDTO(CPPFLAGS, [-DSVR4 -DMPRAS])
@@ -405,22 +423,62 @@ dnl	       # Not a problem in 10.20.  Otherwise, who knows?
 	APR_ADDTO(CPPFLAGS, [-D_TANDEM_SOURCE -D_XOPEN_SOURCE_EXTENDED=1])
 	;;
     *-ibm-os390)
-       APR_SETIFNULL(apr_lock_method, [USE_SYSVSEM_SERIALIZE])
-       APR_SETIFNULL(apr_sysvsem_is_global, [yes])
-       APR_SETIFNULL(apr_gethostbyname_is_thread_safe, [yes])
-       APR_SETIFNULL(apr_gethostbyaddr_is_thread_safe, [yes])
-       APR_ADDTO(CPPFLAGS, [-U_NO_PROTO -DPTHREAD_ATTR_SETDETACHSTATE_ARG2_ADDR -DPTHREAD_SETS_ERRNO -DPTHREAD_DETACH_ARG1_ADDR -DSIGPROCMASK_SETS_THREAD_MASK -DTCP_NODELAY=1])
-       ;;
+        APR_SETIFNULL(apr_lock_method, [USE_SYSVSEM_SERIALIZE])
+        APR_SETIFNULL(apr_sysvsem_is_global, [yes])
+        APR_SETIFNULL(apr_gethostbyname_is_thread_safe, [yes])
+        APR_SETIFNULL(apr_gethostbyaddr_is_thread_safe, [yes])
+        APR_SETIFNULL(apr_getservbyname_is_thread_safe, [yes])
+        AC_DEFINE(HAVE_ZOS_PTHREADS, 1, [Define for z/OS pthread API nuances])
+        APR_ADDTO(CPPFLAGS, [-U_NO_PROTO -DSIGPROCMASK_SETS_THREAD_MASK -DTCP_NODELAY=1])
+        ;;
     *-ibm-as400)
-       APR_SETIFNULL(apr_lock_method, [USE_SYSVSEM_SERIALIZE])
-       APR_SETIFNULL(apr_process_lock_is_global, [yes])
-       APR_SETIFNULL(apr_gethostbyname_is_thread_safe, [yes])
-       APR_SETIFNULL(apr_gethostbyaddr_is_thread_safe, [yes])
-       ;;
+        APR_SETIFNULL(apr_lock_method, [USE_SYSVSEM_SERIALIZE])
+        APR_SETIFNULL(apr_process_lock_is_global, [yes])
+        APR_SETIFNULL(apr_gethostbyname_is_thread_safe, [yes])
+        APR_SETIFNULL(apr_gethostbyaddr_is_thread_safe, [yes])
+        APR_SETIFNULL(apr_getservbyname_is_thread_safe, [yes])
+        ;;
     *cygwin*)
 	APR_ADDTO(CPPFLAGS, [-DCYGWIN])
-	APR_ADDTO(LIBS, [-lcrypt])
 	;;
+    *mingw*)
+        APR_ADDTO(CPPFLAGS, [-DWIN32 -D__MSVCRT__])
+        APR_ADDTO(LDFLAGS, [-Wl,--enable-auto-import,--subsystem,console])
+        APR_SETIFNULL(have_unicode_fs, [1])
+        APR_SETIFNULL(have_proc_invoked, [1])
+        APR_SETIFNULL(apr_lock_method, [win32])
+        APR_SETIFNULL(apr_process_lock_is_global, [yes])
+        APR_SETIFNULL(apr_cv_use_lfs64, [yes])
+        APR_SETIFNULL(apr_cv_osuuid, [yes])
+        APR_SETIFNULL(apr_cv_tcp_nodelay_with_cork, [no])
+        APR_SETIFNULL(apr_thread_func, [__stdcall])
+        APR_SETIFNULL(ac_cv_o_nonblock_inherited, [yes])
+        APR_SETIFNULL(ac_cv_tcp_nodelay_inherited, [yes])
+        APR_SETIFNULL(ac_cv_file__dev_zero, [no])
+        APR_SETIFNULL(ac_cv_func_setpgrp_void, [no])
+        APR_SETIFNULL(ac_cv_func_mmap, [yes])
+        APR_SETIFNULL(ac_cv_define_sockaddr_in6, [yes])
+        APR_SETIFNULL(ac_cv_working_getaddrinfo, [yes])
+        APR_SETIFNULL(ac_cv_working_getnameinfo, [yes])
+        APR_SETIFNULL(ac_cv_func_gai_strerror, [yes])
+        case $host in
+            *mingw32*)
+                APR_SETIFNULL(apr_has_xthread_files, [1])
+                APR_SETIFNULL(apr_has_user, [1])
+                APR_SETIFNULL(apr_procattr_user_set_requires_password, [1])
+                dnl The real function is TransmitFile(), not sendfile(), but
+                dnl this bypasses the Linux/Solaris/AIX/etc. test and enables
+                dnl the TransmitFile() implementation.
+                APR_SETIFNULL(ac_cv_func_sendfile, [yes])
+                ;;
+            *mingwce)
+                APR_SETIFNULL(apr_has_xthread_files, [0])
+                APR_SETIFNULL(apr_has_user, [0])
+                APR_SETIFNULL(apr_procattr_user_set_requires_password, [0])
+                APR_SETIFNULL(ac_cv_func_sendfile, [no])
+                ;;
+        esac
+        ;;
   esac
 
 fi
@@ -431,7 +489,7 @@ dnl APR_CC_HINTS
 dnl
 dnl  Allows us to provide a default choice of compiler which
 dnl  the user can override.
-AC_DEFUN([APR_CC_HINTS], [
+AC_DEFUN(APR_CC_HINTS, [
 case "$host" in
   *-apple-aux3*)
       APR_SETIFNULL(CC, [gcc])

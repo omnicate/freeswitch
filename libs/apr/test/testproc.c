@@ -44,13 +44,13 @@ static void test_create_proc(abts_case *tc, void *data)
     rv = apr_procattr_dir_set(attr, "data");
     ABTS_INT_EQUAL(tc, APR_SUCCESS, rv);
 
-    rv = apr_procattr_cmdtype_set(attr, APR_PROGRAM);
+    rv = apr_procattr_cmdtype_set(attr, APR_PROGRAM_ENV);
     ABTS_INT_EQUAL(tc, APR_SUCCESS, rv);
 
     args[0] = "proc_child" EXTENSION;
     args[1] = NULL;
     
-    rv = apr_proc_create(&newproc, "../proc_child" EXTENSION, args, NULL, 
+    rv = apr_proc_create(&newproc, "../" TESTBINPATH "proc_child" EXTENSION, args, NULL, 
                          attr, p);
     ABTS_INT_EQUAL(tc, APR_SUCCESS, rv);
 
@@ -59,7 +59,7 @@ static void test_create_proc(abts_case *tc, void *data)
     length = strlen(TESTSTR);
     rv = apr_file_write(testfile, TESTSTR, &length);
     ABTS_INT_EQUAL(tc, APR_SUCCESS, rv);
-    ABTS_INT_EQUAL(tc, strlen(TESTSTR), length);
+    ABTS_SIZE_EQUAL(tc, strlen(TESTSTR), length);
 
     testfile = newproc.out;
     length = 256;
@@ -91,15 +91,15 @@ static void test_file_redir(abts_case *tc, void *data)
 
     testfile = NULL;
     rv = apr_file_open(&testfile, "data/stdin",
-                       APR_READ | APR_WRITE | APR_CREATE | APR_EXCL,
+                       APR_FOPEN_READ | APR_FOPEN_WRITE | APR_FOPEN_CREATE | APR_FOPEN_EXCL,
                        APR_OS_DEFAULT, p);
     ABTS_INT_EQUAL(tc, APR_SUCCESS, rv);
     rv = apr_file_open(&testout, "data/stdout",
-                       APR_READ | APR_WRITE | APR_CREATE | APR_EXCL,
+                       APR_FOPEN_READ | APR_FOPEN_WRITE | APR_FOPEN_CREATE | APR_FOPEN_EXCL,
                        APR_OS_DEFAULT, p);
     ABTS_INT_EQUAL(tc, APR_SUCCESS, rv);
     rv = apr_file_open(&testerr, "data/stderr",
-                       APR_READ | APR_WRITE | APR_CREATE | APR_EXCL,
+                       APR_FOPEN_READ | APR_FOPEN_WRITE | APR_FOPEN_CREATE | APR_FOPEN_EXCL,
                        APR_OS_DEFAULT, p);
     ABTS_INT_EQUAL(tc, APR_SUCCESS, rv);
 
@@ -120,13 +120,13 @@ static void test_file_redir(abts_case *tc, void *data)
     ABTS_INT_EQUAL(tc, APR_SUCCESS, rv);
     rv = apr_procattr_dir_set(attr, "data");
     ABTS_INT_EQUAL(tc, APR_SUCCESS, rv);
-    rv = apr_procattr_cmdtype_set(attr, APR_PROGRAM);
+    rv = apr_procattr_cmdtype_set(attr, APR_PROGRAM_ENV);
     ABTS_INT_EQUAL(tc, APR_SUCCESS, rv);
 
     args[0] = "proc_child";
     args[1] = NULL;
 
-    rv = apr_proc_create(&newproc, "../proc_child" EXTENSION, args, NULL, 
+    rv = apr_proc_create(&newproc, "../" TESTBINPATH "proc_child" EXTENSION, args, NULL, 
                          attr, p);
     ABTS_INT_EQUAL(tc, APR_SUCCESS, rv);
 

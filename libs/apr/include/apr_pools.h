@@ -28,10 +28,16 @@
  * particularly in the presence of die()).
  *
  * Instead, we maintain pools, and allocate items (both memory and I/O
- * handlers) from the pools --- currently there are two, one for per
- * transaction info, and one for config info.  When a transaction is over,
- * we can delete everything in the per-transaction apr_pool_t without fear,
- * and without thinking too hard about it either.
+ * handlers) from the pools --- currently there are two, one for
+ * per-transaction info, and one for config info.  When a transaction is
+ * over, we can delete everything in the per-transaction apr_pool_t without
+ * fear, and without thinking too hard about it either.
+ *
+ * Note that most operations on pools are not thread-safe: a single pool
+ * should only be accessed by a single thread at any given time. The one
+ * exception to this rule is creating a subpool of a given pool: one or more
+ * threads can safely create subpools at the same time that another thread
+ * accesses the parent pool.
  */
 
 #include "apr.h"
@@ -182,11 +188,39 @@ APR_DECLARE(void) apr_pool_terminate(void);
  * @param abort_fn A function to use if the pool cannot allocate more memory.
  * @param allocator The allocator to use with the new pool.  If NULL the
  *        allocator of the parent pool will be used.
+ * @remark This function is thread-safe, in the sense that multiple threads
+ *         can safely create subpools of the same parent pool concurrently.
+ *         Similarly, a subpool can be created by one thread at the same
+ *         time that another thread accesses the parent pool.
  */
 APR_DECLARE(apr_status_t) apr_pool_create_ex(apr_pool_t **newpool,
                                              apr_pool_t *parent,
                                              apr_abortfunc_t abort_fn,
                                              apr_allocator_t *allocator);
+
+/**
+ * Create a new pool.
+ * @deprecated @see apr_pool_create_unmanaged_ex.
+ */
+APR_DECLARE(apr_status_t) apr_pool_create_core_ex(apr_pool_t **newpool,
+                                                  apr_abortfunc_t abort_fn,
+                                                  apr_allocator_t *allocator);
+
+/**
+ * Create a new unmanaged pool.
+ * @param newpool The pool we have just created.
+ * @param abort_fn A function to use if the pool cannot allocate more memory.
+ * @param allocator The allocator to use with the new pool.  If NULL a
+ *        new allocator will be crated with newpool as owner.
+ * @remark An unmanaged pool is a special pool without a parent; it will
+ *         NOT be destroyed upon apr_terminate.  It must be explicitly
+ *         destroyed by calling apr_pool_destroy, to prevent memory leaks.
+ *         Use of this function is discouraged, think twice about whether
+ *         you really really need it.
+ */
+APR_DECLARE(apr_status_t) apr_pool_create_unmanaged_ex(apr_pool_t **newpool,
+                                                   apr_abortfunc_t abort_fn,
+                                                   apr_allocator_t *allocator);
 
 /**
  * Debug version of apr_pool_create_ex.
@@ -217,12 +251,56 @@ APR_DECLARE(apr_status_t) apr_pool_create_ex_debug(apr_pool_t **newpool,
 #endif
 
 /**
+ * Debug version of apr_pool_create_core_ex.
+ * @deprecated @see apr_pool_create_unmanaged_ex_debug.
+ */
+APR_DECLARE(apr_status_t) apr_pool_create_core_ex_debug(apr_pool_t **newpool,
+                                                   apr_abortfunc_t abort_fn,
+                                                   apr_allocator_t *allocator,
+                                                   const char *file_line);
+
+/**
+ * Debug version of apr_pool_create_unmanaged_ex.
+ * @param newpool @see apr_pool_create_unmanaged.
+ * @param abort_fn @see apr_pool_create_unmanaged.
+ * @param allocator @see apr_pool_create_unmanaged.
+ * @param file_line Where the function is called from.
+ *        This is usually APR_POOL__FILE_LINE__.
+ * @remark Only available when APR_POOL_DEBUG is defined.
+ *         Call this directly if you have you apr_pool_create_unmanaged_ex
+ *         calls in a wrapper function and wish to override
+ *         the file_line argument to reflect the caller of
+ *         your wrapper function.  If you do not have
+ *         apr_pool_create_core_ex in a wrapper, trust the macro
+ *         and don't call apr_pool_create_core_ex_debug directly.
+ */
+APR_DECLARE(apr_status_t) apr_pool_create_unmanaged_ex_debug(apr_pool_t **newpool,
+                                                   apr_abortfunc_t abort_fn,
+                                                   apr_allocator_t *allocator,
+                                                   const char *file_line);
+
+#if APR_POOL_DEBUG
+#define apr_pool_create_core_ex(newpool, abort_fn, allocator)  \
+    apr_pool_create_unmanaged_ex_debug(newpool, abort_fn, allocator, \
+                                  APR_POOL__FILE_LINE__)
+
+#define apr_pool_create_unmanaged_ex(newpool, abort_fn, allocator)  \
+    apr_pool_create_unmanaged_ex_debug(newpool, abort_fn, allocator, \
+                                  APR_POOL__FILE_LINE__)
+
+#endif
+
+/**
  * Create a new pool.
  * @param newpool The pool we have just created.
  * @param parent The parent pool.  If this is NULL, the new pool is a root
  *        pool.  If it is non-NULL, the new pool will inherit all
  *        of its parent pool's attributes, except the apr_pool_t will
  *        be a sub-pool.
+ * @remark This function is thread-safe, in the sense that multiple threads
+ *         can safely create subpools of the same parent pool concurrently.
+ *         Similarly, a subpool can be created by one thread at the same
+ *         time that another thread accesses the parent pool.
  */
 #if defined(DOXYGEN)
 APR_DECLARE(apr_status_t) apr_pool_create(apr_pool_t **newpool,
@@ -239,7 +317,30 @@ APR_DECLARE(apr_status_t) apr_pool_create(apr_pool_t **newpool,
 #endif
 
 /**
- * Find the pools allocator
+ * Create a new pool.
+ * @param newpool The pool we have just created.
+ */
+#if defined(DOXYGEN)
+APR_DECLARE(apr_status_t) apr_pool_create_core(apr_pool_t **newpool);
+APR_DECLARE(apr_status_t) apr_pool_create_unmanaged(apr_pool_t **newpool);
+#else
+#if APR_POOL_DEBUG
+#define apr_pool_create_core(newpool) \
+    apr_pool_create_unmanaged_ex_debug(newpool, NULL, NULL, \
+                                  APR_POOL__FILE_LINE__)
+#define apr_pool_create_unmanaged(newpool) \
+    apr_pool_create_unmanaged_ex_debug(newpool, NULL, NULL, \
+                                  APR_POOL__FILE_LINE__)
+#else
+#define apr_pool_create_core(newpool) \
+    apr_pool_create_unmanaged_ex(newpool, NULL, NULL)
+#define apr_pool_create_unmanaged(newpool) \
+    apr_pool_create_unmanaged_ex(newpool, NULL, NULL)
+#endif
+#endif
+
+/**
+ * Find the pool's allocator
  * @param pool The pool to get the allocator from.
  */
 APR_DECLARE(apr_allocator_t *) apr_pool_allocator_get(apr_pool_t *pool);
@@ -409,18 +510,7 @@ APR_DECLARE(int) apr_pool_is_ancestor(apr_pool_t *a, apr_pool_t *b);
  * @param pool The pool to tag
  * @param tag  The tag
  */
-APR_DECLARE(const char *) apr_pool_tag(apr_pool_t *pool, const char *tag);
-
-#if APR_HAS_THREADS
-/**
- * Add a mutex to a pool to make it suitable to use from multiple threads.
- * @param pool The pool to add the mutex to
- * @param mutex The mutex
- * @remark The mutex does not protect the destroy operation just the low level allocs.
- */
-APR_DECLARE(void) apr_pool_mutex_set(apr_pool_t *pool,
-									 apr_thread_mutex_t *mutex);
-#endif
+APR_DECLARE(void) apr_pool_tag(apr_pool_t *pool, const char *tag);
 
 
 /*
@@ -446,7 +536,6 @@ APR_DECLARE(void) apr_pool_mutex_set(apr_pool_t *pool,
  *      key names is a typical way to help ensure this uniqueness.
  *
  */
-
 APR_DECLARE(apr_status_t) apr_pool_userdata_set(
     const void *data,
     const char *key,
@@ -516,6 +605,23 @@ APR_DECLARE(void) apr_pool_cleanup_register(
     const void *data,
     apr_status_t (*plain_cleanup)(void *),
     apr_status_t (*child_cleanup)(void *));
+
+/**
+ * Register a function to be called when a pool is cleared or destroyed.
+ *
+ * Unlike apr_pool_cleanup_register which register a cleanup
+ * that is called AFTER all subpools are destroyed this function register
+ * a function that will be called before any of the subpool is destoryed.
+ *
+ * @param p The pool register the cleanup with
+ * @param data The data to pass to the cleanup function.
+ * @param plain_cleanup The function to call when the pool is cleared
+ *                      or destroyed
+ */
+APR_DECLARE(void) apr_pool_pre_cleanup_register(
+    apr_pool_t *p,
+    const void *data,
+    apr_status_t (*plain_cleanup)(void *));
 
 /**
  * Remove a previously registered cleanup function.

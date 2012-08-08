@@ -15,6 +15,7 @@
  */
 
 
+#include "apr.h"
 #include "testutil.h"
 #include "apr_general.h"
 #include "apr_pools.h"
@@ -22,7 +23,6 @@
 #include "apr_dso.h"
 #include "apr_strings.h"
 #include "apr_file_info.h"
-#include "apr.h"
 #if APR_HAVE_UNISTD_H
 #include <unistd.h>
 #endif
@@ -31,14 +31,14 @@
 
 #ifdef NETWARE
 # define MOD_NAME "mod_test.nlm"
-#elif defined(BEOS)
+#elif defined(BEOS) || defined(__MVS__)
 # define MOD_NAME "mod_test.so"
 #elif defined(WIN32)
-# define MOD_NAME "mod_test.dll"
+# define MOD_NAME TESTBINPATH "mod_test.dll"
 #elif defined(DARWIN)
 # define MOD_NAME ".libs/mod_test.so" 
 # define LIB_NAME ".libs/libmod_test.dylib" 
-#elif defined(__hpux__) || defined(__hpux)
+#elif (defined(__hpux__) || defined(__hpux)) && !defined(__ia64)
 # define MOD_NAME ".libs/mod_test.sl"
 # define LIB_NAME ".libs/libmod_test.sl"
 #elif defined(_AIX) || defined(__bsdi__)

@@ -30,7 +30,7 @@
  * depends on IsValidSid(), which internally we better test long
  * before we get here!
  */
-void get_sid_string(char *buf, apr_size_t blen, apr_uid_t id)
+static void get_sid_string(char *buf, apr_size_t blen, apr_uid_t id)
 {
     PSID_IDENTIFIER_AUTHORITY psia;
     DWORD nsa;
@@ -45,10 +45,10 @@ void get_sid_string(char *buf, apr_size_t blen, apr_uid_t id)
         + ((DWORD)(psia->Value[3]) << 16) + ((DWORD)(psia->Value[2]) << 24);
     sa  =  (DWORD)(psia->Value[1])        + ((DWORD)(psia->Value[0]) <<  8);
     if (sa) {
-        slen = apr_snprintf(buf, blen, "S-%lu-0x%04x%08x",
-                            SID_REVISION, sa, nsa);
+        slen = apr_snprintf(buf, blen, "S-%d-0x%04x%08x",
+                            SID_REVISION, (unsigned int)sa, (unsigned int)nsa);
     } else {
-        slen = apr_snprintf(buf, blen, "S-%lu-%lu",
+        slen = apr_snprintf(buf, blen, "S-%d-%lu",
                             SID_REVISION, nsa);
     }
 
@@ -121,7 +121,8 @@ APR_DECLARE(apr_status_t) apr_uid_homepath_get(char **dirname,
         else if (type == REG_EXPAND_SZ) {
             apr_wchar_t path[MAX_PATH];
             char retdir[MAX_PATH];
-            ExpandEnvironmentStringsW((apr_wchar_t*)regkey, path, sizeof(path));
+            ExpandEnvironmentStringsW((apr_wchar_t*)regkey, path, 
+                                      sizeof(path) / 2);
             if ((rv = unicode_to_utf8_path(retdir, sizeof(retdir), path))
                     != APR_SUCCESS)
                 return rv;
@@ -210,11 +211,11 @@ APR_DECLARE(apr_status_t) apr_uid_get(apr_uid_t *uid, apr_gid_t *gid,
     DWORD rv;
     char *pos;
 
-    if (pos = strchr(username, '/')) {
+    if ((pos = strchr(username, '/'))) {
         domain = apr_pstrndup(p, username, pos - username);
         username = pos + 1;
     }
-    else if (pos = strchr(username, '\\')) {
+    else if ((pos = strchr(username, '\\'))) {
         domain = apr_pstrndup(p, username, pos - username);
         username = pos + 1;
     }

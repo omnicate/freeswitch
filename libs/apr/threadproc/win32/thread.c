@@ -15,7 +15,7 @@
  */
 
 #include "apr_private.h"
-#include "win32/apr_arch_threadproc.h"
+#include "apr_arch_threadproc.h"
 #include "apr_thread_proc.h"
 #include "apr_general.h"
 #include "apr_lib.h"
@@ -94,7 +94,6 @@ APR_DECLARE(apr_status_t) apr_thread_create(apr_thread_t **new,
         return APR_ENOMEM;
     }
 
-    (*new)->pool = pool;
     (*new)->data = data;
     (*new)->func = func;
     (*new)->td   = NULL;
@@ -103,12 +102,12 @@ APR_DECLARE(apr_status_t) apr_thread_create(apr_thread_t **new,
         return stat;
     }
 
-    /* Use 0 for Thread Stack Size, because that will default the stack to the
-     * same size as the calling thread. 
+    /* Use 0 for default Thread Stack Size, because that will
+     * default the stack to the same size as the calling thread.
      */
 #ifndef _WIN32_WCE
     if ((handle = (HANDLE)_beginthreadex(NULL,
-                        attr && attr->stacksize > 0 ? attr->stacksize : 0,
+                        (DWORD) (attr ? attr->stacksize : 0),
                         (unsigned int (APR_THREAD_FUNC *)(void *))dummy_worker,
                         (*new), 0, &temp)) == 0) {
         return APR_FROM_OS_ERROR(_doserrno);

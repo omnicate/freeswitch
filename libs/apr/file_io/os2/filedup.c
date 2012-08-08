@@ -91,7 +91,8 @@ APR_DECLARE(apr_status_t) apr_file_setaside(apr_file_t **new_file,
     (*new_file)->pool = p;
 
     if (old_file->buffered) {
-        (*new_file)->buffer = apr_palloc(p, APR_FILE_BUFSIZE);
+        (*new_file)->buffer = apr_palloc(p, old_file->bufsize);
+        (*new_file)->bufsize = old_file->bufsize;
 
         if (old_file->direction == 1) {
             memcpy((*new_file)->buffer, old_file->buffer, old_file->bufpos);
@@ -111,7 +112,7 @@ APR_DECLARE(apr_status_t) apr_file_setaside(apr_file_t **new_file,
         (*new_file)->fname = apr_pstrdup(p, old_file->fname);
     }
 
-    if (!(old_file->flags & APR_FILE_NOCLEANUP)) {
+    if (!(old_file->flags & APR_FOPEN_NOCLEANUP)) {
         apr_pool_cleanup_register(p, (void *)(*new_file), 
                                   apr_file_cleanup,
                                   apr_file_cleanup);

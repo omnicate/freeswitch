@@ -19,6 +19,7 @@
 #include "apr_strings.h" /* prototype of apr_mkstemp() */
 #include "apr_arch_file_io.h" /* prototype of apr_mkstemp() */
 #include "apr_portable.h" /* for apr_os_file_put() */
+#include "apr_arch_inherit.h"
 
 #include <stdlib.h> /* for mkstemp() - Single Unix */
 
@@ -27,8 +28,8 @@ APR_DECLARE(apr_status_t) apr_file_mktemp(apr_file_t **fp, char *template, apr_i
     int fd;
     apr_status_t rv;
 
-    flags = (!flags) ? APR_CREATE | APR_READ | APR_WRITE |  
-                       APR_DELONCLOSE : flags & ~APR_EXCL;
+    flags = (!flags) ? APR_FOPEN_CREATE | APR_FOPEN_READ | APR_FOPEN_WRITE |
+                       APR_FOPEN_DELONCLOSE : flags & ~APR_FOPEN_EXCL;
 
     fd = mkstemp(template);
     if (fd == -1) {
@@ -38,11 +39,24 @@ APR_DECLARE(apr_status_t) apr_file_mktemp(apr_file_t **fp, char *template, apr_i
      * Otherwise file locking will not allow the file to be shared.
      */
     close(fd);
-    if ((rv = apr_file_open(fp, template, flags|APR_FILE_NOCLEANUP,
+    if ((rv = apr_file_open(fp, template, flags|APR_FOPEN_NOCLEANUP,
                             APR_UREAD | APR_UWRITE, p)) == APR_SUCCESS) {
 
-        apr_pool_cleanup_register((*fp)->pool, (void *)(*fp),
-                                  apr_unix_file_cleanup, apr_unix_file_cleanup);
+
+	if (!(flags & APR_FOPEN_NOCLEANUP)) {
+            int flags;
+
+            if ((flags = fcntl((*fp)->filedes, F_GETFD)) == -1)
+                return errno;
+
+            flags |= FD_CLOEXEC;
+            if (fcntl((*fp)->filedes, F_SETFD, flags) == -1)
+                return errno;
+
+	    apr_pool_cleanup_register((*fp)->pool, (void *)(*fp),
+				      apr_unix_file_cleanup,
+				      apr_unix_child_file_cleanup);
+	}
     }
 
     return rv;

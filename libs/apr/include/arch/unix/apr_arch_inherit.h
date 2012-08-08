@@ -24,9 +24,15 @@
 #define APR_IMPLEMENT_INHERIT_SET(name, flag, pool, cleanup)        \
 apr_status_t apr_##name##_inherit_set(apr_##name##_t *the##name)    \
 {                                                                   \
-    if (the##name->flag & APR_FILE_NOCLEANUP)                       \
+    if (the##name->flag & APR_FOPEN_NOCLEANUP)                      \
         return APR_EINVAL;                                          \
     if (!(the##name->flag & APR_INHERIT)) {                         \
+        int flags = fcntl(the##name->name##des, F_GETFD);           \
+        if (flags == -1)                                            \
+            return errno;                                           \
+        flags &= ~(FD_CLOEXEC);                                     \
+        if (fcntl(the##name->name##des, F_SETFD, flags) == -1)      \
+            return errno;                                           \
         the##name->flag |= APR_INHERIT;                             \
         apr_pool_child_cleanup_set(the##name->pool,                 \
                                    (void *)the##name,               \
@@ -38,9 +44,15 @@ apr_status_t apr_##name##_inherit_set(apr_##name##_t *the##name)    \
 #define APR_IMPLEMENT_INHERIT_UNSET(name, flag, pool, cleanup)      \
 apr_status_t apr_##name##_inherit_unset(apr_##name##_t *the##name)  \
 {                                                                   \
-    if (the##name->flag & APR_FILE_NOCLEANUP)                       \
+    if (the##name->flag & APR_FOPEN_NOCLEANUP)                      \
         return APR_EINVAL;                                          \
     if (the##name->flag & APR_INHERIT) {                            \
+        int flags;                                                  \
+        if ((flags = fcntl(the##name->name##des, F_GETFD)) == -1)   \
+            return errno;                                           \
+        flags |= FD_CLOEXEC;                                        \
+        if (fcntl(the##name->name##des, F_SETFD, flags) == -1)      \
+            return errno;                                           \
         the##name->flag &= ~APR_INHERIT;                            \
         apr_pool_child_cleanup_set(the##name->pool,                 \
                                    (void *)the##name,               \

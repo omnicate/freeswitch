@@ -73,7 +73,10 @@ static void test_child_kill(abts_case *tc, void *data)
                              APR_NO_PIPE);
     ABTS_INT_EQUAL(tc, APR_SUCCESS, rv);
 
-    rv = apr_proc_create(&newproc, "./occhild" EXTENSION, args, NULL, procattr, p);
+    rv = apr_procattr_cmdtype_set(procattr, APR_PROGRAM_ENV);
+    APR_ASSERT_SUCCESS(tc, "Couldn't set copy environment", rv);
+
+    rv = apr_proc_create(&newproc, TESTBINPATH "occhild" EXTENSION, args, NULL, procattr, p);
     ABTS_INT_EQUAL(tc, APR_SUCCESS, rv);
     ABTS_PTR_NOTNULL(tc, newproc.in);
     ABTS_PTR_EQUAL(tc, NULL, newproc.out);

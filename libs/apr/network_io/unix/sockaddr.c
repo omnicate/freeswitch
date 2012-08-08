@@ -58,6 +58,15 @@ struct apr_ipsubnet_t {
 #define GETHOSTBYNAME_BUFLEN 512
 #endif
 
+#ifdef _AIX
+/* Some levels of AIX getaddrinfo() don't like servname = "0", so
+ * set servname to "1" when port is 0 and fix it up later.
+ */
+#define AIX_SERVNAME_HACK 1
+#else
+#define AIX_SERVNAME_HACK 0
+#endif
+
 #ifdef _WIN32_WCE
 /* XXX: BS solution.  Need an HAVE_GETSERVBYNAME and actually
  * do something here, to provide the obvious proto mappings.
@@ -98,25 +107,35 @@ static apr_status_t get_remote_addr(apr_socket_t *sock)
     }
 }
 
-APR_DECLARE(apr_status_t) apr_sockaddr_ip_get(char **addr,
-                                         apr_sockaddr_t *sockaddr)
+APR_DECLARE(apr_status_t) apr_sockaddr_ip_getbuf(char *buf, apr_size_t buflen,
+                                                 apr_sockaddr_t *sockaddr)
 {
-    *addr = apr_palloc(sockaddr->pool, sockaddr->addr_str_len);
-    apr_inet_ntop(sockaddr->family,
-                  sockaddr->ipaddr_ptr,
-                  *addr,
-                  sockaddr->addr_str_len);
+    if (!apr_inet_ntop(sockaddr->family, sockaddr->ipaddr_ptr, buf, buflen)) {
+        return APR_ENOSPC;
+    }
+
 #if APR_HAVE_IPV6
-    if (sockaddr->family == AF_INET6 &&
-        IN6_IS_ADDR_V4MAPPED((struct in6_addr *)sockaddr->ipaddr_ptr)) {
+    if (sockaddr->family == AF_INET6 
+        && IN6_IS_ADDR_V4MAPPED((struct in6_addr *)sockaddr->ipaddr_ptr)
+        && buflen > strlen("::ffff:")) {
         /* This is an IPv4-mapped IPv6 address; drop the leading
          * part of the address string so we're left with the familiar
          * IPv4 format.
          */
-        *addr += strlen("::ffff:");
+        memmove(buf, buf + strlen("::ffff:"),
+                strlen(buf + strlen("::ffff:"))+1);
     }
 #endif
+    /* ensure NUL termination if the buffer is too short */
+    buf[buflen-1] = '\0';
     return APR_SUCCESS;
+}
+
+APR_DECLARE(apr_status_t) apr_sockaddr_ip_get(char **addr,
+                                              apr_sockaddr_t *sockaddr)
+{
+    *addr = apr_palloc(sockaddr->pool, sockaddr->addr_str_len);
+    return apr_sockaddr_ip_getbuf(*addr, sockaddr->addr_str_len, sockaddr);
 }
 
 void apr_sockaddr_vars_set(apr_sockaddr_t *addr, int family, apr_port_t port)
@@ -128,6 +147,11 @@ void apr_sockaddr_vars_set(apr_sockaddr_t *addr, int family, apr_port_t port)
         addr->sa.sin.sin_port = htons(port);
         addr->port = port;
     }
+#if AIX_SERVNAME_HACK
+    else {
+        addr->sa.sin.sin_port = htons(port);
+    }
+#endif
 
     if (family == APR_INET) {
         addr->salen = sizeof(struct sockaddr_in);
@@ -321,16 +345,12 @@ static apr_status_t call_resolver(apr_sockaddr_t **sa,
         hints.ai_flags |= AI_NUMERICHOST;
 #endif
 #else
-#ifdef _AIX
-        /* But current AIX getaddrinfo() doesn't like servname = "0";
-         * the "1" won't hurt since we use the port parameter to fill
-         * in the returned socket addresses later
-         */
+#if AIX_SERVNAME_HACK
         if (!port) {
             servname = "1";
         }
         else
-#endif /* _AIX */
+#endif /* AIX_SERVNAME_HACK */
         servname = apr_itoa(p, port);
 #endif /* OSF1 */
     }
@@ -343,12 +363,13 @@ static apr_status_t call_resolver(apr_sockaddr_t **sa,
     }
 #endif
     if (error) {
-#ifndef WIN32
+#if defined(WIN32)
+        return apr_get_netos_error();
+#else
         if (error == EAI_SYSTEM) {
             return errno;
         }
         else 
-#endif
         {
             /* issues with representing this with APR's error scheme:
              * glibc uses negative values for these numbers, perhaps so 
@@ -360,6 +381,7 @@ static apr_status_t call_resolver(apr_sockaddr_t **sa,
 #endif
             return error + APR_OS_START_EAIERR;
         }
+#endif /* WIN32 */
     }
 
     prev_sa = NULL;
@@ -370,7 +392,11 @@ static apr_status_t call_resolver(apr_sockaddr_t **sa,
         /* Ignore anything bogus: getaddrinfo in some old versions of
          * glibc will return AF_UNIX entries for APR_UNSPEC+AI_PASSIVE
          * lookups. */
+#if APR_HAVE_IPV6
         if (ai->ai_family != AF_INET && ai->ai_family != AF_INET6) {
+#else
+        if (ai->ai_family != AF_INET) {
+#endif
             ai = ai->ai_next;
             continue;
         }
@@ -695,18 +721,64 @@ APR_DECLARE(apr_status_t) apr_getnameinfo(char **hostname,
 APR_DECLARE(apr_status_t) apr_getservbyname(apr_sockaddr_t *sockaddr,
                                             const char *servname)
 {
+#if APR_HAS_THREADS && !defined(GETSERVBYNAME_IS_THREAD_SAFE) && \
+    defined(HAVE_GETSERVBYNAME_R) && \
+    (defined(GETSERVBYNAME_R_GLIBC2) || defined(GETSERVBYNAME_R_SOLARIS) || \
+     defined(GETSERVBYNAME_R_OSF1))
+    struct servent se;
+#if defined(GETSERVBYNAME_R_OSF1)
+    struct servent_data sed;
+
+    memset(&sed, 0, sizeof(sed)); /* must zero fill before use */
+#else
+#if defined(GETSERVBYNAME_R_GLIBC2)
+    struct servent *res;
+#endif
+    char buf[1024];
+#endif
+#else
     struct servent *se;
+#endif
 
     if (servname == NULL)
         return APR_EINVAL;
 
+#if APR_HAS_THREADS && !defined(GETSERVBYNAME_IS_THREAD_SAFE) && \
+    defined(HAVE_GETSERVBYNAME_R) && \
+    (defined(GETSERVBYNAME_R_GLIBC2) || defined(GETSERVBYNAME_R_SOLARIS) || \
+     defined(GETSERVBYNAME_R_OSF1))
+#if defined(GETSERVBYNAME_R_GLIBC2)
+    if (getservbyname_r(servname, NULL,
+                        &se, buf, sizeof(buf), &res) == 0 && res != NULL) {
+        sockaddr->port = ntohs(res->s_port);
+        sockaddr->servname = apr_pstrdup(sockaddr->pool, servname);
+        sockaddr->sa.sin.sin_port = res->s_port;
+        return APR_SUCCESS;
+    }
+#elif defined(GETSERVBYNAME_R_SOLARIS)
+    if (getservbyname_r(servname, NULL, &se, buf, sizeof(buf)) != NULL) {
+        sockaddr->port = ntohs(se.s_port);
+        sockaddr->servname = apr_pstrdup(sockaddr->pool, servname);
+        sockaddr->sa.sin.sin_port = se.s_port;
+        return APR_SUCCESS;
+    }
+#elif defined(GETSERVBYNAME_R_OSF1)
+    if (getservbyname_r(servname, NULL, &se, &sed) == 0) {
+        sockaddr->port = ntohs(se.s_port);
+        sockaddr->servname = apr_pstrdup(sockaddr->pool, servname);
+        sockaddr->sa.sin.sin_port = se.s_port;
+        return APR_SUCCESS;
+    }
+#endif
+#else
     if ((se = getservbyname(servname, NULL)) != NULL){
-        sockaddr->port = htons(se->s_port);
+        sockaddr->port = ntohs(se->s_port);
         sockaddr->servname = apr_pstrdup(sockaddr->pool, servname);
         sockaddr->sa.sin.sin_port = se->s_port;
         return APR_SUCCESS;
     }
-    return errno;
+#endif
+    return APR_ENOENT;
 }
 
 #define V4MAPPED_EQUAL(a,b)                                   \

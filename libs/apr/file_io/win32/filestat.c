@@ -97,7 +97,7 @@ static void resolve_prot(apr_finfo_t *finfo, apr_int32_t wanted, PACL dacl)
      * there is no reason for os_level testing here.
      */
     if ((wanted & APR_FINFO_WPROT) && !worldid) {
-        SID_IDENTIFIER_AUTHORITY SIDAuth = SECURITY_WORLD_SID_AUTHORITY;
+        SID_IDENTIFIER_AUTHORITY SIDAuth = {SECURITY_WORLD_SID_AUTHORITY};
         if (AllocateAndInitializeSid(&SIDAuth, 1, SECURITY_WORLD_RID,
                                      0, 0, 0, 0, 0, 0, 0, &worldid))
             atexit(free_world);
@@ -188,7 +188,8 @@ static apr_status_t resolve_ident(apr_finfo_t *finfo, const char *fname,
     return rv;
 }
 
-static void guess_protection_bits(apr_finfo_t *finfo)
+static apr_status_t guess_protection_bits(apr_finfo_t *finfo,
+                                          apr_int32_t wanted)
 {
     /* Read, write execute for owner.  In the Win9x environment, any
      * readable file is executable (well, not entirely 100% true, but
@@ -205,6 +206,8 @@ static void guess_protection_bits(apr_finfo_t *finfo)
                        | (finfo->protection << prot_scope_user);
 
     finfo->valid |= APR_FINFO_UPROT | APR_FINFO_GPROT | APR_FINFO_WPROT;
+
+    return ((wanted & ~finfo->valid) ? APR_INCOMPLETE : APR_SUCCESS);
 }
 
 apr_status_t more_finfo(apr_finfo_t *finfo, const void *ufile, 
@@ -215,8 +218,9 @@ apr_status_t more_finfo(apr_finfo_t *finfo, const void *ufile,
     apr_status_t rv;
 
     if (apr_os_level < APR_WIN_NT)
-        guess_protection_bits(finfo);
-    else if (wanted & (APR_FINFO_PROT | APR_FINFO_OWNER))
+        return guess_protection_bits(finfo, wanted);
+
+    if (wanted & (APR_FINFO_PROT | APR_FINFO_OWNER))
     {
         /* On NT this request is incredibly expensive, but accurate.
          * Since the WinNT-only functions below are protected by the
@@ -264,7 +268,7 @@ apr_status_t more_finfo(apr_finfo_t *finfo, const void *ufile,
                                  ((wanted & APR_FINFO_PROT) ? &dacl : NULL),
                                  NULL, &pdesc);
         else
-            return APR_INCOMPLETE;
+            return APR_INCOMPLETE; /* should not occur */
         if (rv == ERROR_SUCCESS)
             apr_pool_cleanup_register(finfo->pool, pdesc, free_localheap, 
                                  apr_pool_cleanup_null);
@@ -286,9 +290,51 @@ apr_status_t more_finfo(apr_finfo_t *finfo, const void *ufile,
             resolve_prot(finfo, wanted, dacl);
         }
         else if (wanted & APR_FINFO_PROT)
-            guess_protection_bits(finfo);
+            guess_protection_bits(finfo, wanted);
     }
 
+    if ((apr_os_level >= APR_WIN_2000) && (wanted & APR_FINFO_CSIZE)
+                                       && (finfo->filetype == APR_REG))
+    {
+        DWORD sizelo, sizehi;
+        if (whatfile == MORE_OF_HANDLE) {
+            /* Not available for development and implementation under
+             * a reasonable license; if you review the licensing
+             * terms and conditions of;
+             *   http://go.microsoft.com/fwlink/?linkid=84083
+             * you probably understand why APR chooses not to implement.
+             */
+            IOSB sb;
+            FSI fi;
+            if ((ZwQueryInformationFile((HANDLE)ufile, &sb, 
+                                       &fi, sizeof(fi), 5) == 0) 
+                    && (sb.Status == 0)) {
+                finfo->csize = fi.AllocationSize;
+                finfo->valid |= APR_FINFO_CSIZE;
+            }
+        }
+        else {
+            SetLastError(NO_ERROR);
+            if (whatfile == MORE_OF_WFSPEC)
+                sizelo = GetCompressedFileSizeW((apr_wchar_t*)ufile, &sizehi);
+            else if (whatfile == MORE_OF_FSPEC)
+                sizelo = GetCompressedFileSizeA((char*)ufile, &sizehi);
+            else
+                return APR_EGENERAL; /* should not occur */
+        
+            if (sizelo != INVALID_FILE_SIZE || GetLastError() == NO_ERROR) {
+#if APR_HAS_LARGE_FILES
+                finfo->csize =  (apr_off_t)sizelo
+                             | ((apr_off_t)sizehi << 32);
+#else
+                finfo->csize = (apr_off_t)sizelo;
+                if (finfo->csize < 0 || sizehi)
+                    finfo->csize = 0x7fffffff;
+#endif
+                finfo->valid |= APR_FINFO_CSIZE;
+            }
+        }
+    }
     return ((wanted & ~finfo->valid) ? APR_INCOMPLETE : APR_SUCCESS);
 }
 
@@ -395,7 +441,7 @@ APR_DECLARE(apr_status_t) apr_file_info_get(apr_finfo_t *finfo, apr_int32_t want
          * don't need to take chances while the handle is already open.
          */
         DWORD FileType;
-        if (FileType = GetFileType(thefile->filehand)) {
+        if ((FileType = GetFileType(thefile->filehand))) {
             if (FileType == FILE_TYPE_CHAR) {
                 finfo->filetype = APR_CHR;
             }
@@ -488,8 +534,8 @@ APR_DECLARE(apr_status_t) apr_stat(apr_finfo_t *finfo, const char *fname,
                 wanted &= ~finfo->valid;
         }
 
-        if (rv = utf8_to_unicode_path(wfname, sizeof(wfname) 
-                                            / sizeof(apr_wchar_t), fname))
+        if ((rv = utf8_to_unicode_path(wfname, sizeof(wfname) 
+                                            / sizeof(apr_wchar_t), fname)))
             return rv;
         if (!(wanted & APR_FINFO_NAME)) {
             if (!GetFileAttributesExW(wfname, GetFileExInfoStandard, 
@@ -674,9 +720,9 @@ APR_DECLARE(apr_status_t) apr_file_attrs_set(const char *fname,
 #if APR_HAS_UNICODE_FS
     IF_WIN_OS_IS_UNICODE
     {
-        if (rv = utf8_to_unicode_path(wfname,
-                                      sizeof(wfname) / sizeof(wfname[0]),
-                                      fname))
+        if ((rv = utf8_to_unicode_path(wfname,
+                                       sizeof(wfname) / sizeof(wfname[0]),
+                                       fname)))
             return rv;
         flags = GetFileAttributesW(wfname);
     }
@@ -735,7 +781,7 @@ APR_DECLARE(apr_status_t) apr_file_mtime_set(const char *fname,
     apr_status_t rv;
 
     rv = apr_file_open(&thefile, fname,
-                       APR_READ | APR_WRITEATTRS,
+                       APR_FOPEN_READ | APR_WRITEATTRS,
                        APR_OS_DEFAULT, pool);
     if (!rv)
     {

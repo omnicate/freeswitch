@@ -20,6 +20,11 @@
 #include "apr_signal.h"
 #include "apr_random.h"
 
+/* Heavy on no'ops, here's what we want to pass if there is APR_NO_FILE
+ * requested for a specific child handle;
+ */
+static apr_file_t no_file = { NULL, -1, };
+
 APR_DECLARE(apr_status_t) apr_procattr_create(apr_procattr_t **new,
                                               apr_pool_t *pool)
 {
@@ -39,69 +44,47 @@ APR_DECLARE(apr_status_t) apr_procattr_io_set(apr_procattr_t *attr,
                                               apr_int32_t out,
                                               apr_int32_t err)
 {
-    apr_status_t status;
-    if (in != 0) {
-        if ((status = apr_file_pipe_create(&attr->child_in, &attr->parent_in,
-                                           attr->pool)) != APR_SUCCESS) {
-            return status;
-        }
+    apr_status_t rv;
 
-        switch (in) {
-        case APR_FULL_BLOCK:
-            break;
-        case APR_PARENT_BLOCK:
-            apr_file_pipe_timeout_set(attr->child_in, 0);
-            break;
-        case APR_CHILD_BLOCK:
-            apr_file_pipe_timeout_set(attr->parent_in, 0);
-            break;
-        default:
-            apr_file_pipe_timeout_set(attr->child_in, 0);
-            apr_file_pipe_timeout_set(attr->parent_in, 0);
-        }
+    if ((in != APR_NO_PIPE) && (in != APR_NO_FILE)) {
+        /* APR_CHILD_BLOCK maps to APR_WRITE_BLOCK, while
+         * APR_PARENT_BLOCK maps to APR_READ_BLOCK, so transpose 
+         * the CHILD/PARENT blocking flags for the stdin pipe.
+         * stdout/stderr map to the correct mode by default.
+         */
+        if (in == APR_CHILD_BLOCK)
+            in = APR_READ_BLOCK;
+        else if (in == APR_PARENT_BLOCK)
+            in = APR_WRITE_BLOCK;
+
+        if ((rv = apr_file_pipe_create_ex(&attr->child_in, &attr->parent_in,
+                                          in, attr->pool)) == APR_SUCCESS)
+            rv = apr_file_inherit_unset(attr->parent_in);
+        if (rv != APR_SUCCESS)
+            return rv;
     }
+    else if (in == APR_NO_FILE)
+        attr->child_in = &no_file;
 
-    if (out) {
-        if ((status = apr_file_pipe_create(&attr->parent_out, &attr->child_out,
-                                           attr->pool)) != APR_SUCCESS) {
-            return status;
-        }
-
-        switch (out) {
-        case APR_FULL_BLOCK:
-            break;
-        case APR_PARENT_BLOCK:
-            apr_file_pipe_timeout_set(attr->child_out, 0);
-            break;
-        case APR_CHILD_BLOCK:
-            apr_file_pipe_timeout_set(attr->parent_out, 0);
-            break;
-        default:
-            apr_file_pipe_timeout_set(attr->child_out, 0);
-            apr_file_pipe_timeout_set(attr->parent_out, 0);
-        }
+    if ((out != APR_NO_PIPE) && (out != APR_NO_FILE)) {
+        if ((rv = apr_file_pipe_create_ex(&attr->parent_out, &attr->child_out,
+                                          out, attr->pool)) == APR_SUCCESS)
+            rv = apr_file_inherit_unset(attr->parent_out);
+        if (rv != APR_SUCCESS)
+            return rv;
     }
+    else if (out == APR_NO_FILE)
+        attr->child_out = &no_file;
 
-    if (err) {
-        if ((status = apr_file_pipe_create(&attr->parent_err, &attr->child_err,
-                                           attr->pool)) != APR_SUCCESS) {
-            return status;
-        }
-
-        switch (err) {
-        case APR_FULL_BLOCK:
-            break;
-        case APR_PARENT_BLOCK:
-            apr_file_pipe_timeout_set(attr->child_err, 0);
-            break;
-        case APR_CHILD_BLOCK:
-            apr_file_pipe_timeout_set(attr->parent_err, 0);
-            break;
-        default:
-            apr_file_pipe_timeout_set(attr->child_err, 0);
-            apr_file_pipe_timeout_set(attr->parent_err, 0);
-        }
+    if ((err != APR_NO_PIPE) && (err != APR_NO_FILE)) {
+        if ((rv = apr_file_pipe_create_ex(&attr->parent_err, &attr->child_err,
+                                          err, attr->pool)) == APR_SUCCESS)
+            rv = apr_file_inherit_unset(attr->parent_err);
+        if (rv != APR_SUCCESS)
+            return rv;
     }
+    else if (err == APR_NO_FILE)
+        attr->child_err = &no_file;
 
     return APR_SUCCESS;
 }
@@ -113,14 +96,29 @@ APR_DECLARE(apr_status_t) apr_procattr_child_in_set(apr_procattr_t *attr,
 {
     apr_status_t rv = APR_SUCCESS;
 
-    if (attr->child_in == NULL && attr->parent_in == NULL)
-        rv = apr_file_pipe_create(&attr->child_in, &attr->parent_in, attr->pool);
-    
-    if (child_in != NULL && rv == APR_SUCCESS)
-        rv = apr_file_dup2(attr->child_in, child_in, attr->pool);
+    if (attr->child_in == NULL && attr->parent_in == NULL
+           && child_in == NULL && parent_in == NULL)
+        if ((rv = apr_file_pipe_create(&attr->child_in, &attr->parent_in,
+                                       attr->pool)) == APR_SUCCESS)
+            rv = apr_file_inherit_unset(attr->parent_in);
 
-    if (parent_in != NULL && rv == APR_SUCCESS)
-        rv = apr_file_dup2(attr->parent_in, parent_in, attr->pool);
+    if (child_in != NULL && rv == APR_SUCCESS) {
+        if (attr->child_in && (attr->child_in->filedes != -1))
+            rv = apr_file_dup2(attr->child_in, child_in, attr->pool);
+        else {
+            attr->child_in = NULL;
+            if ((rv = apr_file_dup(&attr->child_in, child_in, attr->pool))
+                    == APR_SUCCESS)
+                rv = apr_file_inherit_set(attr->child_in);
+        }
+    }
+
+    if (parent_in != NULL && rv == APR_SUCCESS) {
+        if (attr->parent_in)
+            rv = apr_file_dup2(attr->parent_in, parent_in, attr->pool);
+        else
+            rv = apr_file_dup(&attr->parent_in, parent_in, attr->pool);
+    }
 
     return rv;
 }
@@ -132,14 +130,29 @@ APR_DECLARE(apr_status_t) apr_procattr_child_out_set(apr_procattr_t *attr,
 {
     apr_status_t rv = APR_SUCCESS;
 
-    if (attr->child_out == NULL && attr->parent_out == NULL)
-        rv = apr_file_pipe_create(&attr->child_out, &attr->parent_out, attr->pool);
+    if (attr->child_out == NULL && attr->parent_out == NULL
+           && child_out == NULL && parent_out == NULL)
+        if ((rv = apr_file_pipe_create(&attr->parent_out, &attr->child_out,
+                                       attr->pool)) == APR_SUCCESS)
+            rv = apr_file_inherit_unset(attr->parent_out);
 
-    if (child_out != NULL && rv == APR_SUCCESS)
-        rv = apr_file_dup2(attr->child_out, child_out, attr->pool);
+    if (child_out != NULL && rv == APR_SUCCESS) {
+        if (attr->child_out && (attr->child_out->filedes != -1))
+            rv = apr_file_dup2(attr->child_out, child_out, attr->pool);
+        else {
+            attr->child_out = NULL;
+            if ((rv = apr_file_dup(&attr->child_out, child_out, attr->pool))
+                    == APR_SUCCESS)
+                rv = apr_file_inherit_set(attr->child_out);
+        }
+    }
 
-    if (parent_out != NULL && rv == APR_SUCCESS)
-        rv = apr_file_dup2(attr->parent_out, parent_out, attr->pool);
+    if (parent_out != NULL && rv == APR_SUCCESS) {
+        if (attr->parent_out)
+            rv = apr_file_dup2(attr->parent_out, parent_out, attr->pool);
+        else
+            rv = apr_file_dup(&attr->parent_out, parent_out, attr->pool);
+    }
 
     return rv;
 }
@@ -151,14 +164,28 @@ APR_DECLARE(apr_status_t) apr_procattr_child_err_set(apr_procattr_t *attr,
 {
     apr_status_t rv = APR_SUCCESS;
 
-    if (attr->child_err == NULL && attr->parent_err == NULL)
-        rv = apr_file_pipe_create(&attr->child_err, &attr->parent_err, attr->pool);
+    if (attr->child_err == NULL && attr->parent_err == NULL
+           && child_err == NULL && parent_err == NULL)
+        if ((rv = apr_file_pipe_create(&attr->parent_err, &attr->child_err,
+                                      attr->pool)) == APR_SUCCESS)
+            rv = apr_file_inherit_unset(attr->parent_err);
 
-    if (child_err != NULL && rv == APR_SUCCESS)
-        rv = apr_file_dup2(attr->child_err, child_err, attr->pool);
-
-    if (parent_err != NULL && rv == APR_SUCCESS)
-        rv = apr_file_dup2(attr->parent_err, parent_err, attr->pool);
+    if (child_err != NULL && rv == APR_SUCCESS) {
+        if (attr->child_err && (attr->child_err->filedes != -1))
+            rv = apr_file_dup2(attr->child_err, child_err, attr->pool);
+        else {
+            attr->child_err = NULL;
+            if ((rv = apr_file_dup(&attr->child_err, child_err, attr->pool))
+                    == APR_SUCCESS)
+                rv = apr_file_inherit_set(attr->child_err);
+        }
+    }
+    if (parent_err != NULL && rv == APR_SUCCESS) {
+        if (attr->parent_err)
+            rv = apr_file_dup2(attr->parent_err, parent_err, attr->pool);
+        else
+            rv = apr_file_dup(&attr->parent_err, parent_err, attr->pool);
+    }
 
     return rv;
 }
@@ -192,15 +219,14 @@ APR_DECLARE(apr_status_t) apr_procattr_detach_set(apr_procattr_t *attr,
 APR_DECLARE(apr_status_t) apr_proc_fork(apr_proc_t *proc, apr_pool_t *pool)
 {
     int pid;
+    
+    memset(proc, 0, sizeof(apr_proc_t));
 
     if ((pid = fork()) < 0) {
         return errno;
     }
     else if (pid == 0) {
-        proc->pid = pid;
-        proc->in = NULL;
-        proc->out = NULL;
-        proc->err = NULL;
+        proc->pid = getpid();
 
         apr_random_after_fork(proc);
 
@@ -208,9 +234,6 @@ APR_DECLARE(apr_status_t) apr_proc_fork(apr_proc_t *proc, apr_pool_t *pool)
     }
 
     proc->pid = pid;
-    proc->in = NULL;
-    proc->out = NULL;
-    proc->err = NULL;
 
     return APR_INPARENT;
 }
@@ -355,7 +378,7 @@ APR_DECLARE(apr_status_t) apr_proc_create(apr_proc_t *new,
              * caller can choose to pass full path for other
              * values of cmdtype
              */
-            if (access(progname, R_OK|X_OK) == -1) {
+            if (access(progname, X_OK) == -1) {
                 /* exec*() in child wouldn't have worked */
                 return errno;
             }
@@ -369,7 +392,6 @@ APR_DECLARE(apr_status_t) apr_proc_create(apr_proc_t *new,
         return errno;
     }
     else if (new->pid == 0) {
-        int status;
         /* child process */
 
         /*
@@ -402,20 +424,29 @@ APR_DECLARE(apr_status_t) apr_proc_create(apr_proc_t *new,
 
         apr_pool_cleanup_for_exec();
 
-        if (attr->child_in) {
-            apr_file_close(attr->parent_in);
+        if ((attr->child_in) && (attr->child_in->filedes == -1)) {
+            close(STDIN_FILENO);
+        }
+        else if (attr->child_in &&
+                 attr->child_in->filedes != STDIN_FILENO) {
             dup2(attr->child_in->filedes, STDIN_FILENO);
             apr_file_close(attr->child_in);
         }
 
-        if (attr->child_out) {
-            apr_file_close(attr->parent_out);
+        if ((attr->child_out) && (attr->child_out->filedes == -1)) {
+            close(STDOUT_FILENO);
+        }
+        else if (attr->child_out &&
+                 attr->child_out->filedes != STDOUT_FILENO) {
             dup2(attr->child_out->filedes, STDOUT_FILENO);
             apr_file_close(attr->child_out);
         }
 
-        if (attr->child_err) {
-            apr_file_close(attr->parent_err);
+        if ((attr->child_err) && (attr->child_err->filedes == -1)) {
+            close(STDERR_FILENO);
+        }
+        else if (attr->child_err &&
+                 attr->child_err->filedes != STDERR_FILENO) {
             dup2(attr->child_err->filedes, STDERR_FILENO);
             apr_file_close(attr->child_err);
         }
@@ -427,34 +458,34 @@ APR_DECLARE(apr_status_t) apr_proc_create(apr_proc_t *new,
                 if (attr->errfn) {
                     attr->errfn(pool, errno, "change of working directory failed");
                 }
-                exit(-1);   /* We have big problems, the child should exit. */
+                _exit(-1);   /* We have big problems, the child should exit. */
             }
         }
 
         /* Only try to switch if we are running as root */
         if (attr->gid != -1 && !geteuid()) {
-            if ((status = setgid(attr->gid))) {
+            if (setgid(attr->gid)) {
                 if (attr->errfn) {
                     attr->errfn(pool, errno, "setting of group failed");
                 }
-                exit(-1);   /* We have big problems, the child should exit. */
+                _exit(-1);   /* We have big problems, the child should exit. */
             }
         }
 
         if (attr->uid != -1 && !geteuid()) {
-            if ((status = setuid(attr->uid))) {
+            if (setuid(attr->uid)) {
                 if (attr->errfn) {
                     attr->errfn(pool, errno, "setting of user failed");
                 }
-                exit(-1);   /* We have big problems, the child should exit. */
+                _exit(-1);   /* We have big problems, the child should exit. */
             }
         }
 
-        if ((status = limit_proc(attr)) != APR_SUCCESS) {
+        if (limit_proc(attr) != APR_SUCCESS) {
             if (attr->errfn) {
                 attr->errfn(pool, errno, "setting of resource limits failed");
             }
-            exit(-1);   /* We have big problems, the child should exit. */
+            _exit(-1);   /* We have big problems, the child should exit. */
         }
 
         if (attr->cmdtype == APR_SHELLCMD ||
@@ -546,20 +577,20 @@ APR_DECLARE(apr_status_t) apr_proc_create(apr_proc_t *new,
             attr->errfn(pool, errno, desc);
         }
 
-        exit(-1);  /* if we get here, there is a problem, so exit with an
-                    * error code. */
+        _exit(-1);  /* if we get here, there is a problem, so exit with an
+                     * error code. */
     }
 
     /* Parent process */
-    if (attr->child_in) {
+    if (attr->child_in && (attr->child_in->filedes != -1)) {
         apr_file_close(attr->child_in);
     }
 
-    if (attr->child_out) {
+    if (attr->child_out && (attr->child_out->filedes != -1)) {
         apr_file_close(attr->child_out);
     }
 
-    if (attr->child_err) {
+    if (attr->child_err && (attr->child_err->filedes != -1)) {
         apr_file_close(attr->child_err);
     }
 
@@ -634,6 +665,7 @@ APR_DECLARE(apr_status_t) apr_proc_wait(apr_proc_t *proc,
     return errno;
 }
 
+#if APR_HAVE_STRUCT_RLIMIT
 APR_DECLARE(apr_status_t) apr_procattr_limit_set(apr_procattr_t *attr,
                                                  apr_int32_t what,
                                                  struct rlimit *limit)
@@ -648,7 +680,7 @@ APR_DECLARE(apr_status_t) apr_procattr_limit_set(apr_procattr_t *attr,
 #endif
 
         case APR_LIMIT_MEM:
-#if defined (RLIMIT_DATA) || defined (RLIMIT_VMEM) || defined(RLIMIT_AS)
+#if defined(RLIMIT_DATA) || defined(RLIMIT_VMEM) || defined(RLIMIT_AS)
             attr->limit_mem = limit;
             break;
 #else
@@ -675,3 +707,5 @@ APR_DECLARE(apr_status_t) apr_procattr_limit_set(apr_procattr_t *attr,
 
     return APR_SUCCESS;
 }
+#endif /* APR_HAVE_STRUCT_RLIMIT */
+

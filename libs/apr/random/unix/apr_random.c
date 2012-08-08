@@ -14,7 +14,10 @@
  * limitations under the License.
  */
 /*
- * See the paper "???" by Ben Laurie for an explanation of this PRNG.
+ * See the paper "On Randomness" by Ben Laurie for an explanation of this PRNG.
+ * http://www.apache-ssl.org/randomness.pdf
+ * XXX: Is there a formal proof of this PRNG? Couldn't we use the more popular
+ * Mersenne Twister PRNG (and BSD licensed)?
  */
 
 #include "apr.h"
@@ -83,6 +86,23 @@ struct apr_random_t {
 
 static apr_random_t *all_random;
 
+static apr_status_t random_cleanup(void *data)
+{
+    apr_random_t *remove_this = data,
+                 *cur = all_random,
+                 **prev_ptr = &all_random;
+    while (cur) {
+        if (cur == remove_this) {
+            *prev_ptr = cur->next;
+            break;
+        }
+        prev_ptr = &cur->next;
+        cur = cur->next;
+    }
+    return APR_SUCCESS;
+}
+
+
 APR_DECLARE(void) apr_random_init(apr_random_t *g,apr_pool_t *p,
                                   apr_crypto_hash_t *pool_hash,
                                   apr_crypto_hash_t *key_hash,
@@ -125,6 +145,7 @@ APR_DECLARE(void) apr_random_init(apr_random_t *g,apr_pool_t *p,
 
     g->next = all_random;
     all_random = g;
+    apr_pool_cleanup_register(p, g, random_cleanup, apr_pool_cleanup_null);
 }
 
 static void mix_pid(apr_random_t *g,unsigned char *H,pid_t pid)
@@ -156,6 +177,11 @@ APR_DECLARE(void) apr_random_after_fork(apr_proc_t *proc)
     apr_random_t *r;
 
     for (r = all_random; r; r = r->next)
+        /* 
+         * XXX Note: the pid does not provide sufficient entropy to 
+         * actually call this secure.  See Ben's paper referenced at 
+         * the top of this file. 
+         */
         mixer(r,proc->pid);
 }
 
@@ -219,7 +245,7 @@ APR_DECLARE(void) apr_random_add_entropy(apr_random_t *g,const void *entropy_,
         p->pool[p->bytes++] = entropy[n];
 
         if (p->bytes == g->rehash_size) {
-            unsigned int r;
+            apr_size_t r;
 
             for (r = 0; r < p->bytes/2; r+=g->pool_hash->size)
                 hash(g->pool_hash,p->pool+r,p->pool+r*2,g->pool_hash->size*2);
@@ -246,7 +272,7 @@ static void apr_random_bytes(apr_random_t *g,unsigned char *random,
     apr_size_t n;
 
     for (n = 0; n < bytes; ) {
-        int l;
+        apr_size_t l;
 
         if (g->random_bytes == 0) {
             apr_random_block(g,g->randomness);

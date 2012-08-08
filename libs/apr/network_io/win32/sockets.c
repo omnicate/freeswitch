@@ -51,6 +51,12 @@ static void set_socket_vars(apr_socket_t *sock, int family, int type, int protoc
     sock->protocol = protocol;
     apr_sockaddr_vars_set(sock->local_addr, family, 0);
     apr_sockaddr_vars_set(sock->remote_addr, family, 0);
+#if APR_HAVE_IPV6
+    /* hard-coded behavior for older Windows IPv6 */
+    if (apr_os_level < APR_WIN_VISTA && family == AF_INET6) {
+        apr_set_option(sock, APR_IPV6_V6ONLY, 1);
+    }
+#endif
 }                                                                                                  
 static void alloc_socket(apr_socket_t **new, apr_pool_t *p)
 {
@@ -81,7 +87,9 @@ APR_DECLARE(apr_status_t) apr_socket_create(apr_socket_t **new, int family,
                                             int type, int protocol, 
                                             apr_pool_t *cont)
 {
+#if APR_HAVE_IPV6
     int downgrade = (family == AF_UNSPEC);
+#endif
 
     if (family == AF_UNSPEC) {
 #if APR_HAVE_IPV6
@@ -114,7 +122,7 @@ APR_DECLARE(apr_status_t) apr_socket_create(apr_socket_t **new, int family,
      * purposes, always transform the socket() created as a non-inherited
      * handle
      */
-#if APR_HAS_UNICODE_FS
+#if APR_HAS_UNICODE_FS && !defined(_WIN32_WCE)
     IF_WIN_OS_IS_UNICODE {
         /* A different approach.  Many users report errors such as 
          * (32538)An operation was attempted on something that is not 
@@ -128,9 +136,13 @@ APR_DECLARE(apr_status_t) apr_socket_create(apr_socket_t **new, int family,
         SetHandleInformation((HANDLE) (*new)->socketdes, 
                              HANDLE_FLAG_INHERIT, 0);
     }
-#endif
 #if APR_HAS_ANSI_FS
-    ELSE_WIN_OS_IS_ANSI {
+    /* only if APR_HAS_ANSI_FS && APR_HAS_UNICODE_FS */
+    ELSE_WIN_OS_IS_ANSI
+#endif
+#endif
+#if APR_HAS_ANSI_FS || defined(_WIN32_WCE)
+    {
         HANDLE hProcess = GetCurrentProcess();
         HANDLE dup;
         if (DuplicateHandle(hProcess, (HANDLE) (*new)->socketdes, hProcess, 
@@ -247,6 +259,7 @@ APR_DECLARE(apr_status_t) apr_socket_accept(apr_socket_t **new,
     (*new)->remote_addr->salen = sizeof((*new)->remote_addr->sa);
     memcpy (&(*new)->remote_addr->sa, &sa, salen);
     *(*new)->local_addr = *sock->local_addr;
+    (*new)->remote_addr_unknown = 0;
 
     /* The above assignment just overwrote the pool entry. Setting the local_addr 
        pool for the accepted socket back to what it should be.  Otherwise all 
@@ -451,9 +464,7 @@ APR_DECLARE(apr_status_t) apr_os_sock_make(apr_socket_t **apr_sock,
         (*apr_sock)->remote_addr->pool = cont;
         /* XXX IPv6 - this assumes sin_port and sin6_port at same offset */
         (*apr_sock)->remote_addr->port = ntohs((*apr_sock)->remote_addr->sa.sin.sin_port);
-    }
-    else {
-        (*apr_sock)->remote_addr_unknown = 1;
+        (*apr_sock)->remote_addr_unknown = 0;
     }
         
     apr_pool_cleanup_register((*apr_sock)->pool, (void *)(*apr_sock), 

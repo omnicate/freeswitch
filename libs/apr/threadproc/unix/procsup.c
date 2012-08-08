@@ -18,8 +18,6 @@
 
 APR_DECLARE(apr_status_t) apr_proc_detach(int daemonize)
 {
-    int x;
-
     if (chdir("/") == -1) {
         return errno;
     }
@@ -28,15 +26,17 @@ APR_DECLARE(apr_status_t) apr_proc_detach(int daemonize)
     /* Don't detach for MPE because child processes can't survive the death of
      * the parent. */
     if (daemonize) {
-	    if ((x = fork()) > 0) {
-	        exit(0);
+        int x;
+
+        if ((x = fork()) > 0) {
+            exit(0);
         }
-	    else if (x == -1) {
-	        perror("fork");
-	        fprintf(stderr, "unable to fork new process\n");
-	        exit(1);  /* we can't do anything here, so just exit. */
-	    }
-	    /* RAISE_SIGSTOP(DETACH); */
+        else if (x == -1) {
+            perror("fork");
+            fprintf(stderr, "unable to fork new process\n");
+            exit(1);  /* we can't do anything here, so just exit. */
+        }
+        /* RAISE_SIGSTOP(DETACH); */
     }
 #endif
 

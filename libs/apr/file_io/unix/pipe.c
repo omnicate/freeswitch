@@ -149,7 +149,7 @@ APR_DECLARE(apr_status_t) apr_os_pipe_put_ex(apr_file_t **file,
     (*file)->ungetchar = -1; /* no char avail */
     (*file)->filedes = *dafile;
     if (!register_cleanup) {
-        (*file)->flags = APR_FILE_NOCLEANUP;
+        (*file)->flags = APR_FOPEN_NOCLEANUP;
     }
     (*file)->buffered = 0;
 #if APR_HAS_THREADS
@@ -219,6 +219,33 @@ APR_DECLARE(apr_status_t) apr_file_pipe_create(apr_file_t **in, apr_file_t **out
                          apr_pool_cleanup_null);
     apr_pool_cleanup_register((*out)->pool, (void *)(*out), apr_unix_file_cleanup,
                          apr_pool_cleanup_null);
+    return APR_SUCCESS;
+}
+
+APR_DECLARE(apr_status_t) apr_file_pipe_create_ex(apr_file_t **in, 
+                                                  apr_file_t **out, 
+                                                  apr_int32_t blocking,
+                                                  apr_pool_t *pool)
+{
+    apr_status_t status;
+
+    if ((status = apr_file_pipe_create(in, out, pool)) != APR_SUCCESS)
+        return status;
+
+    switch (blocking) {
+        case APR_FULL_BLOCK:
+            break;
+        case APR_READ_BLOCK:
+            apr_file_pipe_timeout_set(*out, 0);
+            break;
+        case APR_WRITE_BLOCK:
+            apr_file_pipe_timeout_set(*in, 0);
+            break;
+        default:
+            apr_file_pipe_timeout_set(*out, 0);
+            apr_file_pipe_timeout_set(*in, 0);
+    }
+
     return APR_SUCCESS;
 }
 

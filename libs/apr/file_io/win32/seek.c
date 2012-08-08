@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
-#include "win32/apr_arch_file_io.h"
+#include "apr_arch_file_io.h"
 #include "apr_file_io.h"
 #include <errno.h>
 #include <string.h>
 
 static apr_status_t setptr(apr_file_t *thefile, apr_off_t pos )
 {
-    apr_size_t newbufpos;
+    apr_off_t newbufpos;
     apr_status_t rv;
     DWORD rc;
 
@@ -37,15 +37,14 @@ static apr_status_t setptr(apr_file_t *thefile, apr_off_t pos )
     /* We may be truncating to size here. 
      * XXX: testing an 'unsigned' as >= 0 below indicates a bug
      */
-    newbufpos = (apr_size_t)(pos - (thefile->filePtr 
-                                  - thefile->dataRead));
+    newbufpos = pos - (thefile->filePtr - thefile->dataRead);
 
-    if (newbufpos >= 0 && newbufpos <= thefile->dataRead) {
+    if (newbufpos >= 0 && newbufpos <= (apr_off_t)thefile->dataRead) {
         thefile->bufpos = (apr_size_t)newbufpos;
         rv = APR_SUCCESS;
     } else {
         DWORD offlo = (DWORD)pos;
-        DWORD offhi = (DWORD)(pos >> 32);
+        LONG  offhi = (LONG)(pos >> 32);
         rc = SetFilePointer(thefile->filehand, offlo, &offhi, FILE_BEGIN);
 
         if (rc == (DWORD)-1)
@@ -101,10 +100,10 @@ APR_DECLARE(apr_status_t) apr_file_seek(apr_file_t *thefile, apr_seek_where_t wh
         *offset = thefile->filePtr - thefile->dataRead + thefile->bufpos;
         return rc;
     }
-    /* A file opened with APR_XTHREAD has been opened for overlapped i/o. 
+    /* A file opened with APR_FOPEN_XTHREAD has been opened for overlapped i/o.
      * APR must explicitly track the file pointer in this case.
      */
-    else if (thefile->pOverlapped || thefile->flags & APR_XTHREAD) {
+    else if (thefile->pOverlapped || thefile->flags & APR_FOPEN_XTHREAD) {
         switch(where) {
             case APR_SET:
                 thefile->filePtr = *offset;
@@ -159,7 +158,7 @@ APR_DECLARE(apr_status_t) apr_file_trunc(apr_file_t *thefile, apr_off_t offset)
 {
     apr_status_t rv;
     DWORD offlo = (DWORD)offset;
-    DWORD offhi = (DWORD)(offset >> 32);
+    LONG  offhi = (LONG)(offset >> 32);
     DWORD rc;
 
     rc = SetFilePointer(thefile->filehand, offlo, &offhi, FILE_BEGIN);

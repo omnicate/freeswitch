@@ -36,19 +36,34 @@
 #endif
 
 #if APR_HAVE_UNISTD_H
-#include <unistd.h>     /* for getpid */
+#include <unistd.h>     /* for getpid and sysconf */
 #endif
 
+#if APR_ALLOCATOR_USES_MMAP
+#include <sys/mman.h>
+#endif
 
 /*
  * Magic numbers
  */
 
-#define MIN_ALLOC 8192
+/*
+ * XXX: This is not optimal when using --enable-allocator-uses-mmap on
+ * XXX: machines with large pagesize, but currently the sink is assumed
+ * XXX: to be index 0, so MIN_ALLOC must be at least two pages.
+ */
+#define MIN_ALLOC (2 * BOUNDARY_SIZE)
 #define MAX_INDEX   20
 
+#if APR_ALLOCATOR_USES_MMAP && defined(_SC_PAGESIZE)
+static unsigned int boundary_index;
+static unsigned int boundary_size;
+#define BOUNDARY_INDEX  boundary_index
+#define BOUNDARY_SIZE   boundary_size
+#else
 #define BOUNDARY_INDEX 12
 #define BOUNDARY_SIZE (1 << BOUNDARY_INDEX)
+#endif
 
 /* 
  * Timing constants for killing subprocesses
@@ -62,16 +77,39 @@
 
 /*
  * Allocator
+ *
+ * @note The max_free_index and current_free_index fields are not really
+ * indices, but quantities of BOUNDARY_SIZE big memory blocks.
  */
 
 struct apr_allocator_t {
+    /** largest used index into free[], always < MAX_INDEX */
     apr_uint32_t        max_index;
+    /** Total size (in BOUNDARY_SIZE multiples) of unused memory before
+     * blocks are given back. @see apr_allocator_max_free_set().
+     * @note Initialized to APR_ALLOCATOR_MAX_FREE_UNLIMITED,
+     * which means to never give back blocks.
+     */
     apr_uint32_t        max_free_index;
+    /**
+     * Memory size (in BOUNDARY_SIZE multiples) that currently must be freed
+     * before blocks are given back. Range: 0..max_free_index
+     */
     apr_uint32_t        current_free_index;
 #if APR_HAS_THREADS
     apr_thread_mutex_t *mutex;
 #endif /* APR_HAS_THREADS */
     apr_pool_t         *owner;
+    /**
+     * Lists of free nodes. Slot 0 is used for oversized nodes,
+     * and the slots 1..MAX_INDEX-1 contain nodes of sizes
+     * (i+1) * BOUNDARY_SIZE. Example for BOUNDARY_INDEX == 12:
+     * slot  0: nodes larger than 81920
+     * slot  1: size  8192
+     * slot  2: size 12288
+     * ...
+     * slot 19: size 81920
+     */
     apr_memnode_t      *free[MAX_INDEX];
 };
 
@@ -108,7 +146,11 @@ APR_DECLARE(void) apr_allocator_destroy(apr_allocator_t *allocator)
         ref = &allocator->free[index];
         while ((node = *ref) != NULL) {
             *ref = node->next;
+#if APR_ALLOCATOR_USES_MMAP
+            munmap(node, (node->index+1) << BOUNDARY_INDEX);
+#else
             free(node);
+#endif
         }
     }
 
@@ -168,16 +210,19 @@ APR_DECLARE(void) apr_allocator_max_free_set(apr_allocator_t *allocator,
 }
 
 static APR_INLINE
-apr_memnode_t *allocator_alloc(apr_allocator_t *allocator, apr_size_t size)
+apr_memnode_t *allocator_alloc(apr_allocator_t *allocator, apr_size_t in_size)
 {
     apr_memnode_t *node, **ref;
     apr_uint32_t max_index;
-    apr_size_t i, index;
+    apr_size_t size, i, index;
 
     /* Round up the block size to the next boundary, but always
      * allocate at least a certain size (MIN_ALLOC).
      */
-    size = APR_ALIGN(size + APR_MEMNODE_T_SIZE, BOUNDARY_SIZE);
+    size = APR_ALIGN(in_size + APR_MEMNODE_T_SIZE, BOUNDARY_SIZE);
+    if (size < in_size) {
+        return NULL;
+    }
     if (size < MIN_ALLOC)
         size = MIN_ALLOC;
 
@@ -233,7 +278,7 @@ apr_memnode_t *allocator_alloc(apr_allocator_t *allocator, apr_size_t size)
                 allocator->max_index = max_index;
             }
 
-            allocator->current_free_index += node->index;
+            allocator->current_free_index += node->index + 1;
             if (allocator->current_free_index > allocator->max_free_index)
                 allocator->current_free_index = allocator->max_free_index;
 
@@ -273,7 +318,7 @@ apr_memnode_t *allocator_alloc(apr_allocator_t *allocator, apr_size_t size)
         if (node) {
             *ref = node->next;
 
-            allocator->current_free_index += node->index;
+            allocator->current_free_index += node->index + 1;
             if (allocator->current_free_index > allocator->max_free_index)
                 allocator->current_free_index = allocator->max_free_index;
 
@@ -297,7 +342,12 @@ apr_memnode_t *allocator_alloc(apr_allocator_t *allocator, apr_size_t size)
     /* If we haven't got a suitable node, malloc a new one
      * and initialize it.
      */
+#if APR_ALLOCATOR_USES_MMAP
+    if ((node = mmap(NULL, size, PROT_READ|PROT_WRITE,
+                     MAP_PRIVATE|MAP_ANON, -1, 0)) == MAP_FAILED)
+#else
     if ((node = malloc(size)) == NULL)
+#endif
         return NULL;
 
     node->next = NULL;
@@ -332,7 +382,7 @@ void allocator_free(apr_allocator_t *allocator, apr_memnode_t *node)
         index = node->index;
 
         if (max_free_index != APR_ALLOCATOR_MAX_FREE_UNLIMITED
-            && index > current_free_index) {
+            && index + 1 > current_free_index) {
             node->next = freelist;
             freelist = node;
         }
@@ -345,7 +395,10 @@ void allocator_free(apr_allocator_t *allocator, apr_memnode_t *node)
                 max_index = index;
             }
             allocator->free[index] = node;
-            current_free_index -= index;
+            if (current_free_index >= index + 1)
+                current_free_index -= index + 1;
+            else
+                current_free_index = 0;
         }
         else {
             /* This node is too large to keep in a specific size bucket,
@@ -353,7 +406,10 @@ void allocator_free(apr_allocator_t *allocator, apr_memnode_t *node)
              */
             node->next = allocator->free[0];
             allocator->free[0] = node;
-            current_free_index -= index;
+            if (current_free_index >= index + 1)
+                current_free_index -= index + 1;
+            else
+                current_free_index = 0;
         }
     } while ((node = next) != NULL);
 
@@ -368,7 +424,11 @@ void allocator_free(apr_allocator_t *allocator, apr_memnode_t *node)
     while (freelist != NULL) {
         node = freelist;
         freelist = node->next;
+#if APR_ALLOCATOR_USES_MMAP
+        munmap(node, (node->index+1) << BOUNDARY_INDEX);
+#else
         free(node);
+#endif
     }
 }
 
@@ -449,9 +509,7 @@ struct apr_pool_t {
     apr_abortfunc_t       abort_fn;
     apr_hash_t           *user_data;
     const char           *tag;
-#if APR_HAS_THREADS
-	apr_thread_mutex_t   *user_mutex;
-#endif
+
 #if !APR_POOL_DEBUG
     apr_memnode_t        *active;
     apr_memnode_t        *self; /* The node containing the pool itself */
@@ -473,8 +531,8 @@ struct apr_pool_t {
 #endif /* APR_POOL_DEBUG */
 #ifdef NETWARE
     apr_os_proc_t         owner_proc;
-
 #endif /* defined(NETWARE) */
+    cleanup_t            *pre_cleanups;
 };
 
 #define SIZEOF_POOL_T       APR_ALIGN_DEFAULT(sizeof(apr_pool_t))
@@ -500,7 +558,6 @@ static apr_file_t *file_stderr = NULL;
  */
 
 static void run_cleanups(cleanup_t **c);
-static void run_child_cleanups(cleanup_t **c);
 static void free_proc_chain(struct process_chain *procs);
 
 #if APR_POOL_DEBUG
@@ -519,6 +576,14 @@ APR_DECLARE(apr_status_t) apr_pool_initialize(void)
     if (apr_pools_initialized++)
         return APR_SUCCESS;
 
+#if APR_ALLOCATOR_USES_MMAP && defined(_SC_PAGESIZE)
+    boundary_size = sysconf(_SC_PAGESIZE);
+    boundary_index = 12;
+    while ( (1 << boundary_index) < boundary_size)
+        boundary_index++;
+    boundary_size = (1 << boundary_index);
+#endif
+
     if ((rv = apr_allocator_create(&global_allocator)) != APR_SUCCESS) {
         apr_pools_initialized = 0;
         return rv;
@@ -536,6 +601,9 @@ APR_DECLARE(apr_status_t) apr_pool_initialize(void)
 
     /* This has to happen here because mutexes might be backed by
      * atomics.  It used to be snug and safe in apr_initialize().
+     *
+     * Warning: apr_atomic_init() must always be called, by any
+     * means possible, from apr_initialize().
      */
     if ((rv = apr_atomic_init(global_pool)) != APR_SUCCESS) {
         return rv;
@@ -590,31 +658,38 @@ APR_DECLARE(void) apr_pool_terminate(void)
     node->next->ref = node->ref;                \
 } while (0)
 
+/* Returns the amount of free space in the given node. */
+#define node_free_space(node_) ((apr_size_t)(node_->endp - node_->first_avail))
+
 /*
  * Memory allocation
  */
 
-APR_DECLARE(void *) apr_palloc(apr_pool_t *pool, apr_size_t size)
+APR_DECLARE(void *) apr_palloc(apr_pool_t *pool, apr_size_t in_size)
 {
     apr_memnode_t *active, *node;
-    void *mem = NULL;
-    apr_size_t free_index;
-#if APR_HAS_THREADS
-	if (pool->user_mutex) apr_thread_mutex_lock(pool->user_mutex);
-#endif
-    size = APR_ALIGN_DEFAULT(size);
+    void *mem;
+    apr_size_t size, free_index;
+
+    size = APR_ALIGN_DEFAULT(in_size);
+    if (size < in_size) {
+        if (pool->abort_fn)
+            pool->abort_fn(APR_ENOMEM);
+
+        return NULL;
+    }
     active = pool->active;
 
     /* If the active node has enough bytes left, use it. */
-    if (size < (apr_size_t)(active->endp - active->first_avail)) {
+    if (size <= node_free_space(active)) {
         mem = active->first_avail;
         active->first_avail += size;
 
-		goto end;
+        return mem;
     }
 
     node = active->next;
-    if (size < (apr_size_t)(node->endp - node->first_avail)) {
+    if (size <= node_free_space(node)) {
         list_remove(node);
     }
     else {
@@ -622,8 +697,7 @@ APR_DECLARE(void *) apr_palloc(apr_pool_t *pool, apr_size_t size)
             if (pool->abort_fn)
                 pool->abort_fn(APR_ENOMEM);
 
-			mem = NULL;
-			goto end;
+            return NULL;
         }
     }
 
@@ -642,7 +716,7 @@ APR_DECLARE(void *) apr_palloc(apr_pool_t *pool, apr_size_t size)
     active->free_index = (APR_UINT32_TRUNC_CAST)free_index;
     node = active->next;
     if (free_index >= node->free_index)
-		goto end;
+        return mem;
 
     do {
         node = node->next;
@@ -652,10 +726,6 @@ APR_DECLARE(void *) apr_palloc(apr_pool_t *pool, apr_size_t size)
     list_remove(active);
     list_insert(active, node);
 
- end:
-#if APR_HAS_THREADS
-	if (pool->user_mutex) apr_thread_mutex_unlock(pool->user_mutex);
-#endif
     return mem;
 }
 
@@ -672,7 +742,6 @@ APR_DECLARE(void *) apr_pcalloc(apr_pool_t *pool, apr_size_t size)
 {
     void *mem;
 
-    size = APR_ALIGN_DEFAULT(size);
     if ((mem = apr_palloc(pool, size)) != NULL) {
         memset(mem, 0, size);
     }
@@ -688,9 +757,11 @@ APR_DECLARE(void *) apr_pcalloc(apr_pool_t *pool, apr_size_t size)
 APR_DECLARE(void) apr_pool_clear(apr_pool_t *pool)
 {
     apr_memnode_t *active;
-#if APR_HAS_THREADS
-	if (pool->user_mutex) apr_thread_mutex_lock(pool->user_mutex);
-#endif
+
+    /* Run pre destroy cleanups */
+    run_cleanups(&pool->pre_cleanups);
+    pool->pre_cleanups = NULL;
+
     /* Destroy the subpools.  The subpools will detach themselves from
      * this pool thus this loop is safe and easy.
      */
@@ -716,31 +787,22 @@ APR_DECLARE(void) apr_pool_clear(apr_pool_t *pool)
     active->first_avail = pool->self_first_avail;
 
     if (active->next == active)
-        goto end;
+        return;
 
     *active->ref = NULL;
     allocator_free(pool->allocator, active->next);
     active->next = active;
     active->ref = &active->next;
-
- end:
-#if APR_HAS_THREADS
-	if (pool->user_mutex) apr_thread_mutex_unlock(pool->user_mutex);
-#endif
 }
-
-#if APR_HAS_THREADS
-APR_DECLARE(void) apr_pool_mutex_set(apr_pool_t *pool,
-									 apr_thread_mutex_t *mutex)
-{
-    pool->user_mutex = mutex;
-}
-#endif
 
 APR_DECLARE(void) apr_pool_destroy(apr_pool_t *pool)
 {
     apr_memnode_t *active;
     apr_allocator_t *allocator;
+
+    /* Run pre destroy cleanups */
+    run_cleanups(&pool->pre_cleanups);
+    pool->pre_cleanups = NULL;
 
     /* Destroy the subpools.  The subpools will detach themselve from
      * this pool thus this loop is safe and easy.
@@ -816,6 +878,10 @@ APR_DECLARE(apr_status_t) apr_pool_create_ex(apr_pool_t **newpool,
     if (!parent)
         parent = global_pool;
 
+    /* parent will always be non-NULL here except the first time a
+     * pool is created, in which case allocator is guaranteed to be
+     * non-NULL. */
+
     if (!abort_fn && parent)
         abort_fn = parent->abort_fn;
 
@@ -842,12 +908,11 @@ APR_DECLARE(apr_status_t) apr_pool_create_ex(apr_pool_t **newpool,
     pool->child = NULL;
     pool->cleanups = NULL;
     pool->free_cleanups = NULL;
+    pool->pre_cleanups = NULL;
     pool->subprocesses = NULL;
     pool->user_data = NULL;
     pool->tag = NULL;
-#if APR_HAS_THREADS
-	pool->user_mutex = NULL;
-#endif
+
 #ifdef NETWARE
     pool->owner_proc = (apr_os_proc_t)getnlmhandle();
 #endif /* defined(NETWARE) */
@@ -881,6 +946,74 @@ APR_DECLARE(apr_status_t) apr_pool_create_ex(apr_pool_t **newpool,
     return APR_SUCCESS;
 }
 
+/* Deprecated. Renamed to apr_pool_create_unmanaged_ex
+ */
+APR_DECLARE(apr_status_t) apr_pool_create_core_ex(apr_pool_t **newpool,
+                                                  apr_abortfunc_t abort_fn,
+                                                  apr_allocator_t *allocator)
+{
+    return apr_pool_create_unmanaged_ex(newpool, abort_fn, allocator);
+}
+
+APR_DECLARE(apr_status_t) apr_pool_create_unmanaged_ex(apr_pool_t **newpool,
+                                                  apr_abortfunc_t abort_fn,
+                                                  apr_allocator_t *allocator)
+{
+    apr_pool_t *pool;
+    apr_memnode_t *node;
+    apr_allocator_t *pool_allocator;
+
+    *newpool = NULL;
+
+    if (!apr_pools_initialized)
+        return APR_ENOPOOL;
+    if ((pool_allocator = allocator) == NULL) {
+        if ((pool_allocator = malloc(SIZEOF_ALLOCATOR_T)) == NULL) {
+            if (abort_fn)
+                abort_fn(APR_ENOMEM);
+
+            return APR_ENOMEM;
+        }
+        memset(pool_allocator, 0, SIZEOF_ALLOCATOR_T);
+        pool_allocator->max_free_index = APR_ALLOCATOR_MAX_FREE_UNLIMITED;
+    }
+    if ((node = allocator_alloc(pool_allocator,
+                                MIN_ALLOC - APR_MEMNODE_T_SIZE)) == NULL) {
+        if (abort_fn)
+            abort_fn(APR_ENOMEM);
+
+        return APR_ENOMEM;
+    }
+
+    node->next = node;
+    node->ref = &node->next;
+
+    pool = (apr_pool_t *)node->first_avail;
+    node->first_avail = pool->self_first_avail = (char *)pool + SIZEOF_POOL_T;
+
+    pool->allocator = pool_allocator;
+    pool->active = pool->self = node;
+    pool->abort_fn = abort_fn;
+    pool->child = NULL;
+    pool->cleanups = NULL;
+    pool->free_cleanups = NULL;
+    pool->pre_cleanups = NULL;
+    pool->subprocesses = NULL;
+    pool->user_data = NULL;
+    pool->tag = NULL;
+    pool->parent = NULL;
+    pool->sibling = NULL;
+    pool->ref = NULL;
+
+#ifdef NETWARE
+    pool->owner_proc = (apr_os_proc_t)getnlmhandle();
+#endif /* defined(NETWARE) */
+    if (!allocator)
+        pool_allocator->owner = pool;
+    *newpool = pool;
+
+    return APR_SUCCESS;
+}
 
 /*
  * "Print" functions
@@ -934,8 +1067,7 @@ static int psprintf_flush(apr_vformatter_buff_t *vbuff)
         size = APR_PSPRINTF_MIN_STRINGSIZE;
 
     node = active->next;
-    if (!ps->got_a_new_node
-        && size < (apr_size_t)(node->endp - node->first_avail)) {
+    if (!ps->got_a_new_node && size <= node_free_space(node)) {
 
         list_remove(node);
         list_insert(node, active);
@@ -990,10 +1122,6 @@ APR_DECLARE(char *) apr_pvsprintf(apr_pool_t *pool, const char *fmt, va_list ap)
     apr_memnode_t *active, *node;
     apr_size_t free_index;
 
-#if APR_HAS_THREADS
-	if (pool->user_mutex) apr_thread_mutex_lock(pool->user_mutex);
-#endif
-
     ps.node = active = pool->active;
     ps.pool = pool;
     ps.vbuff.curpos  = ps.node->first_avail;
@@ -1012,8 +1140,7 @@ APR_DECLARE(char *) apr_pvsprintf(apr_pool_t *pool, const char *fmt, va_list ap)
                 pool->abort_fn(APR_ENOMEM);
             }
 
-            strp = NULL;
-			goto end;
+            return NULL;
         }
     }
 
@@ -1021,8 +1148,7 @@ APR_DECLARE(char *) apr_pvsprintf(apr_pool_t *pool, const char *fmt, va_list ap)
         if (pool->abort_fn)
             pool->abort_fn(APR_ENOMEM);
 
-        strp = NULL;
-		goto end;
+        return NULL;
     }
 
     strp = ps.vbuff.curpos;
@@ -1039,8 +1165,8 @@ APR_DECLARE(char *) apr_pvsprintf(apr_pool_t *pool, const char *fmt, va_list ap)
     /*
      * Link the node in if it's a new one
      */
-    if (!ps.got_a_new_node) 
-        goto end;
+    if (!ps.got_a_new_node)
+        return strp;
 
     active = pool->active;
     node = ps.node;
@@ -1058,7 +1184,7 @@ APR_DECLARE(char *) apr_pvsprintf(apr_pool_t *pool, const char *fmt, va_list ap)
     node = active->next;
 
     if (free_index >= node->free_index)
-        goto end;
+        return strp;
 
     do {
         node = node->next;
@@ -1067,12 +1193,6 @@ APR_DECLARE(char *) apr_pvsprintf(apr_pool_t *pool, const char *fmt, va_list ap)
 
     list_remove(active);
     list_insert(active, node);
-
- end:
-
-#if APR_HAS_THREADS
-	if (pool->user_mutex) apr_thread_mutex_unlock(pool->user_mutex);
-#endif
 
     return strp;
 }
@@ -1139,7 +1259,7 @@ static void apr_pool_log_event(apr_pool_t *pool, const char *event,
                 "] "
                 "%7s "
                 "(%10lu/%10lu/%10lu) "
-                "0x%08X \"%s\" "
+                "0x%pp \"%s\" "
                 "<%s> "
                 "(%u/%u/%u) "
                 "\n",
@@ -1151,7 +1271,7 @@ static void apr_pool_log_event(apr_pool_t *pool, const char *event,
                 (unsigned long)apr_pool_num_bytes(pool, 0),
                 (unsigned long)apr_pool_num_bytes(pool, 1),
                 (unsigned long)apr_pool_num_bytes(global_pool, 1),
-                (unsigned int)pool, pool->tag,
+                pool, pool->tag,
                 file_line,
                 pool->stat_alloc, pool->stat_total_alloc, pool->stat_clear);
         }
@@ -1165,7 +1285,7 @@ static void apr_pool_log_event(apr_pool_t *pool, const char *event,
                 "] "
                 "%7s "
                 "                                   "
-                "0x%08X "
+                "0x%pp "
                 "<%s> "
                 "\n",
                 (unsigned long)getpid(),
@@ -1173,7 +1293,7 @@ static void apr_pool_log_event(apr_pool_t *pool, const char *event,
                 (unsigned long)apr_os_thread_current(),
 #endif /* APR_HAS_THREADS */
                 event,
-                (unsigned int)pool,
+                pool,
                 file_line);
         }
     }
@@ -1245,10 +1365,19 @@ APR_DECLARE(apr_status_t) apr_pool_initialize(void)
     apr_status_t rv;
 #if (APR_POOL_DEBUG & APR_POOL_DEBUG_VERBOSE_ALL)
     char *logpath;
+    apr_file_t *debug_log = NULL;
 #endif
 
     if (apr_pools_initialized++)
         return APR_SUCCESS;
+
+#if APR_ALLOCATOR_USES_MMAP && defined(_SC_PAGESIZE)
+    boundary_size = sysconf(_SC_PAGESIZE);
+    boundary_index = 12;
+    while ( (1 << boundary_index) < boundary_size)
+        boundary_index++;
+    boundary_size = (1 << boundary_index);
+#endif
 
     /* Since the debug code works a bit differently then the
      * regular pools code, we ask for a lock here.  The regular
@@ -1274,13 +1403,20 @@ APR_DECLARE(apr_status_t) apr_pool_initialize(void)
 #if (APR_POOL_DEBUG & APR_POOL_DEBUG_VERBOSE_ALL)
     rv = apr_env_get(&logpath, "APR_POOL_DEBUG_LOG", global_pool);
 
+    /* Don't pass file_stderr directly to apr_file_open() here, since
+     * apr_file_open() can call back to apr_pool_log_event() and that
+     * may attempt to use then then non-NULL but partially set up file
+     * object. */
     if (rv == APR_SUCCESS) {
-        apr_file_open(&file_stderr, logpath, APR_APPEND|APR_WRITE|APR_CREATE,
+        apr_file_open(&debug_log, logpath, APR_APPEND|APR_WRITE|APR_CREATE,
                       APR_OS_DEFAULT, global_pool);
     }
     else {
-        apr_file_open_stderr(&file_stderr, global_pool);
+        apr_file_open_stderr(&debug_log, global_pool);
     }
+
+    /* debug_log is now a file handle. */
+    file_stderr = debug_log;
 
     if (file_stderr) {
         apr_file_printf(file_stderr,
@@ -1303,7 +1439,8 @@ APR_DECLARE(void) apr_pool_terminate(void)
     if (!apr_pools_initialized)
         return;
 
-    apr_pools_initialized = 0;
+    if (--apr_pools_initialized)
+        return;
 
     apr_pool_destroy(global_pool); /* This will also destroy the mutex */
     global_pool = NULL;
@@ -1333,6 +1470,7 @@ static void *pool_alloc(apr_pool_t *pool, apr_size_t size)
     node = pool->nodes;
     if (node == NULL || node->index == 64) {
         if ((node = malloc(SIZEOF_DEBUG_NODE_T)) == NULL) {
+            free(mem);
             if (pool->abort_fn)
                 pool->abort_fn(APR_ENOMEM);
 
@@ -1401,6 +1539,10 @@ static void pool_clear_debug(apr_pool_t *pool, const char *file_line)
     debug_node_t *node;
     apr_uint32_t index;
 
+    /* Run pre destroy cleanups */
+    run_cleanups(&pool->pre_cleanups);
+    pool->pre_cleanups = NULL;
+
     /* Destroy the subpools.  The subpools will detach themselves from
      * this pool thus this loop is safe and easy.
      */
@@ -1430,7 +1572,7 @@ static void pool_clear_debug(apr_pool_t *pool, const char *file_line)
 
         for (index = 0; index < node->index; index++) {
             memset(node->beginp[index], POOL_POISON_BYTE,
-                   node->endp[index] - node->beginp[index]);
+                   (char *)node->endp[index] - (char *)node->beginp[index]);
             free(node->beginp[index]);
         }
 
@@ -1639,6 +1781,84 @@ APR_DECLARE(apr_status_t) apr_pool_create_ex_debug(apr_pool_t **newpool,
     return APR_SUCCESS;
 }
 
+APR_DECLARE(apr_status_t) apr_pool_create_core_ex_debug(apr_pool_t **newpool,
+                                                   apr_abortfunc_t abort_fn,
+                                                   apr_allocator_t *allocator,
+                                                   const char *file_line)
+{
+    return apr_pool_create_unmanaged_ex_debug(newpool, abort_fn, allocator,
+                                              file_line);
+}
+
+APR_DECLARE(apr_status_t) apr_pool_create_unmanaged_ex_debug(apr_pool_t **newpool,
+                                                   apr_abortfunc_t abort_fn,
+                                                   apr_allocator_t *allocator,
+                                                   const char *file_line)
+{
+    apr_pool_t *pool;
+    apr_allocator_t *pool_allocator;
+
+    *newpool = NULL;
+
+    if ((pool = malloc(SIZEOF_POOL_T)) == NULL) {
+        if (abort_fn)
+            abort_fn(APR_ENOMEM);
+
+         return APR_ENOMEM;
+    }
+
+    memset(pool, 0, SIZEOF_POOL_T);
+
+    pool->abort_fn = abort_fn;
+    pool->tag = file_line;
+    pool->file_line = file_line;
+
+#if APR_HAS_THREADS
+    pool->owner = apr_os_thread_current();
+#endif /* APR_HAS_THREADS */
+#ifdef NETWARE
+    pool->owner_proc = (apr_os_proc_t)getnlmhandle();
+#endif /* defined(NETWARE) */
+
+    if ((pool_allocator = allocator) == NULL) {
+        apr_status_t rv;
+        if ((rv = apr_allocator_create(&pool_allocator)) != APR_SUCCESS) {
+            if (abort_fn)
+                abort_fn(rv);
+            return rv;
+        }
+        pool_allocator->owner = pool;
+    }
+    pool->allocator = pool_allocator;
+
+    if (pool->allocator != allocator) {
+#if APR_HAS_THREADS
+        apr_status_t rv;
+
+        /* No matter what the creation flags say, always create
+         * a lock.  Without it integrity_check and apr_pool_num_bytes
+         * blow up (because they traverse pools child lists that
+         * possibly belong to another thread, in combination with
+         * the pool having no lock).  However, this might actually
+         * hide problems like creating a child pool of a pool
+         * belonging to another thread.
+         */
+        if ((rv = apr_thread_mutex_create(&pool->mutex,
+                APR_THREAD_MUTEX_NESTED, pool)) != APR_SUCCESS) {
+            free(pool);
+            return rv;
+        }
+#endif /* APR_HAS_THREADS */
+    }
+
+    *newpool = pool;
+
+#if (APR_POOL_DEBUG & APR_POOL_DEBUG_VERBOSE)
+    apr_pool_log_event(pool, "CREATE", file_line, 1);
+#endif /* (APR_POOL_DEBUG & APR_POOL_DEBUG_VERBOSE) */
+
+    return APR_SUCCESS;
+}
 
 /*
  * "Print" functions (debug)
@@ -1858,7 +2078,7 @@ APR_DECLARE(apr_pool_t *) apr_pool_parent_get(apr_pool_t *pool)
     /* On NetWare, don't return the global_pool, return the application pool 
        as the top most pool */
     if (pool->parent == global_pool)
-        return NULL;
+        return pool;
     else
 #endif
     return pool->parent;
@@ -1895,13 +2115,9 @@ APR_DECLARE(int) apr_pool_is_ancestor(apr_pool_t *a, apr_pool_t *b)
     return 0;
 }
 
-APR_DECLARE(const char *) apr_pool_tag(apr_pool_t *pool, const char *tag)
+APR_DECLARE(void) apr_pool_tag(apr_pool_t *pool, const char *tag)
 {
-	if (tag) {
-		pool->tag = tag;
-	}
-
-	return pool->tag;
+    pool->tag = tag;
 }
 
 
@@ -2009,6 +2225,30 @@ APR_DECLARE(void) apr_pool_cleanup_register(apr_pool_t *p, const void *data,
     }
 }
 
+APR_DECLARE(void) apr_pool_pre_cleanup_register(apr_pool_t *p, const void *data,
+                      apr_status_t (*plain_cleanup_fn)(void *data))
+{
+    cleanup_t *c;
+
+#if APR_POOL_DEBUG
+    apr_pool_check_integrity(p);
+#endif /* APR_POOL_DEBUG */
+
+    if (p != NULL) {
+        if (p->free_cleanups) {
+            /* reuse a cleanup structure */
+            c = p->free_cleanups;
+            p->free_cleanups = c->next;
+        } else {
+            c = apr_palloc(p, sizeof(cleanup_t));
+        }
+        c->data = data;
+        c->plain_cleanup_fn = plain_cleanup_fn;
+        c->next = p->pre_cleanups;
+        p->pre_cleanups = c;
+    }
+}
+
 APR_DECLARE(void) apr_pool_cleanup_kill(apr_pool_t *p, const void *data,
                       apr_status_t (*cleanup_fn)(void *))
 {
@@ -2024,6 +2264,15 @@ APR_DECLARE(void) apr_pool_cleanup_kill(apr_pool_t *p, const void *data,
     c = p->cleanups;
     lastp = &p->cleanups;
     while (c) {
+#if APR_POOL_DEBUG
+        /* Some cheap loop detection to catch a corrupt list: */
+        if (c == c->next
+            || (c->next && c == c->next->next)
+            || (c->next && c->next->next && c == c->next->next->next)) {
+            abort();
+        }
+#endif
+
         if (c->data == data && c->plain_cleanup_fn == cleanup_fn) {
             *lastp = c->next;
             /* move to freelist */
@@ -2033,13 +2282,34 @@ APR_DECLARE(void) apr_pool_cleanup_kill(apr_pool_t *p, const void *data,
         }
 
         lastp = &c->next;
-
-		if (c == c->next) {
-			c = NULL;
-		} else {
-			c = c->next;
-		}
+        c = c->next;
     }
+
+    /* Remove any pre-cleanup as well */
+    c = p->pre_cleanups;
+    lastp = &p->pre_cleanups;
+    while (c) {
+#if APR_POOL_DEBUG
+        /* Some cheap loop detection to catch a corrupt list: */
+        if (c == c->next
+            || (c->next && c == c->next->next)
+            || (c->next && c->next->next && c == c->next->next->next)) {
+            abort();
+        }
+#endif
+
+        if (c->data == data && c->plain_cleanup_fn == cleanup_fn) {
+            *lastp = c->next;
+            /* move to freelist */
+            c->next = p->free_cleanups;
+            p->free_cleanups = c;
+            break;
+        }
+
+        lastp = &c->next;
+        c = c->next;
+    }
+
 }
 
 APR_DECLARE(void) apr_pool_child_cleanup_set(apr_pool_t *p, const void *data,
@@ -2084,6 +2354,8 @@ static void run_cleanups(cleanup_t **cref)
     }
 }
 
+#if !defined(WIN32) && !defined(OS2)
+
 static void run_child_cleanups(cleanup_t **cref)
 {
     cleanup_t *c = *cref;
@@ -2105,19 +2377,27 @@ static void cleanup_pool_for_exec(apr_pool_t *p)
 
 APR_DECLARE(void) apr_pool_cleanup_for_exec(void)
 {
-#if !defined(WIN32) && !defined(OS2)
-    /*
-     * Don't need to do anything on NT or OS/2, because I
-     * am actually going to spawn the new process - not
-     * exec it. All handles that are not inheritable, will
-     * be automajically closed. The only problem is with
-     * file handles that are open, but there isn't much
-     * I can do about that (except if the child decides
-     * to go out and close them
-     */
     cleanup_pool_for_exec(global_pool);
-#endif /* !defined(WIN32) && !defined(OS2) */
 }
+
+#else /* !defined(WIN32) && !defined(OS2) */
+
+APR_DECLARE(void) apr_pool_cleanup_for_exec(void)
+{
+    /*
+     * Don't need to do anything on NT or OS/2, because 
+     * these platforms will spawn the new process - not
+     * fork for exec. All handles that are not inheritable,
+     * will be automajically closed. The only problem is
+     * with file handles that are open, but there isn't
+     * much that can be done about that (except if the
+     * child decides to go out and close them, or the
+     * developer quits opening them shared)
+     */
+    return;
+}
+
+#endif /* !defined(WIN32) && !defined(OS2) */
 
 APR_DECLARE_NONSTD(apr_status_t) apr_pool_cleanup_null(void *data)
 {
@@ -2280,6 +2560,22 @@ APR_DECLARE(apr_status_t) apr_pool_create_ex_debug(apr_pool_t **newpool,
     return apr_pool_create_ex(newpool, parent, abort_fn, allocator);
 }
 
+APR_DECLARE(apr_status_t) apr_pool_create_core_ex_debug(apr_pool_t **newpool,
+                                                   apr_abortfunc_t abort_fn,
+                                                   apr_allocator_t *allocator,
+                                                   const char *file_line)
+{
+    return apr_pool_create_unmanaged_ex(newpool, abort_fn, allocator);
+}
+
+APR_DECLARE(apr_status_t) apr_pool_create_unmanaged_ex_debug(apr_pool_t **newpool,
+                                                   apr_abortfunc_t abort_fn,
+                                                   apr_allocator_t *allocator,
+                                                   const char *file_line)
+{
+    return apr_pool_create_unmanaged_ex(newpool, abort_fn, allocator);
+}
+
 #else /* APR_POOL_DEBUG */
 
 #undef apr_palloc
@@ -2328,6 +2624,32 @@ APR_DECLARE(apr_status_t) apr_pool_create_ex(apr_pool_t **newpool,
     return apr_pool_create_ex_debug(newpool, parent,
                                     abort_fn, allocator,
                                     "undefined");
+}
+
+#undef apr_pool_create_core_ex
+APR_DECLARE(apr_status_t) apr_pool_create_core_ex(apr_pool_t **newpool,
+                                                  apr_abortfunc_t abort_fn,
+                                                  apr_allocator_t *allocator);
+
+APR_DECLARE(apr_status_t) apr_pool_create_core_ex(apr_pool_t **newpool,
+                                                  apr_abortfunc_t abort_fn,
+                                                  apr_allocator_t *allocator)
+{
+    return apr_pool_create_unmanaged_ex_debug(newpool, abort_fn,
+                                         allocator, "undefined");
+}
+
+#undef apr_pool_create_unmanaged_ex
+APR_DECLARE(apr_status_t) apr_pool_create_unmanaged_ex(apr_pool_t **newpool,
+                                                  apr_abortfunc_t abort_fn,
+                                                  apr_allocator_t *allocator);
+
+APR_DECLARE(apr_status_t) apr_pool_create_unmanaged_ex(apr_pool_t **newpool,
+                                                  apr_abortfunc_t abort_fn,
+                                                  apr_allocator_t *allocator)
+{
+    return apr_pool_create_unmanaged_ex_debug(newpool, abort_fn,
+                                         allocator, "undefined");
 }
 
 #endif /* APR_POOL_DEBUG */

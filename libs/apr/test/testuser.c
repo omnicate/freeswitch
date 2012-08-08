@@ -44,6 +44,9 @@ static void username(abts_case *tc, void *data)
                        apr_uid_name_get(&uname, uid, p));
     ABTS_PTR_NOTNULL(tc, uname);
 
+    if (uname == NULL)
+        return;
+
     APR_ASSERT_SUCCESS(tc, "apr_uid_get failed",
                        apr_uid_get(&retreived_uid, &retreived_gid, uname, p));
 
@@ -87,6 +90,9 @@ static void groupname(abts_case *tc, void *data)
                        apr_gid_name_get(&gname, gid, p));
     ABTS_PTR_NOTNULL(tc, gname);
 
+    if (gname == NULL)
+        return;
+
     APR_ASSERT_SUCCESS(tc, "apr_gid_get failed",
                        apr_gid_get(&retreived_gid, gname, p));
 
@@ -94,7 +100,7 @@ static void groupname(abts_case *tc, void *data)
                        apr_gid_compare(gid, retreived_gid));
 }
 
-#ifndef WIN32
+#ifdef APR_UID_GID_NUMERIC
 
 static void fail_userinfo(abts_case *tc, void *data)
 {
@@ -140,11 +146,6 @@ static void fail_userinfo(abts_case *tc, void *data)
                 rv != APR_SUCCESS || tmp != NULL);
 }
 
-#else
-static void fail_userinfo(abts_case *tc, void *data)
-{
-    ABTS_NOT_IMPL(tc, "Users are not opaque integers on this platform");
-}
 #endif
 
 #else
@@ -164,7 +165,9 @@ abts_suite *testuser(abts_suite *suite)
     abts_run_test(suite, uid_current, NULL);
     abts_run_test(suite, username, NULL);
     abts_run_test(suite, groupname, NULL);
+#ifdef APR_UID_GID_NUMERIC
     abts_run_test(suite, fail_userinfo, NULL);
+#endif
 #endif
 
     return suite;

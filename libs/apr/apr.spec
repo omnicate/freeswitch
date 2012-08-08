@@ -3,14 +3,14 @@
 
 Summary: Apache Portable Runtime library
 Name: apr
-Version: 1.2.8
+Version: 1.4.6
 Release: 1
 License: Apache Software License
 Group: System Environment/Libraries
 URL: http://apr.apache.org/
-Source0: %{name}-%{version}.tar.gz
+Source0: http://www.apache.org/dist/apr/%{name}-%{version}.tar.bz2
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-buildroot
-BuildPrereq: autoconf, libtool, doxygen
+BuildRequires: autoconf, libtool, doxygen, python
 
 %description
 The mission of the Apache Portable Runtime (APR) is to provide a
@@ -46,8 +46,8 @@ make %{?_smp_mflags} && make dox
 %check
 # Run non-interactive tests
 pushd test
-make %{?_smp_mflags} testall CFLAGS=-fno-strict-aliasing
-./testall -v || exit 1
+make %{?_smp_mflags} all CFLAGS=-fno-strict-aliasing
+make check || exit 1
 popd
 
 %install
@@ -88,6 +88,10 @@ rm -rf $RPM_BUILD_ROOT
 %{_includedir}/apr-%{aprver}/*.h
 
 %changelog
+* Sat Aug 30 2008 Graham Leggett <minfrin@sharp.fm> 1.3.3
+- update to depend on the bzip2 binary
+- build depends on python
+
 * Tue Jun 22 2004 Graham Leggett <minfrin@sharp.fm> 1.0.0-1
 - update to support v1.0.0 of APR
 
