@@ -43,7 +43,7 @@
 //#define USE_MEM_LOCK
 //#define SWITCH_POOL_RECYCLE
 #ifndef SWITCH_POOL_RECYCLE
-#define PER_POOL_LOCK 1
+#define PER_POOL_LOCK 0
 #endif
 
 static struct {
@@ -324,23 +324,7 @@ SWITCH_DECLARE(void) switch_core_memory_pool_tag(switch_memory_pool_t *pool, con
 
 SWITCH_DECLARE(void) switch_pool_clear(switch_memory_pool_t *p)
 {
-#ifdef PER_POOL_LOCK
-	apr_thread_mutex_t *my_mutex;
-	apr_pool_mutex_set(p, NULL);
-#endif
-
 	apr_pool_clear(p);
-
-#ifdef PER_POOL_LOCK
-
-	if ((apr_thread_mutex_create(&my_mutex, APR_THREAD_MUTEX_NESTED, p)) != APR_SUCCESS) {
-		abort();
-	}
-
-	apr_pool_mutex_set(p, my_mutex);
-
-#endif
-
 }
 
 
@@ -386,8 +370,6 @@ SWITCH_DECLARE(switch_status_t) switch_core_perform_new_memory_pool(switch_memor
 
 		apr_allocator_mutex_set(my_allocator, my_mutex);
 		apr_allocator_owner_set(my_allocator, *pool);
-
-		apr_pool_mutex_set(*pool, my_mutex);
 
 #else
 		apr_pool_create(pool, NULL);
@@ -623,7 +605,6 @@ switch_memory_pool_t *switch_core_memory_init(void)
 	}
 
 	apr_allocator_mutex_set(my_allocator, my_mutex);
-	apr_pool_mutex_set(memory_manager.memory_pool, my_mutex);
 	apr_allocator_owner_set(my_allocator, memory_manager.memory_pool);
 	apr_pool_tag(memory_manager.memory_pool, "core_pool");
 #else
