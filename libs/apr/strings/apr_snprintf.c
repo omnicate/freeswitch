@@ -849,6 +849,11 @@ APR_DECLARE(int) apr_vformatter(int (*flush_func)(apr_vformatter_buff_t *),
             else if (*fmt == 'l') {
                 var_type = IS_LONG;
                 fmt++;
+				/* Handle 'll' format type */
+				if (*fmt == 'l') {
+					var_type = IS_QUAD;
+					fmt++;
+				}
             }
             else if (*fmt == 'h') {
                 var_type = IS_SHORT;

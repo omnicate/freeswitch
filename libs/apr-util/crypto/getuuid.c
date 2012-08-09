@@ -20,9 +20,12 @@
  */
 #include "apr.h"
 #include "apr_uuid.h"
-#include "apr_md5.h"
 #include "apr_general.h"
 #include "apr_portable.h"
+
+#if !APR_HAS_RANDOM
+#include "apr_md5.h"
+#endif
 
 
 #if APR_HAVE_UNISTD_H
@@ -200,7 +203,8 @@ APU_DECLARE(void) apr_uuid_get(apr_uuid_t *uuid)
     d[7] = (unsigned char)(timestamp >> 48);
     d[6] = (unsigned char)(((timestamp >> 56) & 0x0F) | 0x10);
     /* clock_seq_hi_and_reserved, uint8 */
-    d[8] = (unsigned char)(((uuid_state_seqnum >> 8) & 0x3F) | 0x80);
+	/* increment uuid_state_seqnum to make uuids less likely to collide */
+    d[8] = (unsigned char)(((++uuid_state_seqnum >> 8) & 0x3F) | 0x80);
     /* clock_seq_low, uint8 */
     d[9] = (unsigned char)uuid_state_seqnum;
     /* node, byte[6] */
