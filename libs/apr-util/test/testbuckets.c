@@ -1,9 +1,9 @@
-/* Copyright 2000-2005 The Apache Software Foundation or its licensors, as
- * applicable.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+/* Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -315,7 +315,8 @@ static void test_insertfile(abts_case *tc, void *ctx)
 
     ABTS_ASSERT(tc, "open test file",
                 apr_file_open(&f, TIF_FNAME,
-                              APR_WRITE|APR_TRUNCATE|APR_CREATE,
+                              APR_FOPEN_WRITE | APR_FOPEN_TRUNCATE
+                            | APR_FOPEN_CREATE | APR_FOPEN_SPARSE,
                               APR_OS_DEFAULT, p) == APR_SUCCESS);
 
     if (apr_file_trunc(f, bignum)) {
@@ -367,7 +368,7 @@ static apr_file_t *make_test_file(abts_case *tc, const char *fname,
 
     ABTS_ASSERT(tc, "create test file",
                 apr_file_open(&f, fname,
-                              APR_READ|APR_WRITE|APR_TRUNCATE|APR_CREATE,
+                              APR_FOPEN_READ|APR_FOPEN_WRITE|APR_FOPEN_TRUNCATE|APR_FOPEN_CREATE,
                               APR_OS_DEFAULT, p) == APR_SUCCESS);
     
     ABTS_ASSERT(tc, "write test file contents",

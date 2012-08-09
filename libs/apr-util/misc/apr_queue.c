@@ -1,9 +1,9 @@
-/* Copyright 2000-2005 The Apache Software Foundation or its licensors, as
- * applicable.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+/* Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -126,9 +126,7 @@ APU_DECLARE(apr_status_t) apr_queue_create(apr_queue_t **q,
     }
 
     /* Set all the data in the queue to NULL */
-    queue->data = apr_palloc(a, queue_capacity * sizeof(void*));
-	if (!queue->data) return APR_ENOMEM;
-	memset(queue->data, 0, queue_capacity * sizeof(void*));
+    queue->data = apr_pcalloc(a, queue_capacity * sizeof(void*));
     queue->bounds = queue_capacity;
     queue->nelts = 0;
     queue->in = 0;
@@ -187,7 +185,9 @@ APU_DECLARE(apr_status_t) apr_queue_push(apr_queue_t *queue, void *data)
     }
 
     queue->data[queue->in] = data;
-    queue->in = (queue->in + 1) % queue->bounds;
+    queue->in++;
+    if (queue->in >= queue->bounds)
+        queue->in -= queue->bounds;
     queue->nelts++;
 
     if (queue->empty_waiters) {
@@ -204,9 +204,9 @@ APU_DECLARE(apr_status_t) apr_queue_push(apr_queue_t *queue, void *data)
 }
 
 /**
- * Push new data onto the queue. Blocks if the queue is full. Once
- * the push operation has completed, it signals other threads waiting
- * in apr_queue_pop() that they may continue consuming sockets.
+ * Push new data onto the queue. If the queue is full, return APR_EAGAIN. If
+ * the push operation completes successfully, it signals other threads
+ * waiting in apr_queue_pop() that they may continue consuming sockets.
  */
 APU_DECLARE(apr_status_t) apr_queue_trypush(apr_queue_t *queue, void *data)
 {
@@ -227,7 +227,9 @@ APU_DECLARE(apr_status_t) apr_queue_trypush(apr_queue_t *queue, void *data)
     }
     
     queue->data[queue->in] = data;
-    queue->in = (queue->in + 1) % queue->bounds;
+    queue->in++;
+    if (queue->in >= queue->bounds)
+        queue->in -= queue->bounds;
     queue->nelts++;
 
     if (queue->empty_waiters) {
@@ -299,7 +301,9 @@ APU_DECLARE(apr_status_t) apr_queue_pop(apr_queue_t *queue, void **data)
     *data = queue->data[queue->out];
     queue->nelts--;
 
-    queue->out = (queue->out + 1) % queue->bounds;
+    queue->out++;
+    if (queue->out >= queue->bounds)
+        queue->out -= queue->bounds;
     if (queue->full_waiters) {
         Q_DBG("signal !full", queue);
         rv = apr_thread_cond_signal(queue->not_full);
@@ -312,71 +316,6 @@ APU_DECLARE(apr_status_t) apr_queue_pop(apr_queue_t *queue, void **data)
     rv = apr_thread_mutex_unlock(queue->one_big_mutex);
     return rv;
 }
-
-/**
- * Retrieves the next item from the queue. If there are no
- * items available, it will block until one becomes available, or 
- * until timeout is elapsed. Once retrieved, the item is placed into
- * the address specified by'data'.
- */
-APU_DECLARE(apr_status_t) apr_queue_pop_timeout(apr_queue_t *queue, void **data, apr_interval_time_t timeout)
-{
-    apr_status_t rv;
-
-    if (queue->terminated) {
-        return APR_EOF; /* no more elements ever again */
-    }
-
-    rv = apr_thread_mutex_lock(queue->one_big_mutex);
-    if (rv != APR_SUCCESS) {
-        return rv;
-    }
-
-    /* Keep waiting until we wake up and find that the queue is not empty. */
-    if (apr_queue_empty(queue)) {
-        if (!queue->terminated) {
-            queue->empty_waiters++;
-            rv = apr_thread_cond_timedwait(queue->not_empty, queue->one_big_mutex, timeout);
-            queue->empty_waiters--;
-			/* In the event of a timemout, APR_TIMEUP will be returned */
-            if (rv != APR_SUCCESS) {
-                apr_thread_mutex_unlock(queue->one_big_mutex);
-                return rv;
-            }
-        }
-        /* If we wake up and it's still empty, then we were interrupted */
-        if (apr_queue_empty(queue)) {
-            Q_DBG("queue empty (intr)", queue);
-            rv = apr_thread_mutex_unlock(queue->one_big_mutex);
-            if (rv != APR_SUCCESS) {
-                return rv;
-            }
-            if (queue->terminated) {
-                return APR_EOF; /* no more elements ever again */
-            }
-            else {
-                return APR_EINTR;
-            }
-        }
-    } 
-
-    *data = queue->data[queue->out];
-    queue->nelts--;
-
-    queue->out = (queue->out + 1) % queue->bounds;
-    if (queue->full_waiters) {
-        Q_DBG("signal !full", queue);
-        rv = apr_thread_cond_signal(queue->not_full);
-        if (rv != APR_SUCCESS) {
-            apr_thread_mutex_unlock(queue->one_big_mutex);
-            return rv;
-        }
-    }
-
-    rv = apr_thread_mutex_unlock(queue->one_big_mutex);
-    return rv;
-}
-
 
 /**
  * Retrieves the next item from the queue. If there are no
@@ -404,7 +343,9 @@ APU_DECLARE(apr_status_t) apr_queue_trypop(apr_queue_t *queue, void **data)
     *data = queue->data[queue->out];
     queue->nelts--;
 
-    queue->out = (queue->out + 1) % queue->bounds;
+    queue->out++;
+    if (queue->out >= queue->bounds)
+        queue->out -= queue->bounds;
     if (queue->full_waiters) {
         Q_DBG("signal !full", queue);
         rv = apr_thread_cond_signal(queue->not_full);

@@ -1,10 +1,10 @@
 #!/bin/sh
-# Copyright 2001-2005 The Apache Software Foundation or its licensors, as
-# applicable.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
 #
 #     http://www.apache.org/licenses/LICENSE-2.0
 #
@@ -30,6 +30,8 @@ includedir="@includedir@"
 LIBS="@APRUTIL_EXPORT_LIBS@"
 INCLUDES="@APRUTIL_INCLUDES@"
 LDFLAGS="@APRUTIL_LDFLAGS@"
+LDAP_LIBS="@LDADD_ldap@"
+DBM_LIBS="@LDADD_dbm_db@ @LDADD_dbm_gdbm@ @LDADD_dbm_ndbm@"
 
 APRUTIL_LIBNAME="@APRUTIL_LIBNAME@"
 
@@ -53,6 +55,10 @@ Known values for OPTION are:
   --includedir      print location where headers are installed
   --ldflags         print linker flags
   --libs            print library information
+  --avoid-ldap      do not include ldap library information with --libs
+  --ldap-libs       print library information to link with ldap
+  --avoid-dbm       do not include DBM library information with --libs
+  --dbm-libs        print additional library information to link with DBM
   --srcdir          print APR-util source directory
   --link-ld         print link switch(es) for linking to APR-util
   --link-libtool    print the libtool inputs for linking to APR-util
@@ -80,7 +86,7 @@ fi
 if test "$location" = "installed"; then
     LA_FILE="$libdir/lib${APRUTIL_LIBNAME}.la"
 
-    LIBS=`echo "$LIBS" | sed -e "s $APU_BUILD_DIR/xml/expat $prefix g" -e "s $prefix/lib/libexpat.la -lexpat g"`
+    LIBS=`echo "$LIBS" | sed -e "s $APU_BUILD_DIR/xml/expat $prefix g" -e "s $prefix/libexpat.la -lexpat g"`
     LDFLAGS=`echo "$LDFLAGS" | sed -e "s $APU_BUILD_DIR/xml/expat $prefix g"`
     INCLUDES=`echo "$INCLUDES" | sed -e "s $APU_BUILD_DIR/xml/expat $prefix g" -e "s -I$prefix/lib  g"`
 else
@@ -109,8 +115,20 @@ while test $# -gt 0; do
     echo $bindir
     exit 0
     ;;
+    --avoid-ldap)
+    LDAP_LIBS=""
+    ;;
+    --avoid-dbm)
+    DBM_LIBS=""
+    ;;
     --libs)
-    flags="$flags $LIBS"
+    flags="$flags $LDAP_LIBS $DBM_LIBS $LIBS"
+    ;;
+    --ldap-libs)
+    flags="$flags $LDAP_LIBS"
+    ;;
+    --dbm-libs)
+    flags="$flags $DBM_LIBS"
     ;;
     --includedir)
     if test "$location" = "installed"; then

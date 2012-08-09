@@ -1,9 +1,9 @@
-/* Copyright 2000-2005 The Apache Software Foundation or its licensors, as
- * applicable.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+/* Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -24,7 +24,14 @@
 
 #include "apr.h"
 #include "apu.h"
+#include "apu_config.h"
+
+#if APU_DSO_BUILD
+#define APU_DSO_LDAP_BUILD
+#endif
+
 #include "apr_ldap.h"
+#include "apu_internal.h"
 #include "apr_errno.h"
 #include "apr_pools.h"
 #include "apr_strings.h"
@@ -49,10 +56,11 @@
  * will return APR_EGENERAL. Further LDAP specific error information
  * can be found in result_err.
  */
-APU_DECLARE(int) apr_ldap_ssl_init(apr_pool_t *pool,
-                                   const char *cert_auth_file,
-                                   int cert_file_type,
-                                   apr_ldap_err_t **result_err) {
+APU_DECLARE_LDAP(int) apr_ldap_ssl_init(apr_pool_t *pool,
+                                        const char *cert_auth_file,
+                                        int cert_file_type,
+                                        apr_ldap_err_t **result_err)
+{
 
     apr_ldap_err_t *result = (apr_ldap_err_t *)apr_pcalloc(pool, sizeof(apr_ldap_err_t));
     *result_err = result;
@@ -105,7 +113,8 @@ APU_DECLARE(int) apr_ldap_ssl_init(apr_pool_t *pool,
  * @todo currently we do not check whether apr_ldap_ssl_init()
  * has been called first - should we?
  */
-APU_DECLARE(int) apr_ldap_ssl_deinit(void) {
+APU_DECLARE_LDAP(int) apr_ldap_ssl_deinit(void)
+{
 
 #if APR_HAS_LDAP_SSL && APR_HAS_LDAPSSL_CLIENT_DEINIT
     ldapssl_client_deinit();
@@ -135,24 +144,41 @@ APU_DECLARE(int) apr_ldap_ssl_deinit(void) {
  * APR_LDAP_SSL: SSL encryption (ldaps://)
  * APR_LDAP_STARTTLS: Force STARTTLS on ldap://
  */
-APU_DECLARE(int) apr_ldap_init(apr_pool_t *pool,
-                               LDAP **ldap,
-                               const char *hostname,
-                               int portno,
-                               int secure,
-                               apr_ldap_err_t **result_err) {
+APU_DECLARE_LDAP(int) apr_ldap_init(apr_pool_t *pool,
+                                    LDAP **ldap,
+                                    const char *hostname,
+                                    int portno,
+                                    int secure,
+                                    apr_ldap_err_t **result_err)
+{
 
     apr_ldap_err_t *result = (apr_ldap_err_t *)apr_pcalloc(pool, sizeof(apr_ldap_err_t));
     *result_err = result;
 
 #if APR_HAS_LDAPSSL_INIT
+#if APR_HAS_SOLARIS_LDAPSDK
+    /*
+     * Using the secure argument should aways be possible.  But as LDAP SDKs
+     * tend to have different quirks and bugs, this needs to be tested for
+     * for each of them, first. For Solaris LDAP it works, and the method
+     * with ldap_set_option doesn't.
+     */
+    *ldap = ldapssl_init(hostname, portno, secure == APR_LDAP_SSL);
+#else
     *ldap = ldapssl_init(hostname, portno, 0);
+#endif
 #elif APR_HAS_LDAP_SSLINIT
     *ldap = ldap_sslinit((char *)hostname, portno, 0);
 #else
     *ldap = ldap_init((char *)hostname, portno);
 #endif
+
     if (*ldap != NULL) {
+#if APR_HAS_SOLARIS_LDAPSDK
+        if (secure == APR_LDAP_SSL)
+            return APR_SUCCESS;
+        else
+#endif
         return apr_ldap_set_option(pool, *ldap, APR_LDAP_OPT_TLS, &secure, result_err);
     }
     else {
@@ -174,7 +200,8 @@ APU_DECLARE(int) apr_ldap_init(apr_pool_t *pool,
  * This function returns a string describing the LDAP toolkit
  * currently in use. The string is placed inside result_err->reason.
  */
-APU_DECLARE(int) apr_ldap_info(apr_pool_t *pool, apr_ldap_err_t **result_err)
+APU_DECLARE_LDAP(int) apr_ldap_info(apr_pool_t *pool,
+                                    apr_ldap_err_t **result_err)
 {
     apr_ldap_err_t *result = (apr_ldap_err_t *)apr_pcalloc(pool, sizeof(apr_ldap_err_t));
     *result_err = result;
@@ -185,5 +212,24 @@ APU_DECLARE(int) apr_ldap_info(apr_pool_t *pool, apr_ldap_err_t **result_err)
     return APR_SUCCESS;
     
 }
+
+#if APU_DSO_BUILD
+
+/* For DSO builds, export the table of entry points into the apr_ldap DSO
+ * See include/private/apu_internal.h for the corresponding declarations
+ */
+APU_MODULE_DECLARE_DATA struct apr__ldap_dso_fntable apr__ldap_fns = {
+    apr_ldap_info,
+    apr_ldap_init,
+    apr_ldap_ssl_init,
+    apr_ldap_ssl_deinit,
+    apr_ldap_get_option,
+    apr_ldap_set_option,
+    apr_ldap_rebind_init,
+    apr_ldap_rebind_add,
+    apr_ldap_rebind_remove
+};
+
+#endif /* APU_DSO_BUILD */
 
 #endif /* APR_HAS_LDAP */

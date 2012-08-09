@@ -1,9 +1,9 @@
-/* Copyright 2000-2005 The Apache Software Foundation or its licensors, as
- * applicable.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+/* Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -243,6 +243,10 @@ APU_DECLARE(void) apr_hook_sort_all(void)
 #endif
     int n;
 
+    if (!s_aHooksToSort) {
+        s_aHooksToSort = apr_array_make(apr_hook_global_pool, 1, sizeof(HookSortEntry));
+    }
+        
     for(n=0 ; n < s_aHooksToSort->nelts ; ++n) {
 	HookSortEntry *pEntry=&((HookSortEntry *)s_aHooksToSort->elts)[n];
 	*pEntry->paHooks=sort_hook(*pEntry->paHooks,pEntry->szHookName);
@@ -260,6 +264,10 @@ APU_DECLARE(void) apr_hook_deregister_all(void)
     get_apd
 #endif
     int n;    
+
+    if (!s_aHooksToSort) {
+        return;
+    }
 
     for(n=0 ; n < s_aHooksToSort->nelts ; ++n) {
         HookSortEntry *pEntry=&((HookSortEntry *)s_aHooksToSort->elts)[n];
