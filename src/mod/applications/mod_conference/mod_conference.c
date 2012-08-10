@@ -367,6 +367,8 @@ typedef struct conference_obj {
 	char *log_dir;
 	struct vid_helper vh[2];
 	struct vid_helper mh;
+	switch_file_handle_t *record_fh;
+	int video_recording;
 } conference_obj_t;
 
 /* Relationship with another member */
@@ -1878,6 +1880,19 @@ static void *SWITCH_THREAD_FUNC conference_video_thread_run(switch_thread_t *thr
 			switch_core_session_rwunlock(isession);
 		}
 		
+		/* seems we are recording a video file */
+		if (conference->record_fh) {
+			switch_size_t len = vid_frame->packetlen;
+			if (!conference->video_recording) {
+				want_refresh++;
+				conference->video_recording++;
+			} else {
+				if (len > 14) { // 14 = 12(rtp) + 2(cng?)
+					switch_core_file_write_video(conference->record_fh, vid_frame->packet, &len);
+				}
+			}
+		}
+
 		if (want_refresh) {
 			switch_core_session_receive_message(session, &msg);
 			want_refresh = 0;
@@ -3804,6 +3819,7 @@ static void *SWITCH_THREAD_FUNC conference_record_thread_run(switch_thread_t *th
 	int no_data = 0;
 	int lead_in = 20;
 	switch_size_t len = 0;
+	char *ext;
 
 	data_buf_len = samples * sizeof(int16_t);
 
@@ -3863,6 +3879,15 @@ static void *SWITCH_THREAD_FUNC conference_record_thread_run(switch_thread_t *th
 
 	fh.pre_buffer_datalen = SWITCH_DEFAULT_FILE_BUFFER_LEN;
 
+	/* video recording, only for testing at this time*/
+	if ((ext = strrchr(rec->path, '.')) != NULL) {
+		ext++;
+		if (!strncasecmp(ext, "fsv", 3) || !strncasecmp(ext, "mp4", 3)) {
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Disable buffer for video recording\n");
+			fh.pre_buffer_datalen = 0;
+		}
+	}
+
 	if (switch_core_file_open(&fh,
 							  rec->path, (uint8_t) 1, conference->rate, SWITCH_FILE_FLAG_WRITE | SWITCH_FILE_DATA_SHORT,
 							  rec->pool) != SWITCH_STATUS_SUCCESS) {
@@ -3870,6 +3895,9 @@ static void *SWITCH_THREAD_FUNC conference_record_thread_run(switch_thread_t *th
 		goto end;
 	}
 
+	switch_mutex_lock(conference->mutex);
+	if (!conference->record_fh) conference->record_fh = &fh;
+	switch_mutex_unlock(conference->mutex);
 
 	if (switch_core_timer_init(&timer, conference->timer_name, conference->interval, samples, rec->pool) == SWITCH_STATUS_SUCCESS) {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Setup timer success interval: %u  samples: %u\n", conference->interval, samples);
