@@ -56,7 +56,6 @@ missing
 /apr-util/test/Makefile
 /apr-util/xml/expat/config.h
 /apr-util/xml/expat/lib/config.h
-/apr-util/xml/expat/lib/expat.h
 /apr-util/xml/expat/lib/Makefile
 /apr-util/xml/expat/Makefile
 /broadvoice/config-h.in
