@@ -495,6 +495,13 @@ AC_CHECK_FUNCS([gethostname vasprintf mmap mlock mlockall usleep getifaddrs time
 AC_CHECK_FUNCS([sched_setscheduler setpriority setrlimit setgroups initgroups])
 AC_CHECK_FUNCS([wcsncmp setgroups asprintf setenv pselect gettimeofday localtime_r gmtime_r strcasecmp stricmp _stricmp])
 
+# Check availability and return type of strerror_r
+# (NOTE: apr-1-config sets -D_GNU_SOURCE at build-time, need to run the check with it too)
+save_CPPFLAGS="$CPPFLAGS"
+CPPFLAGS="$CPPFLAGS -D_GNU_SOURCE"
+AC_FUNC_STRERROR_R
+CPPFLAGS="$save_CPPFLAGS"
+
 AX_HAVE_CPU_SET
 
 AC_CHECK_LIB(rt, clock_gettime, [AC_DEFINE(HAVE_CLOCK_GETTIME, 1, [Define if you have clock_gettime()])])
@@ -998,6 +1005,7 @@ AC_CONFIG_FILES([Makefile
 		src/mod/applications/mod_stress/Makefile
 		src/mod/applications/mod_hash/Makefile
 		src/mod/codecs/mod_com_g729/Makefile
+		src/mod/endpoints/mod_html5/Makefile
 		src/mod/endpoints/mod_portaudio/Makefile
 		src/mod/endpoints/mod_skinny/Makefile
 		src/mod/endpoints/mod_skypopen/Makefile
@@ -1092,6 +1100,7 @@ AC_CONFIG_SUBDIRS([libs/libcodec2])
 if test "x${enable_zrtp}" = "xyes"; then
    AC_CONFIG_SUBDIRS([libs/libzrtp/projects/gnu])
 fi
+AC_CONFIG_SUBDIRS([libs/libwebsockets])
 
 case $host in
    *-openbsd*)
