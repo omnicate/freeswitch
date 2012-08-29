@@ -700,6 +700,9 @@ static switch_status_t fsv_file_write(switch_file_handle_t *handle, void *data, 
 	status =  switch_file_write(context->fd, data, len);
 	switch_mutex_unlock(context->mutex);
 
+	*len /= 2;
+	handle->sample_count += *len;
+
 	return status;
 }
 
