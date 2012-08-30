@@ -1542,10 +1542,135 @@ static switch_status_t load_config(void)
 	return SWITCH_STATUS_SUCCESS;
 }
 
+/* codec interface */
+
+struct mp3_context {
+	lame_global_flags *gfp;
+};
+
+static switch_status_t switch_mp3_init(switch_codec_t *codec, switch_codec_flag_t flags, const switch_codec_settings_t *codec_settings)
+{
+	struct mp3_context *context = NULL;
+	int encoding, decoding;
+
+	encoding = (flags & SWITCH_CODEC_FLAG_ENCODE);
+	decoding = (flags & SWITCH_CODEC_FLAG_DECODE);
+
+	if (!(encoding || decoding) || (!(context = switch_core_alloc(codec->memory_pool, sizeof(struct mp3_context))))) {
+		return SWITCH_STATUS_FALSE;
+	} else {
+		if (codec->fmtp_in) {
+			codec->fmtp_out = switch_core_strdup(codec->memory_pool, codec->fmtp_in);
+		}
+
+		memset(context, 0, sizeof(struct mp3_context));
+
+		context->gfp = lame_init();
+
+		id3tag_init(context->gfp);
+		id3tag_v2_only(context->gfp);
+		id3tag_pad_v2(context->gfp);
+
+		lame_set_num_channels(context->gfp, 1);
+		lame_set_in_samplerate(context->gfp, 8000);
+		lame_set_out_samplerate(context->gfp, 44100);
+		lame_set_mode(context->gfp, MONO);
+		// lame_set_brate(gfp, 16 * (fh.samplerate / 8000) * fh.channels);
+		// lame_set_brate(context->gfp, 16);
+		lame_set_brate(context->gfp, 128);
+		lame_set_quality(context->gfp, 2);
+		lame_set_errorf(context->gfp, log_error);
+		lame_set_debugf(context->gfp, log_debug);
+		lame_set_msgf(context->gfp, log_msg);
+
+		lame_init_params(context->gfp);
+		lame_print_config(context->gfp);
+
+		if (encoding) {
+			lame_set_bWriteVbrTag(context->gfp, 0);
+			lame_mp3_tags_fid(context->gfp, NULL);
+			lame_set_disable_reservoir(context->gfp, 1);
+		}
+
+		if (decoding) {
+		}
+
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "framesize: %d\n", lame_get_framesize(context->gfp));
+
+		codec->private_info = context;
+
+		return SWITCH_STATUS_SUCCESS;
+	}
+}
+
+static switch_status_t switch_mp3_destroy(switch_codec_t *codec)
+{
+	struct mp3_context *context = codec->private_info;
+
+	if (context && context->gfp) lame_close(context->gfp);
+	codec->private_info = NULL;
+	return SWITCH_STATUS_SUCCESS;
+}
+
+static switch_status_t switch_mp3_encode(switch_codec_t *codec,
+	switch_codec_t *other_codec,
+	void *decoded_data,
+	uint32_t decoded_data_len,
+	uint32_t decoded_rate,
+	void *encoded_data, uint32_t *encoded_data_len,
+	uint32_t *encoded_rate,
+	unsigned int *flag)
+{
+	struct mp3_context *context = codec->private_info;
+
+	if (!context) {
+		return SWITCH_STATUS_FALSE;
+	}
+
+	if (decoded_data_len % 160 == 0) {
+		int len;
+
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "decoded_data_len: %d\n", decoded_data_len);
+
+		len = lame_encode_buffer(context->gfp, decoded_data, NULL, decoded_data_len, encoded_data, *encoded_data_len);
+
+		if (len == 0) {
+			// switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "------ flush \n");
+			// len = lame_encode_flush(context->gfp, encoded_data, *encoded_data_len);
+		}
+
+		if (len < 0) {
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "encode error!\n");
+			return SWITCH_STATUS_FALSE;
+		}
+
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "encoded len: %d\n", len);
+
+		*encoded_data_len = len;
+	}
+	return SWITCH_STATUS_SUCCESS;
+}
+
+static switch_status_t switch_mp3_decode(switch_codec_t *codec,
+										  switch_codec_t *other_codec,
+										  void *encoded_data,
+										  uint32_t encoded_data_len,
+										  uint32_t encoded_rate, void *decoded_data, uint32_t *decoded_data_len, uint32_t *decoded_rate,
+										  unsigned int *flag)
+{
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Not implemented!\n");
+	return SWITCH_STATUS_FALSE;
+}
+
 SWITCH_MODULE_LOAD_FUNCTION(mod_shout_load)
 {
 	switch_api_interface_t *shout_api_interface;
 	switch_file_interface_t *file_interface;
+	switch_codec_interface_t *codec_interface;
+	int mpf = 20000, spf = 80, bpf = 160, ebpf = 20, count = 1;
+
+	/* connect my internal structure to the blank pointer passed to me */
+	*module_interface = switch_loadable_module_create_module_interface(pool, modname);
 
 	supported_formats[0] = "shout";
 	supported_formats[1] = "mp3";
@@ -1568,6 +1693,12 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_shout_load)
 	load_config();
 
 	SWITCH_ADD_API(shout_api_interface, "telecast", "telecast", telecast_api_function, TELECAST_SYNTAX);
+
+	SWITCH_ADD_CODEC(codec_interface, "MP3");
+	switch_core_codec_add_implementation(pool, codec_interface,
+		 SWITCH_CODEC_TYPE_AUDIO, 98, "MP3", NULL, 8000, 8000, 8000,
+		 mpf * count, spf * count, bpf * count, ebpf * count, 1, count * 20,
+		 switch_mp3_init, switch_mp3_encode, switch_mp3_decode, switch_mp3_destroy);
 
 	/* indicate that the module should continue to be loaded */
 	return SWITCH_STATUS_SUCCESS;
