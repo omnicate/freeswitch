@@ -685,7 +685,7 @@ static switch_status_t fsv_file_write(switch_file_handle_t *handle, void *data, 
 
 	/* switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "writing: %ld %d %x\n", (long)(*len), handle->channels, handle->flags); */
 
-	if (*len > max_datasize) { /* when sample rate is 8000 */
+	if (*len > max_datasize) {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "You are asking to write %d bytes of data which is not supported. Please set enable_file_write_buffering=false to use .fsv format\n", (int)(*len));
 		return SWITCH_STATUS_GENERR;
 	}
