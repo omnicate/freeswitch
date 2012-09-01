@@ -546,8 +546,8 @@ static switch_status_t fsv_file_open(switch_file_handle_t *handle, const char *p
 	}
 
 	handle->samples = 0;
-	handle->samplerate = 8000;
-	handle->channels = 1;
+	// handle->samplerate = 8000;
+	// handle->channels = 1;
 	handle->format = 0;
 	handle->sections = 0;
 	handle->seekable = 0;
@@ -678,14 +678,30 @@ static switch_status_t fsv_file_write(switch_file_handle_t *handle, void *data, 
 	uint32_t datalen = *len * 2;
 	size_t size;
 	switch_status_t status;
+	uint16_t *xdata = data;
+	int max_datasize = handle->samplerate / 8000 * 160;
 
 	fsv_file_context *context = handle->private_info;
 
-	/* switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "writing: %ld\n", (long)(*len)); */
+	/* switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "writing: %ld %d %x\n", (long)(*len), handle->channels, handle->flags); */
 
-	if (*len > 160) { /* when sample rate is 8000 */
+	if (*len > max_datasize) { /* when sample rate is 8000 */
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "You are asking to write %d bytes of data which is not supported. Please set enable_file_write_buffering=false to use .fsv format\n", (int)(*len));
 		return SWITCH_STATUS_GENERR;
+	}
+
+	if (handle->channels == 2) {
+		int i;
+		/* How to mux both channel? */
+		for (i=0; i<*len; i++) {
+			// int32_t mixed = (xdata[i*2] + xdata[i*2+1])/2;
+			// int32_t mixed = xdata[i*2] + xdata[i*2+1];
+			// switch_normalize_to_16bit(mixed);
+			// xdata[i] = (uint16_t)mixed;
+
+			// only record the left channel before we figure out how to mux
+			xdata[i] = xdata[i*2];
+		}
 	}
 
 	switch_mutex_lock(context->mutex);
