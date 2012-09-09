@@ -1877,6 +1877,7 @@ static void *SWITCH_THREAD_FUNC conference_video_thread_run(switch_thread_t *thr
 		}
 		
 		/* seems we are recording a video file */
+		switch_mutex_lock(conference->mutex);
 		if (conference->record_fh) {
 			switch_size_t len = vid_frame->packetlen;
 			if (!conference->video_recording) {
@@ -1887,7 +1888,10 @@ static void *SWITCH_THREAD_FUNC conference_video_thread_run(switch_thread_t *thr
 					switch_core_file_write_video(conference->record_fh, vid_frame->packet, &len);
 				}
 			}
+		} else {
+			conference->video_recording = 0;
 		}
+		switch_mutex_unlock(conference->mutex);
 
 		if (want_refresh) {
 			switch_core_session_receive_message(session, &msg);
@@ -4007,6 +4011,9 @@ static void *SWITCH_THREAD_FUNC conference_record_thread_run(switch_thread_t *th
 	switch_buffer_destroy(&member->mux_buffer);
 	switch_clear_flag_locked(member, MFLAG_RUNNING);
 	if (switch_test_flag((&fh), SWITCH_FILE_OPEN)) {
+		switch_mutex_lock(conference->mutex);
+		conference->record_fh = NULL;
+		switch_mutex_unlock(conference->mutex);
 		switch_core_file_close(&fh);
 	}
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Recording of %s Stopped\n", rec->path);
