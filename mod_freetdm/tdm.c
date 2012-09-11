@@ -101,13 +101,13 @@ static void ctdm_report_alarms(ftdm_channel_t *channel)
 	}
 	
 	if (ftdm_channel_get_alarms(channel, &alarmflag) != FTDM_SUCCESS) {
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Failed to retrieve alarms %s:%d\n", ftdm_channel_get_span_name(channel), ftdm_channel_get_id(channel));
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Failed to retrieve alarms %s:%d\n", ftdm_channel_get_span_name(channel), ftdm_channel_get_ph_id(channel));
 		return;
 	}
 
 	switch_event_add_header(event, SWITCH_STACK_BOTTOM, "span-name", "%s", ftdm_channel_get_span_name(channel));
 	switch_event_add_header(event, SWITCH_STACK_BOTTOM, "span-number", "%d", ftdm_channel_get_span_id(channel));
-	switch_event_add_header(event, SWITCH_STACK_BOTTOM, "chan-number", "%d", ftdm_channel_get_id(channel));
+	switch_event_add_header(event, SWITCH_STACK_BOTTOM, "chan-number", "%d", ftdm_channel_get_ph_id(channel));
 	
 	if (alarmflag) {
 		switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "condition", "ftdm-alarm-trap");
@@ -135,7 +135,7 @@ static void ctdm_report_alarms(ftdm_channel_t *channel)
 	}
 
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Reporting [%s] alarms for %s:%d\n", 
-			(alarmflag?"ftdm-alarm-trap":"ftdm-alarm-clear"), ftdm_channel_get_span_name(channel), ftdm_channel_get_id(channel));
+					  (alarmflag?"ftdm-alarm-trap":"ftdm-alarm-clear"), ftdm_channel_get_span_name(channel), ftdm_channel_get_ph_id(channel));
 
 	switch_event_fire(&event);
 	return;
@@ -200,7 +200,7 @@ static void ctdm_event_handler(switch_event_t *event)
 					}
 
 					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Requesting alarm status for %s:%d\n", 
-							ftdm_channel_get_span_name(channel), ftdm_channel_get_id(channel));
+									  ftdm_channel_get_span_name(channel), ftdm_channel_get_ph_id(channel));
 
 					ctdm_report_alarms(channel);
 				} else if (!strcmp(cond, "mg-tdm-dtmfremoval")) {
@@ -221,7 +221,7 @@ static void ctdm_event_handler(switch_event_t *event)
 					}
 
 					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "%s DTMF-removal for %s:%d\n",
-									  enable ? "Enabling" : "Disabling", ftdm_channel_get_span_name(channel), ftdm_channel_get_id(channel));
+									  enable ? "Enabling" : "Disabling", ftdm_channel_get_span_name(channel), ftdm_channel_get_ph_id(channel));
 
 					ftdm_channel_command(channel, enable ? FTDM_COMMAND_ENABLE_DTMF_REMOVAL : FTDM_COMMAND_DISABLE_DTMF_REMOVAL, 0);
 				}
@@ -252,7 +252,7 @@ static FIO_SIGNAL_CB_FUNCTION(on_signal_cb)
 	switch_event_t *event = NULL;
 	ftdm_alarm_flag_t alarmbits = FTDM_ALARM_NONE;
 
-	chanid = ftdm_channel_get_id(sigmsg->channel);
+	chanid = ftdm_channel_get_ph_id(sigmsg->channel);
 	spanid = ftdm_channel_get_span_id(sigmsg->channel);
 	
 	switch(sigmsg->event_id) {
@@ -284,8 +284,8 @@ static FIO_SIGNAL_CB_FUNCTION(on_signal_cb)
 
 	if (event) {
 		switch_event_add_header(event, SWITCH_STACK_BOTTOM, "span-name", "%s", ftdm_channel_get_span_name(sigmsg->channel));
-		switch_event_add_header(event, SWITCH_STACK_BOTTOM, "span-number", "%d", ftdm_channel_get_span_id(sigmsg->channel));
-		switch_event_add_header(event, SWITCH_STACK_BOTTOM, "chan-number", "%d", ftdm_channel_get_id(sigmsg->channel));
+		switch_event_add_header(event, SWITCH_STACK_BOTTOM, "span-number", "%d", spanid);
+		switch_event_add_header(event, SWITCH_STACK_BOTTOM, "chan-number", "%d", chanid);
 
 		if (alarmbits & FTDM_ALARM_RED) {
 			switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "alarm", "red");
@@ -557,7 +557,7 @@ top:
     
     
 	span_id = ftdm_channel_get_span_id(tech_pvt->ftdm_channel);
-	chan_id = ftdm_channel_get_id(tech_pvt->ftdm_channel);
+	chan_id = ftdm_channel_get_ph_id(tech_pvt->ftdm_channel);
 
     if (status == FTDM_FAIL) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Failed to read from channel %s device %d:%d!\n", name, span_id, chan_id);
@@ -621,7 +621,7 @@ static switch_status_t channel_write_frame(switch_core_session_t *session, switc
 	assert(tech_pvt != NULL);
     
 	span_id = ftdm_channel_get_span_id(tech_pvt->ftdm_channel);
-	chan_id = ftdm_channel_get_id(tech_pvt->ftdm_channel);
+	chan_id = ftdm_channel_get_ph_id(tech_pvt->ftdm_channel);
     
 	name = switch_channel_get_name(channel);   
     
