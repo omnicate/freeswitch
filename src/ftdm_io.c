@@ -5706,7 +5706,8 @@ static void *ftdm_span_service_events(ftdm_thread_t *me, void *obj)
 
 	memset(poll_events, 0, sizeof(short) * span->chan_count);
 
-	for(i = 1; i <= span->chan_count; i++) {
+	for(i = 0; i < span->chan_count; i++) {
+	 /* poll events is zero based */
 		poll_events[i] |= FTDM_EVENTS;
 	}
 
