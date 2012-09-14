@@ -32,7 +32,8 @@
  *
  * status: codec is hard codec to PCMU 8000HZ for audio and H264 for video
  *         tested with lib mp4v2-2.0.0
- *         hope we could merge with mod_mp4 but I cannot make the play_mp4 work and yet contact the origin author
+ *         video might not propaly hinted, so no video when playing with play_mp4 in mod_mp4, audio seems fine
+ *         hope we could merge with mod_mp4 but I failed to contact the origin author
  */
 
 #include <switch.h>
