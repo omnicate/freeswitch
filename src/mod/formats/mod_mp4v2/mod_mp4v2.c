@@ -628,7 +628,7 @@ static switch_status_t mp4_file_write(switch_file_handle_t *handle, void *data, 
 	uint32_t encoded_rate;
 	mp4_file_context_t *context = handle->private_info;
 	uint32_t size;
-	uint16_t *xdata = data;
+	int16_t *xdata = data;
 
 	// switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "writing: %ld\n", (long)(*len));
 
