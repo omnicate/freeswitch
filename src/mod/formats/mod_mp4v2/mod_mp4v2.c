@@ -637,7 +637,7 @@ static switch_status_t mp4_file_write(switch_file_handle_t *handle, void *data, 
 		return SWITCH_STATUS_FALSE;
 	}
 
-	if (handle->channels > 2) {
+	if (handle->channels > 1) {
 		int i, j;
 		int32_t mixed = 0;
 		for (i=0; i<*len; i++) {
