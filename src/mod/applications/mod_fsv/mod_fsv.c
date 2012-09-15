@@ -675,10 +675,10 @@ end:
 
 static switch_status_t fsv_file_write(switch_file_handle_t *handle, void *data, size_t *len)
 {
-	uint32_t datalen = *len * 2;
+	uint32_t datalen = *len * sizeof(int16_t);
 	size_t size;
 	switch_status_t status;
-	uint16_t *xdata = data;
+	int16_t *xdata = data;
 	int max_datasize = handle->samplerate / 8000 * 160;
 
 	fsv_file_context *context = handle->private_info;
@@ -690,17 +690,15 @@ static switch_status_t fsv_file_write(switch_file_handle_t *handle, void *data, 
 		return SWITCH_STATUS_GENERR;
 	}
 
-	if (handle->channels == 2) {
-		int i;
-		/* How to mux both channel? */
+	if (handle->channels > 1) {
+		int i, j;
+		int32_t mixed = 0;
 		for (i=0; i<*len; i++) {
-			// int32_t mixed = (xdata[i*2] + xdata[i*2+1])/2;
-			// int32_t mixed = xdata[i*2] + xdata[i*2+1];
-			// switch_normalize_to_16bit(mixed);
-			// xdata[i] = (uint16_t)mixed;
-
-			// only record the left channel before we figure out how to mux
-			xdata[i] = xdata[i*2];
+			for (j = 0; j < handle->channels; j++) {
+				mixed += xdata[i * handle->channels + j];
+			}
+			switch_normalize_to_16bit(mixed);
+			xdata[i] = (uint16_t)mixed;
 		}
 	}
 
@@ -716,8 +714,7 @@ static switch_status_t fsv_file_write(switch_file_handle_t *handle, void *data, 
 	status =  switch_file_write(context->fd, data, len);
 	switch_mutex_unlock(context->mutex);
 
-	*len /= 2;
-	handle->sample_count += *len;
+	handle->sample_count += *len / sizeof(int16_t);
 
 	return status;
 }
