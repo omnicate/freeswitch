@@ -637,12 +637,15 @@ static switch_status_t mp4_file_write(switch_file_handle_t *handle, void *data, 
 		return SWITCH_STATUS_FALSE;
 	}
 
-	if (handle->channels == 2) {
-		int i;
-		/* How to mux both channel? */
+	if (handle->channels > 2) {
+		int i, j;
+		int32_t mixed = 0;
 		for (i=0; i<*len; i++) {
-			// only record the left channel before we figure out how to mux
-			xdata[i] = xdata[i*2];
+			for (j = 0; j < handle->channels; j++) {
+				mixed += xdata[i * handle->channels + j];
+			}
+			switch_normalize_to_16bit(mixed);
+			xdata[i] = (uint16_t)mixed;
 		}
 	}
 
