@@ -772,7 +772,7 @@ static FIO_COMMAND_FUNCTION(wanpipe_command)
 #ifdef WP_API_FEATURE_LIBSNG_HWEC
 			int return_code = 0;
 			if (!ftdm_channel_test_feature(ftdmchan, FTDM_CHANNEL_FEATURE_HWEC)) {
-				ftdm_log_chan_mg(ftdmchan, FTDM_LOG_ERROR, "Wanpipe device does not have HW EC\n");
+				ftdm_log_chan_msg(ftdmchan, FTDM_LOG_ERROR, "Wanpipe device does not have HW EC\n");
 				return FTDM_NOTIMPL;
 			}
 
@@ -788,7 +788,7 @@ static FIO_COMMAND_FUNCTION(wanpipe_command)
 #ifdef WP_API_FEATURE_LIBSNG_HWEC
 			int return_code = 0;
 			if (!ftdm_channel_test_feature(ftdmchan, FTDM_CHANNEL_FEATURE_HWEC)) {
-				ftdm_log_chan_mg(ftdmchan, FTDM_LOG_ERROR, "Wanpipe device does not have HW EC\n");
+				ftdm_log_chan_msg(ftdmchan, FTDM_LOG_ERROR, "Wanpipe device does not have HW EC\n");
 				return FTDM_NOTIMPL;
 			}
 			
