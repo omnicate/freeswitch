@@ -124,7 +124,7 @@ FIO_CHANNEL_NEXT_EVENT_FUNCTION(wanpipe_channel_next_event);
 static void wp_swap16(char *data, int datalen)
 {
 	int i = 0;
-	uint16_t *samples = data;
+	uint16_t *samples = (uint16_t*) data;
 	for (i = 0; i < datalen/2; i++) {
 		uint16_t sample = ((samples[i]  & 0x00FF) << 8) | ((samples[i]  & 0xFF00) >> 8); 
 		samples[i] =  sample;
@@ -771,6 +771,11 @@ static FIO_COMMAND_FUNCTION(wanpipe_command)
 		{
 #ifdef WP_API_FEATURE_LIBSNG_HWEC
 			int return_code = 0;
+			if (!ftdm_channel_test_feature(ftdmchan, FTDM_CHANNEL_FEATURE_HWEC)) {
+				ftdm_log_chan_msg(ftdmchan, FTDM_LOG_ERROR, "Wanpipe device does not have HW EC\n");
+				return FTDM_NOTIMPL;
+			}
+
 			err = sangoma_hwec_set_hwdtmf_removal(ftdmchan->sockfd, ftdmchan->physical_chan_id, &return_code, 1, 0);
 			if (return_code) {
 				ftdm_log_chan_msg(ftdmchan, FTDM_LOG_ERROR, "Wanpipe failed to Disable HW-DTMF removal\n");
@@ -782,6 +787,11 @@ static FIO_COMMAND_FUNCTION(wanpipe_command)
 		{
 #ifdef WP_API_FEATURE_LIBSNG_HWEC
 			int return_code = 0;
+			if (!ftdm_channel_test_feature(ftdmchan, FTDM_CHANNEL_FEATURE_HWEC)) {
+				ftdm_log_chan_msg(ftdmchan, FTDM_LOG_ERROR, "Wanpipe device does not have HW EC\n");
+				return FTDM_NOTIMPL;
+			}
+			
 			err = sangoma_hwec_set_hwdtmf_removal(ftdmchan->sockfd, ftdmchan->physical_chan_id, &return_code, 0, 0);
 			if (return_code) {
 				ftdm_log_chan_msg(ftdmchan, FTDM_LOG_ERROR, "Wanpipe failed to Disable HW-DTMF removal\n");
