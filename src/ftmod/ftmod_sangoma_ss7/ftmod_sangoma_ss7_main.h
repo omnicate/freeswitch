@@ -511,7 +511,25 @@ typedef enum{
 	SNG_SS7_OPR_MODE_NONE,
 	SNG_SS7_OPR_MODE_M2UA_SG,
 	SNG_SS7_OPR_MODE_ISUP,
+	SNG_SS7_OPR_MODE_M2UA_ASP
 }ftdm_sngss7_operating_modes_e;
+
+static inline const char* ftdm_opr_mode_tostr(ftdm_sngss7_operating_modes_e mode)
+{
+	switch(mode)
+	{
+		case SNG_SS7_OPR_MODE_M2UA_SG:
+			return "M2UA-SG";
+		case SNG_SS7_OPR_MODE_ISUP:
+			return "ISUP";
+		case SNG_SS7_OPR_MODE_M2UA_ASP:
+			return "M2UA-ASP";
+		default:
+			return "Invalid";
+	}
+	return "Invalid";
+}
+
 
 typedef ftdm_sngss7_operating_modes_e ftdm_sngss7_opr_mode;
 
@@ -1028,6 +1046,9 @@ ftdm_status_t sngss7_add_raw_data(sngss7_chan_data_t *sngss7_info, uint8_t* data
 void handle_isup_t35(void *userdata);
 void handle_isup_t10(void *userdata);
 void handle_isup_t39(void *userdata);
+
+
+void ftmod_ss7_enable_linkset(void);
 
 
 /******************************************************************************/

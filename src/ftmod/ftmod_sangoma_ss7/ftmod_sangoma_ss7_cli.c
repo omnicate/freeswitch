@@ -840,7 +840,34 @@ ftdm_status_t ftdm_sngss7_handle_cli_cmd(ftdm_stream_handle_t *stream, const cha
 			goto handle_cli_error_argc;
 		}
 		c++;
-		if(!strcasecmp(argv[c],"logging")){
+		if(!strcasecmp(argv[c],"asp")){
+
+			if (check_arg_count(argc, 4)) {
+				stream->write_function(stream, "Invalid \"m2ua  asp option\", please use \"m2ua asp command usage \n");
+				goto handle_cli_error_argc;
+			}   
+			c++;
+			if(!strcasecmp(argv[c],"up")){
+				c++;
+				int peer_id = atoi(argv[c]);
+				if(ftmod_asp_up(peer_id)) {
+					ftdm_log (FTDM_LOG_ERROR ,"ftmod_asp_up FAIL for peer_id[%d] \n", peer_id);
+				}else {
+					ftdm_log (FTDM_LOG_ERROR ,"ftmod_asp_up SUCCESS peer_id[%d] \n", peer_id);
+				}
+			}else if(!strcasecmp(argv[c],"active")){
+				c++;
+				int peer_id = atoi(argv[c]);
+				if(ftmod_asp_ac(peer_id) != ROK) {
+					ftdm_log (FTDM_LOG_ERROR ,"ftmod_sigtran_asp_ac FAIL  for peer_id[%d] \n", peer_id);
+				}else {
+					ftdm_log (FTDM_LOG_ERROR ,"ftmod_sigtran_asp_ac SUCCESS for peer_id[%d]  \n", peer_id);
+				}
+			} else{
+				stream->write_function(stream, "Unknown \"m2ua asp \" command..see usage\n");
+				goto handle_cli_error;
+			}
+		}else if(!strcasecmp(argv[c],"logging")){
 			c++;
 			if(!strcasecmp(argv[c],"enable")){
 				ftmod_ss7_enable_m2ua_sg_logging();

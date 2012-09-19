@@ -864,6 +864,14 @@ void handle_sng_m2ua_alarm(Pst *pst, MwMgmt *sta)
 			{
 				ftdm_log(FTDM_LOG_INFO," STMWPEER: peerId (%d) \n\n",
 						sta->t.usta.s.peerId);             
+				
+				if(SNG_SS7_OPR_MODE_M2UA_ASP == g_ftdm_operating_mode){
+					if(LMW_MSG_ASP_UP_ACK == sta->t.usta.t.aspm.msgType){
+						ftdm_log(FTDM_LOG_INFO," Received ASP_ACK for PeerId[%d]\n",sta->t.usta.s.peerId);
+						ftdm_m2ua_start_timer(SNG_M2UA_TIMER_ASP_ACTIVE, sta->t.usta.s.peerId);
+					}
+				}
+
 				break;
 			}
 		case STMWCLUSTER:
@@ -895,6 +903,11 @@ void handle_sng_m2ua_alarm(Pst *pst, MwMgmt *sta)
 		case LMW_EVENT_ESTABLISH_OK:
 			{
 				ftdm_log(FTDM_LOG_INFO," M2UA : LMW_EVENT_ESTABLISH_OK Event raised on peerId[%d]\n",sta->t.usta.s.peerId);
+				
+				if(SNG_SS7_OPR_MODE_M2UA_ASP == g_ftdm_operating_mode){
+					ftdm_m2ua_start_timer(SNG_M2UA_TIMER_ASP_UP, sta->t.usta.s.peerId);
+				}
+			
 				break;
 			}
 		case LMW_EVENT_ESTABLISH_FAIL:     
@@ -922,6 +935,17 @@ void handle_sng_m2ua_alarm(Pst *pst, MwMgmt *sta)
 						" ntfy status id (%d)\n\n", sta->t.usta.s.peerId,
 						sta->t.usta.t.ntfy.aspId, sta->t.usta.t.ntfy.stType,
 						sta->t.usta.t.ntfy.stId);
+
+				if(SNG_SS7_OPR_MODE_M2UA_ASP == g_ftdm_operating_mode){
+					if(LMW_NTFY_TYPE_ASCHG == sta->t.usta.t.ntfy.stType) {
+						if(LMW_NTFY_AS_ACTIVE == sta->t.usta.t.ntfy.stId){
+							/* AS becomes ACTIVE..now establish MTP3 link alignment procedures */
+							/* we can not send message back to trillium stack from receiving message thread 
+							 * start timer */
+							ftdm_m2ua_start_timer(SNG_M2UA_TIMER_MTP3_LINKSET_BIND_ENABLE, 0x00);
+						}
+					}
+				}
 
 				break;
 			}

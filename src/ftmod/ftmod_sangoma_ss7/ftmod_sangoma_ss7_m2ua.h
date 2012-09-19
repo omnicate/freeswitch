@@ -105,11 +105,28 @@ typedef struct sng_m2ua_cluster_cfg{
 	uint16_t    		 peerIdLst[MW_MAX_NUM_OF_PEER];	/* idx to m2ua_peer profile */
 }sng_m2ua_cluster_cfg_t;
 
+
+typedef enum{
+	SNG_M2UA_TIMER_ASP_UP        = 0x1,     /* ASP UP Timer Event */
+	SNG_M2UA_TIMER_ASP_ACTIVE    = 0x2,     /* ASP ACTIVE Timer Event */
+	SNG_M2UA_TIMER_MTP3_LINKSET_BIND_ENABLE = 0x3,     /* MTP3 Link Bind & Enable */ 
+}sng_m2ua_tmr_evt_types_e;
+
+
+typedef struct sng_m2ua_tmr{
+	ftdm_sched_t            *tmr_sched;
+	ftdm_timer_id_t         tmr_id;
+	int 			peer_id; 		/* timer specific data */
+	int 			tmr_running; 		/* timer specific data */
+	sng_m2ua_tmr_evt_types_e  tmr_event;
+}sng_m2ua_tmr_sched_t;
+
 typedef struct sng_m2ua_gbl_cfg{
 	sng_nif_cfg_t 		nif[MW_MAX_NUM_OF_INTF+1];
 	sng_m2ua_cfg_t 		m2ua[MW_MAX_NUM_OF_INTF+1];
 	sng_m2ua_peer_cfg_t 	m2ua_peer[MW_MAX_NUM_OF_PEER+1];
 	sng_m2ua_cluster_cfg_t 	m2ua_clus[MW_MAX_NUM_OF_CLUSTER+1];
+	sng_m2ua_tmr_sched_t	sched;
 }sng_m2ua_gbl_cfg_t;
 
 /* m2ua xml parsing APIs */
@@ -119,6 +136,8 @@ int ftmod_ss7_parse_m2ua_peer_interfaces(ftdm_conf_node_t *m2ua_peer_interfaces)
 int ftmod_ss7_parse_m2ua_clust_interfaces(ftdm_conf_node_t *m2ua_clust_interfaces);
 int ftmod_ss7_parse_sctp_links(ftdm_conf_node_t *node);
 uint32_t iptoul(const char *ip);
+void ftdm_m2ua_handle_tmr_expiry(void *userdata);
+void ftdm_m2ua_start_timer(sng_m2ua_tmr_evt_types_e evt_type , int peer_id);
 
 int ftmod_ss7_m2ua_start(void);
 void ftmod_ss7_m2ua_free(void);
@@ -131,6 +150,9 @@ int ftmod_m2ua_ssta_req(int elemt, int id, MwMgmt* cfm);
 int ftmod_nif_ssta_req(int elemt, int id, NwMgmt* cfm);
 void ftmod_ss7_enable_m2ua_sg_logging(void);
 void ftmod_ss7_disable_m2ua_sg_logging(void);
+int ftmod_asp_up(int peer_id);
+int ftmod_asp_ac(int peer_id);
+
 
 
 #endif /*__FTMOD_SNG_SS7_M2UA_H__*/

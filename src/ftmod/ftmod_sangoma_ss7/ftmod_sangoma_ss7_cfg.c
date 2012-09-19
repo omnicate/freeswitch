@@ -209,7 +209,7 @@ int  ft_to_sngss7_cfg_all(void)
 			}
 		} /* if (sngss7_test_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_MTP2)) */
 
-		if(SNG_SS7_OPR_MODE_M2UA_SG == g_ftdm_operating_mode){
+		if(SNG_SS7_OPR_MODE_ISUP != g_ftdm_operating_mode){
 			if(FTDM_SUCCESS != ftmod_ss7_m2ua_init()){
 				ftdm_log (FTDM_LOG_ERROR, "ftmod_ss7_m2ua_init FAILED \n");
 				return FTDM_FAIL;
@@ -459,7 +459,7 @@ int  ft_to_sngss7_cfg_all(void)
 	} /* while (x < (MAX_RELAY_CHANNELS)) */
 
 
-	if(SNG_SS7_OPR_MODE_M2UA_SG == g_ftdm_operating_mode){
+	if(SNG_SS7_OPR_MODE_ISUP != g_ftdm_operating_mode){
 		return ftmod_ss7_m2ua_cfg();
 	}
 	
@@ -966,7 +966,11 @@ int ftmod_ss7_mtp3_dlsap_config(int id)
 	cfg.t.cfg.s.snDLSAP.tst[6]			= 'A';					/* link test pattern */
 	cfg.t.cfg.s.snDLSAP.ssf				= k->ssf;				/* sub service field */ 
 	cfg.t.cfg.s.snDLSAP.dstProcId		= k->mtp2ProcId;		/* destination processor id */
-	cfg.t.cfg.s.snDLSAP.dstEnt			= ENTSD;				/* entity */
+	if(SNG_SS7_OPR_MODE_M2UA_ASP == g_ftdm_operating_mode){
+		cfg.t.cfg.s.snDLSAP.dstEnt			= ENTMW;				/* entity */
+	}else{
+		cfg.t.cfg.s.snDLSAP.dstEnt			= ENTSD;				/* entity */
+	}
 	cfg.t.cfg.s.snDLSAP.dstInst			= S_INST;				/* instance */
 	cfg.t.cfg.s.snDLSAP.prior			= PRIOR0;				/* priority */
 	cfg.t.cfg.s.snDLSAP.route			= RTESPEC;				/* route */

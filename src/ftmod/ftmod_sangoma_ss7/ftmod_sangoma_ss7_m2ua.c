@@ -71,17 +71,20 @@ static int ftmod_sctp_debug(int action);
 static int ftmod_ss7_sctp_shutdown(void);
 static int ftmod_ss7_m2ua_shutdown(void);
 static int ftmod_ss7_tucl_shutdown(void);
+static int ftmod_m2ua_enable_alarm(void);
 
 
 /******************************************************************************/
 ftdm_status_t ftmod_ss7_m2ua_init(void) 
 {
 	/****************************************************************************************************/
-	if (sng_isup_init_nif()) {
-		ftdm_log (FTDM_LOG_ERROR , "Failed to start NIF\n");
-		return FTDM_FAIL;
-	} else {
-		ftdm_log (FTDM_LOG_INFO ,"Started NIF!\n");
+	if(SNG_SS7_OPR_MODE_M2UA_SG == g_ftdm_operating_mode){
+		if (sng_isup_init_nif()) {
+			ftdm_log (FTDM_LOG_ERROR , "Failed to start NIF\n");
+			return FTDM_FAIL;
+		} else {
+			ftdm_log (FTDM_LOG_INFO ,"Started NIF!\n");
+		}
 	}
 	/****************************************************************************************************/
 
@@ -131,11 +134,13 @@ ftdm_status_t ftmod_ss7_m2ua_init(void)
 		ftdm_log (FTDM_LOG_INFO ,"M2UA General configuration: OK\n");
 	}
 	/****************************************************************************************************/
-	if(ftmod_nif_gen_config()){
-		ftdm_log (FTDM_LOG_ERROR ,"NIF General configuration: NOT OK\n");
-		return FTDM_FAIL;
-	}else {
-		ftdm_log (FTDM_LOG_INFO ,"NIF General configuration: OK\n");
+	if(SNG_SS7_OPR_MODE_M2UA_SG == g_ftdm_operating_mode){
+		if(ftmod_nif_gen_config()){
+			ftdm_log (FTDM_LOG_ERROR ,"NIF General configuration: NOT OK\n");
+			return FTDM_FAIL;
+		}else {
+			ftdm_log (FTDM_LOG_INFO ,"NIF General configuration: OK\n");
+		}
 	}
 	/****************************************************************************************************/
 
@@ -307,23 +312,25 @@ ftdm_status_t ftmod_ss7_m2ua_cfg(void)
 /****************************************************************************************************/
 	/* NIF DLSAP */
 
-	x = 1;
-	while(x<MW_MAX_NUM_OF_INTF){
-		if ((g_ftdm_sngss7_data.cfg.g_m2ua_cfg.nif[x].id !=0) && 
-				(!(g_ftdm_sngss7_data.cfg.g_m2ua_cfg.nif[x].flags & SNGSS7_CONFIGURED))) {
-			if(ftmod_nif_dlsap_config(x)) {
-				ftdm_log (FTDM_LOG_ERROR ,"NIF DLSAP[%d] configuration: NOT OK\n", x);
-				return FTDM_FAIL;
-			}else{
-				ftdm_log (FTDM_LOG_INFO ,"NIF DLSAP[%d] configuration: OK\n", x);
+	if(SNG_SS7_OPR_MODE_M2UA_SG == g_ftdm_operating_mode){
+		x = 1;
+		while(x<MW_MAX_NUM_OF_INTF){
+			if ((g_ftdm_sngss7_data.cfg.g_m2ua_cfg.nif[x].id !=0) && 
+					(!(g_ftdm_sngss7_data.cfg.g_m2ua_cfg.nif[x].flags & SNGSS7_CONFIGURED))) {
+				if(ftmod_nif_dlsap_config(x)) {
+					ftdm_log (FTDM_LOG_ERROR ,"NIF DLSAP[%d] configuration: NOT OK\n", x);
+					return FTDM_FAIL;
+				}else{
+					ftdm_log (FTDM_LOG_INFO ,"NIF DLSAP[%d] configuration: OK\n", x);
+				}
 			}
+			g_ftdm_sngss7_data.cfg.g_m2ua_cfg.nif[x].flags |= SNGSS7_CONFIGURED;
+			x++;
 		}
-		g_ftdm_sngss7_data.cfg.g_m2ua_cfg.nif[x].flags |= SNGSS7_CONFIGURED;
-		x++;
+		sngss7_set_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_NIF_STARTED);
 	}
 
 	/* successfully started all the layers , not SET STARTED FLAGS */
-	sngss7_set_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_NIF_STARTED);
 	sngss7_set_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_M2UA_STARTED);
 	sngss7_set_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_SCTP_STARTED);
 	sngss7_set_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_TUCL_STARTED);
@@ -714,7 +721,11 @@ static int ftmod_m2ua_gen_config(void)
 
 
 
-	cfg.t.cfg.s.genCfg.nodeType          = LMW_TYPE_SGP; /* NodeType ==  SGP or ASP  */
+	if(SNG_SS7_OPR_MODE_M2UA_SG == g_ftdm_operating_mode){
+		cfg.t.cfg.s.genCfg.nodeType          = LMW_TYPE_SGP; /* NodeType ==  SGP or ASP  */
+	}else{
+		cfg.t.cfg.s.genCfg.nodeType          = LMW_TYPE_ASP; /* NodeType ==  SGP or ASP  */
+	}
 	cfg.t.cfg.s.genCfg.maxNmbIntf        = MW_MAX_NUM_OF_INTF;
 	cfg.t.cfg.s.genCfg.maxNmbCluster     = MW_MAX_NUM_OF_CLUSTER;
 	cfg.t.cfg.s.genCfg.maxNmbPeer        = MW_MAX_NUM_OF_PEER;
@@ -745,20 +756,24 @@ static int ftmod_m2ua_gen_config(void)
 	cfg.t.cfg.s.genCfg.reConfig.tmrFlcPoll.enb = TRUE;            /* SCTP Flc Poll timer */
 	cfg.t.cfg.s.genCfg.reConfig.tmrFlcPoll.val = 10;
 
-#ifdef MWASP
-	cfg.t.cfg.s.genCfg.reConfig.tmrAspm.enb    = TRUE;         /* ASPM  timer */
-	cfg.t.cfg.s.genCfg.reConfig.tmrAspm.val    = 10;
-	cfg.t.cfg.s.genCfg.reConfig.tmrHeartBeat.enb  = TRUE;       /* Heartbeat timer */
-	cfg.t.cfg.s.genCfg.reConfig.tmrHeartBeat.val  = 10;
-#endif
 
-#ifdef MWSG
-	cfg.t.cfg.s.genCfg.reConfig.tmrAsPend.enb  = TRUE;   /* AS-PENDING timer */
-	cfg.t.cfg.s.genCfg.reConfig.tmrAsPend.val  = 10;
-	cfg.t.cfg.s.genCfg.reConfig.tmrCongPoll.enb = TRUE;  /* SS7 Congestion poll timer */
-	cfg.t.cfg.s.genCfg.reConfig.tmrCongPoll.val = 10;
-	cfg.t.cfg.s.genCfg.reConfig.tmrHeartBeat.enb  = FALSE;       /* HBtimer only at ASP */
-#endif
+	if(SNG_SS7_OPR_MODE_M2UA_ASP == g_ftdm_operating_mode){
+		cfg.t.cfg.s.genCfg.reConfig.tmrAspm.enb    = TRUE;         /* ASPM  timer */
+		cfg.t.cfg.s.genCfg.reConfig.tmrAspm.val    = 10;
+		cfg.t.cfg.s.genCfg.reConfig.tmrHeartBeat.enb  = TRUE;       /* Heartbeat timer */
+		cfg.t.cfg.s.genCfg.reConfig.tmrHeartBeat.val  = 10;
+	}
+
+
+
+	if(SNG_SS7_OPR_MODE_M2UA_SG == g_ftdm_operating_mode){
+		cfg.t.cfg.s.genCfg.reConfig.tmrAsPend.enb  = TRUE;   /* AS-PENDING timer */
+		cfg.t.cfg.s.genCfg.reConfig.tmrAsPend.val  = 10;
+		cfg.t.cfg.s.genCfg.reConfig.tmrCongPoll.enb = TRUE;  /* SS7 Congestion poll timer */
+		cfg.t.cfg.s.genCfg.reConfig.tmrCongPoll.val = 10;
+		cfg.t.cfg.s.genCfg.reConfig.tmrHeartBeat.enb  = FALSE;       /* HBtimer only at ASP */
+	}
+
 	cfg.t.cfg.s.genCfg.reConfig.aspmRetry = 5;
 
 	return (sng_cfg_m2ua (&pst, &cfg));
@@ -937,9 +952,11 @@ static int ftmod_m2ua_peer_config1(int m2ua_inf_id, int peer_id)
 
    cfg.t.cfg.s.peerCfg.peerId 		= peer->id;               /* peer id */
    cfg.t.cfg.s.peerCfg.aspIdFlag 	= peer->aspIdFlag;        /* aspId flag */
-#ifdef MWASP
-   cfg.t.cfg.s.peerCfg.selfAspId 	= peer->selfAspId;  	  /* aspId */
-#endif
+
+   if(SNG_SS7_OPR_MODE_M2UA_ASP == g_ftdm_operating_mode){
+	   cfg.t.cfg.s.peerCfg.selfAspId 	= peer->selfAspId;  	  /* aspId */
+   }
+
    cfg.t.cfg.s.peerCfg.assocCfg.suId    = peer->sctpId; 	  /* SCTSAP ID */
    cfg.t.cfg.s.peerCfg.assocCfg.dstAddrLst.nmb = peer->numDestAddr;
    for (i=0; i <= (peer->numDestAddr); i++) {
@@ -1255,27 +1272,29 @@ int ftmod_ss7_m2ua_start(void){
 	}/* END - M2UA Interfaces while loop*/
 /***********************************************************************************************************************/
 
-	x = 1;
-	while(x<MW_MAX_NUM_OF_INTF){
-		if ((g_ftdm_sngss7_data.cfg.g_m2ua_cfg.nif[x].id !=0) && 
-				(!(g_ftdm_sngss7_data.cfg.g_m2ua_cfg.nif[x].flags & SNGSS7_ACTIVE))) {
-			/* Send a control request to bind the DLSAP between NIF, M2UA and MTP-2 */
-			if(ftmod_nif_m2ua_dlsap_bind(x)) {
-				ftdm_log (FTDM_LOG_ERROR ,"Control request to bind DLSAP[%d] between NIF and M2UA: NOT OK\n", x);
-				return 1;
-			}else {
-				ftdm_log (FTDM_LOG_INFO ,"Control request to bind DLSAP[%d] between NIF and M2UA : OK\n", x);
+	if(SNG_SS7_OPR_MODE_M2UA_SG == g_ftdm_operating_mode){
+		x = 1;
+		while(x<MW_MAX_NUM_OF_INTF){
+			if ((g_ftdm_sngss7_data.cfg.g_m2ua_cfg.nif[x].id !=0) && 
+					(!(g_ftdm_sngss7_data.cfg.g_m2ua_cfg.nif[x].flags & SNGSS7_ACTIVE))) {
+				/* Send a control request to bind the DLSAP between NIF, M2UA and MTP-2 */
+				if(ftmod_nif_m2ua_dlsap_bind(x)) {
+					ftdm_log (FTDM_LOG_ERROR ,"Control request to bind DLSAP[%d] between NIF and M2UA: NOT OK\n", x);
+					return 1;
+				}else {
+					ftdm_log (FTDM_LOG_INFO ,"Control request to bind DLSAP[%d] between NIF and M2UA : OK\n", x);
+				}
+				if(ftmod_nif_mtp2_dlsap_bind(x)) {
+					ftdm_log (FTDM_LOG_ERROR ,"Control request to bind DLSAP[%d] between NIF and MTP2: NOT OK\n", x);
+					return 1;
+				}else {
+					ftdm_log (FTDM_LOG_INFO ,"Control request to bind DLSAP[%d] between NIF and MTP2 : OK\n", x);
+				}
+				g_ftdm_sngss7_data.cfg.g_m2ua_cfg.nif[x].flags |= SNGSS7_ACTIVE;
 			}
-			if(ftmod_nif_mtp2_dlsap_bind(x)) {
-				ftdm_log (FTDM_LOG_ERROR ,"Control request to bind DLSAP[%d] between NIF and MTP2: NOT OK\n", x);
-				return 1;
-			}else {
-				ftdm_log (FTDM_LOG_INFO ,"Control request to bind DLSAP[%d] between NIF and MTP2 : OK\n", x);
-			}
-			g_ftdm_sngss7_data.cfg.g_m2ua_cfg.nif[x].flags |= SNGSS7_ACTIVE;
-		}
-		x++;
-	}/* END - NIF Interfaces for loop*/
+			x++;
+		}/* END - NIF Interfaces for loop*/
+	}
 
 /***********************************************************************************************************************/
 
@@ -1315,7 +1334,11 @@ int ftmod_ss7_m2ua_start(void){
 	}
 
 
-	
+	if(SNG_SS7_OPR_MODE_M2UA_ASP == g_ftdm_operating_mode){
+		/* enable M2UA Alarms as of now for ASP mode only...
+		* ideally should be enable for both..will do it in nsg-4.4 */
+		ftmod_m2ua_enable_alarm();
+	}
 
 	return 0;
 }
@@ -1582,6 +1605,37 @@ static int ftmod_sctp_debug(int action)
 }
 /***********************************************************************************************************************/
 
+static int ftmod_m2ua_enable_alarm()
+{
+	Pst pst;
+	MwMgmt cntrl;  
+
+	memset((U8 *)&pst, 0, sizeof(Pst));
+	memset((U8 *)&cntrl, 0, sizeof(MwMgmt));
+
+	smPstInit(&pst);
+
+	pst.dstEnt = ENTMW;
+
+	/* prepare header */
+	cntrl.hdr.msgType     = TCNTRL;         /* message type */
+	cntrl.hdr.entId.ent   = ENTMW;          /* entity */
+	cntrl.hdr.entId.inst  = 0;              /* instance */
+	cntrl.hdr.elmId.elmnt = STMWGEN;       /* General */
+
+	cntrl.hdr.response.selector    = 0;
+	cntrl.hdr.response.prior       = PRIOR0;
+	cntrl.hdr.response.route       = RTESPEC;
+	cntrl.hdr.response.mem.region  = S_REG;
+	cntrl.hdr.response.mem.pool    = S_POOL;
+
+	cntrl.t.cntrl.action = AENA;
+	cntrl.t.cntrl.subAction = SAUSTA;
+
+	return (sng_cntrl_m2ua (&pst, &cntrl));
+}
+/***********************************************************************************************************************/
+
 static int ftmod_m2ua_debug(int action)
 {
 	Pst pst;
@@ -1771,3 +1825,185 @@ int ftmod_nif_ssta_req(int elemt, int id, NwMgmt* cfm)
 
 	return(sng_sta_nif(&pst,&ssta,cfm));
 }
+/************************************************************************************/
+void ftdm_m2ua_start_timer(sng_m2ua_tmr_evt_types_e evt_type , int peer_id)
+{
+	char timer_name[128];
+	sng_m2ua_tmr_sched_t  *sched = &g_ftdm_sngss7_data.cfg.g_m2ua_cfg.sched;
+
+	memset(&timer_name[0],0,sizeof(timer_name));
+
+	if(sched->tmr_running){
+		SS7_INFO (" Timer[%d] already running with timer-id[%d]\n",sched->tmr_event, sched->tmr_id);
+		return;
+	}
+
+	sched->tmr_event = evt_type;
+
+	switch(evt_type)
+	{
+		case SNG_M2UA_TIMER_ASP_UP:
+			{
+				strcpy(&timer_name[0],"asp-up-timer");
+				sched->peer_id = peer_id;
+				break;
+			}
+		case SNG_M2UA_TIMER_ASP_ACTIVE:
+			{
+				strcpy(&timer_name[0],"asp-active-timer");
+				sched->peer_id = peer_id;
+				break;
+			}
+		case SNG_M2UA_TIMER_MTP3_LINKSET_BIND_ENABLE:
+			{
+				strcpy(&timer_name[0],"mtp3-linkset-bind-enable-timer");
+				break;
+			}
+		default:
+			return;
+	}
+
+
+	if (ftdm_sched_timer (sched->tmr_sched,
+				&timer_name[0],	
+				2000, /* time is in ms - starting tmr for 2 sec */	
+				ftdm_m2ua_handle_tmr_expiry,	
+				sched,	
+				&sched->tmr_id))
+	{
+		SS7_ERROR ("Unable to schedule ASP-UP timer\n");
+	}else{
+		SS7_INFO (" Timer[%s] started with timer-id[%d] for 100 ms\n",&timer_name[0], sched->tmr_id);
+		sched->tmr_running = 0x01;
+	}
+
+	return;
+}
+/************************************************************************************/
+void ftdm_m2ua_handle_tmr_expiry(void *userdata)
+{
+	sng_m2ua_tmr_sched_t  *sched = (sng_m2ua_tmr_sched_t*)userdata;
+
+	if(NULL == sched) {
+		ftdm_log (FTDM_LOG_ERROR ,"Invalid userdata \n");
+		return;
+	}
+
+	g_ftdm_sngss7_data.cfg.g_m2ua_cfg.sched.tmr_running = 0x00;
+
+	switch(sched->tmr_event)
+	{
+		case SNG_M2UA_TIMER_ASP_UP:
+			{
+				ftdm_log (FTDM_LOG_INFO ,"M2UA ASP-UP Timer Expiry \n");
+				if(ftmod_asp_up(sched->peer_id)) {
+					ftdm_log (FTDM_LOG_ERROR ,"ftmod_asp_up FAIL  \n");
+				}else {
+					ftdm_log (FTDM_LOG_INFO ,"ftmod_asp_up SUCCESS  \n");
+				}
+				break;
+			}
+		case SNG_M2UA_TIMER_ASP_ACTIVE:
+			{
+				ftdm_log (FTDM_LOG_INFO ,"M2UA ASP-ACTIVE Timer Expiry \n");
+				if(ftmod_asp_ac(sched->peer_id)) {
+					ftdm_log (FTDM_LOG_ERROR ,"ftmod_asp_ac FAIL  \n");
+				}else {
+					ftdm_log (FTDM_LOG_INFO ,"ftmod_asp_ac SUCCESS  \n");
+				}
+				break;
+			}
+		case SNG_M2UA_TIMER_MTP3_LINKSET_BIND_ENABLE:
+			{
+				ftdm_log (FTDM_LOG_INFO ,"M2UA ASP- MTP3 LINKSET bind-enable Timer Expiry \n");
+				ftmod_ss7_enable_linkset();
+				break;
+			}
+		default:
+			return;
+	}
+
+	return;
+}
+
+/************************************************************************************/
+int ftmod_asp_up(int peer_id)
+{
+    Pst pst;
+    MwMgmt cntrl;
+
+    memset((U8 *)&pst, 0, sizeof(Pst));
+    memset((U8 *)&cntrl, 0, sizeof(MwMgmt));
+
+    smPstInit(&pst);
+
+    pst.dstEnt = ENTMW;
+
+    /* prepare header */
+    cntrl.hdr.msgType     = TCNTRL;         /* message type */
+    cntrl.hdr.entId.ent   = ENTMW;          /* entity */
+    cntrl.hdr.entId.inst  = 0;              /* instance */
+    cntrl.hdr.elmId.elmnt = STMWPEER;       /* General */
+    cntrl.hdr.transId     = 1;     /* transaction identifier */
+
+    cntrl.hdr.response.selector    = 0;
+    cntrl.hdr.response.prior       = PRIOR0;
+    cntrl.hdr.response.route       = RTESPEC;
+    cntrl.hdr.response.mem.region  = S_REG;
+    cntrl.hdr.response.mem.pool    = S_POOL;
+
+
+    cntrl.t.cntrl.action = AMWASPUP;
+    /* KAPIL - Not Requried 
+     * cntrl.t.cntrl.s.suId = 0; */
+
+    cntrl.t.cntrl.s.peerId = (MwPeerId) peer_id;
+
+    cntrl.t.cntrl.aspm.autoCtx = TRUE;
+    memcpy((U8 *)cntrl.t.cntrl.aspm.info, (CONSTANT U8 *)"PEER_0", sizeof("PEER_0"));
+
+
+    return (sng_cntrl_m2ua (&pst, &cntrl));
+
+}
+/************************************************************************************/
+int ftmod_asp_ac(int peer_id)
+{
+  Pst pst;
+  MwMgmt cntrl;
+
+  memset((U8 *)&pst, 0, sizeof(Pst));
+  memset((U8 *)&cntrl, 0, sizeof(MwMgmt));
+
+  smPstInit(&pst);
+
+  pst.dstEnt = ENTMW;
+
+  /* prepare header */
+  cntrl.hdr.msgType     = TCNTRL;         /* message type */
+   cntrl.hdr.entId.ent   = ENTMW;          /* entity */
+   cntrl.hdr.entId.inst  = 0;              /* instance */
+   cntrl.hdr.elmId.elmnt = STMWPEER;       /* General */
+   cntrl.hdr.transId     = 1;     /* transaction identifier */
+
+   cntrl.hdr.response.selector    = 0;
+   cntrl.hdr.response.prior       = PRIOR0;
+   cntrl.hdr.response.route       = RTESPEC;
+   cntrl.hdr.response.mem.region  = S_REG;
+   cntrl.hdr.response.mem.pool    = S_POOL;
+
+
+   cntrl.t.cntrl.action = AMWASPAC;
+  /* KAPIL - NOT REQUIRED  cntrl.t.cntrl.s.suId = 0; */
+
+   cntrl.t.cntrl.s.peerId = (MwPeerId) peer_id;
+
+   cntrl.t.cntrl.aspm.autoCtx = TRUE;
+   cntrl.t.cntrl.aspm.type = LMW_TRF_MODE_LOADSHARE;
+   memcpy((U8 *)cntrl.t.cntrl.aspm.info, (CONSTANT U8 *)"PEER_0", sizeof("PEER_0"));
+
+   return (sng_cntrl_m2ua (&pst, &cntrl));
+}
+/************************************************************************************/
+
+

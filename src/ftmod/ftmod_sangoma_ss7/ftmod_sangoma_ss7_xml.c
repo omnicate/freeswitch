@@ -228,16 +228,15 @@ int ftmod_ss7_parse_xml(ftdm_conf_parameter_t *ftdm_parameters, ftdm_span_t *spa
 	if(!strcasecmp(var, "operating-mode")){
 		if(!strcasecmp(val, "ISUP")) {
 			g_ftdm_operating_mode = SNG_SS7_OPR_MODE_ISUP;
-		}
-		else if(!strcasecmp(val, "M2UA_SG")) {
+		} else if(!strcasecmp(val, "M2UA_SG")) {
 			g_ftdm_operating_mode = SNG_SS7_OPR_MODE_M2UA_SG;
+		} else if(!strcasecmp(val, "M2UA_ASP")) {
+			g_ftdm_operating_mode = SNG_SS7_OPR_MODE_M2UA_ASP;
 		} else {
 			SS7_DEBUG("Operating mode not specified, defaulting to ISUP\n");
 		}
 		i++;
 	}
-
-	
 
 	var = ftdm_parameters[i].var;
 	val = ftdm_parameters[i].val;
@@ -280,7 +279,7 @@ int ftmod_ss7_parse_xml(ftdm_conf_parameter_t *ftdm_parameters, ftdm_span_t *spa
 	/* fill the pointer to span into isupCkt */
 	sngSpan.span = span;
 
-	if(SNG_SS7_OPR_MODE_ISUP == g_ftdm_operating_mode){
+	if(SNG_SS7_OPR_MODE_M2UA_SG != g_ftdm_operating_mode){
 		/* setup the circuits structure */
 		if(ftmod_ss7_fill_in_circuits(&sngSpan)) {
 			SS7_ERROR("Failed to fill in circuits structure!\n");
@@ -325,9 +324,9 @@ static int ftmod_ss7_parse_sng_isup(ftdm_conf_node_t *sng_isup)
 	tmp_node = sng_isup->child;
 
 	while (tmp_node != NULL) {
-	/**************************************************************************/
+		/**************************************************************************/
 		/* check the type of structure */
- 		if (!strcasecmp(tmp_node->name, "sng_gen")) {
+		if (!strcasecmp(tmp_node->name, "sng_gen")) {
 		/**********************************************************************/
 			if (gen_config == NULL) {
 				gen_config = tmp_node;
@@ -489,78 +488,82 @@ static int ftmod_ss7_parse_sng_isup(ftdm_conf_node_t *sng_isup)
 		return FTDM_FAIL;
 	}
 
-	if (ftmod_ss7_parse_mtp1_links(mtp1_links)) {
-		SS7_ERROR("Failed to parse \"mtp1_links\"!\n");
-		return FTDM_FAIL;
+	SS7_DEBUG("FreeTDM Operating Mode[%s]\n",ftdm_opr_mode_tostr(g_ftdm_operating_mode));
+
+/****************************************************************************************************/
+	if((SNG_SS7_OPR_MODE_ISUP == g_ftdm_operating_mode) || 
+			(SNG_SS7_OPR_MODE_M2UA_SG == g_ftdm_operating_mode)){
+
+		if (ftmod_ss7_parse_mtp1_links(mtp1_links)) {
+			SS7_ERROR("Failed to parse \"mtp1_links\"!\n");
+			return FTDM_FAIL;
+		}
+
+		if (ftmod_ss7_parse_mtp2_links(mtp2_links)) {
+			SS7_ERROR("Failed to parse \"mtp2_links\"!\n");
+			return FTDM_FAIL;
+		}
 	}
+/****************************************************************************************************/
 
-	if (ftmod_ss7_parse_mtp2_links(mtp2_links)) {
-		SS7_ERROR("Failed to parse \"mtp2_links\"!\n");
-		return FTDM_FAIL;
+	if((SNG_SS7_OPR_MODE_ISUP == g_ftdm_operating_mode) || 
+			(SNG_SS7_OPR_MODE_M2UA_ASP == g_ftdm_operating_mode)){
+
+		if (mtp3_links && ftmod_ss7_parse_mtp3_links(mtp3_links)) {
+			SS7_ERROR("Failed to parse \"mtp3_links\"!\n");
+			return FTDM_FAIL;
+		}
+
+		if (ftmod_ss7_parse_mtp_linksets(mtp_linksets)) {
+			SS7_ERROR("Failed to parse \"mtp_linksets\"!\n");
+			return FTDM_FAIL;
+		}
+
+		if (ftmod_ss7_parse_mtp_routes(mtp_routes)) {	
+			SS7_ERROR("Failed to parse \"mtp_routes\"!\n");
+			return FTDM_FAIL;
+		}
+
+		if (isup_interfaces && ftmod_ss7_parse_isup_interfaces(isup_interfaces)) {
+			SS7_ERROR("Failed to parse \"isup_interfaces\"!\n");
+			return FTDM_FAIL;
+		}
+
+		if (cc_spans && ftmod_ss7_parse_cc_spans(cc_spans)) {
+			SS7_ERROR("Failed to parse \"cc_spans\"!\n");
+			return FTDM_FAIL;
+		}
 	}
+/****************************************************************************************************/
 
+	if((SNG_SS7_OPR_MODE_M2UA_SG == g_ftdm_operating_mode) || 
+			(SNG_SS7_OPR_MODE_M2UA_ASP == g_ftdm_operating_mode)){
 
-	switch(g_ftdm_operating_mode)
-	{
-		case SNG_SS7_OPR_MODE_ISUP:
-			{
-				if (mtp3_links && ftmod_ss7_parse_mtp3_links(mtp3_links)) {
-					SS7_ERROR("Failed to parse \"mtp3_links\"!\n");
-					return FTDM_FAIL;
-				}
+		if (ftmod_ss7_parse_sctp_links(sctp_ifaces) != FTDM_SUCCESS) {
+			SS7_ERROR("Failed to parse <sctp_links>!\n");
+			return FTDM_FAIL;
+		}
 
-				if (ftmod_ss7_parse_mtp_linksets(mtp_linksets)) {
-					SS7_ERROR("Failed to parse \"mtp_linksets\"!\n");
-					return FTDM_FAIL;
-				}
+		if ((SNG_SS7_OPR_MODE_M2UA_SG == g_ftdm_operating_mode) && 
+		    (nif_ifaces && ftmod_ss7_parse_nif_interfaces(nif_ifaces))) {
+			SS7_ERROR("Failed to parse \"nif_ifaces\"!\n");
+			return FTDM_FAIL;
+		}
 
-				if (ftmod_ss7_parse_mtp_routes(mtp_routes)) {	
-					SS7_ERROR("Failed to parse \"mtp_routes\"!\n");
-					return FTDM_FAIL;
-				}
-
-				if (isup_interfaces && ftmod_ss7_parse_isup_interfaces(isup_interfaces)) {
-					SS7_ERROR("Failed to parse \"isup_interfaces\"!\n");
-					return FTDM_FAIL;
-				}
-
-				if (cc_spans && ftmod_ss7_parse_cc_spans(cc_spans)) {
-					SS7_ERROR("Failed to parse \"cc_spans\"!\n");
-					return FTDM_FAIL;
-				}
-				break;
-			}
-		case SNG_SS7_OPR_MODE_M2UA_SG: 
-			{
-				if (ftmod_ss7_parse_sctp_links(sctp_ifaces) != FTDM_SUCCESS) {
-					SS7_ERROR("Failed to parse <sctp_links>!\n");
-					return FTDM_FAIL;
-				}
-
-				if (nif_ifaces && ftmod_ss7_parse_nif_interfaces(nif_ifaces)) {
-					SS7_ERROR("Failed to parse \"nif_ifaces\"!\n");
-					return FTDM_FAIL;
-				}
-
-				if (m2ua_ifaces && ftmod_ss7_parse_m2ua_interfaces(m2ua_ifaces)) {
-					SS7_ERROR("Failed to parse \"m2ua_ifaces\"!\n");
-					return FTDM_FAIL;
-				}
-				if (m2ua_peer_ifaces && ftmod_ss7_parse_m2ua_peer_interfaces(m2ua_peer_ifaces)) {
-					SS7_ERROR("Failed to parse \"m2ua_peer_ifaces\"!\n");
-					return FTDM_FAIL;
-				}
-				if (m2ua_clust_ifaces && ftmod_ss7_parse_m2ua_clust_interfaces(m2ua_clust_ifaces)) {
-					SS7_ERROR("Failed to parse \"m2ua_clust_ifaces\"!\n");
-					return FTDM_FAIL;
-				}
-				break;
-			}
-		default:
-			SS7_ERROR("Invalid operating mode[%d]\n",g_ftdm_operating_mode);
-			break;
-
+		if (m2ua_ifaces && ftmod_ss7_parse_m2ua_interfaces(m2ua_ifaces)) {
+			SS7_ERROR("Failed to parse \"m2ua_ifaces\"!\n");
+			return FTDM_FAIL;
+		}
+		if (m2ua_peer_ifaces && ftmod_ss7_parse_m2ua_peer_interfaces(m2ua_peer_ifaces)) {
+			SS7_ERROR("Failed to parse \"m2ua_peer_ifaces\"!\n");
+			return FTDM_FAIL;
+		}
+		if (m2ua_clust_ifaces && ftmod_ss7_parse_m2ua_clust_interfaces(m2ua_clust_ifaces)) {
+			SS7_ERROR("Failed to parse \"m2ua_clust_ifaces\"!\n");
+			return FTDM_FAIL;
+		}
 	}
+/****************************************************************************************************/
 
 	return FTDM_SUCCESS;
 }
@@ -623,8 +626,7 @@ static int ftmod_ss7_parse_sng_gen(ftdm_conf_node_t *sng_gen)
 				g_ftdm_sngss7_data.cfg.force_inr = 0;
 			}
 			SS7_DEBUG("Found INR force configuration = %s\n", parm->val );
-		}
-		else {
+		}else {
 			SS7_ERROR("Found an invalid parameter \"%s\"!\n", parm->val);
 			return FTDM_FAIL;
 		}
@@ -3284,6 +3286,10 @@ static int ftmod_ss7_fill_in_circuits(sng_span_t *sngSpan)
 
 	/**************************************************************************/
 	} /* for (i == 1; i < ftdmspan->chan_count; i++) */
+
+	if(SNG_SS7_OPR_MODE_M2UA_ASP == g_ftdm_operating_mode){
+		g_ftdm_sngss7_data.cfg.g_m2ua_cfg.sched.tmr_sched = ((sngss7_span_data_t *)(ftdmspan->signal_data))->sched; 
+	}
 
 	return FTDM_SUCCESS;
 }
