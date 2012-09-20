@@ -679,84 +679,71 @@ static switch_status_t channel_receive_event(switch_core_session_t *session, swi
     ctdm_private_t *tech_pvt = switch_core_session_get_private(session);
 
     if (!zstr(command)) {
-                
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "FreeTDM received %s command \n",command);
-		
-		if (!strcasecmp(command, kPREBUFFER_LEN)) {
-	        const char *szval = switch_event_get_header(event, kPREBUFFER_LEN);
-	        int val = !zstr(szval) ? atoi(szval) : 0;
-        
-		/*******************************************************************************************************/
-	        if (tech_pvt->prebuffer_len == val) {
-	            tech_pvt->prebuffer_len = val;
-				if (FTDM_SUCCESS != ftdm_channel_command(tech_pvt->ftdm_channel, 
-							FTDM_COMMAND_SET_PRE_BUFFER_SIZE, &tech_pvt->prebuffer_len)) {
-	                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Failed to set channel pre buffer size.\n");
-	                return SWITCH_STATUS_GENERR;        
-	            }
-	        }
-		/*******************************************************************************************************/
-		} else if (!strcasecmp(command, kECHOCANCEL)) {
-		/*******************************************************************************************************/
-			const char *szval = switch_event_get_header(event, kECHOCANCEL);
-			int enabled = !!switch_true(szval);
-		
-			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, 
-					"FreeTDM sending echo cancel [%s] command \n",enabled ? "enable" : "disable");
-			
-			if (FTDM_SUCCESS != ftdm_channel_command(tech_pvt->ftdm_channel, 
-						enabled ? FTDM_COMMAND_ENABLE_ECHOCANCEL : FTDM_COMMAND_DISABLE_ECHOCANCEL, NULL)) {
-				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, 
-						"Failed to %s echo cancellation.\n", enabled ? "enable" : "disable");
-				return SWITCH_STATUS_FALSE;        
-			}
-		/*******************************************************************************************************/
-		} else if (!strcasecmp(command, kDTMF_REMOVAL)) {
-		/*******************************************************************************************************/
-				ftdm_channel_t *channel = NULL;
-				ftdm_span_t *span = NULL;
-				uint8_t enable = 0;
-				const char *span_name = NULL;
-				const char *cond = switch_event_get_header(event, "condition");
 
-				if (zstr(cond)) {
-					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Could not find condition\n");
-					return SWITCH_STATUS_FALSE;
-				}
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "FreeTDM received %s command \n",command);
 
-				span_name = switch_event_get_header(event, "span-name");
+        if (!strcasecmp(command, kPREBUFFER_LEN)) {
+            const char *szval = switch_event_get_header(event, kPREBUFFER_LEN);
+            int val = !zstr(szval) ? atoi(szval) : 0;
 
-				if (ftdm_span_find_by_name(span_name, &span) != FTDM_SUCCESS) {
-					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Cannot find span [%s]\n", span_name);
-					return SWITCH_STATUS_FALSE;
-				}
+            /*******************************************************************************************************/
+            if (tech_pvt->prebuffer_len == val) {
+                tech_pvt->prebuffer_len = val;
+                if (FTDM_SUCCESS != ftdm_channel_command(tech_pvt->ftdm_channel, 
+                            FTDM_COMMAND_SET_PRE_BUFFER_SIZE, &tech_pvt->prebuffer_len)) {
+                    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Failed to set channel pre buffer size.\n");
+                    return SWITCH_STATUS_GENERR;        
+                }
+            }
+            /*******************************************************************************************************/
+        } else if (!strcasecmp(command, kECHOCANCEL)) {
+            /*******************************************************************************************************/
+            const char *szval = switch_event_get_header(event, kECHOCANCEL);
+            int enabled = !!switch_true(szval);
 
-				channel = ctdm_get_channel_from_event(event, span);
-				if (!channel) {
-					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Could not find channel\n");
-					return SWITCH_STATUS_FALSE;
-				}
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, 
+                    "FreeTDM sending echo cancel [%s] command \n",enabled ? "enable" : "disable");
 
-				if (!strcmp(cond, "enable")) {
-					enable = 1;
-				}
+            if (FTDM_SUCCESS != ftdm_channel_command(tech_pvt->ftdm_channel, 
+                        enabled ? FTDM_COMMAND_ENABLE_ECHOCANCEL : FTDM_COMMAND_DISABLE_ECHOCANCEL, NULL)) {
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, 
+                        "Failed to %s echo cancellation.\n", enabled ? "enable" : "disable");
+                return SWITCH_STATUS_FALSE;        
+            }
+            /*******************************************************************************************************/
+        } else if (!strcasecmp(command, kDTMF_REMOVAL)) {
+            /*******************************************************************************************************/
+            uint8_t enable = 0;
+            const char *cond = switch_event_get_header(event, "condition");
 
-				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "%s DTMF-removal for %s:%d\n",
-						enable ? "Enabling" : "Disabling", ftdm_channel_get_span_name(channel), ftdm_channel_get_ph_id(channel));
+            if (zstr(cond)) {
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Could not find condition\n");
+                return SWITCH_STATUS_FALSE;
+            }
 
-				if (FTDM_SUCCESS != ftdm_channel_command(channel, enable ? FTDM_COMMAND_ENABLE_DTMF_REMOVAL : FTDM_COMMAND_DISABLE_DTMF_REMOVAL, 0)){
-					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, 
-							"Failed to %s DTMF-removal \n", enable ? "enable" : "disable");
-					return SWITCH_STATUS_FALSE;        
-				}
+            if (!strcmp(cond, "enable")) {
+                enable = 1;
+            }
 
-		/*******************************************************************************************************/
-		 }else {
-		/*******************************************************************************************************/
-			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "FreeTDM received unknown command [%s] \n",command);
-		}
-	}
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "%s DTMF-removal for %s:%d\n",
+                    enable ? "Enabling" : "Disabling", 
+                    ftdm_channel_get_span_name(tech_pvt->ftdm_channel), ftdm_channel_get_ph_id(tech_pvt->ftdm_channel));
 
-	return SWITCH_STATUS_SUCCESS;
+            if (FTDM_SUCCESS != 
+                    ftdm_channel_command(tech_pvt->ftdm_channel, enable ? FTDM_COMMAND_ENABLE_DTMF_REMOVAL : FTDM_COMMAND_DISABLE_DTMF_REMOVAL, 0)) {
+
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, 
+                        "Failed to %s DTMF-removal \n", enable ? "enable" : "disable");
+                return SWITCH_STATUS_FALSE;        
+            }
+
+            /*******************************************************************************************************/
+        }else {
+            /*******************************************************************************************************/
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "FreeTDM received unknown command [%s] \n",command);
+        }
+    }
+
+    return SWITCH_STATUS_SUCCESS;
 }
 
