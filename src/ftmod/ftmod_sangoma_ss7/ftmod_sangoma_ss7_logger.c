@@ -69,32 +69,32 @@ void handle_sng_log(uint8_t level, char *fmt,...)
 	switch (level) {
 	/**************************************************************************/
 	case SNG_LOGLEVEL_DEBUG:
-		ftdm_log(FTDM_LOG_DEBUG, "sng_ss7->%s", data);
+		ftdm_log(FTDM_LOG_DEBUG, "STACK_LOG: sng_ss7->%s", data);
 		break;
 	/**************************************************************************/
 	case SNG_LOGLEVEL_WARN:
-		ftdm_log(FTDM_LOG_WARNING, "sng_ss7->%s", data);
+		ftdm_log(FTDM_LOG_WARNING, "STACK_LOG: sng_ss7->%s", data);
 		break;
 	/**************************************************************************/
 	case SNG_LOGLEVEL_INFO:
-		ftdm_log(FTDM_LOG_INFO, "sng_ss7->%s", data);
+		ftdm_log(FTDM_LOG_INFO, "STACK_LOG: sng_ss7->%s", data);
 		break;
 	/**************************************************************************/
 	case SNG_LOGLEVEL_NOTICE:
-		ftdm_log(FTDM_LOG_NOTICE, "sng_ss7->%s", data);
+		ftdm_log(FTDM_LOG_NOTICE, "STACK_LOG: sng_ss7->%s", data);
 		break;
 	/**************************************************************************/
 	case SNG_LOGLEVEL_ERROR:
-		ftdm_log(FTDM_LOG_ERROR, "sng_ss7->%s", data);
+		ftdm_log(FTDM_LOG_ERROR, "STACK_LOG: sng_ss7->%s", data);
 		break;
 	/**************************************************************************/
 	case SNG_LOGLEVEL_CRIT:
 		/*printf("%s",data);*/
-		ftdm_log(FTDM_LOG_CRIT, "sng_ss7->%s", data);
+		ftdm_log(FTDM_LOG_CRIT, "STACK_LOG: sng_ss7->%s", data);
 		break;
 	/**************************************************************************/
 	default:
-		ftdm_log(FTDM_LOG_INFO, "sng_ss7->%s", data);
+		ftdm_log(FTDM_LOG_INFO, "STACK_LOG: sng_ss7->%s", data);
 		break;
 	/**************************************************************************/
 	}
