@@ -54,6 +54,9 @@ void handle_sng_relay_alarm(Pst *pst, RyMngmt *sta);
 /******************************************************************************/
 
 /* FUNCTIONS ******************************************************************/
+
+#define STACK_LOG_FORMAT "STACK_LOG_BEGIN:sng_ss7:%sSTACK_LOG_END"
+
 void handle_sng_log(uint8_t level, char *fmt,...)
 {
 	char	*data;
@@ -67,42 +70,32 @@ void handle_sng_log(uint8_t level, char *fmt,...)
 	}
 
 	switch (level) {
-	/**************************************************************************/
 	case SNG_LOGLEVEL_DEBUG:
-		ftdm_log(FTDM_LOG_DEBUG, "STACK_LOG: sng_ss7->%s", data);
+		ftdm_log(FTDM_LOG_DEBUG, STACK_LOG_FORMAT, data);
 		break;
-	/**************************************************************************/
 	case SNG_LOGLEVEL_WARN:
-		ftdm_log(FTDM_LOG_WARNING, "STACK_LOG: sng_ss7->%s", data);
+		ftdm_log(FTDM_LOG_WARNING, STACK_LOG_FORMAT, data);
 		break;
-	/**************************************************************************/
 	case SNG_LOGLEVEL_INFO:
-		ftdm_log(FTDM_LOG_INFO, "STACK_LOG: sng_ss7->%s", data);
+		ftdm_log(FTDM_LOG_INFO, STACK_LOG_FORMAT, data);
 		break;
-	/**************************************************************************/
 	case SNG_LOGLEVEL_NOTICE:
-		ftdm_log(FTDM_LOG_NOTICE, "STACK_LOG: sng_ss7->%s", data);
+		ftdm_log(FTDM_LOG_NOTICE, STACK_LOG_FORMAT, data);
 		break;
-	/**************************************************************************/
 	case SNG_LOGLEVEL_ERROR:
-		ftdm_log(FTDM_LOG_ERROR, "STACK_LOG: sng_ss7->%s", data);
+		ftdm_log(FTDM_LOG_ERROR, STACK_LOG_FORMAT, data);
 		break;
-	/**************************************************************************/
 	case SNG_LOGLEVEL_CRIT:
-		/*printf("%s",data);*/
-		ftdm_log(FTDM_LOG_CRIT, "STACK_LOG: sng_ss7->%s", data);
+		ftdm_log(FTDM_LOG_CRIT, STACK_LOG_FORMAT, data);
 		break;
-	/**************************************************************************/
 	default:
-		ftdm_log(FTDM_LOG_INFO, "STACK_LOG: sng_ss7->%s", data);
+		ftdm_log(FTDM_LOG_INFO, STACK_LOG_FORMAT, data);
 		break;
-	/**************************************************************************/
 	}
 
 	return;
 }
 
-/******************************************************************************/
 void handle_sng_mtp1_alarm(Pst *pst, L1Mngmt *sta)
 {
 
