@@ -56,10 +56,8 @@ ftdm_sngss7_opr_mode g_ftdm_operating_mode;
 
 /* PROTOTYPES *****************************************************************/
 static void *ftdm_sangoma_ss7_run (ftdm_thread_t * me, void *obj);
-static void ftdm_sangoma_ss7_process_stack_event (sngss7_event_data_t *sngss7_event);
 static void ftdm_sangoma_ss7_process_peer_stack_event (ftdm_channel_t *ftdmchan, sngss7_event_data_t *sngss7_event);
 
-static ftdm_status_t ftdm_sangoma_ss7_stop (ftdm_span_t * span);
 static ftdm_status_t ftdm_sangoma_ss7_start (ftdm_span_t * span);
 /******************************************************************************/
 
@@ -565,7 +563,7 @@ ftdm_sangoma_ss7_run_exit:
 }
 
 /******************************************************************************/
-static void ftdm_sangoma_ss7_process_stack_event (sngss7_event_data_t *sngss7_event)
+void ftdm_sangoma_ss7_process_stack_event (sngss7_event_data_t *sngss7_event)
 {
 	sngss7_chan_data_t *sngss7_info = NULL;
 	ftdm_channel_t *ftdmchan = NULL;
@@ -1606,7 +1604,7 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 					if (!ftdm_test_flag (ftdmchan, FTDM_CHANNEL_SIG_UP)) {
 						SS7_DEBUG_CHAN(ftdmchan,"All reset flags cleared %s\n", "");
 						/* all flags are down so we can bring up the sig status */
-						sngss7_set_sig_status(sngss7_info, FTDM_SIG_STATE_UP);
+						sngss7_set_sig_status(sngss7_info, FTDM_SIG_STATE_UP, 0);
 					}
 				} else {
 					state_flag = 0;
@@ -1751,7 +1749,7 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 	
 		/* if the sig_status is up...bring it down */
 		if (ftdm_test_flag (ftdmchan, FTDM_CHANNEL_SIG_UP)) {
-			sngss7_set_sig_status(sngss7_info, FTDM_SIG_STATE_DOWN);
+			sngss7_set_sig_status(sngss7_info, FTDM_SIG_STATE_DOWN, 0);
 		}
 
 		if (sngss7_test_ckt_flag (sngss7_info, FLAG_GRP_RESET_RX)) {
@@ -1892,7 +1890,7 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 				}
 			} else {
 				/* bring the sig status back up */
-				sngss7_set_sig_status(sngss7_info, FTDM_SIG_STATE_UP);
+				sngss7_set_sig_status(sngss7_info, FTDM_SIG_STATE_UP, 0);
 			}
 		} /* if (sngss7_test_flag(sngss7_info, FLAG_INFID_RESUME)) */
 
@@ -1902,7 +1900,7 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 
 			if (ftdm_test_flag(ftdmchan, FTDM_CHANNEL_SIG_UP)) {
 				/* bring the sig status down */
-				sngss7_set_sig_status(sngss7_info, FTDM_SIG_STATE_DOWN);
+				sngss7_set_sig_status(sngss7_info, FTDM_SIG_STATE_DOWN, 0);
 			}
 
 			/* Wait for RESUME */
@@ -1916,7 +1914,7 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 			SS7_DEBUG_CHAN(ftdmchan, "Processing CKT_MN_BLOCK_RX flag %s\n", "");
 
 			/* bring the sig status down */
-			sngss7_set_sig_status(sngss7_info, FTDM_SIG_STATE_DOWN);
+			sngss7_set_sig_status(sngss7_info, FTDM_SIG_STATE_DOWN, 0);
 
 			/* send a BLA */
 			ft_to_sngss7_bla (ftdmchan);
@@ -1942,7 +1940,7 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 			/* not bring the cic up if there is a hardware block */
 			if (sngss7_channel_status_clear(sngss7_info)) {
 				/* bring the sig status up */
-				sngss7_set_sig_status(sngss7_info, FTDM_SIG_STATE_UP);
+				sngss7_set_sig_status(sngss7_info, FTDM_SIG_STATE_UP, 0);
 
 			}
 			/* send a uba */
@@ -1957,7 +1955,7 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 			!sngss7_test_ckt_blk_flag(sngss7_info, FLAG_GRP_HW_BLOCK_TX_DN )) {
 
 			SS7_DEBUG_CHAN(ftdmchan, "Processing FLAG_GRP_HW_BLOCK_TX flag %s\n", "");
-			sngss7_set_sig_status(sngss7_info, FTDM_SIG_STATE_DOWN);
+			sngss7_set_sig_status(sngss7_info, FTDM_SIG_STATE_DOWN, 0);
 
 			/* dont send block again if the channel is already blocked by maintenance */
 			if( !sngss7_test_ckt_blk_flag(sngss7_info, FLAG_CKT_MN_BLOCK_TX) &&
@@ -1987,7 +1985,7 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 			sngss7_clear_ckt_blk_flag(sngss7_info, FLAG_GRP_HW_UNBLK_TX_DN);
 
 			if (sngss7_channel_status_clear(sngss7_info)) {
-				sngss7_set_sig_status(sngss7_info, FTDM_SIG_STATE_UP);
+				sngss7_set_sig_status(sngss7_info, FTDM_SIG_STATE_UP, 0);
 			}
 
 			if (sngss7_tx_block_status_clear(sngss7_info) && !skip_unblock) {
@@ -2007,7 +2005,7 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 
 			SS7_DEBUG_CHAN(ftdmchan, "Processing FLAG_GRP_HW_BLOCK_RX flag %s\n", "");
 
-			sngss7_set_sig_status(sngss7_info, FTDM_SIG_STATE_DOWN);
+			sngss7_set_sig_status(sngss7_info, FTDM_SIG_STATE_DOWN, 0);
 			
 			/* FIXME: Transmit CRG Ack */
 
@@ -2024,7 +2022,7 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 			sngss7_clear_ckt_blk_flag(sngss7_info, FLAG_GRP_HW_UNBLK_RX);
 
 			if (sngss7_channel_status_clear(sngs7_info)) {
-				sngss7_set_sig_status(sngss7_info, FTDM_SIG_STATE_UP);
+				sngss7_set_sig_status(sngss7_info, FTDM_SIG_STATE_UP, 0);
 			}
 
 			/* Transmit CRU Ack */
@@ -2041,7 +2039,7 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 			SS7_DEBUG_CHAN(ftdmchan, "Processing CKT_MN_BLOCK_TX flag %s\n", "");
 
 			/* bring the sig status down */
-			sngss7_set_sig_status(sngss7_info, FTDM_SIG_STATE_DOWN);
+			sngss7_set_sig_status(sngss7_info, FTDM_SIG_STATE_DOWN, 0);
 
 			/* send a blo */
 			ft_to_sngss7_blo (ftdmchan);
@@ -2064,7 +2062,7 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 
 			if (sngss7_channel_status_clear(sngss7_info)) {
 				/* bring the sig status up */
-				sngss7_set_sig_status(sngss7_info, FTDM_SIG_STATE_UP);
+				sngss7_set_sig_status(sngss7_info, FTDM_SIG_STATE_UP, 0);
 			}
 
 			if (sngss7_tx_block_status_clear(sngss7_info)) {
@@ -2094,7 +2092,7 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 				ft_to_sngss7_ubl(ftdmchan);
 			} else {
 				/* bring the sig status down */
-				sngss7_set_sig_status(sngss7_info, FTDM_SIG_STATE_DOWN);
+				sngss7_set_sig_status(sngss7_info, FTDM_SIG_STATE_DOWN, 0);
 			}
 
 		}
@@ -2114,7 +2112,7 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 			ft_to_sngss7_uba(ftdmchan);
 			
 			if (sngss7_channel_status_clear(sngss7_info)) {
-				sngss7_set_sig_status(sngss7_info, FTDM_SIG_STATE_UP);
+				sngss7_set_sig_status(sngss7_info, FTDM_SIG_STATE_UP, 0);
 			}
 
 
@@ -2126,7 +2124,7 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 			SS7_DEBUG_CHAN(ftdmchan, "Processing CKT_UCIC_BLOCK flag %s\n", "");
 
 			/* bring the channel signaling status to down */
-			sngss7_set_sig_status(sngss7_info, FTDM_SIG_STATE_DOWN);
+			sngss7_set_sig_status(sngss7_info, FTDM_SIG_STATE_DOWN, 0);
 
 			/* remove any reset flags */
 			clear_rx_grs_flags(sngss7_info);
@@ -2259,6 +2257,22 @@ suspend_goto_restart:
 }
 
 /******************************************************************************/
+static FIO_CHANNEL_INDICATE_FUNCTION(ftdm_sangoma_ss7_indicate)
+{
+    ftdm_status_t status = FTDM_FAIL;
+
+    switch (indication) {
+        case FTDM_CHANNEL_INDICATE_RAW:
+            if (SNG_SS7_OPR_MODE_MTP2_API == g_ftdm_operating_mode) {
+                return ftmod_sangoma_ss7_mtp2_indicate(ftdmchan);
+            }
+            break;
+        default:
+            status = FTDM_NOTIMPL;
+    }
+    return status;
+}
+/******************************************************************************/
 static FIO_CHANNEL_OUTGOING_CALL_FUNCTION(ftdm_sangoma_ss7_outgoing_call)
 {
 	sngss7_chan_data_t  *sngss7_info = ftdmchan->call_data;
@@ -2363,8 +2377,15 @@ static FIO_CHANNEL_GET_SIG_STATUS_FUNCTION(ftdm_sangoma_ss7_get_sig_status)
 /******************************************************************************/
 static FIO_CHANNEL_SET_SIG_STATUS_FUNCTION(ftdm_sangoma_ss7_set_sig_status)
 {
-	SS7_ERROR ("Cannot set channel status in this module\n");
-	return FTDM_NOTIMPL;
+    ftdm_status_t rstatus = FTDM_FAIL;
+    if (SNG_SS7_OPR_MODE_MTP2_API == g_ftdm_operating_mode) {
+        rstatus = ftmod_sangoma_ss7_mtp2_set_sig_status(ftdmchan, status);
+    } else {
+        SS7_ERROR ("Cannot set channel status in this module\n");
+        rstatus = FTDM_NOTIMPL;
+    }
+
+    return rstatus;
 }
 
 /* FT-CORE SIG FUNCTIONS ******************************************************/
@@ -2381,6 +2402,10 @@ static ftdm_status_t ftdm_sangoma_ss7_start(ftdm_span_t * span)
 
 
 	SS7_INFO ("Starting span %s:%u.\n", span->name, span->span_id);
+
+    if (SNG_SS7_OPR_MODE_MTP2_API == g_ftdm_operating_mode) {
+        return sngss7_activate_mtp2api(span);
+    }
 
 	/* clear the monitor thread stop flag */
 	ftdm_clear_flag (span, FTDM_SPAN_STOP_THREAD);
@@ -2461,7 +2486,7 @@ static ftdm_status_t ftdm_sangoma_ss7_start(ftdm_span_t * span)
 }
 
 /******************************************************************************/
-static ftdm_status_t ftdm_sangoma_ss7_stop(ftdm_span_t * span)
+ftdm_status_t ftdm_sangoma_ss7_stop(ftdm_span_t * span)
 {
 	/*this function is called by the FT-Core to stop this span */
 	int timeout=0;
@@ -2529,6 +2554,7 @@ static FIO_CONFIGURE_SPAN_SIGNALING_FUNCTION(ftdm_sangoma_ss7_span_config)
 	span->stop 						= ftdm_sangoma_ss7_stop;
 	span->signal_type 				= FTDM_SIGTYPE_SS7;
 	span->signal_data 				= NULL;
+    span->indicate                  = ftdm_sangoma_ss7_indicate;
 	span->outgoing_call 			= ftdm_sangoma_ss7_outgoing_call;
 	span->channel_request 			= NULL;
 	span->signal_cb 				= sig_cb;
@@ -2557,11 +2583,16 @@ static FIO_CONFIGURE_SPAN_SIGNALING_FUNCTION(ftdm_sangoma_ss7_span_config)
 		span->signal_type = FTDM_SIGTYPE_M2UA;
 	}
 
-	if (ft_to_sngss7_cfg_all()) {	/* configure libsngss7 */
-		ftdm_log (FTDM_LOG_CRIT, "Failed to configure LibSngSS7!\n");
-		ftdm_sleep (100);
-		return FTDM_FAIL;
-	}
+    if (SNG_SS7_OPR_MODE_MTP2_API == g_ftdm_operating_mode) {
+        if(FTDM_SUCCESS != sngss7_cfg_mtp2api(span)){
+            ftdm_log (FTDM_LOG_CRIT, "Failed to configure LibSngSS7: MTP2 API \n");
+            return FTDM_FAIL;
+        }
+    } else if (ft_to_sngss7_cfg_all()) { /* configure libsngss7 */
+        ftdm_log (FTDM_LOG_CRIT, "Failed to configure LibSngSS7!\n");
+        ftdm_sleep (100);
+        return FTDM_FAIL;
+    }
 
 	ftdm_log (FTDM_LOG_INFO, "Finished configuring ftmod_sangoma_ss7 span = %s(%d)...\n",
 								span->name,
@@ -2616,6 +2647,7 @@ static FIO_SIG_LOAD_FUNCTION(ftdm_sangoma_ss7_init)
 	sng_event.sm.sng_mtp1_alarm = handle_sng_mtp1_alarm;
 	sng_event.sm.sng_mtp2_alarm = handle_sng_mtp2_alarm;
 	sng_event.sm.sng_mtp3_alarm = handle_sng_mtp3_alarm;
+    sng_event.sm.sng_mtp3_li_alarm = handle_sng_mtp3_li_alarm;
 	sng_event.sm.sng_isup_alarm = handle_sng_isup_alarm;
 	sng_event.sm.sng_cc_alarm = handle_sng_cc_alarm;
 	sng_event.sm.sng_relay_alarm = handle_sng_relay_alarm;
@@ -2623,6 +2655,17 @@ static FIO_SIG_LOAD_FUNCTION(ftdm_sangoma_ss7_init)
 	sng_event.sm.sng_nif_alarm  = handle_sng_nif_alarm;
 	sng_event.sm.sng_tucl_alarm = handle_sng_tucl_alarm;
 	sng_event.sm.sng_sctp_alarm = handle_sng_sctp_alarm;
+
+    /* MTP2 API sng ss7 call backs */
+    sng_event.ap.sng_ap_dat_ind     = sngss7_mtp2api_dat_ind;
+    sng_event.ap.sng_ap_dat_cfm     = sngss7_mtp2api_dat_cfm;
+    sng_event.ap.sng_ap_con_cfm     = sngss7_mtp2api_con_cfm;
+    sng_event.ap.sng_ap_disc_ind    = sngss7_mtp2api_disc_ind;
+    sng_event.ap.sng_ap_sta_ind     = sngss7_mtp2api_sta_ind;
+    sng_event.ap.sng_ap_sta_cfm     = sngss7_mtp2api_sta_cfm;
+    sng_event.ap.sng_ap_flc_ind     = sngss7_mtp2api_flc_ind;
+    sng_event.ap.is_mtp2api_enable  = sngss7_is_mtp2api_enable;
+
 
 	/* initalize sng_ss7 library */
 	sng_isup_init_gen(&sng_event);
@@ -2668,6 +2711,7 @@ static FIO_SIG_UNLOAD_FUNCTION(ftdm_sangoma_ss7_unload)
 	}
 
 	if (sngss7_test_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_MTP1_STARTED)) {
+        ftmod_ss7_shutdown_mtp1();
 		sng_isup_free_mtp1();
 		sngss7_clear_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_MTP1_STARTED);
 	}

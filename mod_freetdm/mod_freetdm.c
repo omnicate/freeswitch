@@ -2988,6 +2988,33 @@ static int add_config_nodes(switch_xml_t swnode, ftdm_conf_node_t *rootnode,
 	return 0;
 }
 
+#define ftdm_set_operating_mode(_operating_mode, _is_isup, _is_m2ua_sg, _is_m2ua_asp, _is_mtp2_api)                 \
+{                                                                                                                   \
+    if (_operating_mode && ('\0' != _operating_mode[0])) {                                                          \
+        if (!strcasecmp(_operating_mode, "ISUP")) {                                                                 \
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Setting Operating mode to ISUP \n");            \
+            _is_isup = 0x01;                                                                                        \
+        } else if (!strcasecmp(_operating_mode, "M2UA_SG")) {                                                       \
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Setting Operating mode to M2UA SG \n");         \
+            _is_m2ua_sg = 0x01;                                                                                     \
+        } else if (!strcasecmp(_operating_mode, "M2UA_ASP")) {                                                      \
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Setting Operating mode to M2UA ASP \n");        \
+            _is_m2ua_asp = 0x01;                                                                                    \
+        } else if (!strcasecmp(_operating_mode, "MTP2_API")) {                                                      \
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Setting Operating mode to MTP2 API \n");        \
+            _is_mtp2_api = 0x01;                                                                                    \
+        } else {                                                                                                    \
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,                                                 \
+            "Invalid operating Mode[%s] \n", operating_mode);                                                       \
+            ftdm_conf_node_destroy(rootnode);                                                                       \
+            return NULL;                                                                                            \
+        }                                                                                                           \
+    } else {                                                                                                        \
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Default operating mode to ISUP \n"); \
+        _is_isup = 0x01;                                                                                             \
+    }                                                                                                               \
+}
+
 static ftdm_conf_node_t *_get_ss7_config_node(switch_xml_t cfg, const char *confname, const char *operating_mode)
 {
 	switch_xml_t signode, ss7configs, isup, gen, param;
@@ -2996,6 +3023,7 @@ static ftdm_conf_node_t *_get_ss7_config_node(switch_xml_t cfg, const char *conf
 	int is_isup = 0x00;
 	int is_m2ua_sg = 0x00;
 	int is_m2ua_asp = 0x00;
+	int is_mtp2_api = 0x00;
 
 	/* try to find the conf in the hash first */
 	rootnode = switch_core_hash_find(globals.ss7_configs, confname);
@@ -3055,25 +3083,7 @@ static ftdm_conf_node_t *_get_ss7_config_node(switch_xml_t cfg, const char *conf
 		return NULL;
 	}
 
-	/* operating mode , M2UA or ISUP */
-	if(operating_mode && ('\0' != operating_mode[0])) {
-		if(!strcasecmp(operating_mode, "ISUP")) {
-			is_isup = 0x01;
-		}else if(!strcasecmp(operating_mode, "M2UA_SG")) {
-			is_m2ua_sg = 0x01;
-		}else if(!strcasecmp(operating_mode, "M2UA_ASP")) {
-			is_m2ua_asp = 0x01;
-		} else {
-			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Invalid operating Mode[%s] \n", operating_mode);
-			ftdm_conf_node_destroy(rootnode);
-			return NULL;
-		}
-	} else {
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Operating mode not specified, default to ISUP \n");
-		is_isup = 0x01;
-	}
-
-	/* add sng_gen */
+    /* add sng_gen */
 	gen = switch_xml_child(isup, "sng_gen");
 	if (gen == NULL) {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "failed to process sng_gen for sng_isup config %s\n", confname);
@@ -3091,9 +3101,17 @@ static ftdm_conf_node_t *_get_ss7_config_node(switch_xml_t cfg, const char *conf
 		var = (char *) switch_xml_attr_soft(param, "name");
 		val = (char *) switch_xml_attr_soft(param, "value");
 		ftdm_conf_node_add_param(list, var, val);
-
-		
+        if (!strcasecmp("operating_mode", var)) {
+            ftdm_set_operating_mode(val, is_isup, is_m2ua_sg, is_m2ua_asp, is_mtp2_api);
+        }
 	}
+
+    /* opertating-mode field should be part of sng_ss7 (global ss7 config) */
+    /* for backward support - keeping operating_mode field in span also for now, 
+     * but soon it will be removed from span configuration .*/
+
+    /* span defined operating mode has to take priority */
+    ftdm_set_operating_mode(operating_mode, is_isup, is_m2ua_sg, is_m2ua_asp, is_mtp2_api);
 
 	/* add relay channels */
 	if (add_config_list_nodes(isup, rootnode, "sng_relay", "relay_channel", NULL, NULL)) {
@@ -3116,7 +3134,9 @@ static ftdm_conf_node_t *_get_ss7_config_node(switch_xml_t cfg, const char *conf
 		return NULL;
 	}
 
-	if(is_isup || is_m2ua_asp) {
+    if (is_mtp2_api) goto done;
+
+	if (is_isup || is_m2ua_asp) {
 		/* add mtp3 links */
 		if (add_config_list_nodes(isup, rootnode, "mtp3_links", "mtp3_link", NULL, NULL)) {
 			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "failed to process mtp3_links for sng_isup config %s\n", confname);
@@ -3188,6 +3208,7 @@ static ftdm_conf_node_t *_get_ss7_config_node(switch_xml_t cfg, const char *conf
 		}
 	}
 
+done:
 	switch_core_hash_insert(globals.ss7_configs, confname, rootnode);
 
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Added SS7 node configuration %s\n", confname);
@@ -3527,8 +3548,9 @@ static switch_status_t load_config(void)
 				LOAD_ERROR("ss7 span missing required attribute, skipping ...\n");
 				continue;
 			}
-			if (name) {
-				zstatus = ftdm_span_find_by_name(name, &span);
+
+            if (name) {
+                zstatus = ftdm_span_find_by_name(name, &span);
 			} else {
 				if (switch_is_number(id)) {
 					span_id = atoi(id);

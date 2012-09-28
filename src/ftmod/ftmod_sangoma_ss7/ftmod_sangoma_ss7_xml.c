@@ -156,9 +156,9 @@ int cmbLinkSetId;
 /* PROTOTYPES *****************************************************************/
 int ftmod_ss7_parse_xml(ftdm_conf_parameter_t *ftdm_parameters, ftdm_span_t *span);
 
-static int ftmod_ss7_parse_sng_isup(ftdm_conf_node_t *sng_isup);
+static int ftmod_ss7_parse_sng_isup(ftdm_conf_node_t *sng_isup, const char* operating_mode);
 
-static int ftmod_ss7_parse_sng_gen(ftdm_conf_node_t *sng_gen);
+static int ftmod_ss7_parse_sng_gen(ftdm_conf_node_t *sng_gen, char* operating_mode);
 
 static int ftmod_ss7_parse_sng_relay(ftdm_conf_node_t *sng_relay);
 static int ftmod_ss7_parse_relay_channel(ftdm_conf_node_t *relay_chan);
@@ -199,10 +199,57 @@ static int ftmod_ss7_fill_in_circuits(sng_span_t *sngSpan);
 
 static int ftmod_ss7_next_timeslot(char *ch_map, sng_timeslot_t *timeslot);
 static void ftmod_ss7_set_glare_resolution (const char *method);
+static int ftmod_ss7_set_operating_mode(const char* span_opr_mode, const char* sng_gen_opr_mode);
 
 /******************************************************************************/
 
 /* FUNCTIONS ******************************************************************/
+
+static int ftmod_ss7_set_operating_mode(const char* span_opr_mode, const char* sng_gen_opr_mode)
+{
+    ftdm_sngss7_operating_modes_e mode = SNG_SS7_OPR_MODE_NONE;
+    char opr_mode[128];
+
+    memset(opr_mode, 0, sizeof(opr_mode));
+
+    /* 1)  Initially operating mode will be set to INVALID
+    *  2)  operating-mode can be the part of sng_gen and span configuration 
+    *  3)  we are only supporting one operating mode per system, NOT supporting per span operating mode 
+    *  4)  IF first span configuration or sng_ss7 we set operating mode to X and then subsequent span
+    *      configuration defined another operating mode , return error 
+    *  5)  If operating mode present in span config..this will take priority then configured in sng_gen
+    *  */
+
+    if (span_opr_mode && ('\0' != span_opr_mode[0])) {
+        strcpy(opr_mode, span_opr_mode);
+    } else if (sng_gen_opr_mode && ('\0' != sng_gen_opr_mode[0])) {
+        strcpy(opr_mode, sng_gen_opr_mode);
+    } else {
+        strcpy(opr_mode, "ISUP");
+    }
+
+    if (!strcasecmp(opr_mode, "ISUP")) {
+        mode = SNG_SS7_OPR_MODE_ISUP;
+    } else if (!strcasecmp(opr_mode, "M2UA_SG")) {                                                       
+        mode = SNG_SS7_OPR_MODE_M2UA_SG;
+    } else if (!strcasecmp(opr_mode, "M2UA_ASP")) {                                                    
+        mode = SNG_SS7_OPR_MODE_M2UA_ASP;
+    } else if (!strcasecmp(opr_mode, "MTP2_API")) {                                                  
+        mode = SNG_SS7_OPR_MODE_MTP2_API;
+    } else {
+        return FTDM_SUCCESS;
+    }
+
+    if ( SNG_SS7_OPR_MODE_NONE == g_ftdm_operating_mode ) {
+        g_ftdm_operating_mode = mode;
+    } else if (g_ftdm_operating_mode != mode) {
+        SS7_ERROR("Different operating Mode[%s] then configured[%s] \n", 
+                opr_mode, ftdm_opr_mode_tostr(g_ftdm_operating_mode));                                      
+        return FTDM_FAIL;
+    }
+
+    return FTDM_SUCCESS;
+}
 
 int ftmod_ss7_parse_xml(ftdm_conf_parameter_t *ftdm_parameters, ftdm_span_t *span)
 {
@@ -211,6 +258,7 @@ int ftmod_ss7_parse_xml(ftdm_conf_parameter_t *ftdm_parameters, ftdm_span_t *spa
 	int					i = 0;
 	const char			*var = NULL;
 	const char			*val = NULL;
+	const char			*operating_mode = NULL;
 	ftdm_conf_node_t	*ptr = NULL;
 
 	/* clean out the isup ckt */
@@ -222,20 +270,17 @@ int ftmod_ss7_parse_xml(ftdm_conf_parameter_t *ftdm_parameters, ftdm_span_t *spa
 	var = ftdm_parameters[i].var;
 	val = ftdm_parameters[i].val;
 
-	g_ftdm_operating_mode = SNG_SS7_OPR_MODE_ISUP;
+    /* Default value will be set after processing of sng_gen  to
+     * confirm that operating mode not defined neither in sng gen nor in span cfg */
+	//g_ftdm_operating_mode = SNG_SS7_OPR_MODE_ISUP;
+    
+    /* operating mode can be present in sng_gen or per span as of now */
+    /* if operating mode present in sng_gen and span then span has to take priority */
 
 	/* confirm that the first parameter is the "operating-mode" */
-	if(!strcasecmp(var, "operating-mode")){
-		if(!strcasecmp(val, "ISUP")) {
-			g_ftdm_operating_mode = SNG_SS7_OPR_MODE_ISUP;
-		} else if(!strcasecmp(val, "M2UA_SG")) {
-			g_ftdm_operating_mode = SNG_SS7_OPR_MODE_M2UA_SG;
-		} else if(!strcasecmp(val, "M2UA_ASP")) {
-			g_ftdm_operating_mode = SNG_SS7_OPR_MODE_M2UA_ASP;
-		} else {
-			SS7_DEBUG("Operating mode not specified, defaulting to ISUP\n");
-		}
-		i++;
+    if (!strcasecmp(var, "operating-mode")) {
+        operating_mode = val;
+        i++;
 	}
 
 	var = ftdm_parameters[i].var;
@@ -245,7 +290,7 @@ int ftmod_ss7_parse_xml(ftdm_conf_parameter_t *ftdm_parameters, ftdm_span_t *spa
 	/* confirm that the 2nd parameter is the "confnode" */
 	if (!strcasecmp(var, "confnode")) {
 		/* parse the confnode and fill in the global libsng_ss7 config structure */
-		if (ftmod_ss7_parse_sng_isup(ptr)) {
+		if (ftmod_ss7_parse_sng_isup(ptr, operating_mode)) {
 			SS7_ERROR("Failed to parse the \"confnode\"!\n");
 			goto ftmod_ss7_parse_xml_error;
 		}
@@ -279,13 +324,14 @@ int ftmod_ss7_parse_xml(ftdm_conf_parameter_t *ftdm_parameters, ftdm_span_t *spa
 	/* fill the pointer to span into isupCkt */
 	sngSpan.span = span;
 
-	if(SNG_SS7_OPR_MODE_M2UA_SG != g_ftdm_operating_mode){
-		/* setup the circuits structure */
-		if(ftmod_ss7_fill_in_circuits(&sngSpan)) {
-			SS7_ERROR("Failed to fill in circuits structure!\n");
-			goto ftmod_ss7_parse_xml_error;
-		}
-	}
+    if ((SNG_SS7_OPR_MODE_ISUP == g_ftdm_operating_mode) || 
+            (SNG_SS7_OPR_MODE_M2UA_ASP == g_ftdm_operating_mode)){
+        /* setup the circuits structure */
+        if(ftmod_ss7_fill_in_circuits(&sngSpan)) {
+            SS7_ERROR("Failed to fill in circuits structure!\n");
+            goto ftmod_ss7_parse_xml_error;
+        }
+    }
 
 	return FTDM_SUCCESS;
 
@@ -294,7 +340,7 @@ ftmod_ss7_parse_xml_error:
 }
 
 /******************************************************************************/
-static int ftmod_ss7_parse_sng_isup(ftdm_conf_node_t *sng_isup)
+static int ftmod_ss7_parse_sng_isup(ftdm_conf_node_t *sng_isup, const char* span_opr_mode)
 {
 	ftdm_conf_node_t	*gen_config = NULL;
 	ftdm_conf_node_t	*relay_channels = NULL;
@@ -311,6 +357,9 @@ static int ftmod_ss7_parse_sng_isup(ftdm_conf_node_t *sng_isup)
 	ftdm_conf_node_t	*m2ua_peer_ifaces = NULL;
 	ftdm_conf_node_t	*m2ua_clust_ifaces = NULL;
 	ftdm_conf_node_t	*sctp_ifaces = NULL;
+    char                 sng_gen_opr_mode[128];
+
+    memset(&sng_gen_opr_mode[0], 0, sizeof(sng_gen_opr_mode));
 
 	/* confirm that we are looking at sng_isup */
 	if (strcasecmp(sng_isup->name, "sng_isup")) {
@@ -478,21 +527,27 @@ static int ftmod_ss7_parse_sng_isup(ftdm_conf_node_t *sng_isup)
 	} /* while (tmp_node != NULL) */
 
 	/* now try to parse the sections */
-	if (ftmod_ss7_parse_sng_gen(gen_config)) {
+	if (ftmod_ss7_parse_sng_gen(gen_config, sng_gen_opr_mode)) {
 		SS7_ERROR("Failed to parse \"gen_config\"!\n");
 		return FTDM_FAIL;
 	}
 
-	if (ftmod_ss7_parse_sng_relay(relay_channels)) {
+    if (FTDM_FAIL == ftmod_ss7_set_operating_mode(span_opr_mode, sng_gen_opr_mode)) {
+        return FTDM_FAIL;
+    } 
+
+    SS7_INFO("Setting FreeTDM Operating Mode[%s]\n",ftdm_opr_mode_tostr(g_ftdm_operating_mode));
+
+	if (relay_channels && ftmod_ss7_parse_sng_relay(relay_channels)) {
 		SS7_ERROR("Failed to parse \"relay_channels\"!\n");
 		return FTDM_FAIL;
 	}
 
-	SS7_DEBUG("FreeTDM Operating Mode[%s]\n",ftdm_opr_mode_tostr(g_ftdm_operating_mode));
 
 /****************************************************************************************************/
 	if((SNG_SS7_OPR_MODE_ISUP == g_ftdm_operating_mode) || 
-			(SNG_SS7_OPR_MODE_M2UA_SG == g_ftdm_operating_mode)){
+			(SNG_SS7_OPR_MODE_M2UA_SG == g_ftdm_operating_mode) ||
+            (SNG_SS7_OPR_MODE_MTP2_API == g_ftdm_operating_mode)) {
 
 		if (ftmod_ss7_parse_mtp1_links(mtp1_links)) {
 			SS7_ERROR("Failed to parse \"mtp1_links\"!\n");
@@ -504,6 +559,8 @@ static int ftmod_ss7_parse_sng_isup(ftdm_conf_node_t *sng_isup)
 			return FTDM_FAIL;
 		}
 	}
+
+    if ( SNG_SS7_OPR_MODE_MTP2_API == g_ftdm_operating_mode ) goto done;
 /****************************************************************************************************/
 
 	if((SNG_SS7_OPR_MODE_ISUP == g_ftdm_operating_mode) || 
@@ -564,7 +621,7 @@ static int ftmod_ss7_parse_sng_isup(ftdm_conf_node_t *sng_isup)
 		}
 	}
 /****************************************************************************************************/
-
+done:
 	return FTDM_SUCCESS;
 }
 
@@ -589,7 +646,7 @@ static void ftmod_ss7_set_glare_resolution (const char *method)
 }
 
 /******************************************************************************/
-static int ftmod_ss7_parse_sng_gen(ftdm_conf_node_t *sng_gen)
+static int ftmod_ss7_parse_sng_gen(ftdm_conf_node_t *sng_gen, char* operating_mode)
 {
 	ftdm_conf_parameter_t	*parm = sng_gen->parameters;
 	int						num_parms = sng_gen->n_parameters;
@@ -625,8 +682,10 @@ static int ftmod_ss7_parse_sng_gen(ftdm_conf_node_t *sng_gen)
 			} else {
 				g_ftdm_sngss7_data.cfg.force_inr = 0;
 			}
-			SS7_DEBUG("Found INR force configuration = %s\n", parm->val );
-		}else {
+			SS7_DEBUG("Found INR force configuration = %s\n", parm->val);
+        } else if (!strcasecmp(parm->var, "operating_mode")) {
+                strcpy(operating_mode, parm->val);
+		} else {
 			SS7_ERROR("Found an invalid parameter \"%s\"!\n", parm->val);
 			return FTDM_FAIL;
 		}
@@ -784,6 +843,10 @@ static int ftmod_ss7_parse_mtp1_link(ftdm_conf_node_t *mtp1_link)
 	ftdm_conf_parameter_t	*parm = mtp1_link->parameters;
 	int					 	num_parms = mtp1_link->n_parameters;
 	int					 	i;
+    ftdm_span_t *ftdmspan     = NULL;
+    ftdm_iterator_t *chaniter = NULL;
+    ftdm_iterator_t *curr     = NULL;
+
 
 	/* initalize the mtp1Link structure */
 	memset(&mtp1Link, 0x0, sizeof(mtp1Link));
@@ -814,11 +877,16 @@ static int ftmod_ss7_parse_mtp1_link(ftdm_conf_node_t *mtp1_link)
 			mtp1Link.span = atoi(parm->val);
 			SS7_DEBUG("Found an mtp1_link span = %d\n", mtp1Link.span);
 		/**********************************************************************/
-		} else if (!strcasecmp(parm->var, "chan")) {
+		} else if (!strcasecmp(parm->var, "chan_no") || !strcasecmp(parm->var, "chan")){ 
 		/**********************************************************************/
 			mtp1Link.chan = atoi(parm->val);
 			SS7_DEBUG("Found an mtp1_link chan = %d\n", mtp1Link.chan);
 		/**********************************************************************/
+        } else if (!strcasecmp(parm->var, "span_name")) {
+            /**********************************************************************/
+            strcpy((char *)mtp1Link.span_name, parm->val);
+            SS7_DEBUG("Found an mtp1_link span = %s\n", mtp1Link.span_name);
+            /**********************************************************************/
 		} else {
 		/**********************************************************************/
 			SS7_ERROR("\tFound an invalid parameter \"%s\"!\n", parm->val);
@@ -831,6 +899,42 @@ static int ftmod_ss7_parse_mtp1_link(ftdm_conf_node_t *mtp1_link)
 
 	/**************************************************************************/
 	} /* for (i = 0; i < num_parms; i++) */
+
+    if (mtp1Link.chan <= 0) {
+        ftdm_log(FTDM_LOG_CRIT, "Channel number not specified for mtp1_link %s\n", mtp1Link.name);
+        return FTDM_FAIL;
+    }
+
+    if (SNG_SS7_OPR_MODE_MTP2_API == g_ftdm_operating_mode) {
+        if (!ftdm_strlen_zero(mtp1Link.span_name)) {
+            ftdm_span_find_by_name(mtp1Link.span_name, &ftdmspan);
+            if (!ftdmspan) {
+                ftdm_log(FTDM_LOG_ERROR, "Could not find span with name:%s\n", mtp1Link.span_name);
+                return FTDM_FAIL;
+            }
+        }
+
+        if (!ftdmspan) {
+            ftdm_log(FTDM_LOG_ERROR, "Could not find span for this mtp1 Link\n");
+            return FTDM_FAIL;
+        }
+
+        chaniter = ftdm_span_get_chan_iterator(ftdmspan, NULL);
+        for (curr = chaniter; curr; curr = ftdm_iterator_next(curr)) {
+            ftdm_channel_t *ftdmchan = (ftdm_channel_t*)ftdm_iterator_current(curr);
+
+            if (ftdmchan->physical_chan_id == mtp1Link.chan) {
+                mtp1Link.ftdmchan = ftdmchan;
+                break;
+            }
+        }
+        ftdm_iterator_free(chaniter);
+
+        if (!mtp1Link.ftdmchan) {
+            ftdm_log(FTDM_LOG_CRIT, "Could not find mtp1_link chan = %s\n", parm->val);
+            return FTDM_FAIL;
+        }
+    }
 
 	/* store the link in global structure */
 	ftmod_ss7_fill_in_mtp1_link(&mtp1Link);
@@ -934,6 +1038,32 @@ static int ftmod_ss7_parse_mtp2_link(ftdm_conf_node_t *mtp2_link)
 				mtp2Link.linkType = sng_link_type_map[ret].tril_mtp2_type;
 				SS7_DEBUG("Found an mtp2_link linkType = %s\n", sng_link_type_map[ret].sng_type);
 			}
+#ifdef SD_HSL
+        } else if (!strcasecmp(parm->var, "sapType")) {
+        /**********************************************************************/
+            if (!strcasecmp(parm->val, "lsl")) {
+                mtp2Link.sapType = SNGSS7_SAPTYPE_LSL;
+                SS7_DEBUG("mtp2_link sapType = lsl\n");
+            } else if (!strcasecmp(parm->val, "hsl")) {
+                mtp2Link.sapType = SNGSS7_SAPTYPE_HSL;
+                SS7_DEBUG("mtp2_link sapType = hsl\n");
+            } else if (!strcasecmp(parm->val, "hsl-extended")) {
+                mtp2Link.sapType = SNGSS7_SAPTYPE_HSL_EXT;
+                SS7_DEBUG("mtp2_link sapType = hsl-extended\n");
+            } else {
+                SS7_DEBUG("Found an invalid mtp2_link sapType = %s\n", parm->val);
+            }
+        /**********************************************************************/
+        } else if (!strcasecmp(parm->var, "thresCnt")) {
+            mtp2Link.sdTe = atoi(parm->val);
+            SS7_DEBUG("Found an mtp2 thresCnt = \"%d\"\n", mtp2Link.sdTe);
+        } else if (!strcasecmp(parm->var, "upCnt")) {
+            mtp2Link.sdUe = atoi(parm->val);
+            SS7_DEBUG("Found an mtp2 upCnt = \"%d\"\n", mtp2Link.sdUe);
+        } else if (!strcasecmp(parm->var, "deCnt")) {
+            mtp2Link.sdDe = atoi(parm->val);
+            SS7_DEBUG("Found an mtp2 deCnt = \"%d\"\n", mtp2Link.sdDe);
+#endif
 		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "t1")) {
 		/**********************************************************************/
@@ -2318,6 +2448,9 @@ static int ftmod_ss7_fill_in_mtp1_link(sng_mtp1_link_t *mtp1Link)
 	g_ftdm_sngss7_data.cfg.mtp1Link[i].id		= mtp1Link->id;
 	g_ftdm_sngss7_data.cfg.mtp1Link[i].span		= mtp1Link->span;
 	g_ftdm_sngss7_data.cfg.mtp1Link[i].chan		= mtp1Link->chan;
+    g_ftdm_sngss7_data.cfg.mtp1Link[i].ftdmchan     = mtp1Link->ftdmchan;
+    strcpy(g_ftdm_sngss7_data.cfg.mtp1Link[i].span_name, mtp1Link->span_name);
+
 
 	return FTDM_SUCCESS;
 }
@@ -2345,6 +2478,7 @@ static int ftmod_ss7_fill_in_mtp2_link(sng_mtp2_link_t *mtp2Link)
 	g_ftdm_sngss7_data.cfg.mtp2Link[i].lssuLength	= mtp2Link->lssuLength;
 	g_ftdm_sngss7_data.cfg.mtp2Link[i].errorType	= mtp2Link->errorType;
 	g_ftdm_sngss7_data.cfg.mtp2Link[i].linkType		= mtp2Link->linkType;
+    g_ftdm_sngss7_data.cfg.mtp2Link[i].sapType      = mtp2Link->sapType;
 	g_ftdm_sngss7_data.cfg.mtp2Link[i].mtp1Id		= mtp2Link->mtp1Id;
 	g_ftdm_sngss7_data.cfg.mtp2Link[i].mtp1ProcId	= mtp2Link->mtp1ProcId;
 
@@ -2395,6 +2529,34 @@ static int ftmod_ss7_fill_in_mtp2_link(sng_mtp2_link_t *mtp2Link)
 	}else {
 		g_ftdm_sngss7_data.cfg.mtp2Link[i].t7		= 20;
 	}
+
+#ifdef SD_HSL
+    if ( mtp2Link->t8 != 0 ) {
+        g_ftdm_sngss7_data.cfg.mtp2Link[i].t8       = mtp2Link->t8;
+    }else {
+        g_ftdm_sngss7_data.cfg.mtp2Link[i].t8       = 1;    /* 100 msec */
+    }
+
+    /* Errored interval parameters from Q.703 A.10.2.5 */
+    if ( mtp2Link->sdTe != 0 ) {
+        g_ftdm_sngss7_data.cfg.mtp2Link[i].sdTe     = mtp2Link->sdTe;
+    }else {
+        g_ftdm_sngss7_data.cfg.mtp2Link[i].sdTe     = 793;
+    }
+
+    if ( mtp2Link->sdUe != 0 ) {
+        g_ftdm_sngss7_data.cfg.mtp2Link[i].sdUe     = mtp2Link->sdUe;
+    }else {
+        g_ftdm_sngss7_data.cfg.mtp2Link[i].sdUe     = 198384;
+    }
+
+    if ( mtp2Link->sdDe != 0 ) {
+        g_ftdm_sngss7_data.cfg.mtp2Link[i].sdDe     = mtp2Link->sdDe;
+    }else {
+        g_ftdm_sngss7_data.cfg.mtp2Link[i].sdDe     = 11328;
+    }
+#endif
+
 
 	return FTDM_SUCCESS;
 }

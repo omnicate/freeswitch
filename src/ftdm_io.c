@@ -2512,14 +2512,21 @@ FT_DECLARE(ftdm_status_t) _ftdm_channel_call_indicate(const char *file, const ch
 		ftdm_set_flag(ftdmchan, FTDM_CHANNEL_IND_ACK_PENDING);
 	}
 
-	if (indication != FTDM_CHANNEL_INDICATE_FACILITY &&
-	    ftdm_test_flag(ftdmchan, FTDM_CHANNEL_OUTBOUND)) {
+    switch(indication) {
+        case FTDM_CHANNEL_INDICATE_FACILITY:
+        case FTDM_CHANNEL_INDICATE_RAW:
+            /* These indications can be performed in any state */
+            break;
+        default:
+            if (ftdm_test_flag(ftdmchan, FTDM_CHANNEL_OUTBOUND)) {
 
-		ftdm_log_chan_ex(ftdmchan, file, func, line, FTDM_LOG_LEVEL_WARNING, "Cannot indicate %s in outgoing channel in state %s\n",
-				ftdm_channel_indication2str(indication), ftdm_channel_state2str(ftdmchan->state));
-		status = FTDM_EINVAL;
-		goto done;
-	}
+                ftdm_log_chan_ex(ftdmchan, file, func, line, FTDM_LOG_LEVEL_WARNING, "Cannot indicate %s in outgoing channel in state %s\n",
+                        ftdm_channel_indication2str(indication), ftdm_channel_state2str(ftdmchan->state));
+                status = FTDM_EINVAL;
+                goto done;
+            }
+            break;
+    }
 
 	if (ftdmchan->state == FTDM_CHANNEL_STATE_TERMINATING) {
 		ftdm_log_chan_ex(ftdmchan, file, func, line, FTDM_LOG_LEVEL_DEBUG, "Ignoring indication %s because the call is in %s state\n",
@@ -2785,21 +2792,22 @@ done:
 	return status;
 }
 
-FT_DECLARE(ftdm_status_t) ftdm_channel_set_sig_status(ftdm_channel_t *fchan, ftdm_signaling_status_t sigstatus)
+FT_DECLARE(ftdm_status_t) _ftdm_channel_set_sig_status(const char *file, const char *func, int line, ftdm_channel_t *fchan, ftdm_signaling_status_t status, ftdm_usrmsg_t *usrmsg)
 {
-	ftdm_status_t res;
+    ftdm_status_t res;
 
-	ftdm_assert_return(fchan != NULL, FTDM_FAIL, "Null channel\n");
-	ftdm_assert_return(fchan->span != NULL, FTDM_FAIL, "Null span\n");
-	ftdm_assert_return(fchan->span->set_channel_sig_status != NULL, FTDM_ENOSYS, "Not implemented\n");
+    ftdm_assert_return(fchan != NULL, FTDM_FAIL, "Null channel\n");
+    ftdm_assert_return(fchan->span != NULL, FTDM_FAIL, "Null span\n");
+    ftdm_assert_return(fchan->span->set_channel_sig_status != NULL, FTDM_ENOSYS, "Not implemented\n");
 
-	ftdm_channel_lock(fchan);
+    ftdm_channel_lock(fchan);
 
-	res = fchan->span->set_channel_sig_status(fchan, sigstatus);
+    ftdm_channel_save_usrmsg(fchan, usrmsg);
+    res = fchan->span->set_channel_sig_status(fchan, status);
+    ftdm_usrmsg_free(&fchan->usrmsg);
+    ftdm_channel_unlock(fchan);
 
-	ftdm_channel_unlock(fchan);
-
-	return res;
+    return res;
 }
 
 FT_DECLARE(ftdm_status_t) ftdm_channel_get_sig_status(ftdm_channel_t *ftdmchan, ftdm_signaling_status_t *sigstatus)

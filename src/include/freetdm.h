@@ -462,12 +462,14 @@ typedef enum {
 	FTDM_SIGEVENT_DIALING, /*!< Outgoing call just started */
 	FTDM_SIGEVENT_TRANSFER_COMPLETED, /*!< Transfer request is completed */
 	FTDM_SIGEVENT_SMS,
+    FTDM_SIGEVENT_IO_INDATA, /*!< Incoming data received */
+    FTDM_SIGEVENT_RAW, /*!< Signalling specific event */
 	FTDM_SIGEVENT_INVALID, /*!<Invalid */
 } ftdm_signal_event_t;
 #define SIGNAL_STRINGS "START", "STOP", "RELEASED", "UP", "FLASH", "PROCEED", "RINGING", "PROGRESS", \
 		"PROGRESS_MEDIA", "ALARM_TRAP", "ALARM_CLEAR", \
 		"COLLECTED_DIGIT", "ADD_CALL", "RESTART", "SIGSTATUS_CHANGED", "FACILITY", \
-		"TRACE", "TRACE_RAW", "INDICATION_COMPLETED", "DIALING", "TRANSFER_COMPLETED", "SMS", "INVALID"
+		"TRACE", "TRACE_RAW", "INDICATION_COMPLETED", "DIALING", "TRANSFER_COMPLETED", "SMS", "IO_INDATA", "RAW", "INVALID"
 /*! \brief Move from string to ftdm_signal_event_t and viceversa */
 FTDM_STR2ENUM_P(ftdm_str2ftdm_signal_event, ftdm_signal_event2str, ftdm_signal_event_t)
 
@@ -525,6 +527,7 @@ FTDM_STR2ENUM_P(ftdm_str2ftdm_signaling_status, ftdm_signaling_status2str, ftdm_
 
 typedef struct {
 	ftdm_signaling_status_t status;
+    uint8_t raw_reason; /* Signalling specific */
 } ftdm_event_sigstatus_t;
 
 typedef enum {
@@ -575,9 +578,11 @@ typedef enum {
 	FTDM_CHANNEL_INDICATE_ANSWER,
 	FTDM_CHANNEL_INDICATE_FACILITY,
 	FTDM_CHANNEL_INDICATE_TRANSFER,
+    /* Signalling specific indications */
+    FTDM_CHANNEL_INDICATE_RAW,
 	FTDM_CHANNEL_INDICATE_INVALID,
 } ftdm_channel_indication_t;
-#define INDICATION_STRINGS "NONE", "RINGING", "PROCEED", "PROGRESS", "PROGRESS_MEDIA", "BUSY", "ANSWER", "FACILITY", "TRANSFER", "INVALID"
+#define INDICATION_STRINGS "NONE", "RINGING", "PROCEED", "PROGRESS", "PROGRESS_MEDIA", "BUSY", "ANSWER", "FACILITY", "TRANSFER", "RAW", "INVALID"
 
 /*! \brief Move from string to ftdm_channel_indication_t and viceversa */
 FTDM_STR2ENUM_P(ftdm_str2ftdm_channel_indication, ftdm_channel_indication2str, ftdm_channel_indication_t)
@@ -615,6 +620,7 @@ struct ftdm_sigmsg {
 		ftdm_event_collected_t collected; /*!< valid if event_id is FTDM_SIGEVENT_COLLECTED_DIGIT */
 		ftdm_event_indication_completed_t indication_completed; /*!< valid if the event_id is FTDM_SIGEVENT_INDICATION_COMPLETED */
 		ftdm_event_transfer_completed_t transfer_completed;
+        uint8_t raw_id; /*!<Signalling specific event - used for FTDM_SIGEVENT_RAW*/
 	} ev_data;
 	ftdm_raw_data_t raw;
 };
@@ -622,6 +628,7 @@ struct ftdm_sigmsg {
 /*! \brief Generic user message sent to the stack */
 struct ftdm_usrmsg {
 	ftdm_variable_container_t variables;
+    uint8_t raw_id; /* Signalling specific event - used for FTDM_INDICATE_RAW */
 	ftdm_raw_data_t raw;
 };
 
@@ -1094,8 +1101,13 @@ FT_DECLARE(ftdm_bool_t) ftdm_channel_call_check_done(const ftdm_channel_t *ftdmc
 /*! \brief Check if the call is in hold */
 FT_DECLARE(ftdm_bool_t) ftdm_channel_call_check_hold(const ftdm_channel_t *ftdmchan);
 
-/*! \brief Set channel signaling status (ie: put specific circuit down) only if supported by the signaling */
-FT_DECLARE(ftdm_status_t) ftdm_channel_set_sig_status(ftdm_channel_t *ftdmchan, ftdm_signaling_status_t status);
+/*! \brief Set the channel signaling status */
+#define ftdm_channel_set_sig_status(ftdmchan, sigstatus) _ftdm_channel_set_sig_status(__FILE__, __FUNCTION__, __LINE__, (ftdmchan), (sigstatus), NULL)
+#define ftdm_channel_set_sig_status_ex(ftdmchan, sigstatus, usrmsg) _ftdm_channel_set_sig_status(__FILE__, __FUNCTION__, __LINE__, (ftdmchan), (sigstatus), usrmsg)
+/*! \brief Set channel signaling status (ie: put specific circuit down) only if supported by the signaling (see ftdm_channel_set_sig_stauts for an easy to use macro)
+ *  *  \note 
+ *   */
+FT_DECLARE(ftdm_status_t) _ftdm_channel_set_sig_status(const char *file, const char *func, int line, ftdm_channel_t *ftdmchan, ftdm_signaling_status_t status, ftdm_usrmsg_t *usrmsg);
 
 /*! \brief Get channel signaling status (ie: whether protocol layer is up or down) */
 FT_DECLARE(ftdm_status_t) ftdm_channel_get_sig_status(ftdm_channel_t *ftdmchan, ftdm_signaling_status_t *status);

@@ -699,6 +699,35 @@ int ftmod_ss7_shutdown_mtp2(void)
 }
 
 /******************************************************************************/
+int ftmod_ss7_shutdown_mtp1(void)
+{
+    L1Mngmt cntrl;
+    Pst pst;
+
+    /* initalize the post structure */
+    smPstInit(&pst);
+
+    /* insert the destination Entity */
+    pst.dstEnt = ENTL1;
+
+    /* initalize the control structure */
+    memset(&cntrl, 0x0, sizeof(cntrl));
+
+    /* initalize the control header */
+    smHdrInit(&cntrl.hdr);
+
+    cntrl.hdr.msgType           = TCNTRL;   /* this is a control request */
+    cntrl.hdr.entId.ent         = ENTL1;
+    cntrl.hdr.entId.inst        = S_INST;
+    cntrl.hdr.elmId.elmnt       = STGEN;
+
+    cntrl.t.cntrl.action        = ASHUTDOWN;    /* Activate */
+    cntrl.t.cntrl.subAction     = SAELMNT;          /* specificed element */
+
+    return (sng_cntrl_mtp1(&pst, &cntrl));
+}
+
+/******************************************************************************/
 int ftmod_ss7_shutdown_relay(void)
 {
 	RyMngmt cntrl;

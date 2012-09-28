@@ -1967,7 +1967,7 @@ static ftdm_status_t handle_tx_cgb(ftdm_stream_handle_t *stream, int span, int c
 				ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_SUSPENDED);
 
 				/* bring the sig status down */
-				sngss7_set_sig_status(sngss7_info, FTDM_SIG_STATE_DOWN);
+				sngss7_set_sig_status(sngss7_info, FTDM_SIG_STATE_DOWN, 0);
 
 				/* if this is the first channel in the range */
 				if (!main_chan) {
@@ -2098,7 +2098,7 @@ static ftdm_status_t handle_tx_cgu(ftdm_stream_handle_t *stream, int span, int c
 				}
 
 				/* bring the sig status up */
-				sngss7_set_sig_status(sngss7_info, FTDM_SIG_STATE_UP);
+				sngss7_set_sig_status(sngss7_info, FTDM_SIG_STATE_UP, 0);
 				ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_SUSPENDED);
 
 				/* if this is the first channel in the range */

@@ -791,9 +791,21 @@ int ftmod_ss7_mtp1_psap_config(int id)
 	cfg.hdr.elmId.elmnt 		= STPSAP;
 	
 	cfg.hdr.elmId.elmntInst1	= k->id;
-	
-	cfg.t.cfg.s.l1PSAP.span		= k->span;
-	cfg.t.cfg.s.l1PSAP.chan		= k->chan;
+
+    /* for MTP2 API mode , FreeTDM open channel and pass the FD to Layer 1, 
+     * rest all other cases layer1 will open the channel*/
+    if (SNG_SS7_OPR_MODE_MTP2_API == g_ftdm_operating_mode) {
+        cfg.t.cfg.s.l1PSAP.span         = k->ftdmchan->physical_span_id;
+        cfg.t.cfg.s.l1PSAP.chan         = k->ftdmchan->physical_chan_id;
+        cfg.t.cfg.s.l1PSAP.sockfd       = k->ftdmchan->sockfd;
+#ifdef SD_HSL
+        cfg.t.cfg.s.l1PSAP.extSeqNum    = k->extSeqNum;
+#endif
+    } else {
+        cfg.t.cfg.s.l1PSAP.span         = k->span;
+        cfg.t.cfg.s.l1PSAP.chan         = k->chan;
+    }
+
 	cfg.t.cfg.s.l1PSAP.spId		= k->id;
 
 	return(sng_cfg_mtp1(&pst, &cfg));
@@ -874,14 +886,29 @@ int ftmod_ss7_mtp2_dlsap_config(int id)
 	cfg.t.cfg.s.sdDLSAP.sdtFlcStartTr	= 256;						/* SDT interface flow control start thresh */
 	cfg.t.cfg.s.sdDLSAP.sdtFlcEndTr		= 512;						/* SDT interface flow control end thresh */
 
+   /* HIGH_SPEED_SIGNALING_SUPPORT */
 #ifdef SD_HSL
-	cfg.t.cfg.s.sdDLSAP.sapType			=;							/* Indcates whether link is HSL or LSL */
-	cfg.t.cfg.s.sdDLSAP.sapFormat		=;							/* The extened sequence no to be used or not */
-	cfg.t.cfg.s.sdDLSAP.t8.enb			=;							/* timer 8 configuration structure */
-	cfg.t.cfg.s.sdDLSAP.sdTe			=;							/* EIM threshold */
-	cfg.t.cfg.s.sdDLSAP.sdUe			=;							/* increment constant */
-	cfg.t.cfg.s.sdDLSAP.sdDe			=;							/* decrement constant */
-#endif /* HIGH_SPEED_SIGNALING_SUPPORT */
+    switch (k->sapType) {
+        case SNGSS7_SAPTYPE_HSL:
+            cfg.t.cfg.s.sdDLSAP.sapType     = SD_HSL_LINK;
+            cfg.t.cfg.s.sdDLSAP.sapFormat   = NORMAL_HSL_FORMAT;
+            break;
+        case SNGSS7_SAPTYPE_HSL_EXT:
+            cfg.t.cfg.s.sdDLSAP.sapType     = SD_HSL_LINK;
+            cfg.t.cfg.s.sdDLSAP.sapFormat   = EXTENDED_HSL_FORMAT;
+            break;
+        default:
+        case SNGSS7_SAPTYPE_LSL:
+            cfg.t.cfg.s.sdDLSAP.sapType     = SD_LSL_LINK;
+            cfg.t.cfg.s.sdDLSAP.sapFormat   = NORMAL_HSL_FORMAT;
+            break;
+    }
+
+    cfg.t.cfg.s.sdDLSAP.t8.enb          = k->t8;                    /* timer 8 configuration structure */
+    cfg.t.cfg.s.sdDLSAP.sdTe            = k->sdTe;                  /* EIM threshold */
+    cfg.t.cfg.s.sdDLSAP.sdUe            = k->sdUe;                  /* increment constant */
+    cfg.t.cfg.s.sdDLSAP.sdDe            = k->sdDe;                  /* decrement constant */
+#endif /* SD_HSL */
 
 #if (SS7_TTC || SS7_NTT)
 	cfg.t.cfg.s.sdDLSAP.numRtb			=;							/* outstanding number of messages in RTB */

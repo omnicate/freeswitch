@@ -73,7 +73,6 @@ ftdm_status_t check_status_of_all_isup_intf(void);
 ftdm_status_t check_for_reconfig_flag(ftdm_span_t *ftdmspan);
 
 void sngss7_send_signal(sngss7_chan_data_t *sngss7_info, ftdm_signal_event_t event_id);
-void sngss7_set_sig_status(sngss7_chan_data_t *sngss7_info, ftdm_signaling_status_t status);
 ftdm_status_t sngss7_add_var(sngss7_chan_data_t *ss7_info, const char* var, const char* val);
 ftdm_status_t sngss7_add_raw_data(sngss7_chan_data_t *sngss7_info, uint8_t* data, ftdm_size_t data_len);
 /******************************************************************************/
@@ -2786,7 +2785,7 @@ void sngss7_send_signal(sngss7_chan_data_t *sngss7_info, ftdm_signal_event_t eve
 }
 
 /******************************************************************************/
-void sngss7_set_sig_status(sngss7_chan_data_t *sngss7_info, ftdm_signaling_status_t status)
+void sngss7_set_sig_status(sngss7_chan_data_t *sngss7_info, ftdm_signaling_status_t status, uint8_t reason)
 {
 	ftdm_sigmsg_t	sig;
 	ftdm_channel_t	*ftdmchan = sngss7_info->ftdmchan;
@@ -2801,6 +2800,7 @@ void sngss7_set_sig_status(sngss7_chan_data_t *sngss7_info, ftdm_signaling_statu
 	sig.channel = ftdmchan;
 	sig.event_id = FTDM_SIGEVENT_SIGSTATUS_CHANGED;
 	sig.ev_data.sigstatus.status = status;
+    sig.ev_data.sigstatus.raw_reason = reason;
 
 	if (ftdm_span_send_signal(ftdmchan->span, &sig) != FTDM_SUCCESS) {
 		ftdm_log_chan(ftdmchan, FTDM_LOG_ERROR,  "Failed to change channel status to %s\n",

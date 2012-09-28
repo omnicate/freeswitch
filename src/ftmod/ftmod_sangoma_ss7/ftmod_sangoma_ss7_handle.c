@@ -2512,7 +2512,7 @@ ftdm_status_t handle_cgb_req(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 				}
 
 				/* bring the sig status down */
-				sngss7_set_sig_status(sngss7_info, FTDM_SIG_STATE_DOWN);
+				sngss7_set_sig_status(sngss7_info, FTDM_SIG_STATE_DOWN, 0);
 				
 				ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_SUSPENDED);
 
@@ -2667,7 +2667,7 @@ ftdm_status_t handle_cgu_req(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 
 				/* bring the sig status down */
 				if (sngss7_channel_status_clear(sngss7_info)) {
-					sngss7_set_sig_status(sngss7_info, FTDM_SIG_STATE_UP);
+					sngss7_set_sig_status(sngss7_info, FTDM_SIG_STATE_UP, 0);
 				}
 				
 				ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_SUSPENDED);

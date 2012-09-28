@@ -33,6 +33,7 @@ ACLOCAL_AMFLAGS  = -I build
 AUTOMAKE_OPTIONS = foreign
 
 SRC = src
+SAMPLES = sample
 
 moddir = @modinstdir@
 libdir = @libdir@
@@ -100,7 +101,7 @@ core-install: install-libLTLIBRARIES
 #
 # tools & test programs
 #
-noinst_PROGRAMS  = testtones detect_tones detect_dtmf testpri testr2 testanalog testapp testcid
+noinst_PROGRAMS  = testtones detect_tones detect_dtmf testpri testr2 testanalog testapp testcid run_mtp2
 
 testapp_SOURCES = $(SRC)/testapp.c
 testapp_LDADD   = libfreetdm.la
@@ -137,6 +138,12 @@ testr2_CFLAGS  = $(FTDM_CFLAGS) $(AM_CFLAGS)
 testanalog_SOURCES = $(SRC)/testanalog.c
 testanalog_LDADD   = libfreetdm.la
 testanalog_CFLAGS  = $(FTDM_CFLAGS) $(AM_CFLAGS)
+
+run_mtp2_SOURCES = $(SAMPLES)/run_mtp2/run_mtp2.c $(SAMPLES)/run_mtp2/run_mtp2_test.c
+run_mtp2_LDADD   = libfreetdm.la
+run_mtp2_LDFLAGS = -lxml2 -lpthread
+run_mtp2_CFLAGS  = $(AM_CFLAGS) $(FTDM_CFLAGS) -I/usr/include/libxml2
+
 
 #
 # ftmod modules
@@ -215,7 +222,9 @@ ftmod_sangoma_ss7_la_SOURCES = \
 	$(SRC)/ftmod/ftmod_sangoma_ss7/ftmod_sangoma_ss7_logger.c \
 	$(SRC)/ftmod/ftmod_sangoma_ss7/ftmod_sangoma_ss7_m2ua_xml.c \
 	$(SRC)/ftmod/ftmod_sangoma_ss7/ftmod_sangoma_ss7_m2ua.c \
-	$(SRC)/ftmod/ftmod_sangoma_ss7/ftmod_sangoma_ss7_relay.c
+	$(SRC)/ftmod/ftmod_sangoma_ss7/ftmod_sangoma_ss7_relay.c\
+    $(SRC)/ftmod/ftmod_sangoma_ss7/ftmod_sangoma_ss7_mtp2api.c
+
 
 ftmod_sangoma_ss7_la_CFLAGS  = $(FTDM_CFLAGS) $(AM_CFLAGS) -D_GNU_SOURCE
 ftmod_sangoma_ss7_la_LDFLAGS = -shared -module -avoid-version -lsng_ss7
