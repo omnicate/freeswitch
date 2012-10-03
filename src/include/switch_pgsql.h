@@ -55,10 +55,42 @@ typedef enum {
 	SWITCH_PGSQL_FAIL = -1
 } switch_pgsql_status_t;
 
+/*!
+  \brief Create a new handle for the PGSQL connection.
+  \param dsn The DSN of the database to connect to. See documentation for PQconnectdb() at 
+             http://www.postgresql.org/docs/9.0/static/libpq-connect.html. The DSN *MUST* be
+			 prefixed with 'pgsql;' to use the switch_cache_db* functionality. However, the DSN
+			 passed to this function directly *MUST NOT* be prefixed with 'pgsql;'.
+  \return Returns a pointer to a newly allocated switch_pgsql_handle_t type or NULL on failure.
+ */
 SWITCH_DECLARE(switch_pgsql_handle_t *) switch_pgsql_handle_new(const char *dsn);
+
+/*!
+  \brief Sets the number of retries if the PGSQL connection fails.
+  \param handle A fully allocated switch_pgsql_handle_t returned from a call to switch_pgsql_handle_new().
+  \param num_retries How many times to retry connecting to the database if this connection fails.
+ */
 SWITCH_DECLARE(void) switch_pgsql_set_num_retries(switch_pgsql_handle_t *handle, int num_retries);
-SWITCH_DECLARE(switch_pgsql_status_t) switch_pgsql_handle_disconnect(switch_pgsql_handle_t *handle);
+
+/*!
+  \brief Disconnects a PGSQL connection from the database.
+  \param handle The PGSQL database handle to disconnect.
+  \return Returns SWITCH_PGSQL_SUCCESS or SWITCH_PGSQL_FAIL.
+ */
+SWITCH_DECLARE(switch_pgsql_status_t ) switch_pgsql_handle_disconnect(switch_pgsql_handle_t *handle);
+#if 0
+									   ) /* Emacs formatting issue */
+#endif
+/*!
+  \brief Connect to the database specified by the DSN passed to the switch_pgsql_handle_new() call which 
+         initialized this handle.
+  \param The database handle to connect to the database.
+  \return Returns SWITCH_PGSQL_SUCCESS or SWITCH_PGSQL_FAIL.
+ */
 SWITCH_DECLARE(switch_pgsql_status_t) switch_pgsql_handle_connect(switch_pgsql_handle_t *handle);
+
+/*!
+ */
 SWITCH_DECLARE(void) switch_pgsql_handle_destroy(switch_pgsql_handle_t **handlep);
 
 SWITCH_DECLARE(switch_pgsql_status_t) switch_pgsql_send_query(switch_pgsql_handle_t *handle, const char* sql);
