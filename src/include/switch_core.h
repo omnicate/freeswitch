@@ -2246,6 +2246,8 @@ typedef union {
 
 struct switch_cache_db_handle;
 typedef struct switch_cache_db_handle switch_cache_db_handle_t;
+struct switch_sql_manager;
+typedef struct switch_sql_manager switch_sql_manager_t;
 
 static inline const char *switch_cache_db_type_name(switch_cache_db_handle_type_t type)
 {

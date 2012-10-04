@@ -1832,7 +1832,6 @@ typedef struct switch_codec_implementation switch_codec_implementation_t;
 typedef struct switch_buffer switch_buffer_t;
 typedef struct switch_codec_settings switch_codec_settings_t;
 typedef struct switch_codec_fmtp switch_codec_fmtp_t;
-typedef struct switch_sql_manager switch_sql_manager_t;
 typedef struct switch_odbc_handle switch_odbc_handle_t;
 typedef struct switch_pgsql_handle switch_pgsql_handle_t;
 typedef struct switch_pgsql_result switch_pgsql_result_t;
