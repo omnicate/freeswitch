@@ -769,7 +769,7 @@ static FIO_COMMAND_FUNCTION(wanpipe_command)
 		break;
 	case FTDM_COMMAND_ENABLE_DTMF_REMOVAL:
 		{
-#ifdef WP_API_FEATURE_LIBSNG_HWEC
+#ifdef WP_API_FEATURE_LIBSNG_HWEC_DTMF_REMOVAL
 			int return_code = 0;
 			if (!ftdm_channel_test_feature(ftdmchan, FTDM_CHANNEL_FEATURE_HWEC)) {
 				ftdm_log_chan_msg(ftdmchan, FTDM_LOG_ERROR, "Wanpipe device does not have HW EC\n");
@@ -785,7 +785,7 @@ static FIO_COMMAND_FUNCTION(wanpipe_command)
 		break;
 	case FTDM_COMMAND_DISABLE_DTMF_REMOVAL:
 		{
-#ifdef WP_API_FEATURE_LIBSNG_HWEC
+#ifdef WP_API_FEATURE_LIBSNG_HWEC_DTMF_REMOVAL
 			int return_code = 0;
 			if (!ftdm_channel_test_feature(ftdmchan, FTDM_CHANNEL_FEATURE_HWEC)) {
 				ftdm_log_chan_msg(ftdmchan, FTDM_LOG_ERROR, "Wanpipe device does not have HW EC\n");
