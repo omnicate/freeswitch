@@ -573,9 +573,6 @@ SWITCH_DECLARE(switch_status_t) __switch_cache_db_get_db_handle(switch_sql_manag
 			goto end;
 		}
 
-		switch_log_printf(SWITCH_CHANNEL_ID_LOG, file, func, line, NULL, SWITCH_LOG_DEBUG10,
-						  "Create Cached DB handle %s [%s] %s:%d\n", new_dbh->name, switch_cache_db_type_name(type), file, line);
-
 		new_dbh = create_handle(type);
 
 		if (db) {
@@ -587,6 +584,10 @@ SWITCH_DECLARE(switch_status_t) __switch_cache_db_get_db_handle(switch_sql_manag
 		}
 
 		add_handle(sql_manager, new_dbh, db_str, db_callsite_str, thread_str);
+
+		switch_log_printf(SWITCH_CHANNEL_ID_LOG, file, func, line, NULL, SWITCH_LOG_DEBUG10,
+						  "Create Cached DB handle %s [%s] %s:%d\n", new_dbh->name, switch_cache_db_type_name(type), file, line);
+
 	}
 
  end:
@@ -2890,8 +2891,13 @@ SWITCH_DECLARE(void) _switch_cache_db_status(switch_sql_manager_t *sql_manager, 
 	switch_mutex_lock(sql_manager->dbh_mutex);
 
 	for (dbh = sql_manager->handle_pool; dbh; dbh = dbh->next) {
-		char *needle = "pass=\"";
+		char *needles[3];
 		time_t diff = 0;
+		int i = 0;
+
+		needles[0] = "pass=\"";
+		needles[1] = "password=";
+		needles[2] = "password='";
 
 		diff = now - dbh->last_used;
 
@@ -2904,11 +2910,26 @@ SWITCH_DECLARE(void) _switch_cache_db_status(switch_sql_manager_t *sql_manager, 
 
 		/* sanitize password */
 		memset(cleankey_str, 0, sizeof(cleankey_str));
-		pos1 = strstr(dbh->name, needle) + strlen(needle);
-		pos2 = strstr(pos1, "\"");
-		strncpy(cleankey_str, dbh->name, pos1 - dbh->name);
-		strcpy(&cleankey_str[pos1 - dbh->name], pos2);
-		
+		for (i = 0; i < 3; i++) {
+			if((pos1 = strstr(dbh->name, needles[i]))) {
+				pos1 += strlen(needles[i]);
+
+				if (!(pos2 = strstr(pos1, "\""))) {
+					if (!(pos2 = strstr(pos1, "'"))) {
+						if (!(pos2 = strstr(pos1, " "))) {
+							pos2 = pos1 + strlen(pos1);
+						}
+					}
+				}
+				strncpy(cleankey_str, dbh->name, pos1 - dbh->name);
+				strcpy(&cleankey_str[pos1 - dbh->name], pos2);
+				break;
+			}
+		}
+		if (i == 3) {
+			strncpy(cleankey_str, dbh->name, strlen(dbh->name));
+		}
+
 		count++;
 		
 		if (dbh->use_count) {
