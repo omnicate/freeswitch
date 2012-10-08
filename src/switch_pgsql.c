@@ -600,19 +600,23 @@ SWITCH_DECLARE(switch_pgsql_status_t) switch_pgsql_handle_callback_exec_detailed
 
 			switch_assert(names && vals);
 
-			for (col = 0; col <= result->cols; ++col) {
+			for (col = 0; col < result->cols; ++col) {
 				char * tmp;
 				int len;
 
 				tmp = PQfname(result->result, col);
-				len = strlen(tmp);
-				names[col] = malloc(len+1);
-				strncpy(names[col], tmp, len);
-
-				len = PQgetlength(result->result, row, col);
-				vals[col] = malloc(len+1);
-				tmp = PQgetvalue(result->result, row, col);
-				strncpy(vals[col], tmp, len);
+				if (tmp) {
+					len = strlen(tmp);
+					names[col] = malloc(len+1);
+					strncpy(names[col], tmp, len);
+					
+					len = PQgetlength(result->result, row, col);
+					vals[col] = malloc(len+1);
+					tmp = PQgetvalue(result->result, row, col);
+					strncpy(vals[col], tmp, len);
+				} else {
+					switch_log_printf(SWITCH_CHANNEL_ID_LOG, file, func, line, NULL, SWITCH_LOG_ERROR, "ERR: Column number %d out of range\n", col);
+				}
 			}
 
 			if (callback(pdata, row, vals, names)) {
