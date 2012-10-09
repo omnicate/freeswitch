@@ -55,7 +55,7 @@ void handle_sng_relay_alarm(Pst *pst, RyMngmt *sta);
 
 /* FUNCTIONS ******************************************************************/
 
-#define STACK_LOG_FORMAT "STACK_LOG_BEGIN:sng_ss7:%sSTACK_LOG_END"
+#define STACK_LOG_FORMAT "STACK_LOG_BEGIN:%sSTACK_LOG_END\n"
 
 void handle_sng_log(uint8_t level, char *fmt,...)
 {
