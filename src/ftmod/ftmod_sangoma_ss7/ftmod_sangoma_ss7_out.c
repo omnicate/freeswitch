@@ -643,8 +643,6 @@ ft_to_sngss7_ubl (ftdm_channel_t * ftdmchan)
 	if (sngss7_test_cmd_pending_flag(sngss7_info, FLAG_CMD_PENDING_WAIT_FOR_RX_BLA) ) {
 		sngss7_set_cmd_pending_flag(sngss7_info, FLAG_CMD_PENDING_WAIT_FOR_TX_UBL);
 		SS7_INFO_CHAN(ftdmchan, "[CIC:%d]Set pending UBL request on Rx BLA.\n",	sngss7_info->circuit->cic);
-		SS7_FUNC_TRACE_EXIT (__FUNCTION__);
-		return;
 	} 
 
 	sng_cc_sta_request (1,
