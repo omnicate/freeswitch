@@ -1766,10 +1766,19 @@ ftdm_status_t handle_blo_rsp(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 			SS7_FUNC_TRACE_EXIT(__FUNCTION__);
 			return FTDM_FAIL;
 		}
-
+		sngss7_clear_cmd_pending_flag(sngss7_info, FLAG_CMD_PENDING_WAIT_FOR_RX_BLA);
 		SS7_INFO_CHAN(ftdmchan, "[CIC:%d]Rx %s\n",
 			g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic,
 			DECODE_LCC_EVENT(evntType));
+		
+		if (sngss7_test_cmd_pending_flag(sngss7_info, FLAG_CMD_PENDING_WAIT_FOR_TX_UBL) ) {
+			if (sngss7_tx_block_status_clear(sngss7_info)) {
+				sngss7_set_ckt_blk_flag(sngss7_info, FLAG_CKT_MN_UNBLK_TX);
+				ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_SUSPENDED);
+				SS7_INFO_CHAN(ftdmchan, "[CIC:%d]Triger pending UBL request.\n",	g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic);
+			}
+			sngss7_clear_cmd_pending_flag(sngss7_info, FLAG_CMD_PENDING_WAIT_FOR_TX_UBL);
+		}		
 	}
 
 	/* lock the channel */

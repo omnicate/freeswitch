@@ -608,6 +608,7 @@ typedef struct sngss7_chan_data {
 	uint8_t					globalFlg;
 	uint32_t				ckt_flags;
 	uint32_t				blk_flags;
+	uint32_t				cmd_pending_flags;
 	ftdm_hash_t*			variables;		/* send on next sigevent */
 	ftdm_size_t				raw_data_len;
 	void					*raw_data;		/* send on next sigevent */
@@ -661,6 +662,11 @@ typedef struct sngss7_event_data
 	} event;
 } sngss7_event_data_t;
 
+
+typedef enum {
+	FLAG_CMD_PENDING_WAIT_FOR_RX_BLA	= (1<<0),
+	FLAG_CMD_PENDING_WAIT_FOR_TX_UBL		= (1<<1)
+} sng_cmd_pending_flags_t;
 
 typedef enum {
 	FLAG_RESET_RX			= (1 << 0),
@@ -1275,6 +1281,10 @@ if (ftdmchan->state == new_state) { \
 #define sngss7_clear_ckt_blk_flag(obj, flag) ((obj)->blk_flags &= ~(flag))
 #define sngss7_set_ckt_blk_flag(obj, flag)   ((obj)->blk_flags |= (flag))
 
+#define sngss7_test_cmd_pending_flag(obj, flag)  ((obj)->cmd_pending_flags & flag)
+#define sngss7_clear_cmd_pending_flag(obj, flag) ((obj)->cmd_pending_flags &= ~(flag))
+#define sngss7_set_cmd_pending_flag(obj, flag)   ((obj)->cmd_pending_flags |= (flag))
+
 #define sngss7_test_options(obj, option) ((obj)->options & option)
 #define sngss7_clear_options(obj, option) ((obj)->options &= ~(option))
 #define sngss7_set_options(obj, option)   ((obj)->options |= (option))
@@ -1285,7 +1295,7 @@ if (ftdmchan->state == new_state) { \
 									   FLAG_GRP_MN_BLOCK_TX_DN | \
 									   FLAG_GRP_HW_BLOCK_TX | \
 									   FLAG_GRP_HW_BLOCK_TX_DN | \
-			       						   FLAG_GRP_HW_UNBLK_TX | \
+			       					   FLAG_GRP_HW_UNBLK_TX | \
 									   FLAG_CKT_MN_UNBLK_TX	))) 
 
 #define sngss7_block_status_clear(obj) (obj->blk_flags == 0)

@@ -603,6 +603,7 @@ void ft_to_sngss7_blo (ftdm_channel_t * ftdmchan)
 						SIT_STA_CIRBLOREQ, 
 						NULL);
 	
+	sngss7_set_cmd_pending_flag(sngss7_info, FLAG_CMD_PENDING_WAIT_FOR_RX_BLA);
 	SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Tx BLO\n", sngss7_info->circuit->cic);
 
 	SS7_FUNC_TRACE_EXIT (__FUNCTION__);
@@ -637,7 +638,15 @@ ft_to_sngss7_ubl (ftdm_channel_t * ftdmchan)
 	SS7_FUNC_TRACE_ENTER (__FUNCTION__);
 	
 	sngss7_chan_data_t *sngss7_info = ftdmchan->call_data;
-	
+
+
+	if (sngss7_test_cmd_pending_flag(sngss7_info, FLAG_CMD_PENDING_WAIT_FOR_RX_BLA) ) {
+		sngss7_set_cmd_pending_flag(sngss7_info, FLAG_CMD_PENDING_WAIT_FOR_TX_UBL);
+		SS7_INFO_CHAN(ftdmchan, "[CIC:%d]Set pending UBL request on Rx BLA.\n",	sngss7_info->circuit->cic);
+		SS7_FUNC_TRACE_EXIT (__FUNCTION__);
+		return;
+	} 
+
 	sng_cc_sta_request (1,
 						0,
 						0,

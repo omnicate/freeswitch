@@ -67,6 +67,9 @@ static ftdm_status_t handle_show_inreset(ftdm_stream_handle_t *stream, int span,
 static ftdm_status_t handle_show_flags(ftdm_stream_handle_t *stream, int span, int chan, int verbose);
 static ftdm_status_t handle_show_blocks(ftdm_stream_handle_t *stream, int span, int chan, int verbose);
 static ftdm_status_t handle_show_status(ftdm_stream_handle_t *stream, int span, int chan, int verbose);
+static ftdm_status_t handle_show_stack_status(ftdm_stream_handle_t *stream, char* span, int verbose);
+static ftdm_status_t handle_status_isup_ckt(ftdm_stream_handle_t *stream, char *id_name);
+static ftdm_status_t handle_status_isup_ckt_with_id(ftdm_stream_handle_t *stream, int id);
 
 static ftdm_status_t handle_tx_rsc(ftdm_stream_handle_t *stream, int span, int chan, int verbose);
 static ftdm_status_t handle_tx_grs(ftdm_stream_handle_t *stream, int span, int chan, int range, int verbose);
@@ -166,6 +169,11 @@ ftdm_status_t ftdm_sngss7_handle_cli_cmd(ftdm_stream_handle_t *stream, const cha
 			c++;
 			handle_status_relay(stream, argv[c]);
 			
+		/******************************************************************/
+		} else if (!strcasecmp(argv[c], "stack")) {
+			if (check_arg_count(argc, 4))  goto handle_cli_error_argc;
+			handle_show_stack_status(stream, argv[3], verbose);
+		/******************************************************************/
 		} else  if (!strcasecmp(argv[c], "span")) {
 		/**********************************************************************/
 			switch (argc) {
@@ -1373,6 +1381,35 @@ static ftdm_status_t handle_show_blocks(ftdm_stream_handle_t *stream, int span, 
 }
 
 /******************************************************************************/
+static ftdm_status_t handle_show_stack_status(ftdm_stream_handle_t *stream, char* span, int verbose)
+{
+	int x=0;
+	int spanNo = 0;
+	sng_isup_ckt_t *ckt;
+	sngss7_chan_data_t *sngss7_info;
+	
+	if (!span)  {
+		stream->write_function(stream, "Span not specified. Showing all spans. \n", span);
+		spanNo = 0;
+	} else {
+		spanNo = atoi(span);
+	}
+	
+	for (x = (g_ftdm_sngss7_data.cfg.procId * 1000) + 1; 
+		g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0;  
+		x++) 
+	{
+		ckt = &g_ftdm_sngss7_data.cfg.isupCkt[x];
+		sngss7_info = (sngss7_chan_data_t *)g_ftdm_sngss7_data.cfg.isupCkt[x].obj;		
+		if ((ckt->span == spanNo) || !spanNo ) {
+			handle_status_isup_ckt_with_id(stream, sngss7_info->circuit->id);
+		}
+	}
+			
+	return FTDM_SUCCESS;
+}
+
+/******************************************************************************/
 static ftdm_status_t handle_show_status(ftdm_stream_handle_t *stream, int span, int chan, int verbose)
 {
 	int				 			x;
@@ -2429,19 +2466,19 @@ static ftdm_status_t handle_status_relay(ftdm_stream_handle_t *stream, char *nam
 }
 
 /******************************************************************************/
-static ftdm_status_t handle_status_isup_ckt(ftdm_stream_handle_t *stream, char *id_name)
+static ftdm_status_t handle_status_isup_ckt(ftdm_stream_handle_t *stream, char *id_name) {
+	return handle_status_isup_ckt_with_id(stream, atoi(id_name));
+}
+static ftdm_status_t handle_status_isup_ckt_with_id(ftdm_stream_handle_t *stream, int id)
 {
 	sng_isup_ckt_t				*ckt;
 	sngss7_chan_data_t  		*ss7_info;
 	ftdm_channel_t	  			*ftdmchan;
-	uint32_t					id;
 	uint8_t						state = 0;
 	uint8_t						bits_ab = 0;
 	uint8_t						bits_cd = 0;	
 	uint8_t						bits_ef = 0;
 
-	/* extract the integer version of the id (ckt) */
-	id = atoi(id_name);
 
 	/* extract the global config circuit structure */
 	ckt = &g_ftdm_sngss7_data.cfg.isupCkt[id];
