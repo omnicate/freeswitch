@@ -1766,6 +1766,9 @@ ftdm_status_t handle_blo_rsp(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 		return FTDM_FAIL;
 	}
 
+	SS7_INFO_CHAN(ftdmchan, "[CIC:%d]blk_flag = 0x%x, ckt_flag = 0x%x\n, cmd_pending_flag = 0x%x", 
+					sngss7_info->circuit->cic, sngss7_info->blk_flags, sngss7_info->ckt_flags, sngss7_info->cmd_pending_flags);
+	
 	sngss7_clear_cmd_pending_flag(sngss7_info, FLAG_CMD_PENDING_WAIT_FOR_RX_BLA);
 	SS7_INFO_CHAN(ftdmchan, "[CIC:%d]Rx %s\n",
 		g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic,
@@ -1774,13 +1777,17 @@ ftdm_status_t handle_blo_rsp(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 	if (sngss7_test_cmd_pending_flag(sngss7_info, FLAG_CMD_PENDING_WAIT_FOR_TX_UBL) ) {
 		sngss7_set_ckt_blk_flag(sngss7_info, FLAG_CKT_MN_UNBLK_TX);
 		ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_SUSPENDED);
-		SS7_INFO_CHAN(ftdmchan, "[CIC:%d]Triger pending UBL request.\n",	g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic);
+		SS7_INFO_CHAN(ftdmchan, "[CIC:%d]Trigger pending UBL request.\n",	g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic);
 		sngss7_clear_cmd_pending_flag(sngss7_info, FLAG_CMD_PENDING_WAIT_FOR_TX_UBL);
 	}
 
 	if (sngss7_info->t_waiting_bla.hb_timer_id) {
 		ftdm_sched_cancel_timer (sngss7_info->t_waiting_bla.sched, sngss7_info->t_waiting_bla.hb_timer_id);
+		SS7_INFO_CHAN(ftdmchan, "[CIC:%d]Cancel waiting BLA timer.\n",	g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic);
 	}
+	
+	SS7_INFO_CHAN(ftdmchan, "[CIC:%d]blk_flag = 0x%x, ckt_flag = 0x%x\n, cmd_pending_flag = 0x%x", 
+					sngss7_info->circuit->cic, sngss7_info->blk_flags, sngss7_info->ckt_flags, sngss7_info->cmd_pending_flags);
 
 #if 0
 	/* lock the channel */

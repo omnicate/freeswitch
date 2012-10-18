@@ -595,7 +595,12 @@ void ft_to_sngss7_blo (ftdm_channel_t * ftdmchan)
 	
 	sngss7_chan_data_t *sngss7_info = ftdmchan->call_data;
 	
+	SS7_INFO_CHAN(ftdmchan, "[CIC:%d]blk_flag = 0x%x, ckt_flag = 0x%x\n, cmd_pending_flag = 0x%x", 
+					sngss7_info->circuit->cic, sngss7_info->blk_flags, sngss7_info->ckt_flags, sngss7_info->cmd_pending_flags);
+	
 	sngss7_set_cmd_pending_flag(sngss7_info, FLAG_CMD_PENDING_WAIT_FOR_RX_BLA);
+	SS7_ERROR ("Set FLAG_CMD_PENDING_WAIT_FOR_RX_BLA flag. \n");
+	
 	sng_cc_sta_request (1,
 						0,
 						0,
@@ -614,6 +619,9 @@ void ft_to_sngss7_blo (ftdm_channel_t * ftdmchan)
 	{
 		SS7_ERROR ("Unable to schedule timer of waiting for BLA. \n");
 	}
+	
+	SS7_INFO_CHAN(ftdmchan, "[CIC:%d]blk_flag = 0x%x, ckt_flag = 0x%x\n, cmd_pending_flag = 0x%x", 
+					sngss7_info->circuit->cic, sngss7_info->blk_flags, sngss7_info->ckt_flags, sngss7_info->cmd_pending_flags);
 	
 	SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Tx BLO\n", sngss7_info->circuit->cic);
 
@@ -650,9 +658,10 @@ ft_to_sngss7_ubl (ftdm_channel_t * ftdmchan)
 	
 	sngss7_chan_data_t *sngss7_info = ftdmchan->call_data;
 
+	SS7_INFO_CHAN(ftdmchan, "[CIC:%d]blk_flag = 0x%x, ckt_flag = 0x%x\n, cmd_pending_flag = 0x%x", 
+					sngss7_info->circuit->cic, sngss7_info->blk_flags, sngss7_info->ckt_flags, sngss7_info->cmd_pending_flags);
 
 	if (sngss7_test_cmd_pending_flag(sngss7_info, FLAG_CMD_PENDING_WAIT_FOR_RX_BLA) ) {
-		sngss7_set_ckt_blk_flag(sngss7_info, FLAG_CKT_MN_BLOCK_TX);
 		sngss7_set_cmd_pending_flag(sngss7_info, FLAG_CMD_PENDING_WAIT_FOR_TX_UBL);
 		SS7_INFO_CHAN(ftdmchan, "[CIC:%d]Set pending UBL request on Rx BLA.\n",	sngss7_info->circuit->cic);
 		SS7_FUNC_TRACE_EXIT (__FUNCTION__);
