@@ -51,6 +51,7 @@ static sng_isup_event_interface_t sng_event;
 static ftdm_io_interface_t g_ftdm_sngss7_interface;
 ftdm_sngss7_data_t g_ftdm_sngss7_data;
 ftdm_sngss7_opr_mode g_ftdm_operating_mode;
+uint32_t congestion_level; 
 
 /******************************************************************************/
 
@@ -378,8 +379,6 @@ static void *ftdm_sangoma_ss7_run(ftdm_thread_t * me, void *obj)
 	/* set IN_THREAD flag so that we know this thread is running */
 	ftdm_set_flag (ftdmspan, FTDM_SPAN_IN_THREAD);
 
-
-
 	/* get an interrupt queue for this span for channel state changes */
 	if (ftdm_queue_get_interrupt (ftdmspan->pendingchans, &ftdm_sangoma_ss7_int[0]) != FTDM_SUCCESS) {
 		SS7_CRITICAL ("Failed to get a ftdm_interrupt for span = %d for channel state changes!\n", ftdmspan->span_id);
@@ -482,6 +481,10 @@ static void *ftdm_sangoma_ss7_run(ftdm_thread_t * me, void *obj)
  
 				/* unlock the channel */
 				ftdm_mutex_unlock (ftdmchan->mutex);				
+				if (congestion_level) {
+					usleep (congestion_level*1000);
+					SS7_DEBUG ("span = %d, congestion_level=%d, sleeping.\n",ftdmspan->span_id, congestion_level);
+				}
 			}
 
 			/* clean out all pending stack events */
@@ -496,7 +499,7 @@ static void *ftdm_sangoma_ss7_run(ftdm_thread_t * me, void *obj)
 			break;
 		/**********************************************************************/
 		case FTDM_TIMEOUT:
-			SS7_DEVEL_DEBUG ("ftdm_interrupt_wait timed-out on span = %d\n",ftdmspan->span_id);
+			SS7_DEBUG ("ftdm_interrupt_wait timed-out on span = %d\n",ftdmspan->span_id);
 
 			break;
 		/**********************************************************************/
@@ -2772,6 +2775,8 @@ static FIO_IO_LOAD_FUNCTION(ftdm_sangoma_ss7_io_init)
 {
 	assert (fio != NULL);
 	memset (&g_ftdm_sngss7_interface, 0, sizeof (g_ftdm_sngss7_interface));
+
+	congestion_level = 0;
 
 	g_ftdm_sngss7_interface.name = "ss7";
 	g_ftdm_sngss7_interface.api = ftdm_sangoma_ss7_api;

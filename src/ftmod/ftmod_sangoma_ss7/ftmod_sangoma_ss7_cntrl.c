@@ -965,6 +965,41 @@ int ftmod_ss7_unblock_isup_ckt(uint32_t cktId)
 
 	return (sng_cntrl_isup(&pst, &cntrl));
 }
+int ftmod_ss7_isup_debug(int action)
+{
+	SiMngmt cntrl;
+	Pst pst;
+
+	/* initalize the post structure */
+	smPstInit(&pst);
+
+	/* insert the destination Entity */
+	pst.dstEnt = ENTSI;
+
+	/* initalize the control structure */
+	memset(&cntrl, 0x0, sizeof(SiMngmt));
+
+	/* initalize the control header */
+	smHdrInit(&cntrl.hdr);
+
+	cntrl.hdr.msgType			= TCNTRL;	   /* this is a control request */
+	cntrl.hdr.entId.ent			= ENTSI;
+	cntrl.hdr.entId.inst		= S_INST;
+	//cntrl.hdr.elmId.elmnt		= ;
+
+	cntrl.t.cntrl.action		= action;		/* bind and activate */
+	cntrl.t.cntrl.subAction		= SADBG;		/* specificed element */
+#if (SI_LMINT3 || SMSI_LMINT3)
+	cntrl.t.cntrl.s.siDbg.dbgMask		= 0xFFFF;		
+#else
+    cntrl.t.cntrl.param.siDbg.dbgMask   = 0xFFFF;
+#endif
+
+	return (sng_cntrl_isup(&pst, &cntrl));
+}
+
+/******************************************************************************/
+
 /******************************************************************************/
 /* For Emacs:
  * Local Variables:

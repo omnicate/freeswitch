@@ -218,6 +218,8 @@ int  ft_to_sngss7_cfg_all(void)
 
 		g_ftdm_sngss7_data.gen_config = SNG_GEN_CFG_STATUS_DONE;
 
+		ftmod_ss7_isup_debug(AENA);
+
 	} /* if (!(g_ftdm_sngss7_data.gen_config)) */
 
 
@@ -462,6 +464,7 @@ int  ft_to_sngss7_cfg_all(void)
 	if(SNG_SS7_OPR_MODE_ISUP != g_ftdm_operating_mode){
 		return ftmod_ss7_m2ua_cfg();
 	}
+
 	
 	return 0;
 }
@@ -974,9 +977,9 @@ int ftmod_ss7_mtp3_dlsap_config(int id)
 	cfg.t.cfg.s.snDLSAP.upSwtch			= k->switchType;		/* user part switch type */
 	cfg.t.cfg.s.snDLSAP.maxSLTtry		= MAX_SLTM_RETRIES;		/* maximun times to retry SLTM */
 	cfg.t.cfg.s.snDLSAP.p0QLen			= 32;					/* size of the priority 0 Q */
-	cfg.t.cfg.s.snDLSAP.p1QLen			= 32;					/* size of the priority 1 Q */
-	cfg.t.cfg.s.snDLSAP.p2QLen			= 32;					/* size of the priority 2 Q */
-	cfg.t.cfg.s.snDLSAP.p3QLen			= 32;					/* size of the priority 3 Q */
+	cfg.t.cfg.s.snDLSAP.p1QLen			= 42;					/* size of the priority 1 Q */
+	cfg.t.cfg.s.snDLSAP.p2QLen			= 52;					/* size of the priority 2 Q */
+	cfg.t.cfg.s.snDLSAP.p3QLen			= 64;					/* size of the priority 3 Q */
 	cfg.t.cfg.s.snDLSAP.discPrior		= 0;					/* discard priority */
 #ifndef SDT2
 	cfg.t.cfg.s.snDLSAP.maxCredit		= MAX_SN_CREDIT;		/* max credit */
