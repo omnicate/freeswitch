@@ -604,6 +604,17 @@ void ft_to_sngss7_blo (ftdm_channel_t * ftdmchan)
 						SIT_STA_CIRBLOREQ, 
 						NULL);
 	
+	/* start timer of waiting for BLA message */
+	if (ftdm_sched_timer (sngss7_info->t_waiting_bla.sched,
+					     "t_waiting_bla",
+					     sngss7_info->t_waiting_bla.beat,
+					     sngss7_info->t_waiting_bla.callback,
+					     &sngss7_info->t_waiting_bla,
+					     &sngss7_info->t_waiting_bla.hb_timer_id)) 
+	{
+		SS7_ERROR ("Unable to schedule timer of waiting for BLA. \n");
+	}
+	
 	SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Tx BLO\n", sngss7_info->circuit->cic);
 
 	SS7_FUNC_TRACE_EXIT (__FUNCTION__);

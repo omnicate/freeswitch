@@ -3446,6 +3446,13 @@ static int ftmod_ss7_fill_in_circuits(sng_span_t *sngSpan)
 		ss7_info->t39.sngss7_info	= ss7_info;
 
 
+		/* prepare the timer structures */
+		ss7_info->t_waiting_bla.sched		= ((sngss7_span_data_t *)(ftdmspan->signal_data))->sched;
+		ss7_info->t_waiting_bla.counter		= 1;
+		ss7_info->t_waiting_bla.beat			= 3 * 1000 * 10;   /* Let's do 3 seconds waiting time to trigger this timer */
+		ss7_info->t_waiting_bla.callback		= handle_wait_bla_timeout;
+		ss7_info->t_waiting_bla.sngss7_info	= ss7_info;
+		
 	/**************************************************************************/
 	} /* for (i == 1; i < ftdmspan->chan_count; i++) */
 

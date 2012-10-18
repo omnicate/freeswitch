@@ -616,6 +616,7 @@ typedef struct sngss7_chan_data {
 	sngss7_timer_data_t		t35;
 	sngss7_timer_data_t		t10;
 	sngss7_timer_data_t		t39;
+	sngss7_timer_data_t		t_waiting_bla;
 	sngss7_group_data_t		rx_grs;
 	sngss7_group_data_t		rx_gra;
 	sngss7_group_data_t		tx_grs;
@@ -1131,10 +1132,9 @@ ftdm_status_t sngss7_add_raw_data(sngss7_chan_data_t *sngss7_info, uint8_t* data
 void handle_isup_t35(void *userdata);
 void handle_isup_t10(void *userdata);
 void handle_isup_t39(void *userdata);
-
+void handle_wait_bla_timeout(void *userdata);
 
 void ftmod_ss7_enable_linkset(void);
-
 
 /******************************************************************************/
 
