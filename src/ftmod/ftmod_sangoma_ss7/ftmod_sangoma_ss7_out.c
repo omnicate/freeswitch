@@ -595,7 +595,7 @@ void ft_to_sngss7_blo (ftdm_channel_t * ftdmchan)
 	
 	sngss7_chan_data_t *sngss7_info = ftdmchan->call_data;
 	
-	SS7_INFO_CHAN(ftdmchan, "[CIC:%d]blk_flag = 0x%x, ckt_flag = 0x%x\n, cmd_pending_flag = 0x%x", 
+	SS7_INFO_CHAN(ftdmchan, "[CIC:%d]blk_flag = 0x%x, ckt_flag = 0x%x\n, cmd_pending_flag = 0x%x\n", 
 					sngss7_info->circuit->cic, sngss7_info->blk_flags, sngss7_info->ckt_flags, sngss7_info->cmd_pending_flags);
 	
 	sngss7_set_cmd_pending_flag(sngss7_info, FLAG_CMD_PENDING_WAIT_FOR_RX_BLA);
@@ -609,6 +609,7 @@ void ft_to_sngss7_blo (ftdm_channel_t * ftdmchan)
 						SIT_STA_CIRBLOREQ, 
 						NULL);
 	
+#if JZ_BLO_TIMER
 	/* start timer of waiting for BLA message */
 	if (ftdm_sched_timer (sngss7_info->t_waiting_bla.sched,
 					     "t_waiting_bla",
@@ -620,7 +621,19 @@ void ft_to_sngss7_blo (ftdm_channel_t * ftdmchan)
 		SS7_ERROR ("Unable to schedule timer of waiting for BLA. \n");
 	}
 	
-	SS7_INFO_CHAN(ftdmchan, "[CIC:%d]blk_flag = 0x%x, ckt_flag = 0x%x\n, cmd_pending_flag = 0x%x", 
+	/* start timer of disabling transmit ubl for 5 seconds */
+	if (ftdm_sched_timer (sngss7_info->t_block_ubl.sched,
+					     "t_waiting_bla",
+					     sngss7_info->t_block_ubl.beat,
+					     sngss7_info->t_block_ubl.callback,
+					     &sngss7_info->t_block_ubl,
+					     &sngss7_info->t_block_ubl.hb_timer_id)) 
+	{
+		SS7_ERROR ("Unable to schedule timer of disabling UBL transmission. \n");
+	}
+#endif
+
+	SS7_INFO_CHAN(ftdmchan, "[CIC:%d]blk_flag = 0x%x, ckt_flag = 0x%x\n, cmd_pending_flag = 0x%x\n", 
 					sngss7_info->circuit->cic, sngss7_info->blk_flags, sngss7_info->ckt_flags, sngss7_info->cmd_pending_flags);
 	
 	SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Tx BLO\n", sngss7_info->circuit->cic);
@@ -658,7 +671,7 @@ ft_to_sngss7_ubl (ftdm_channel_t * ftdmchan)
 	
 	sngss7_chan_data_t *sngss7_info = ftdmchan->call_data;
 
-	SS7_INFO_CHAN(ftdmchan, "[CIC:%d]blk_flag = 0x%x, ckt_flag = 0x%x\n, cmd_pending_flag = 0x%x", 
+	SS7_INFO_CHAN(ftdmchan, "[CIC:%d]blk_flag = 0x%x, ckt_flag = 0x%x\n, cmd_pending_flag = 0x%x\n", 
 					sngss7_info->circuit->cic, sngss7_info->blk_flags, sngss7_info->ckt_flags, sngss7_info->cmd_pending_flags);
 
 	if (sngss7_test_cmd_pending_flag(sngss7_info, FLAG_CMD_PENDING_WAIT_FOR_RX_BLA) ) {

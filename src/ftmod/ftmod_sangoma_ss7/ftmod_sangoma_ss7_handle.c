@@ -1766,7 +1766,7 @@ ftdm_status_t handle_blo_rsp(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 		return FTDM_FAIL;
 	}
 
-	SS7_INFO_CHAN(ftdmchan, "[CIC:%d]blk_flag = 0x%x, ckt_flag = 0x%x\n, cmd_pending_flag = 0x%x", 
+	SS7_INFO_CHAN(ftdmchan, "[CIC:%d]blk_flag = 0x%x, ckt_flag = 0x%x\n, cmd_pending_flag = 0x%x\n", 
 					sngss7_info->circuit->cic, sngss7_info->blk_flags, sngss7_info->ckt_flags, sngss7_info->cmd_pending_flags);
 	
 	sngss7_clear_cmd_pending_flag(sngss7_info, FLAG_CMD_PENDING_WAIT_FOR_RX_BLA);
@@ -1781,12 +1781,14 @@ ftdm_status_t handle_blo_rsp(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 		sngss7_clear_cmd_pending_flag(sngss7_info, FLAG_CMD_PENDING_WAIT_FOR_TX_UBL);
 	}
 
+#if JZ_BLO_TIMER
 	if (sngss7_info->t_waiting_bla.hb_timer_id) {
 		ftdm_sched_cancel_timer (sngss7_info->t_waiting_bla.sched, sngss7_info->t_waiting_bla.hb_timer_id);
 		SS7_INFO_CHAN(ftdmchan, "[CIC:%d]Cancel waiting BLA timer.\n",	g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic);
 	}
-	
-	SS7_INFO_CHAN(ftdmchan, "[CIC:%d]blk_flag = 0x%x, ckt_flag = 0x%x\n, cmd_pending_flag = 0x%x", 
+#endif
+
+	SS7_INFO_CHAN(ftdmchan, "[CIC:%d]blk_flag = 0x%x, ckt_flag = 0x%x\n, cmd_pending_flag = 0x%x\n", 
 					sngss7_info->circuit->cic, sngss7_info->blk_flags, sngss7_info->ckt_flags, sngss7_info->cmd_pending_flags);
 
 #if 0
@@ -1821,19 +1823,16 @@ ftdm_status_t handle_ubl_req(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 
 		SS7_FUNC_TRACE_EXIT(__FUNCTION__);
 		return FTDM_FAIL;
-	} else {
-		/* get the ftdmchan and ss7_chan_data from the circuit */
-		if (extract_chan_data(circuit, &sngss7_info, &ftdmchan)) {
-			SS7_ERROR("Failed to extract channel data for ISUP circuit = %d!\n", circuit);
-			SS7_FUNC_TRACE_EXIT(__FUNCTION__);
-			return FTDM_FAIL;
-		}
-
-		SS7_INFO_CHAN(ftdmchan, "[CIC:%d]Rx %s\n",
-			g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic,
-			DECODE_LCC_EVENT(evntType));
+	} 
+	
+	if (extract_chan_data(circuit, &sngss7_info, &ftdmchan)) {
+		SS7_ERROR("Failed to extract channel data for ISUP circuit = %d!\n", circuit);
+		SS7_FUNC_TRACE_EXIT(__FUNCTION__);
+		return FTDM_FAIL;
 	}
 
+	SS7_INFO_CHAN(ftdmchan, "[CIC:%d]Rx %s\n", g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic, DECODE_LCC_EVENT(evntType));
+	
 	/* lock the channel */
 	ftdm_mutex_lock(ftdmchan->mutex);
 
