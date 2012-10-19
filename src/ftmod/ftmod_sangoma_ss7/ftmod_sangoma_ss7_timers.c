@@ -171,6 +171,15 @@ void handle_wait_uba_timeout(void *userdata)
 	ft_to_sngss7_ubl(ftdmchan);
 	SS7_FUNC_TRACE_EXIT(__FUNCTION__);
 }
+void handle_tx_ubl_on_rx_bla_timer(void *userdata)
+{
+	sngss7_timer_data_t *timer = userdata;
+	sngss7_chan_data_t  *sngss7_info = timer->sngss7_info;
+	ftdm_channel_t      *ftdmchan = sngss7_info->ftdmchan;
+	
+	sngss7_set_ckt_blk_flag(sngss7_info, FLAG_CKT_MN_UNBLK_TX);
+	ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_SUSPENDED);
+}
 
 #if JZ_BLO_TIMER
 void handle_disable_tx_ubl_timeout_on_tx_blo(void *userdata)

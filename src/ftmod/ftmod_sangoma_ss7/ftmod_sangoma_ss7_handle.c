@@ -1780,8 +1780,16 @@ ftdm_status_t handle_blo_rsp(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 		DECODE_LCC_EVENT(evntType));
 	
 	if (sngss7_test_cmd_pending_flag(sngss7_info, FLAG_CMD_PENDING_WAIT_FOR_TX_UBL) ) {
-		sngss7_set_ckt_blk_flag(sngss7_info, FLAG_CKT_MN_UNBLK_TX);
-		ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_SUSPENDED);
+		if (ftdm_sched_timer (sngss7_info->t_tx_ubl_on_rx_bla.sched,
+						     "t_tx_ubl_on_rx_bla",
+						     sngss7_info->t_tx_ubl_on_rx_bla.beat,
+						     sngss7_info->t_tx_ubl_on_rx_bla.callback,
+						     &sngss7_info->t_tx_ubl_on_rx_bla,
+						     &sngss7_info->t_tx_ubl_on_rx_bla.hb_timer_id)) 
+		{
+			SS7_ERROR ("Unable to schedule timer of sending UBL after receiving BLA. \n");
+		}
+		
 		SS7_INFO_CHAN(ftdmchan, "[CIC:%d]Trigger pending UBL request.\n",	g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic);
 		sngss7_clear_cmd_pending_flag(sngss7_info, FLAG_CMD_PENDING_WAIT_FOR_TX_UBL);
 	}
