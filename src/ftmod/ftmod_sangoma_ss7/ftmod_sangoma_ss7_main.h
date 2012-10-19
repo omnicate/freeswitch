@@ -618,6 +618,7 @@ typedef struct sngss7_chan_data {
 	sngss7_timer_data_t		t39;
 	
 	sngss7_timer_data_t		t_waiting_bla;
+	sngss7_timer_data_t		t_waiting_uba;
 #if JZ_BLO_TIMER
 	sngss7_timer_data_t		t_block_ubl;
 #endif
@@ -1141,6 +1142,7 @@ void handle_isup_t35(void *userdata);
 void handle_isup_t10(void *userdata);
 void handle_isup_t39(void *userdata);
 void handle_wait_bla_timeout(void *userdata);
+void handle_wait_uba_timeout(void *userdata);
 #if JZ_BLO_TIMER
 void handle_disable_tx_ubl_timeout_on_tx_blo(void *userdata);
 #endif

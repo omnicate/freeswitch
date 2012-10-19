@@ -160,6 +160,17 @@ void handle_wait_bla_timeout(void *userdata)
 	ft_to_sngss7_blo(ftdmchan);
 	SS7_FUNC_TRACE_EXIT(__FUNCTION__);
 }
+void handle_wait_uba_timeout(void *userdata)
+{
+	sngss7_timer_data_t *timer = userdata;
+	sngss7_chan_data_t  *sngss7_info = timer->sngss7_info;
+	ftdm_channel_t      *ftdmchan = sngss7_info->ftdmchan;
+	
+	SS7_FUNC_TRACE_ENTER(__FUNCTION__);
+	SS7_ERROR("handle_wait_uba_timeout() timer kicked in. \n");
+	ft_to_sngss7_ubl(ftdmchan);
+	SS7_FUNC_TRACE_EXIT(__FUNCTION__);
+}
 
 #if JZ_BLO_TIMER
 void handle_disable_tx_ubl_timeout_on_tx_blo(void *userdata)
