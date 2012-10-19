@@ -1140,8 +1140,8 @@ int ftmod_ss7_isup_debug(int action);
 void handle_isup_t35(void *userdata);
 void handle_isup_t10(void *userdata);
 void handle_isup_t39(void *userdata);
-#if JZ_BLO_TIMER
 void handle_wait_bla_timeout(void *userdata);
+#if JZ_BLO_TIMER
 void handle_disable_tx_ubl_timeout_on_tx_blo(void *userdata);
 #endif
 

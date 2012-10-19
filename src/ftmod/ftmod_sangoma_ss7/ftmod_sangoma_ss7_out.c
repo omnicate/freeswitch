@@ -609,7 +609,6 @@ void ft_to_sngss7_blo (ftdm_channel_t * ftdmchan)
 						SIT_STA_CIRBLOREQ, 
 						NULL);
 	
-#if JZ_BLO_TIMER
 	/* start timer of waiting for BLA message */
 	if (ftdm_sched_timer (sngss7_info->t_waiting_bla.sched,
 					     "t_waiting_bla",
@@ -621,6 +620,7 @@ void ft_to_sngss7_blo (ftdm_channel_t * ftdmchan)
 		SS7_ERROR ("Unable to schedule timer of waiting for BLA. \n");
 	}
 	
+#if JZ_BLO_TIMER
 	/* start timer of disabling transmit ubl for 5 seconds */
 	if (ftdm_sched_timer (sngss7_info->t_block_ubl.sched,
 					     "t_waiting_bla",

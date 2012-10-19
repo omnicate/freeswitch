@@ -163,6 +163,7 @@ void handle_wait_bla_timeout(void *userdata)
 	SS7_FUNC_TRACE_EXIT(__FUNCTION__);
 }
 
+#endif
 
 void handle_disable_tx_ubl_timeout_on_tx_blo(void *userdata)
 {
@@ -176,7 +177,6 @@ void handle_disable_tx_ubl_timeout_on_tx_blo(void *userdata)
 	ft_to_sngss7_blo(ftdmchan);
 	SS7_FUNC_TRACE_EXIT(__FUNCTION__);
 }
-#endif
 
 /******************************************************************************/
 /* For Emacs:

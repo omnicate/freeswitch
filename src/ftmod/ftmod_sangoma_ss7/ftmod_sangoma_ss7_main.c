@@ -322,15 +322,22 @@ static void handle_hw_alarm(ftdm_event_t *e)
 					}
 				} else if (e->enum_id == FTDM_OOB_ALARM_CLEAR) {
 					SS7_DEBUG_CHAN(ftdmchan,"handle_hw_alarm: Clear %s \n", " ");
-					sngss7_clear_ckt_blk_flag(ss7_info, FLAG_GRP_HW_BLOCK_TX);
+					if (sngss7_test_ckt_blk_flag(ss7_info, FLAG_GRP_HW_BLOCK_TX_DN)) {
+						sngss7_clear_ckt_blk_flag(ss7_info, FLAG_GRP_HW_BLOCK_TX);
+						sngss7_clear_ckt_blk_flag(ss7_info, FLAG_GRP_HW_BLOCK_TX_DN);
+					}
+#if 0
 					sngss7_clear_ckt_blk_flag(ss7_info, FLAG_GRP_HW_UNBLK_TX);
 					if (sngss7_test_ckt_blk_flag(ss7_info, FLAG_GRP_HW_BLOCK_TX_DN)) {
+#endif
 						sngss7_set_ckt_blk_flag(ss7_info, FLAG_GRP_HW_UNBLK_TX);
 						SS7_DEBUG_CHAN(ftdmchan,"handle_hw_alarm: Setting FLAG_GRP_HW_UNBLK_TX %s\n"," ");
 						if (ftdmchan->state != FTDM_CHANNEL_STATE_SUSPENDED) {
 							ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_SUSPENDED);
 						}
+#if 0
 					}
+#endif
 				}
 			}
 		}
@@ -482,7 +489,7 @@ static void *ftdm_sangoma_ss7_run(ftdm_thread_t * me, void *obj)
 				/* unlock the channel */
 				ftdm_mutex_unlock (ftdmchan->mutex);				
 				if (congestion_level) {
-					usleep (congestion_level*10000);
+					usleep (congestion_level*100*1000);
 					SS7_DEBUG ("span = %d, congestion_level=%d, sleeping.\n",ftdmspan->span_id, congestion_level);
 				}
 			}
@@ -1980,6 +1987,7 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 			} else {
 				SS7_ERROR_CHAN(ftdmchan, "FLAG_GRP_HW_UNBLK_TX set while FLAG_GRP_HW_BLOCK_TX is not %s\n", "");
 				skip_unblock=1;
+				skip_unblock=0;
 			}
 				
 			sngss7_clear_ckt_blk_flag(sngss7_info, FLAG_GRP_HW_BLOCK_TX);
