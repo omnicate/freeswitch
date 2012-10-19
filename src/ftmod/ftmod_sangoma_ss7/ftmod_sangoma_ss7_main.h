@@ -617,8 +617,8 @@ typedef struct sngss7_chan_data {
 	sngss7_timer_data_t		t10;
 	sngss7_timer_data_t		t39;
 	
-#if JZ_BLO_TIMER
 	sngss7_timer_data_t		t_waiting_bla;
+#if JZ_BLO_TIMER
 	sngss7_timer_data_t		t_block_ubl;
 #endif
 

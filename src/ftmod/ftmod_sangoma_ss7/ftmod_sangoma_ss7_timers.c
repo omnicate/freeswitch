@@ -149,8 +149,6 @@ void handle_isup_t39(void *userdata)
 	SS7_FUNC_TRACE_EXIT(__FUNCTION__);
 }
 
-
-#if JZ_BLO_TIMER
 void handle_wait_bla_timeout(void *userdata)
 {
 	sngss7_timer_data_t *timer = userdata;
@@ -163,8 +161,7 @@ void handle_wait_bla_timeout(void *userdata)
 	SS7_FUNC_TRACE_EXIT(__FUNCTION__);
 }
 
-#endif
-
+#if JZ_BLO_TIMER
 void handle_disable_tx_ubl_timeout_on_tx_blo(void *userdata)
 {
 	sngss7_timer_data_t *timer = userdata;
@@ -177,6 +174,7 @@ void handle_disable_tx_ubl_timeout_on_tx_blo(void *userdata)
 	ft_to_sngss7_blo(ftdmchan);
 	SS7_FUNC_TRACE_EXIT(__FUNCTION__);
 }
+#endif
 
 /******************************************************************************/
 /* For Emacs:
