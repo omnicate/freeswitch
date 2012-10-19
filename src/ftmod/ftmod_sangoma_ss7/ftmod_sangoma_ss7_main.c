@@ -482,7 +482,7 @@ static void *ftdm_sangoma_ss7_run(ftdm_thread_t * me, void *obj)
 				/* unlock the channel */
 				ftdm_mutex_unlock (ftdmchan->mutex);				
 				if (congestion_level) {
-					usleep (congestion_level*1000);
+					usleep (congestion_level*10000);
 					SS7_DEBUG ("span = %d, congestion_level=%d, sleeping.\n",ftdmspan->span_id, congestion_level);
 				}
 			}
@@ -499,7 +499,7 @@ static void *ftdm_sangoma_ss7_run(ftdm_thread_t * me, void *obj)
 			break;
 		/**********************************************************************/
 		case FTDM_TIMEOUT:
-			SS7_DEBUG ("ftdm_interrupt_wait timed-out on span = %d\n",ftdmspan->span_id);
+			SS7_DEVEL_DEBUG ("ftdm_interrupt_wait timed-out on span = %d\n",ftdmspan->span_id);
 
 			break;
 		/**********************************************************************/
