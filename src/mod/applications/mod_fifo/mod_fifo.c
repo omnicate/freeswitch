@@ -588,8 +588,6 @@ static struct {
 	char hostname[256];
 	char *dbname;
 	char odbc_dsn[1024];
-	char *odbc_user;
-	char *odbc_pass;
 	int node_thread_running;
 	switch_odbc_handle_t *master_odbc;
 	int threads;
@@ -727,25 +725,21 @@ static void cancel_consumer_outbound_call(const char *key, switch_call_cause_t c
 
 switch_cache_db_handle_t *fifo_get_db_handle(void)
 {
-	switch_cache_db_connection_options_t options = { {0} };
+
 	switch_cache_db_handle_t *dbh = NULL;
-
+	char *dsn;
+	
 	if (!zstr(globals.odbc_dsn)) {
-		options.odbc_options.dsn = globals.odbc_dsn;
-		options.odbc_options.user = globals.odbc_user;
-		options.odbc_options.pass = globals.odbc_pass;
-
-		if (switch_cache_db_get_db_handle(&dbh, SCDB_TYPE_ODBC, &options) != SWITCH_STATUS_SUCCESS) {
-			dbh = NULL;
-		}
-		return dbh;
+		dsn = globals.odbc_dsn;
 	} else {
-		options.core_db_options.db_path = globals.dbname;
-		if (switch_cache_db_get_db_handle(&dbh, SCDB_TYPE_CORE_DB, &options) != SWITCH_STATUS_SUCCESS) {
-			dbh = NULL;
-		}
-		return dbh;
+		dsn = globals.dbname;
 	}
+
+	if (switch_cache_db_get_db_handle_dsn(&dbh, dsn) != SWITCH_STATUS_SUCCESS) {
+		dbh = NULL;
+	}
+	
+	return dbh;
 }
 
 
@@ -1224,9 +1218,14 @@ static void *SWITCH_THREAD_FUNC ringall_thread_run(switch_thread_t *thread, void
 	node_name = cbh->rows[0]->node_name;
 
 	switch_mutex_lock(globals.mutex);
-	node = switch_core_hash_find(globals.fifo_hash, node_name);
-	switch_thread_rwlock_rdlock(node->rwlock);
+	if ((node = switch_core_hash_find(globals.fifo_hash, node_name))) {
+		switch_thread_rwlock_rdlock(node->rwlock);
+	}
 	switch_mutex_unlock(globals.mutex);
+
+	if (!node) {
+		goto end;
+	}
 
 	for (i = 0; i < cbh->rowcount; i++) {
 		struct call_helper *h = cbh->rows[i];
@@ -2247,7 +2246,7 @@ static void fifo_caller_del(const char *uuid)
 	if (uuid) {
 		sql = switch_mprintf("delete from fifo_callers where uuid='%q'", uuid);
 	} else {
-		sql = switch_mprintf("delete from fifo_callers", uuid);
+		sql = switch_mprintf("delete from fifo_callers");
 	}
 
 	fifo_execute_sql(sql, globals.sql_mutex);
@@ -4005,14 +4004,8 @@ static switch_status_t load_config(int reload, int del_all)
 			}
 
 			if (!strcasecmp(var, "odbc-dsn") && !zstr(val)) {
-				if (switch_odbc_available()) {
+				if (switch_odbc_available() || switch_pgsql_available()) {
 					switch_set_string(globals.odbc_dsn, val);
-					if ((globals.odbc_user = strchr(globals.odbc_dsn, ':'))) {
-						*globals.odbc_user++ = '\0';
-						if ((globals.odbc_pass = strchr(globals.odbc_user, ':'))) {
-							*globals.odbc_pass++ = '\0';
-						}
-					}
 				} else {
 					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "ODBC IS NOT AVAILABLE!\n");
 				}
@@ -4251,7 +4244,6 @@ static switch_status_t load_config(int reload, int del_all)
 			}
 		}
 		switch_mutex_unlock(globals.mutex);
-		fifo_caller_del(NULL);
 	}
 
 

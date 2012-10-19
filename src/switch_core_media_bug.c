@@ -201,9 +201,13 @@ SWITCH_DECLARE(switch_status_t) switch_core_media_bug_read(switch_media_bug_t *b
 		return SWITCH_STATUS_FALSE;
 	}
 
-	if (!(bug->raw_read_buffer && (bug->raw_write_buffer || !switch_test_flag(bug, SMBF_WRITE_STREAM)))) {
-		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(switch_core_media_bug_get_session(bug)), SWITCH_LOG_ERROR, "%s Buffer Error\n",
-						  switch_channel_get_name(bug->session->channel));
+	if ((!bug->raw_read_buffer && (!bug->raw_write_buffer || !switch_test_flag(bug, SMBF_WRITE_STREAM)))) {
+		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(switch_core_media_bug_get_session(bug)), SWITCH_LOG_ERROR, 
+				"%s Buffer Error (raw_read_buffer=%p, raw_write_buffer=%p, read=%s, write=%s)\n",
+			        switch_channel_get_name(bug->session->channel),
+				(void *)bug->raw_read_buffer, (void *)bug->raw_write_buffer, 
+				switch_test_flag(bug, SMBF_READ_STREAM) ? "yes" : "no",
+				switch_test_flag(bug, SMBF_WRITE_STREAM) ? "yes" : "no");
 		return SWITCH_STATUS_FALSE;
 	}
 
@@ -240,12 +244,18 @@ SWITCH_DECLARE(switch_status_t) switch_core_media_bug_read(switch_media_bug_t *b
 			if (switch_core_session_get_partner(bug->session, &other_session) == SWITCH_STATUS_SUCCESS) {
 				switch_core_session_get_read_impl(other_session, &other_read_impl);
 				switch_core_session_rwunlock(other_session);
-				
-				if (read_impl.decoded_bytes_per_packet < other_read_impl.decoded_bytes_per_packet) {
-					frame_size = other_read_impl.decoded_bytes_per_packet;
+
+				if (read_impl.actual_samples_per_second == other_read_impl.actual_samples_per_second) {
+					if (read_impl.decoded_bytes_per_packet < other_read_impl.decoded_bytes_per_packet) {
+						frame_size = other_read_impl.decoded_bytes_per_packet;
+					}					
+				} else {
+					if (read_impl.decoded_bytes_per_packet > other_read_impl.decoded_bytes_per_packet) {
+						frame_size = other_read_impl.decoded_bytes_per_packet;
+					}
 				}
 			}
-			
+
 			bug->record_frame_size = frame_size;
 		}
 	}

@@ -567,6 +567,22 @@ SWITCH_STANDARD_APP(mkdir_function)
 	switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "%s MKDIR: %s\n",
 					  switch_channel_get_name(switch_core_session_get_channel(session)), data);
 }
+#define RENAME_SYNTAX "<from_path> <to_path>"
+SWITCH_STANDARD_APP(rename_function)
+{
+	char *argv[2] = { 0 };
+	char *lbuf = NULL;
+
+	if (!zstr(data) && (lbuf = switch_core_session_strdup(session, data))
+		&& switch_split(lbuf, ' ', argv) == 2) {
+		switch_file_rename(argv[0], argv[1], switch_core_session_get_pool(session));
+		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "%s RENAME: %s %s\n",
+						  switch_channel_get_name(switch_core_session_get_channel(session)), argv[0], argv[1]);
+	
+	} else {
+		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Usage: %s\n", RENAME_SYNTAX);
+	}
+}
 
 #define SOFT_HOLD_SYNTAX "<unhold key> [<moh_a>] [<moh_b>]"
 SWITCH_STANDARD_APP(soft_hold_function)
@@ -3197,6 +3213,8 @@ static struct {
 	switch_memory_pool_t *pool;
 	switch_hash_t *pickup_hash;
 	switch_mutex_t *pickup_mutex;
+	switch_hash_t *mutex_hash;
+	switch_mutex_t *mutex_mutex;
 } globals;
 
 /* pickup channel */
@@ -3649,6 +3667,8 @@ SWITCH_STANDARD_APP(pickup_function)
 			caller_profile->callee_id_name = name;
 			caller_profile->callee_id_number = num;
 			
+			switch_channel_flip_cid(channel);
+
 			if (switch_event_create(&event, SWITCH_EVENT_CALL_UPDATE) == SWITCH_STATUS_SUCCESS) {
 				const char *uuid = switch_channel_get_partner_uuid(channel);
 				switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Direction", "RECV");
@@ -4401,7 +4421,7 @@ struct file_string_context {
 typedef struct file_string_context file_string_context_t;
 
 
-static int next_file(switch_file_handle_t *handle)
+static switch_status_t next_file(switch_file_handle_t *handle)
 {
 	file_string_context_t *context = handle->private_info;
 	char *file;
@@ -4416,7 +4436,7 @@ static int next_file(switch_file_handle_t *handle)
 	}
 
 	if (context->index >= context->argc) {
-		return 0;
+		return SWITCH_STATUS_FALSE;
 	}
 
 
@@ -4432,8 +4452,23 @@ static int next_file(switch_file_handle_t *handle)
 		file = switch_core_sprintf(handle->memory_pool, "%s%s%s", prefix, SWITCH_PATH_SEPARATOR, context->argv[context->index]);
 	}
 
-	if (switch_core_file_open(&context->fh,
-							  file, handle->channels, handle->samplerate, SWITCH_FILE_FLAG_READ | SWITCH_FILE_DATA_SHORT, NULL) != SWITCH_STATUS_SUCCESS) {
+	if (switch_test_flag(handle, SWITCH_FILE_FLAG_WRITE)) {
+		char *path = switch_core_strdup(handle->memory_pool, file);
+		char *p;
+
+		if ((p = strrchr(path, *SWITCH_PATH_SEPARATOR))) {
+			*p = '\0';
+			if (switch_dir_make_recursive(path, SWITCH_DEFAULT_DIR_PERMS, handle->memory_pool) != SWITCH_STATUS_SUCCESS) {
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error creating %s\n", path);
+				return SWITCH_STATUS_FALSE;
+			}
+
+		} else {
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error finding the folder path section in '%s'\n", path);
+		}
+
+	}
+	if (switch_core_file_open(&context->fh, file, handle->channels, handle->samplerate, handle->flags, NULL) != SWITCH_STATUS_SUCCESS) {
 		goto top;
 	}
 
@@ -4459,7 +4494,7 @@ static int next_file(switch_file_handle_t *handle)
 		}
 	}
 
-	return 1;
+	return SWITCH_STATUS_SUCCESS;
 }
 
 
@@ -4485,11 +4520,6 @@ static switch_status_t file_string_file_open(switch_file_handle_t *handle, const
 	file_string_context_t *context;
 	char *file_dup;
 
-	if (switch_test_flag(handle, SWITCH_FILE_FLAG_WRITE)) {
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "This format does not support writing!\n");
-		return SWITCH_STATUS_FALSE;
-	}
-
 	context = switch_core_alloc(handle->memory_pool, sizeof(*context));
 
 	file_dup = switch_core_strdup(handle->memory_pool, path);
@@ -4498,7 +4528,7 @@ static switch_status_t file_string_file_open(switch_file_handle_t *handle, const
 
 	handle->private_info = context;
 
-	return next_file(handle) ? SWITCH_STATUS_SUCCESS : SWITCH_STATUS_FALSE;
+	return next_file(handle);
 }
 
 static switch_status_t file_string_file_close(switch_file_handle_t *handle)
@@ -4531,15 +4561,34 @@ static switch_status_t file_string_file_read(switch_file_handle_t *handle, void 
 	}
 
 	if (status != SWITCH_STATUS_SUCCESS) {
-		if (!next_file(handle)) {
-			return SWITCH_STATUS_FALSE;
+		if ((status = next_file(handle)) != SWITCH_STATUS_SUCCESS) {
+			return status;
 		}
 		*len = llen;
 		status = switch_core_file_read(&context->fh, data, len);
 	}
 
-	return SWITCH_STATUS_SUCCESS;
+	return status;
 }
+
+static switch_status_t file_string_file_write(switch_file_handle_t *handle, void *data, size_t *len)
+{
+	file_string_context_t *context = handle->private_info;
+	switch_status_t status;
+	size_t llen = *len;
+
+	status = switch_core_file_write(&context->fh, data, len);
+
+	if (status != SWITCH_STATUS_SUCCESS) {
+		if ((status = next_file(handle)) != SWITCH_STATUS_SUCCESS) {
+			return status;
+		}
+		*len = llen;
+		status = switch_core_file_write(&context->fh, data, len);
+	}
+	return status;
+}
+
 
 /* Registration */
 
@@ -4560,7 +4609,354 @@ SWITCH_STANDARD_APP(blind_transfer_ack_function)
 	switch_ivr_blind_transfer_ack(session, val);
 }
 
+/* /// mutex /// */
 
+typedef struct mutex_node_s {
+	char *uuid;
+	struct mutex_node_s *next;
+} mutex_node_t;
+
+typedef enum {
+	MUTEX_FLAG_WAIT = (1 << 0),
+	MUTEX_FLAG_SET = (1 << 1)
+} mutex_flag_t;
+
+struct read_frame_data {
+	const char *dp;
+	const char *exten;
+	const char *context;
+	const char *key;
+	long to;
+};
+
+typedef struct master_mutex_s {
+	mutex_node_t *list;
+	char *key;
+} master_mutex_t;
+
+static switch_status_t mutex_hanguphook(switch_core_session_t *session);
+static void advance(master_mutex_t *master, switch_bool_t pop_current);
+
+static switch_status_t read_frame_callback(switch_core_session_t *session, switch_frame_t *frame, void *user_data)
+{
+	switch_channel_t *channel = switch_core_session_get_channel(session);
+	struct read_frame_data *rf = (struct read_frame_data *) user_data;
+
+	if (rf->to && --rf->to <= 0) {
+		rf->to = -1;
+		return SWITCH_STATUS_FALSE;
+	}
+
+	return switch_channel_test_app_flag_key(rf->key, channel, MUTEX_FLAG_WAIT) ? SWITCH_STATUS_SUCCESS : SWITCH_STATUS_FALSE;
+	
+}
+
+static void free_node(mutex_node_t **npp)
+{
+	mutex_node_t *np;
+
+	if (npp) {
+		np = *npp;
+		*npp = NULL;
+		switch_safe_free(np->uuid);
+		free(np);
+	}
+}
+
+static void cancel(switch_core_session_t *session, master_mutex_t *master)
+{
+	mutex_node_t *np, *lp = NULL;
+	const char *uuid = switch_core_session_get_uuid(session);
+
+	switch_mutex_lock(globals.mutex_mutex);
+	for (np = master->list; np; np = np->next) {
+		if (np && !strcmp(np->uuid, uuid)) {
+			switch_core_event_hook_remove_state_change(session, mutex_hanguphook);
+			switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "%s %s mutex %s canceled\n", 
+							  switch_core_session_get_uuid(session),
+							  switch_core_session_get_name(session), master->key);
+
+			if (lp) {
+				lp->next = np->next;
+			} else {
+				if ((master->list = np->next)) {
+					advance(master, SWITCH_FALSE);
+				}
+			}
+
+			free_node(&np);
+			
+			break;
+		}
+
+		lp = np;
+	}
+
+	switch_mutex_unlock(globals.mutex_mutex);
+
+}
+
+static void advance(master_mutex_t *master, switch_bool_t pop_current)
+{
+
+	switch_mutex_lock(globals.mutex_mutex);
+
+	if (!master || !master->list) {
+		goto end;
+	}
+	
+	while (master->list) {
+		mutex_node_t *np;
+
+
+		if (!pop_current) {
+			pop_current++;
+		} else {
+			np = master->list;
+			master->list = master->list->next;
+
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "ADVANCE POP %p\n", (void *)np);
+			free_node(&np);
+		}
+	
+
+		if (master->list) {
+			switch_core_session_t *session;
+
+			if ((session = switch_core_session_locate(master->list->uuid))) {
+				switch_channel_t *channel = switch_core_session_get_channel(session);
+				switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, 
+								  "%s mutex %s advanced\n", switch_channel_get_name(channel), master->key);
+				switch_channel_set_app_flag_key(master->key, channel, MUTEX_FLAG_SET);
+				switch_channel_clear_app_flag_key(master->key, channel, MUTEX_FLAG_WAIT);
+				switch_core_event_hook_add_state_change(session, mutex_hanguphook);
+				switch_core_session_rwunlock(session);
+				break;
+			} else {
+				switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "uuid %s already gone\n", master->list->uuid);
+			}
+		}
+	}
+
+
+ end:
+
+	switch_mutex_unlock(globals.mutex_mutex);
+
+	
+}
+
+static void confirm(switch_core_session_t *session, master_mutex_t *master)
+{
+	switch_channel_t *channel = switch_core_session_get_channel(session);
+
+	if (!master) {
+		if (!(master = switch_channel_get_private(channel, "_mutex_master"))) {
+			return;
+		}
+	}
+
+	switch_mutex_lock(globals.mutex_mutex);
+
+	if (master->list) {
+		if (!strcmp(master->list->uuid, switch_core_session_get_uuid(session))) {
+			switch_channel_clear_app_flag_key(master->key, channel, MUTEX_FLAG_SET);
+			switch_core_event_hook_remove_state_change(session, mutex_hanguphook);
+			switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "%s %s mutex %s cleared\n", 
+							  switch_core_session_get_uuid(session),
+							  switch_channel_get_name(channel), master->key);
+			advance(master, SWITCH_TRUE);
+		} else {
+			cancel(session, master);
+		}
+	}
+
+	switch_mutex_unlock(globals.mutex_mutex);
+}
+
+
+
+static switch_status_t mutex_hanguphook(switch_core_session_t *session)
+{
+	switch_channel_t *channel = switch_core_session_get_channel(session);
+	switch_channel_state_t state = switch_channel_get_state(channel);
+
+	if (state != CS_HANGUP) {
+		return SWITCH_STATUS_SUCCESS;
+	}
+
+	switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "%s mutex hangup hook\n", switch_channel_get_name(channel));
+
+	confirm(session, NULL);
+	switch_core_event_hook_remove_state_change(session, mutex_hanguphook);
+
+	return SWITCH_STATUS_SUCCESS;
+}
+
+static switch_bool_t do_mutex(switch_core_session_t *session, const char *key, switch_bool_t on)
+{
+	switch_channel_t *channel = switch_core_session_get_channel(session);
+	const char *feedback, *var;
+	switch_input_args_t args = { 0 };
+	master_mutex_t *master = NULL;
+	mutex_node_t *node, *np;
+	int used;
+	struct read_frame_data rf = { 0 };
+	long to_val = 0;
+
+	if (switch_channel_pre_answer(channel) != SWITCH_STATUS_SUCCESS) {
+		return SWITCH_FALSE;
+	}
+
+	switch_mutex_lock(globals.mutex_mutex);
+	used = switch_channel_test_app_flag_key(key, channel, MUTEX_FLAG_WAIT) || switch_channel_test_app_flag_key(key, channel, MUTEX_FLAG_SET);
+
+	if ((on && used) || (!on && !used)) {
+		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "INVALID STATE\n");
+		switch_mutex_unlock(globals.mutex_mutex);
+		return SWITCH_FALSE;
+	}
+	
+	if (!(master = switch_core_hash_find(globals.mutex_hash, key))) {
+		master = switch_core_alloc(globals.pool, sizeof(*master));
+		master->key = switch_core_strdup(globals.pool, key);
+		master->list = NULL;
+		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "NEW MASTER %s %p\n", key, (void *) master);
+		switch_core_hash_insert(globals.mutex_hash, key, master);
+	} else {
+		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "EXIST MASTER %s %p\n", key, (void *) master);
+	}
+		
+	if (on) {
+
+		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "HIT ON\n");
+
+		switch_zmalloc(node, sizeof(*node));
+		node->uuid = strdup(switch_core_session_get_uuid(session));
+		node->next = NULL;
+
+		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "CHECK MASTER LIST %p\n", (void *) master->list);
+
+		for (np = master->list; np && np->next; np = np->next);
+
+		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "HIT ON np %p\n", (void *) np);
+
+		if (np) {
+			np->next = node;
+			switch_channel_set_app_flag_key(key, channel, MUTEX_FLAG_WAIT);
+		} else {
+			master->list = node;
+			switch_channel_set_app_flag_key(key, channel, MUTEX_FLAG_SET);
+			switch_channel_clear_app_flag_key(key, channel, MUTEX_FLAG_WAIT);
+			switch_channel_set_private(channel, "_mutex_master", master);
+			switch_core_event_hook_add_state_change(session, mutex_hanguphook);
+			switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "%s %s mutex %s acquired\n", 
+							  switch_core_session_get_uuid(session),
+							  switch_channel_get_name(channel), key);
+			switch_mutex_unlock(globals.mutex_mutex);
+			return SWITCH_TRUE;
+		}
+	} else {
+		confirm(session, master);
+
+		switch_mutex_unlock(globals.mutex_mutex);
+		return SWITCH_TRUE;
+	}
+
+	switch_mutex_unlock(globals.mutex_mutex);
+	
+	switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "%s mutex %s is busy, waiting...\n", switch_channel_get_name(channel), key);
+
+	if (!(feedback = switch_channel_get_variable(channel, "mutex_feedback"))) {
+		if ((var = switch_channel_get_variable(channel, "ringback"))) {
+			feedback = switch_core_session_sprintf(session, "tone_stream://%s;loops=-1", var);
+		} else {
+			feedback = switch_channel_get_hold_music(channel);
+		}
+	}
+
+	if (zstr(feedback) || !strcasecmp(feedback, "silence")) {
+		feedback = "silence_stream://-1";
+	}
+
+
+	if ((rf.exten = switch_channel_get_variable(channel, "mutex_orbit_exten"))) {
+		to_val = 60;
+	}
+	
+	if ((var = switch_channel_get_variable(channel, "mutex_timeout"))) {
+		long tmp = atol(var);
+		
+		if (tmp > 0) {
+			to_val = tmp;
+		}
+	}
+	
+	if (to_val) {
+		switch_codec_implementation_t read_impl;
+		switch_core_session_get_read_impl(session, &read_impl);
+		
+		rf.to = (1000 / (read_impl.microseconds_per_packet / 1000)) * to_val;
+		rf.dp = switch_channel_get_variable(channel, "mutex_orbit_dialplan");
+		rf.context = switch_channel_get_variable(channel, "mutex_orbit_context");
+	}
+
+	rf.key = key;
+
+	args.read_frame_callback = read_frame_callback;
+	args.user_data = &rf;
+
+	while(switch_channel_ready(channel) && switch_channel_test_app_flag_key(key, channel, MUTEX_FLAG_WAIT)) {
+		switch_status_t st = switch_ivr_play_file(session, NULL, feedback, &args);
+
+		if (st != SWITCH_STATUS_SUCCESS) {
+			break;
+		}
+	}
+
+	switch_mutex_lock(globals.mutex_mutex);
+	if (switch_channel_test_app_flag_key(key, channel, MUTEX_FLAG_WAIT) || !switch_channel_up(channel)) {
+		cancel(session, master);
+	} else {
+		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "%s %s mutex %s acquired\n", 
+						  switch_core_session_get_uuid(session),
+						  switch_channel_get_name(channel), key);
+		switch_core_event_hook_add_state_change(session, mutex_hanguphook);
+		switch_channel_set_private(channel, "_mutex_master", master);
+	}
+	switch_mutex_unlock(globals.mutex_mutex);
+
+	return SWITCH_TRUE;
+}
+
+#define MUTEX_SYNTAX "<keyname>[ on|off]"
+SWITCH_STANDARD_APP(mutex_function)
+{
+	char *key;
+	char *arg;
+	switch_bool_t on = SWITCH_TRUE;
+
+	if (zstr(data)) {
+		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Missing keyname\n");
+		return;
+	}
+
+	key = switch_core_session_sprintf(session, "_mutex_key_%s", (char *)data);
+
+	if ((arg = strchr(key, ' '))) {
+		*arg++ = '\0';
+
+		if (!strcasecmp(arg, "off")) {
+			on = SWITCH_FALSE;
+		}
+	}
+
+	do_mutex(session, key, on);
+	
+
+}
+
+/* /// mutex /// */
 
 
 #define SPEAK_DESC "Speak text to a channel via the tts interface"
@@ -4595,8 +4991,10 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_dptools_load)
 	switch_file_interface_t *file_interface;
 
 	globals.pool = pool;
-	switch_core_hash_init(&globals.pickup_hash, NULL);
+	switch_core_hash_init(&globals.pickup_hash, globals.pool);
 	switch_mutex_init(&globals.pickup_mutex, SWITCH_MUTEX_NESTED, globals.pool);
+	switch_core_hash_init(&globals.mutex_hash, globals.pool);
+	switch_mutex_init(&globals.mutex_mutex, SWITCH_MUTEX_NESTED, globals.pool);
 
 	/* connect my internal structure to the blank pointer passed to me */
 	*module_interface = switch_loadable_module_create_module_interface(pool, modname);
@@ -4612,6 +5010,7 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_dptools_load)
 	file_interface->file_open = file_string_file_open;
 	file_interface->file_close = file_string_file_close;
 	file_interface->file_read = file_string_file_read;
+	file_interface->file_write = file_string_file_write;
 	file_interface->file_seek = file_string_file_seek;
 
 
@@ -4664,6 +5063,7 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_dptools_load)
 	SWITCH_ADD_APP(app_interface, "flush_dtmf", "flush any queued dtmf", "flush any queued dtmf", flush_dtmf_function, "", SAF_SUPPORT_NOMEDIA);
 	SWITCH_ADD_APP(app_interface, "hold", "Send a hold message", "Send a hold message", hold_function, HOLD_SYNTAX, SAF_SUPPORT_NOMEDIA);
 	SWITCH_ADD_APP(app_interface, "unhold", "Send a un-hold message", "Send a un-hold message", unhold_function, UNHOLD_SYNTAX, SAF_SUPPORT_NOMEDIA);
+	SWITCH_ADD_APP(app_interface, "mutex", "block on a call flow only allowing one at a time", "", mutex_function, MUTEX_SYNTAX, SAF_NONE);
 	SWITCH_ADD_APP(app_interface, "transfer", "Transfer a channel", TRANSFER_LONG_DESC, transfer_function, "<exten> [<dialplan> <context>]",
 				   SAF_SUPPORT_NOMEDIA);
 	SWITCH_ADD_APP(app_interface, "check_acl", "Check an ip against an ACL list", "Check an ip against an ACL list", check_acl_function,
@@ -4751,6 +5151,7 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_dptools_load)
 	SWITCH_ADD_APP(app_interface, "enable_heartbeat", "Enable Media Heartbeat", "Enable Media Heartbeat",
 				   heartbeat_function, HEARTBEAT_SYNTAX, SAF_SUPPORT_NOMEDIA);
 	SWITCH_ADD_APP(app_interface, "mkdir", "Create a directory", "Create a directory", mkdir_function, MKDIR_SYNTAX, SAF_SUPPORT_NOMEDIA);
+	SWITCH_ADD_APP(app_interface, "rename", "Rename file", "Rename file", rename_function, RENAME_SYNTAX, SAF_SUPPORT_NOMEDIA | SAF_ZOMBIE_EXEC);
 	SWITCH_ADD_APP(app_interface, "soft_hold", "Put a bridged channel on hold", "Put a bridged channel on hold", soft_hold_function, SOFT_HOLD_SYNTAX,
 				   SAF_NONE);
 	SWITCH_ADD_APP(app_interface, "bind_meta_app", "Bind a key to an application", "Bind a key to an application", dtmf_bind_function, BIND_SYNTAX,

@@ -727,13 +727,16 @@ static switch_status_t channel_write_frame(switch_core_session_t *session, switc
 			find_non_loopback_bridge(session, &br_a, &a_uuid);
 			find_non_loopback_bridge(tech_pvt->other_session, &br_b, &b_uuid);
 
+
 			
 			if (br_a) {
 				ch_a = switch_core_session_get_channel(br_a);
+				switch_core_media_bug_transfer_recordings(session, br_a);
 			}
 
 			if (br_b) {
 				ch_b = switch_core_session_get_channel(br_b);
+				switch_core_media_bug_transfer_recordings(tech_pvt->other_session, br_b);
 			}
 			
 			if (ch_a && ch_b && switch_channel_test_flag(ch_a, CF_BRIDGED) && switch_channel_test_flag(ch_b, CF_BRIDGED)) {
@@ -961,12 +964,13 @@ static switch_call_cause_t channel_outgoing_channel(switch_core_session_t *sessi
 													switch_call_cause_t *cancel_cause)
 {
 	char name[128];
+	switch_channel_t *ochannel = NULL;
 
 	if (session) {
-		switch_channel_t *channel = switch_core_session_get_channel(session);
-		switch_channel_clear_flag(channel, CF_PROXY_MEDIA);
-		switch_channel_clear_flag(channel, CF_PROXY_MODE);
-		switch_channel_pre_answer(channel);
+		ochannel = switch_core_session_get_channel(session);
+		switch_channel_clear_flag(ochannel, CF_PROXY_MEDIA);
+		switch_channel_clear_flag(ochannel, CF_PROXY_MODE);
+		switch_channel_pre_answer(ochannel);
 	}
 
 	if ((*new_session = switch_core_session_request(loopback_endpoint_interface, SWITCH_CALL_DIRECTION_OUTBOUND, flags, pool)) != 0) {
@@ -992,6 +996,24 @@ static switch_call_cause_t channel_outgoing_channel(switch_core_session_t *sessi
 		}
 
 		if (switch_event_dup(&clone, var_event) == SWITCH_STATUS_SUCCESS) {
+			const char *var;
+			
+			if (ochannel && (var = switch_channel_get_variable(ochannel, "loopback_export"))) {
+				int argc = 0;
+				char *argv[128] = { 0 };
+				char *dup = switch_core_session_strdup(session, var);
+
+				if ((argc = switch_split(dup, ',', argv))) {
+					int i;
+					for (i = 0; i < argc; i++) {
+						if (!zstr(argv[i])) {
+							const char *val = switch_channel_get_variable(ochannel, argv[i]);
+							switch_event_add_header_string(clone, SWITCH_STACK_BOTTOM, argv[i], val);
+						}
+					}
+				}
+			}
+
 			switch_channel_set_private(channel, "__loopback_vars__", clone);
 		}
 

@@ -433,6 +433,7 @@ static int image_resize_row(image_translate_state_t *s, uint8_t buf[])
 #endif
         }
         break;
+    case T4_IMAGE_TYPE_BILEVEL:
     case T4_IMAGE_TYPE_GRAY_8BIT:
         row8[0] = s->raw_pixel_row[0];
         row8[1] = s->raw_pixel_row[1];
@@ -464,7 +465,7 @@ static int image_resize_row(image_translate_state_t *s, uint8_t buf[])
             x = i*256*input_width/output_width;
             frac_col = x & 0xFF;
             x >>= 8;
-            c1 = row16[0][x] + (((row16[0][x + 1] - row16[0[x])*frac_col) >> 8);
+            c1 = row16[0][x] + (((row16[0][x + 1] - row16[0][x])*frac_col) >> 8);
             c2 = row16[1][x] + (((row16[1][x + 1] - row16[1][x])*frac_col) >> 8);
             buf[i] = saturateu8(c1 + (((c2 - c1)*frac_row) >> 8));
 #else
