@@ -1889,7 +1889,7 @@ ftdm_status_t handle_ubl_rsp(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 
 	SS7_INFO_CHAN(ftdmchan, "[CIC:%d]Rx %s\n", g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic, DECODE_LCC_EVENT(evntType));
 	
-	if (sngss7_info->t_waiting_bla.hb_timer_id) {
+	if (sngss7_info->t_waiting_uba.hb_timer_id) {
 		ftdm_sched_cancel_timer (sngss7_info->t_waiting_uba.sched, sngss7_info->t_waiting_uba.hb_timer_id);
 		SS7_INFO_CHAN(ftdmchan, "[CIC:%d]Cancel waiting UBA timer.\n",	g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic);
 	}
