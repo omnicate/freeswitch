@@ -218,7 +218,7 @@ int  ft_to_sngss7_cfg_all(void)
 
 		g_ftdm_sngss7_data.gen_config = SNG_GEN_CFG_STATUS_DONE;
 
-		ftmod_ss7_isup_debug(AENA);
+		/* ftmod_ss7_isup_debug(AENA); */
 
 	} /* if (!(g_ftdm_sngss7_data.gen_config)) */
 

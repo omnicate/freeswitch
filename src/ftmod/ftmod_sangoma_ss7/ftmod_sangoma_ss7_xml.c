@@ -3448,21 +3448,21 @@ static int ftmod_ss7_fill_in_circuits(sng_span_t *sngSpan)
 		/* prepare the timer structures */
 		ss7_info->t_waiting_bla.sched		= ((sngss7_span_data_t *)(ftdmspan->signal_data))->sched;
 		ss7_info->t_waiting_bla.counter		= 1;
-		ss7_info->t_waiting_bla.beat			= 3 * 1000 * 10;   /* Let's do 3 seconds waiting time to trigger this timer */
-		ss7_info->t_waiting_bla.callback		= handle_wait_bla_timeout;
+		ss7_info->t_waiting_bla.beat		= 3 * 1000;
+		ss7_info->t_waiting_bla.callback	= handle_wait_bla_timeout;
 		ss7_info->t_waiting_bla.sngss7_info	= ss7_info;
 		
 		/* prepare the timer structures */
 		ss7_info->t_waiting_uba.sched		= ((sngss7_span_data_t *)(ftdmspan->signal_data))->sched;
 		ss7_info->t_waiting_uba.counter		= 1;
-		ss7_info->t_waiting_uba.beat		= 3 * 1000 * 10;   /* Let's do 3 seconds waiting time to trigger this timer */
+		ss7_info->t_waiting_uba.beat		= 30 * 1000;
 		ss7_info->t_waiting_uba.callback		= handle_wait_uba_timeout;
 		ss7_info->t_waiting_uba.sngss7_info	= ss7_info;
 			
 #if JZ_BLO_TIMER
 		ss7_info->t_block_ubl.sched		= ((sngss7_span_data_t *)(ftdmspan->signal_data))->sched;
 		ss7_info->t_block_ubl.counter		= 1;
-		ss7_info->t_block_ubl.beat			= 3 * 1000 * 10;   /* Let's do 3 seconds waiting time to trigger this timer */
+		ss7_info->t_block_ubl.beat		= 3 * 1000 * 10;
 		ss7_info->t_block_ubl.callback		= handle_disable_tx_ubl_timeout_on_tx_blo;
 		ss7_info->t_block_ubl.sngss7_info	= ss7_info;
 #endif
