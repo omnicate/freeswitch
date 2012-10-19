@@ -1220,8 +1220,29 @@ ftdm_status_t handle_sta_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 		break;
 	/**************************************************************************/
 	case SIT_STA_MTPCONG0:		  /* congestion indication level 0 */
-		SS7_WARN(" %s indication not currently supported. circuit = %d, globalFlg = %d\n", DECODE_LCC_EVENT(evntType), circuit, globalFlg);
+#ifdef PRIVATE_CONG_LEVEL
+		{
+		sngss7_chan_data_t	*sngss7_info;
+		ftdm_channel_t		*ftdmchan;
+		sngss7_span_data_t	*sngss7_span;
+
+		for (int x = (g_ftdm_sngss7_data.cfg.procId * 1000) + 1; g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0; x++) {
+			if (g_ftdm_sngss7_data.cfg.isupCkt[x].id==circuit) {
+				sngss7_info = (sngss7_chan_data_t *)g_ftdm_sngss7_data.cfg.isupCkt[x].obj;
+				ftdmchan = sngss7_info->ftdmchan;
+				sngss7_span = ftdmchan->span->signal_data;
+
+				sngss7_span->congestion_level = 1;
+				
+				SS7_WARN(" %s level 1 received. Setting circuit = %d, globalFlg = %d\n", DECODE_LCC_EVENT(evntType), circuit, globalFlg);
+		
+				break;
+			}
+		}
+		}
+#else
 		congestion_level = 1;
+#endif
 		break;
 	/**************************************************************************/
 	case SIT_STA_MTPCONG1:		  /* congestion indication level 1 */
@@ -1771,8 +1792,10 @@ ftdm_status_t handle_blo_rsp(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 		return FTDM_FAIL;
 	}
 
+	/*
 	SS7_INFO_CHAN(ftdmchan, "[CIC:%d]blk_flag = 0x%x, ckt_flag = 0x%x\n, cmd_pending_flag = 0x%x\n", 
 					sngss7_info->circuit->cic, sngss7_info->blk_flags, sngss7_info->ckt_flags, sngss7_info->cmd_pending_flags);
+	*/
 	
 	sngss7_clear_cmd_pending_flag(sngss7_info, FLAG_CMD_PENDING_WAIT_FOR_RX_BLA);
 	SS7_INFO_CHAN(ftdmchan, "[CIC:%d]Rx %s\n",
@@ -1790,17 +1813,18 @@ ftdm_status_t handle_blo_rsp(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 			SS7_ERROR ("Unable to schedule timer of sending UBL after receiving BLA. \n");
 		}
 		
-		SS7_INFO_CHAN(ftdmchan, "[CIC:%d]Trigger pending UBL request.\n",	g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic);
+		SS7_DEBUG_CHAN(ftdmchan, "[CIC:%d]Trigger pending UBL request.\n",	g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic);
 		sngss7_clear_cmd_pending_flag(sngss7_info, FLAG_CMD_PENDING_WAIT_FOR_TX_UBL);
 	}
 
 	if (sngss7_info->t_waiting_bla.hb_timer_id) {
 		ftdm_sched_cancel_timer (sngss7_info->t_waiting_bla.sched, sngss7_info->t_waiting_bla.hb_timer_id);
-		SS7_INFO_CHAN(ftdmchan, "[CIC:%d]Cancel waiting BLA timer.\n",	g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic);
+		SS7_DEBUG_CHAN(ftdmchan, "[CIC:%d]Cancel waiting BLA timer.\n",	g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic);
 	}
-
+	/*
 	SS7_INFO_CHAN(ftdmchan, "[CIC:%d]blk_flag = 0x%x, ckt_flag = 0x%x\n, cmd_pending_flag = 0x%x\n", 
 					sngss7_info->circuit->cic, sngss7_info->blk_flags, sngss7_info->ckt_flags, sngss7_info->cmd_pending_flags);
+	*/
 
 #if 0
 	/* lock the channel */
@@ -1899,7 +1923,7 @@ ftdm_status_t handle_ubl_rsp(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 	
 	if (sngss7_info->t_waiting_uba.hb_timer_id) {
 		ftdm_sched_cancel_timer (sngss7_info->t_waiting_uba.sched, sngss7_info->t_waiting_uba.hb_timer_id);
-		SS7_INFO_CHAN(ftdmchan, "[CIC:%d]Cancel waiting UBA timer.\n",	g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic);
+		SS7_DEBUG_CHAN(ftdmchan, "[CIC:%d]Cancel waiting UBA timer.\n",	g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic);
 	}
 	
 	SS7_FUNC_TRACE_EXIT(__FUNCTION__);

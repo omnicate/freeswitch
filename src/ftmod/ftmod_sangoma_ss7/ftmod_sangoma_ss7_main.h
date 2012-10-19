@@ -601,17 +601,17 @@ typedef struct sngss7_group_data {
 typedef struct sngss7_chan_data {
 	ftdm_channel_t			*ftdmchan;
 	sng_isup_ckt_t			*circuit;
-	uint32_t				base_chan;
-	uint32_t				suInstId;
-	uint32_t				spInstId;
-	uint32_t				spId;
+	uint32_t					base_chan;
+	uint32_t					suInstId;
+	uint32_t					spInstId;
+	uint32_t					spId;
 	uint8_t					globalFlg;
-	uint32_t				ckt_flags;
-	uint32_t				blk_flags;
-	uint32_t				cmd_pending_flags;
-	ftdm_hash_t*			variables;		/* send on next sigevent */
+	uint32_t					ckt_flags;
+	uint32_t					blk_flags;
+	uint32_t					cmd_pending_flags;
+	ftdm_hash_t*				variables;		/* send on next sigevent */
 	ftdm_size_t				raw_data_len;
-	void					*raw_data;		/* send on next sigevent */
+	void						*raw_data;		/* send on next sigevent */
 	sngss7_glare_data_t		glare;
 	sngss7_timer_data_t		t35;
 	sngss7_timer_data_t		t10;
@@ -629,8 +629,8 @@ typedef struct sngss7_chan_data {
 	sngss7_group_data_t		rx_gra;
 	sngss7_group_data_t		tx_grs;
 	sngss7_group_data_t		ucic;
-	ftdm_queue_t 			*event_queue;
-	struct sngss7_chan_data         *peer_data;
+	ftdm_queue_t 				*event_queue;
+	struct sngss7_chan_data     *peer_data;
 	uint8_t peer_event_transfer_cnt;
     sngss7_api_data_t       api_data;
 } sngss7_chan_data_t;
@@ -646,6 +646,9 @@ typedef struct sngss7_span_data {
 	sngss7_group_data_t		rx_cgu;
 	sngss7_group_data_t		tx_cgu;
 	ftdm_queue_t 			*event_queue;
+#ifdef PRIVATE_CONG_LEVEL
+	uint32_t				congestion_level;
+#endif
 } sngss7_span_data_t;
 
 typedef struct sngss7_event_data
