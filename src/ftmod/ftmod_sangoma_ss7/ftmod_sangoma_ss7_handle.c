@@ -1220,27 +1220,27 @@ ftdm_status_t handle_sta_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 		break;
 	/**************************************************************************/
 	case SIT_STA_MTPCONG0:		  /* congestion indication level 0 */
-		SS7_WARN(" %s indication not currently supported. circuit = %d\n", DECODE_LCC_EVENT(evntType), circuit);
+		SS7_WARN(" %s indication not currently supported. circuit = %d, globalFlg = %d\n", DECODE_LCC_EVENT(evntType), circuit, globalFlg);
 		congestion_level = 1;
 		break;
 	/**************************************************************************/
 	case SIT_STA_MTPCONG1:		  /* congestion indication level 1 */
-		SS7_WARN(" %s indication not currently supported. circuit = %d\n", DECODE_LCC_EVENT(evntType), circuit);
+		SS7_WARN(" %s indication not currently supported. circuit = %d, globalFlg = %d\n", DECODE_LCC_EVENT(evntType), circuit, globalFlg);
 		congestion_level = 2;
 		break;
 	/**************************************************************************/
 	case SIT_STA_MTPCONG2:		  /* congestion indication level 2 */
-		SS7_WARN(" %s indication not currently supported. circuit = %d\n", DECODE_LCC_EVENT(evntType), circuit);
+		SS7_WARN(" %s indication not currently supported. circuit = %d, globalFlg = %d\n", DECODE_LCC_EVENT(evntType), circuit, globalFlg);
 		congestion_level = 3;
 		break;
 	/**************************************************************************/
 	case SIT_STA_MTPCONG3:		  /* congestion indication level 3 */
-		SS7_WARN(" %s indication not currently supported. circuit = %d\n", DECODE_LCC_EVENT(evntType), circuit);
+		SS7_WARN(" %s indication not currently supported. circuit = %d, globalFlg = %d\n", DECODE_LCC_EVENT(evntType), circuit, globalFlg);
 		congestion_level = 4;
 		break;
 	/**************************************************************************/
 	case SIT_STA_MTPSTPCONG:		/* stop congestion indication level 0 */
-		SS7_WARN(" %s indication not currently supported. circuit = %d\n", DECODE_LCC_EVENT(evntType), circuit);
+		SS7_WARN(" %s indication not currently supported. circuit = %d, globalFlg = %d\n", DECODE_LCC_EVENT(evntType), circuit, globalFlg);
 		congestion_level = 0;
 		break; 
 	/**************************************************************************/
