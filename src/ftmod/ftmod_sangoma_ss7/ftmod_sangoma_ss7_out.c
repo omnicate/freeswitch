@@ -561,6 +561,17 @@ void ft_to_sngss7_rsc (ftdm_channel_t * ftdmchan)
 						SIT_STA_CIRRESREQ, 
 						NULL);
 	
+	/* start timer of waiting for RSCA message */
+	if (ftdm_sched_timer (sngss7_info->t_waiting_rsca.sched,
+					     "t_waiting_rsca",
+					     sngss7_info->t_waiting_rsca.beat,
+					     sngss7_info->t_waiting_rsca.callback,
+					     &sngss7_info->t_waiting_rsca,
+					     &sngss7_info->t_waiting_rsca.hb_timer_id)) 
+	{
+		SS7_ERROR ("Unable to schedule timer of waiting for RSCA. \n");
+	}
+	
 	SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Tx RSC\n", sngss7_info->circuit->cic);
 
 	SS7_FUNC_TRACE_EXIT (__FUNCTION__);

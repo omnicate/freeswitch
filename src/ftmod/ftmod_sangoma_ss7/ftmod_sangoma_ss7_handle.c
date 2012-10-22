@@ -2064,25 +2064,25 @@ ftdm_status_t handle_rsc_rsp(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 
 	/* confirm that the circuit is voice channel */
 	if (g_ftdm_sngss7_data.cfg.isupCkt[circuit].type != SNG_CKT_VOICE) {
-		SS7_ERROR("[CIC:%d]Rx %s on non-voice CIC\n",
-					g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic,
-					DECODE_LCC_EVENT(evntType));
-
+ 		SS7_ERROR("[CIC:%d]Rx %s on non-voice CIC\n", g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic, DECODE_LCC_EVENT(evntType));
 		SS7_FUNC_TRACE_EXIT(__FUNCTION__);
 		return FTDM_FAIL;
-	} else {
-		/* get the ftdmchan and ss7_chan_data from the circuit */
-		if (extract_chan_data(circuit, &sngss7_info, &ftdmchan)) {
-			SS7_ERROR("Failed to extract channel data for ISUP circuit = %d!\n", circuit);
-			SS7_FUNC_TRACE_EXIT(__FUNCTION__);
-			return FTDM_FAIL;
-		}
-
-		SS7_INFO_CHAN(ftdmchan, "[CIC:%d]Rx %s\n",
-			g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic,
-			DECODE_LCC_EVENT(evntType));
+	}
+	
+	/* get the ftdmchan and ss7_chan_data from the circuit */
+	if (extract_chan_data(circuit, &sngss7_info, &ftdmchan)) {
+		SS7_ERROR("Failed to extract channel data for ISUP circuit = %d!\n", circuit);
+		SS7_FUNC_TRACE_EXIT(__FUNCTION__);
+		return FTDM_FAIL;
 	}
 
+	SS7_INFO_CHAN(ftdmchan, "[CIC:%d]Rx %s\n", g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic, DECODE_LCC_EVENT(evntType));
+	
+	if (sngss7_info->t_waiting_rsca.hb_timer_id) {
+		ftdm_sched_cancel_timer (sngss7_info->t_waiting_rsca.sched, sngss7_info->t_waiting_rsca.hb_timer_id);
+		SS7_DEBUG_CHAN(ftdmchan, "[CIC:%d]Cancel waiting RSCA timer.\n",	g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic);
+	}
+	
 	/* lock the channel */
 	ftdm_mutex_lock(ftdmchan->mutex);
 
