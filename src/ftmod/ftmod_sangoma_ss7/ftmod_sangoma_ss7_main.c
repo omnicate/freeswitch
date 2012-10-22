@@ -488,9 +488,9 @@ static void *ftdm_sangoma_ss7_run(ftdm_thread_t * me, void *obj)
  
 				/* unlock the channel */
 				ftdm_mutex_unlock (ftdmchan->mutex);				
-				if (congestion_level) {
+				if (0&&congestion_level) {
 					usleep (congestion_level*100*1000);
-					/* SS7_DEBUG ("span = %d, congestion_level=%d, sleeping.\n",ftdmspan->span_id, congestion_level); */
+					SS7_DEBUG ("span = %d, congestion_level=%d, sleeping.\n",ftdmspan->span_id, congestion_level);
 				}
 			}
 

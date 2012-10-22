@@ -633,7 +633,12 @@ void ft_to_sngss7_blo (ftdm_channel_t * ftdmchan)
 		SS7_ERROR ("Unable to schedule timer of waiting for BLA. \n");
 	}
 
+
 	sngss7_set_cmd_pending_flag(sngss7_info, FLAG_CMD_UBL_DUMB);
+	if (sngss7_info->t_block_ubl.hb_timer_id) {
+		ftdm_sched_cancel_timer (sngss7_info->t_block_ubl.sched, sngss7_info->t_waiting_uba.hb_timer_id);
+		SS7_DEBUG_CHAN(ftdmchan, "[CIC:%d]Re-schedule disabling UBL transmission timer.\n", sngss7_info->circuit->cic);
+	}	
 	if (ftdm_sched_timer (sngss7_info->t_block_ubl.sched,
 					     "t_block_ubl",
 					     sngss7_info->t_block_ubl.beat,
@@ -641,7 +646,7 @@ void ft_to_sngss7_blo (ftdm_channel_t * ftdmchan)
 					     &sngss7_info->t_block_ubl,
 					     &sngss7_info->t_block_ubl.hb_timer_id)) 
 	{
-		SS7_ERROR ("Unable to schedule timer of disabling UBL transmission. \n");
+		SS7_ERROR_CHAN(ftdmchan, "[CIC:%d]Unable to schedule timer of disabling UBL transmission.\n", sngss7_info->circuit->cic);
 	}
 
 	/*
