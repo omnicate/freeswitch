@@ -156,7 +156,7 @@ void handle_wait_bla_timeout(void *userdata)
 	ftdm_channel_t      *ftdmchan = sngss7_info->ftdmchan;
 	
 	SS7_FUNC_TRACE_ENTER(__FUNCTION__);
-	SS7_ERROR("handle_wait_bla_timeout() timer kicked in. GOOD. \n");
+	SS7_DEBUG("handle_wait_bla_timeout() timer kicked in. GOOD. \n");
 	ft_to_sngss7_blo(ftdmchan);
 	SS7_FUNC_TRACE_EXIT(__FUNCTION__);
 }
@@ -167,7 +167,7 @@ void handle_wait_uba_timeout(void *userdata)
 	ftdm_channel_t      *ftdmchan = sngss7_info->ftdmchan;
 	
 	SS7_FUNC_TRACE_ENTER(__FUNCTION__);
-	SS7_ERROR("handle_wait_uba_timeout() timer kicked in. \n");
+	SS7_DEBUG("handle_wait_uba_timeout() timer kicked in. \n");
 	ft_to_sngss7_ubl(ftdmchan);
 	SS7_FUNC_TRACE_EXIT(__FUNCTION__);
 }
@@ -189,7 +189,7 @@ void handle_disable_tx_ubl_timeout_on_tx_blo(void *userdata)
 	ftdm_channel_t      *ftdmchan = sngss7_info->ftdmchan;
 	
 	SS7_FUNC_TRACE_ENTER(__FUNCTION__);
-	SS7_ERROR("handle_disable_tx_ubl_timeout_on_tx_blo() timer kicked in.  \n");
+	SS7_DEBUG("handle_disable_tx_ubl_timeout_on_tx_blo() timer kicked in.  \n");
 	
 	ft_to_sngss7_blo(ftdmchan);
 	SS7_FUNC_TRACE_EXIT(__FUNCTION__);
