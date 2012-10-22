@@ -623,10 +623,6 @@ typedef struct sngss7_chan_data {
 	sngss7_timer_data_t		t_waiting_rsca;
 	sngss7_timer_data_t		t_block_ubl;
 	
-#if JZ_BLO_TIMER
-	sngss7_timer_data_t		t_block_ubl;
-#endif
-
 	sngss7_group_data_t		rx_grs;
 	sngss7_group_data_t		rx_gra;
 	sngss7_group_data_t		tx_grs;

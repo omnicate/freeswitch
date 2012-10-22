@@ -156,7 +156,7 @@ void handle_wait_bla_timeout(void *userdata)
 	ftdm_channel_t      *ftdmchan = sngss7_info->ftdmchan;
 	
 	SS7_FUNC_TRACE_ENTER(__FUNCTION__);
-	SS7_DEBUG("handle_wait_bla_timeout() timer kicked in. GOOD. \n");
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "handle_wait_bla_timeout() timer kicked in.  %s\n", " ");
 	ft_to_sngss7_blo(ftdmchan);
 	SS7_FUNC_TRACE_EXIT(__FUNCTION__);
 }
@@ -167,7 +167,7 @@ void handle_wait_uba_timeout(void *userdata)
 	ftdm_channel_t      *ftdmchan = sngss7_info->ftdmchan;
 	
 	SS7_FUNC_TRACE_ENTER(__FUNCTION__);
-	SS7_DEBUG("handle_wait_uba_timeout() timer kicked in. \n");
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "handle_wait_uba_timeout() timer kicked in. %s\n", " ");
 	ft_to_sngss7_blo(ftdmchan);
 	ft_to_sngss7_ubl(ftdmchan);
 	SS7_FUNC_TRACE_EXIT(__FUNCTION__);
@@ -179,6 +179,7 @@ void handle_tx_ubl_on_rx_bla_timer(void *userdata)
 	ftdm_channel_t      *ftdmchan = sngss7_info->ftdmchan;
 	
 	SS7_FUNC_TRACE_ENTER(__FUNCTION__);
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "handle_tx_ubl_on_rx_bla_timer() timer kicked in. %s\n", " ");
 	sngss7_set_ckt_blk_flag(sngss7_info, FLAG_CKT_MN_UNBLK_TX);
 	ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_SUSPENDED);
 	SS7_FUNC_TRACE_EXIT(__FUNCTION__);
@@ -191,7 +192,7 @@ void handle_wait_rsca_timeout(void *userdata)
 	ftdm_channel_t      *ftdmchan = sngss7_info->ftdmchan;
 	
 	SS7_FUNC_TRACE_ENTER(__FUNCTION__);
-	SS7_DEBUG("handle_wait_rsca_timeout() timer kicked in. \n");
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "handle_wait_rsca_timeout() timer kicked in. %s\n", " ");
 	ft_to_sngss7_rsc(ftdmchan);
 	SS7_FUNC_TRACE_EXIT(__FUNCTION__);
 }
@@ -202,7 +203,7 @@ void handle_disable_ubl_timeout(void *userdata)
 	ftdm_channel_t      *ftdmchan = sngss7_info->ftdmchan;
 	
 	SS7_FUNC_TRACE_ENTER(__FUNCTION__);
-	SS7_DEBUG("handle_disable_ubl_timeout() timer kicked in. \n");
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "handle_disable_ubl_timeout() timer kicked in.  %s\n", " ");
 	sngss7_clear_cmd_pending_flag(sngss7_info, FLAG_CMD_UBL_DUMB);
 	
 	if (sngss7_test_ckt_blk_flag(sngss7_info, FLAG_CKT_MN_UNBLK_TX) ||
@@ -212,21 +213,6 @@ void handle_disable_ubl_timeout(void *userdata)
 	}
 	SS7_FUNC_TRACE_EXIT(__FUNCTION__);
 }
-
-#if JZ_BLO_TIMER
-void handle_disable_tx_ubl_timeout_on_tx_blo(void *userdata)
-{
-	sngss7_timer_data_t *timer = userdata;
-	sngss7_chan_data_t  *sngss7_info = timer->sngss7_info;
-	ftdm_channel_t      *ftdmchan = sngss7_info->ftdmchan;
-	
-	SS7_FUNC_TRACE_ENTER(__FUNCTION__);
-	SS7_DEBUG("handle_disable_tx_ubl_timeout_on_tx_blo() timer kicked in.  \n");
-	
-	ft_to_sngss7_blo(ftdmchan);
-	SS7_FUNC_TRACE_EXIT(__FUNCTION__);
-}
-#endif
 
 /******************************************************************************/
 /* For Emacs:
