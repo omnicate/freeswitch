@@ -207,7 +207,7 @@ void handle_disable_ubl_timeout(void *userdata)
 	
 	if (sngss7_test_ckt_blk_flag(sngss7_info, FLAG_CKT_MN_UNBLK_TX) ||
 	    sngss7_test_ckt_blk_flag(sngss7_info, FLAG_GRP_HW_UNBLK_TX) ||
-	    sngss7_test_ckt_blk_flag(sngss7_info, FLAG_GRP_MN_UNBLK_TX) {
+	    sngss7_test_ckt_blk_flag(sngss7_info, FLAG_GRP_MN_UNBLK_TX)) {
 		ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_SUSPENDED);
 	}
 	SS7_FUNC_TRACE_EXIT(__FUNCTION__);
