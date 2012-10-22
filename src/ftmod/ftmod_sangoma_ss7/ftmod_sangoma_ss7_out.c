@@ -718,6 +718,7 @@ ft_to_sngss7_ubl (ftdm_channel_t * ftdmchan)
 		SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Tx UBL\n", sngss7_info->circuit->cic);
 	} else {
 		SS7_DEBUG_CHAN(ftdmchan, "[CIC:%d]UBL not allowed, setting timer for retransmission.\n",	sngss7_info->circuit->cic);
+		sngss7_clear_ckt_blk_flag(sngss7_info, FLAG_GRP_MN_UNBLK_TX);
 	}
 
 	SS7_FUNC_TRACE_EXIT (__FUNCTION__);
