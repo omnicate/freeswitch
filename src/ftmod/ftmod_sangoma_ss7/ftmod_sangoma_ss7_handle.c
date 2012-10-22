@@ -1798,9 +1798,7 @@ ftdm_status_t handle_blo_rsp(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 	*/
 	
 	sngss7_clear_cmd_pending_flag(sngss7_info, FLAG_CMD_PENDING_WAIT_FOR_RX_BLA);
-	SS7_INFO_CHAN(ftdmchan, "[CIC:%d]Rx %s\n",
-		g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic,
-		DECODE_LCC_EVENT(evntType));
+	SS7_INFO_CHAN(ftdmchan, "[CIC:%d]Rx %s\n", g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic, DECODE_LCC_EVENT(evntType));
 	
 	if (sngss7_test_cmd_pending_flag(sngss7_info, FLAG_CMD_PENDING_WAIT_FOR_TX_UBL) ) {
 		if (ftdm_sched_timer (sngss7_info->t_tx_ubl_on_rx_bla.sched,

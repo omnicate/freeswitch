@@ -621,6 +621,7 @@ typedef struct sngss7_chan_data {
 	sngss7_timer_data_t		t_waiting_uba;
 	sngss7_timer_data_t		t_tx_ubl_on_rx_bla;
 	sngss7_timer_data_t		t_waiting_rsca;
+	sngss7_timer_data_t		t_block_ubl;
 	
 #if JZ_BLO_TIMER
 	sngss7_timer_data_t		t_block_ubl;
@@ -678,7 +679,9 @@ typedef struct sngss7_event_data
 
 typedef enum {
 	FLAG_CMD_PENDING_WAIT_FOR_RX_BLA	= (1<<0),
-	FLAG_CMD_PENDING_WAIT_FOR_TX_UBL		= (1<<1)
+	FLAG_CMD_PENDING_WAIT_FOR_TX_UBL	= (1<<1),
+	FLAG_CMD_UBL_DUMB					= (1<<2),
+	FLAG_CMD_BLO_DUMB					= (1<<3)
 } sng_cmd_pending_flags_t;
 
 typedef enum {
@@ -1151,6 +1154,7 @@ void handle_wait_bla_timeout(void *userdata);
 void handle_wait_uba_timeout(void *userdata);
 void handle_tx_ubl_on_rx_bla_timer(void *userdata);
 void handle_wait_rsca_timeout(void *userdata);
+void handle_disable_ubl_timeout(void *userdata);
 
 #if JZ_BLO_TIMER
 void handle_disable_tx_ubl_timeout_on_tx_blo(void *userdata);

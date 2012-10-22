@@ -632,11 +632,10 @@ void ft_to_sngss7_blo (ftdm_channel_t * ftdmchan)
 	{
 		SS7_ERROR ("Unable to schedule timer of waiting for BLA. \n");
 	}
-	
-#if JZ_BLO_TIMER
-	/* start timer of disabling transmit ubl for 5 seconds */
+
+	sngss7_set_cmd_pending_flag(sngss7_info, FLAG_CMD_UBL_DUMB);
 	if (ftdm_sched_timer (sngss7_info->t_block_ubl.sched,
-					     "t_waiting_bla",
+					     "t_block_ubl",
 					     sngss7_info->t_block_ubl.beat,
 					     sngss7_info->t_block_ubl.callback,
 					     &sngss7_info->t_block_ubl,
@@ -644,7 +643,6 @@ void ft_to_sngss7_blo (ftdm_channel_t * ftdmchan)
 	{
 		SS7_ERROR ("Unable to schedule timer of disabling UBL transmission. \n");
 	}
-#endif
 
 	/*
 	SS7_DEBUG_CHAN(ftdmchan, "[CIC:%d]blk_flag = 0x%x, ckt_flag = 0x%x\n, cmd_pending_flag = 0x%x\n", 
@@ -698,25 +696,29 @@ ft_to_sngss7_ubl (ftdm_channel_t * ftdmchan)
 		return;
 	} 
 
-	sng_cc_sta_request (1,
-						0,
-						0,
-						sngss7_info->circuit->id,
-						sngss7_info->globalFlg, 
-						SIT_STA_CIRUBLREQ, 
-						NULL);
-	
-	/* start timer of waiting for BLA message */
-	if (ftdm_sched_timer (sngss7_info->t_waiting_uba.sched,
-					     "t_waiting_uba",
-					     sngss7_info->t_waiting_uba.beat,
-					     sngss7_info->t_waiting_uba.callback,
-					     &sngss7_info->t_waiting_uba,
-					     &sngss7_info->t_waiting_uba.hb_timer_id)) 
-	{
-		SS7_ERROR ("Unable to schedule timer of waiting for BLA. \n");
+	if (!sngss7_test_cmd_pending_flag(sngss7_info, FLAG_CMD_UBL_DUMB) ) {
+		sng_cc_sta_request (1,
+							0,
+							0,
+							sngss7_info->circuit->id,
+							sngss7_info->globalFlg, 
+							SIT_STA_CIRUBLREQ, 
+							NULL);
+		
+		/* start timer of waiting for BLA message */
+		if (ftdm_sched_timer (sngss7_info->t_waiting_uba.sched,
+						     "t_waiting_uba",
+						     sngss7_info->t_waiting_uba.beat,
+						     sngss7_info->t_waiting_uba.callback,
+						     &sngss7_info->t_waiting_uba,
+						     &sngss7_info->t_waiting_uba.hb_timer_id)) 
+		{
+			SS7_ERROR ("Unable to schedule timer of waiting for BLA. \n");
+		}
+		SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Tx UBL\n", sngss7_info->circuit->cic);
+	} else {
+		SS7_DEBUG_CHAN(ftdmchan, "[CIC:%d]UBL not allowed, setting timer for retransmission.\n",	sngss7_info->circuit->cic);
 	}
-	SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Tx UBL\n", sngss7_info->circuit->cic);
 
 	SS7_FUNC_TRACE_EXIT (__FUNCTION__);
 	return;
