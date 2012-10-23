@@ -3454,26 +3454,26 @@ static int ftmod_ss7_fill_in_circuits(sng_span_t *sngSpan)
 		ss7_info->t_waiting_uba.sched		= ((sngss7_span_data_t *)(ftdmspan->signal_data))->sched;
 		ss7_info->t_waiting_uba.counter		= 1;
 		ss7_info->t_waiting_uba.beat		= 30 * 1000;
-		ss7_info->t_waiting_uba.callback		= handle_wait_uba_timeout;
+		ss7_info->t_waiting_uba.callback	= handle_wait_uba_timeout;
 		ss7_info->t_waiting_uba.sngss7_info	= ss7_info;
 		
-		ss7_info->t_tx_ubl_on_rx_bla.sched		= ((sngss7_span_data_t *)(ftdmspan->signal_data))->sched;
-		ss7_info->t_tx_ubl_on_rx_bla.counter		= 1;
-		ss7_info->t_tx_ubl_on_rx_bla.beat		= 5 * 1000;
-		ss7_info->t_tx_ubl_on_rx_bla.callback		= handle_tx_ubl_on_rx_bla_timer;
-		ss7_info->t_tx_ubl_on_rx_bla.sngss7_info	= ss7_info;
+		ss7_info->t_tx_ubl_on_rx_bla.sched	= ((sngss7_span_data_t *)(ftdmspan->signal_data))->sched;
+		ss7_info->t_tx_ubl_on_rx_bla.counter	= 1;
+		ss7_info->t_tx_ubl_on_rx_bla.beat	= 5 * 1000;
+		ss7_info->t_tx_ubl_on_rx_bla.callback	= handle_tx_ubl_on_rx_bla_timer;
+		ss7_info->t_tx_ubl_on_rx_bla.sngss7_info= ss7_info;
 		
 			
 		ss7_info->t_waiting_rsca.sched		= ((sngss7_span_data_t *)(ftdmspan->signal_data))->sched;
-		ss7_info->t_waiting_rsca.counter		= 1;
+		ss7_info->t_waiting_rsca.counter	= 1;
 		ss7_info->t_waiting_rsca.beat		= 60 * 1000;
-		ss7_info->t_waiting_rsca.callback		= handle_wait_rsca_timeout;
+		ss7_info->t_waiting_rsca.callback	= handle_wait_rsca_timeout;
 		ss7_info->t_waiting_rsca.sngss7_info	= ss7_info;
 
 		
-		ss7_info->t_block_ubl.sched			= ((sngss7_span_data_t *)(ftdmspan->signal_data))->sched;
+		ss7_info->t_block_ubl.sched		= ((sngss7_span_data_t *)(ftdmspan->signal_data))->sched;
 		ss7_info->t_block_ubl.counter		= 1;
-		ss7_info->t_block_ubl.beat			= 10 * 1000;
+		ss7_info->t_block_ubl.beat		= 12 * 1000;
 		ss7_info->t_block_ubl.callback		= handle_disable_ubl_timeout;
 		ss7_info->t_block_ubl.sngss7_info	= ss7_info;
 
