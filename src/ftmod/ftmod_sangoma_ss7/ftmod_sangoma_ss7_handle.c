@@ -1220,49 +1220,24 @@ ftdm_status_t handle_sta_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 		break;
 	/**************************************************************************/
 	case SIT_STA_MTPCONG0:		  /* congestion indication level 0 */
-#ifdef PRIVATE_CONG_LEVEL
-		{
-		sngss7_chan_data_t	*sngss7_info;
-		ftdm_channel_t		*ftdmchan;
-		sngss7_span_data_t	*sngss7_span;
-
-		for (int x = (g_ftdm_sngss7_data.cfg.procId * 1000) + 1; g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0; x++) {
-			if (g_ftdm_sngss7_data.cfg.isupCkt[x].id==circuit) {
-				sngss7_info = (sngss7_chan_data_t *)g_ftdm_sngss7_data.cfg.isupCkt[x].obj;
-				ftdmchan = sngss7_info->ftdmchan;
-				sngss7_span = ftdmchan->span->signal_data;
-
-				sngss7_span->congestion_level = 1;
 				
-				SS7_WARN(" %s level 1 received. Setting circuit = %d, globalFlg = %d\n", DECODE_LCC_EVENT(evntType), circuit, globalFlg);
-		
-				break;
-			}
-		}
-		}
-#else
-		congestion_level = 1;
-#endif
+		SS7_WARN(" %s level 1 received. Setting circuit = %d, globalFlg = %d\n", DECODE_LCC_EVENT(evntType), circuit, globalFlg);
 		break;
 	/**************************************************************************/
 	case SIT_STA_MTPCONG1:		  /* congestion indication level 1 */
 		SS7_WARN(" %s indication not currently supported. circuit = %d, globalFlg = %d\n", DECODE_LCC_EVENT(evntType), circuit, globalFlg);
-		congestion_level = 2;
 		break;
 	/**************************************************************************/
 	case SIT_STA_MTPCONG2:		  /* congestion indication level 2 */
 		SS7_WARN(" %s indication not currently supported. circuit = %d, globalFlg = %d\n", DECODE_LCC_EVENT(evntType), circuit, globalFlg);
-		congestion_level = 3;
 		break;
 	/**************************************************************************/
 	case SIT_STA_MTPCONG3:		  /* congestion indication level 3 */
 		SS7_WARN(" %s indication not currently supported. circuit = %d, globalFlg = %d\n", DECODE_LCC_EVENT(evntType), circuit, globalFlg);
-		congestion_level = 4;
 		break;
 	/**************************************************************************/
 	case SIT_STA_MTPSTPCONG:		/* stop congestion indication level 0 */
 		SS7_WARN(" %s indication not currently supported. circuit = %d, globalFlg = %d\n", DECODE_LCC_EVENT(evntType), circuit, globalFlg);
-		congestion_level = 0;
 		break; 
 	/**************************************************************************/
 	case SIT_STA_CIRLOCALBLOIND:	/* Mngmt local blocking */
@@ -1791,11 +1766,6 @@ ftdm_status_t handle_blo_rsp(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 		SS7_FUNC_TRACE_EXIT(__FUNCTION__);
 		return FTDM_FAIL;
 	}
-
-	/*
-	SS7_INFO_CHAN(ftdmchan, "[CIC:%d]blk_flag = 0x%x, ckt_flag = 0x%x\n, cmd_pending_flag = 0x%x\n", 
-					sngss7_info->circuit->cic, sngss7_info->blk_flags, sngss7_info->ckt_flags, sngss7_info->cmd_pending_flags);
-	*/
 	
 	sngss7_clear_cmd_pending_flag(sngss7_info, FLAG_CMD_PENDING_WAIT_FOR_RX_BLA);
 	SS7_INFO_CHAN(ftdmchan, "[CIC:%d]Rx %s\n", g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic, DECODE_LCC_EVENT(evntType));
@@ -1819,20 +1789,6 @@ ftdm_status_t handle_blo_rsp(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 		ftdm_sched_cancel_timer (sngss7_info->t_waiting_bla.sched, sngss7_info->t_waiting_bla.hb_timer_id);
 		SS7_DEBUG_CHAN(ftdmchan, "[CIC:%d]Cancel waiting BLA timer.\n",	g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic);
 	}
-	/*
-	SS7_INFO_CHAN(ftdmchan, "[CIC:%d]blk_flag = 0x%x, ckt_flag = 0x%x\n, cmd_pending_flag = 0x%x\n", 
-					sngss7_info->circuit->cic, sngss7_info->blk_flags, sngss7_info->ckt_flags, sngss7_info->cmd_pending_flags);
-	*/
-
-#if 0
-	/* lock the channel */
-	ftdm_mutex_lock(ftdmchan->mutex);
-
-	/* KONRAD FIX ME */
-
-	/* unlock the channel again before we exit */
-	ftdm_mutex_unlock(ftdmchan->mutex);
-#endif
 
 	SS7_FUNC_TRACE_EXIT(__FUNCTION__);
 	return FTDM_SUCCESS;

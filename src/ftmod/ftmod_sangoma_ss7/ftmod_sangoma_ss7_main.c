@@ -51,7 +51,6 @@ static sng_isup_event_interface_t sng_event;
 static ftdm_io_interface_t g_ftdm_sngss7_interface;
 ftdm_sngss7_data_t g_ftdm_sngss7_data;
 ftdm_sngss7_opr_mode g_ftdm_operating_mode;
-uint32_t congestion_level; 
 
 /******************************************************************************/
 
@@ -488,10 +487,6 @@ static void *ftdm_sangoma_ss7_run(ftdm_thread_t * me, void *obj)
  
 				/* unlock the channel */
 				ftdm_mutex_unlock (ftdmchan->mutex);				
-				if (0&&congestion_level) {
-					usleep (congestion_level*100*1000);
-					SS7_DEBUG ("span = %d, congestion_level=%d, sleeping.\n",ftdmspan->span_id, congestion_level);
-				}
 			}
 
 			/* clean out all pending stack events */
@@ -2783,9 +2778,6 @@ static FIO_IO_LOAD_FUNCTION(ftdm_sangoma_ss7_io_init)
 {
 	assert (fio != NULL);
 	memset (&g_ftdm_sngss7_interface, 0, sizeof (g_ftdm_sngss7_interface));
-
-	congestion_level = 0;
-
 	g_ftdm_sngss7_interface.name = "ss7";
 	g_ftdm_sngss7_interface.api = ftdm_sangoma_ss7_api;
 

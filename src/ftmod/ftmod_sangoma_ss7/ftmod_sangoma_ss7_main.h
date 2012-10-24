@@ -644,9 +644,6 @@ typedef struct sngss7_span_data {
 	sngss7_group_data_t		rx_cgu;
 	sngss7_group_data_t		tx_cgu;
 	ftdm_queue_t 			*event_queue;
-#ifdef PRIVATE_CONG_LEVEL
-	uint32_t				congestion_level;
-#endif
 } sngss7_span_data_t;
 
 typedef struct sngss7_event_data
@@ -867,7 +864,6 @@ extern uint32_t					sngss7_id;
 extern ftdm_sched_t				*sngss7_sched;
 extern int						cmbLinkSetId;
 
-extern uint32_t congestion_level; 
 /******************************************************************************/
 
 /* PROTOTYPES *****************************************************************/
