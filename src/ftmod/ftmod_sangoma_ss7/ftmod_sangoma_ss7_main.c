@@ -1980,15 +1980,15 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 		if (sngss7_test_ckt_blk_flag(sngss7_info, FLAG_GRP_HW_UNBLK_TX)) {
 			int skip_unblock=0;
 			SS7_DEBUG_CHAN(ftdmchan, "Processing FLAG_GRP_HW_UNBLK_TX flag %s\n", "");
-
+#if 0
 			if (sngss7_test_ckt_blk_flag(sngss7_info, FLAG_GRP_HW_BLOCK_TX) || 
 			    sngss7_test_ckt_blk_flag(sngss7_info, FLAG_GRP_HW_BLOCK_TX_DN)) {
 				/* Real unblock */
 			} else {
 				SS7_ERROR_CHAN(ftdmchan, "FLAG_GRP_HW_UNBLK_TX set while FLAG_GRP_HW_BLOCK_TX is not %s\n", "");
 				skip_unblock=1;
-				skip_unblock=0;
 			}
+#endif
 				
 			sngss7_clear_ckt_blk_flag(sngss7_info, FLAG_GRP_HW_BLOCK_TX);
 			sngss7_clear_ckt_blk_flag(sngss7_info, FLAG_GRP_HW_BLOCK_TX_DN);
