@@ -3445,32 +3445,54 @@ static int ftmod_ss7_fill_in_circuits(sng_span_t *sngSpan)
 		ss7_info->t39.callback		= handle_isup_t39;
 		ss7_info->t39.sngss7_info	= ss7_info;
 
+		/* Set up timer for blo re-transmission. 
+		   If not receiving BLA in 5 seconds after sending out BLO, 
+                   this timer kicks in to trigger BLO retransmission.
+		*/
 		ss7_info->t_waiting_bla.sched		= ((sngss7_span_data_t *)(ftdmspan->signal_data))->sched;
 		ss7_info->t_waiting_bla.counter		= 1;
 		ss7_info->t_waiting_bla.beat		= 5 * 1000;
 		ss7_info->t_waiting_bla.callback	= handle_wait_bla_timeout;
 		ss7_info->t_waiting_bla.sngss7_info	= ss7_info;
 		
+		/* Set up timer for UBL re-transmission. 
+		   If not receiving UBA in 30 seconds after sending out UBL, 
+                   this timer kicks in to trigger UBL retransmission.
+		*/
 		ss7_info->t_waiting_uba.sched		= ((sngss7_span_data_t *)(ftdmspan->signal_data))->sched;
 		ss7_info->t_waiting_uba.counter		= 1;
 		ss7_info->t_waiting_uba.beat		= 30 * 1000;
 		ss7_info->t_waiting_uba.callback	= handle_wait_uba_timeout;
 		ss7_info->t_waiting_uba.sngss7_info	= ss7_info;
 		
+		/* Set up timer for UBL transmission upon receiving BLA. 
+		   UBL will not be sent in 5 seconds after receiving BLA, 
+		   since trillium might do a BLO re-transmission without 
+		   ftdm knowing, which possibly overwrite UBL sent by freetdm.
+		   This timer to enable UBL transmission after 5 seconds from
+		   receiving BLA.
+		*/
 		ss7_info->t_tx_ubl_on_rx_bla.sched	= ((sngss7_span_data_t *)(ftdmspan->signal_data))->sched;
 		ss7_info->t_tx_ubl_on_rx_bla.counter	= 1;
 		ss7_info->t_tx_ubl_on_rx_bla.beat	= 5 * 1000;
 		ss7_info->t_tx_ubl_on_rx_bla.callback	= handle_tx_ubl_on_rx_bla_timer;
 		ss7_info->t_tx_ubl_on_rx_bla.sngss7_info= ss7_info;
 		
-			
+		/* Set up timer for RSC re-transmission. 
+		   If not receiving RSCA in 60 seconds after sending out RSC, 
+                   this timer kicks in to trigger RSC retransmission.
+		*/
 		ss7_info->t_waiting_rsca.sched		= ((sngss7_span_data_t *)(ftdmspan->signal_data))->sched;
 		ss7_info->t_waiting_rsca.counter	= 1;
 		ss7_info->t_waiting_rsca.beat		= 60 * 1000;
 		ss7_info->t_waiting_rsca.callback	= handle_wait_rsca_timeout;
 		ss7_info->t_waiting_rsca.sngss7_info	= ss7_info;
 
-		
+		/* Set up timer for block UBL transmission after BLO. 
+		   When BLO has been sent out, freetdm will not send out UBL
+		   in 12 seconds to prevent trillium BLO retransmission overriding
+		   UBL message. 
+		*/
 		ss7_info->t_block_ubl.sched		= ((sngss7_span_data_t *)(ftdmspan->signal_data))->sched;
 		ss7_info->t_block_ubl.counter		= 1;
 		ss7_info->t_block_ubl.beat		= 12 * 1000;
