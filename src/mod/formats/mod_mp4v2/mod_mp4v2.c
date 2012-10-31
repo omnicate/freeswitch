@@ -258,6 +258,7 @@ SWITCH_STANDARD_APP(record_mp4_function)
 	int size = 160;
 	int duration = size;
 	int sample_id = 1;
+	switch_event_t *event;
 
 	switch_core_session_get_read_impl(session, &read_impl);
 	switch_channel_answer(channel);
@@ -355,6 +356,12 @@ SWITCH_STANDARD_APP(record_mp4_function)
 		switch_thread_create(&thread, thd_attr, record_video_thread, &eh, switch_core_session_get_pool(session));
 	}
 
+	if (switch_event_create(&event, SWITCH_EVENT_RECORD_START) == SWITCH_STATUS_SUCCESS) {
+		switch_channel_event_set_data(channel, event);
+		switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Record-File-Path", (char *)data);
+		switch_event_fire(&event);
+	}
+
 	while (switch_channel_ready(channel)) {
 
 		status = switch_core_session_read_frame(session, &read_frame, SWITCH_IO_FLAG_SINGLE_READ, 0);
@@ -417,6 +424,12 @@ SWITCH_STANDARD_APP(record_mp4_function)
 	}
 
 	switch_channel_set_variable(channel, SWITCH_CURRENT_APPLICATION_RESPONSE_VARIABLE, "OK");
+
+	if (switch_event_create(&event, SWITCH_EVENT_RECORD_STOP) == SWITCH_STATUS_SUCCESS) {
+		switch_channel_event_set_data(channel, event);
+		switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Record-File-Path", (char *)data);
+		switch_event_fire(&event);
+	}
 
 end:
 

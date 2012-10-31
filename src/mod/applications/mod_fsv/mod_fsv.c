@@ -115,6 +115,7 @@ SWITCH_STANDARD_APP(record_fsv_function)
 	switch_dtmf_t dtmf = { 0 };
 	int count = 0, sanity = 30;
 	switch_core_session_message_t msg = { 0 };
+	switch_event_t *event;
 
 	/* Tell the channel to request a fresh vid frame */
 	msg.from = __FILE__;
@@ -200,6 +201,11 @@ SWITCH_STANDARD_APP(record_fsv_function)
 		switch_thread_create(&thread, thd_attr, record_video_thread, &eh, switch_core_session_get_pool(session));
 	}
 
+	if (switch_event_create(&event, SWITCH_EVENT_RECORD_START) == SWITCH_STATUS_SUCCESS) {
+		switch_channel_event_set_data(channel, event);
+		switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Record-File-Path", (char *)data);
+		switch_event_fire(&event);
+	}
 
 	while (switch_channel_ready(channel)) {
 
@@ -267,6 +273,12 @@ SWITCH_STANDARD_APP(record_fsv_function)
 	}
 
 	switch_channel_set_variable(channel, SWITCH_CURRENT_APPLICATION_RESPONSE_VARIABLE, "OK");
+
+	if (switch_event_create(&event, SWITCH_EVENT_RECORD_STOP) == SWITCH_STATUS_SUCCESS) {
+		switch_channel_event_set_data(channel, event);
+		switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Record-File-Path", (char *)data);
+		switch_event_fire(&event);
+	}
 
   end:
 
