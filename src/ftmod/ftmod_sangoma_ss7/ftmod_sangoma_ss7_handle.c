@@ -2051,7 +2051,7 @@ ftdm_status_t handle_rsc_rsp(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 			/* go to DOWN */
 			ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_DOWN);
 		} else {
-			SS7_ERROR("Received RSC-RLC but we're not waiting on a RSC-RLC on CIC #, dropping\n", sngss7_info->circuit->cic);
+			SS7_ERROR("Received RSC-RLC but we're not waiting on a RSC-RLC on CIC #%d, dropping\n", sngss7_info->circuit->cic);
 		}
 
 		break;
@@ -2059,7 +2059,7 @@ ftdm_status_t handle_rsc_rsp(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 	case FTDM_CHANNEL_STATE_DOWN:
 		
 		/* do nothing, just drop the message */
-		SS7_DEBUG("Receveived RSC-RLC in down state, dropping\n");
+		SS7_DEBUG("Receveived RSC-RLC in down state on CIC # %d, dropping\n", sngss7_info->circuit->cic);
 		
 		break;
 	/**********************************************************************/
