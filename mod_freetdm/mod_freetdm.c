@@ -849,8 +849,10 @@ static switch_status_t channel_read_frame(switch_core_session_t *session, switch
 	return SWITCH_STATUS_SUCCESS;
 
 fail:
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "clearing IO in channel %s device %d:%d!\n", name, span_id, chan_id);
-	switch_clear_flag_locked(tech_pvt, TFLAG_IO);
+	if (switch_test_flag(tech_pvt, TFLAG_IO)) {
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "clearing IO in channel %s device %d:%d!\n", name, span_id, chan_id);
+		switch_clear_flag_locked(tech_pvt, TFLAG_IO);
+	}
 	return SWITCH_STATUS_GENERR;
 }
 
