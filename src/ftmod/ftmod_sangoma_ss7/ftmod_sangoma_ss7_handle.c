@@ -704,7 +704,7 @@ ftdm_status_t handle_con_cfm(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 	/**************************************************************************/
 	default:	/* incorrect state...reset the CIC */
 
-		SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Rx ANM/CON\n", sngss7_info->circuit->cic);
+		SS7_ERROR_CHAN(ftdmchan, "Got ANM/CON on channel in invalid state(%s)...reset!\n", ftdm_channel_state2str (ftdmchan->state));
 
 		/* throw the TX reset flag */
 		if (!sngss7_tx_reset_status_pending(sngss7_info)) {
@@ -836,8 +836,8 @@ ftdm_status_t handle_rel_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 		break;
 	/**************************************************************************/
 	default:
-
 rel_ind_reset:
+		SS7_ERROR_CHAN(ftdmchan, "Got REL on channel in invalid state(%s)...reset!\n", ftdm_channel_state2str (ftdmchan->state));
 		/* throw the TX reset flag */
 		if (!sngss7_tx_reset_status_pending(sngss7_info)) {
 			sngss7_set_ckt_flag (sngss7_info, FLAG_REMOTE_REL);
@@ -895,6 +895,7 @@ ftdm_status_t handle_rel_cfm(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 		break;
 	/**************************************************************************/
 	default:	
+		SS7_ERROR_CHAN(ftdmchan, "Got REL CFM on channel in invalid state(%s)...reset!\n", ftdm_channel_state2str (ftdmchan->state));
 		/* KONRAD: should just stop the call...but a reset is easier for now (since it does hangup the call) */
 
 		/* go to RESTART */
