@@ -769,7 +769,7 @@ ftdm_status_t handle_rel_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 	case FTDM_CHANNEL_STATE_DOWN:
 		/* according to q.764 2.9.5.1-a) send RLC back if circuit is idle to eliminate ambiguities */
 		ft_to_sngss7_rlc (ftdmchan);
-		
+		break;
 	default:
 		SS7_ERROR_CHAN(ftdmchan, "Got REL on channel in invalid state(%s)...reset!\n", ftdm_channel_state2str (ftdmchan->state));
 		/* throw the TX reset flag */
