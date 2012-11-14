@@ -401,12 +401,12 @@ ftdm_status_t handle_con_sta(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 			
 			break;
 		case FTDM_CHANNEL_STATE_DOWN:
-			SS7_WARN_CHAN(ftdmchan, "RX ACM in DOWN state. Ignore the message.\n" );
+			SS7_WARN_CHAN(ftdmchan, "RX ACM in DOWN state CIC[%d]. Ignore the message.\n",  sngss7_info->circuit->cic );
 			break;
 			
 		default:	/* incorrect state...reset the CIC */
-			SS7_ERROR_CHAN(ftdmchan, "RX ACM in invalid state :%s...resetting CIC\n", 
-							ftdm_channel_state2str (ftdmchan->state));
+			SS7_ERROR_CHAN(ftdmchan, "RX ACM in invalid state :%s...resetting CIC [%d]\n", 
+							ftdm_channel_state2str (ftdmchan->state),  sngss7_info->circuit->cic);
 
 			/* throw the TX reset flag */
 			if (!sngss7_tx_reset_status_pending(sngss7_info)) {
