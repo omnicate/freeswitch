@@ -335,9 +335,17 @@ handle_glare:
 			ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_TERMINATING);
 		}
 		break;
+	default:        /* should not have gotten an IAM while in this state */
+		SS7_ERROR_CHAN(ftdmchan, "Got IAM on channel in invalid state(%s)...reset!\n", ftdm_channel_state2str (ftdmchan->state));
 
-	default:	/* should not have gotten an IAM while in this state */
-		SS7_ERROR_CHAN(ftdmchan, "Got IAM on channel in invalid state(%s).Ignore this received IAM message.\n", ftdm_channel_state2str (ftdmchan->state));
+		/* throw the TX reset flag */
+		if (!sngss7_tx_reset_status_pending(sngss7_info)) {
+			sngss7_tx_reset_restart(sngss7_info);
+			sngss7_set_ckt_flag (sngss7_info, FLAG_REMOTE_REL);
+
+			/* go to RESTART */
+			ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_RESTART);
+		}
 		break;
 	}
 
@@ -392,9 +400,22 @@ ftdm_status_t handle_con_sta(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 			}
 			
 			break;
+		case FTDM_CHANNEL_STATE_DOWN:
+			SS7_WARN_CHAN(ftdmchan, "RX ACM in DOWN state. Ignore the message.\n" );
+			break;
+			
 		default:	/* incorrect state...reset the CIC */
-			SS7_ERROR_CHAN(ftdmchan, "RX Connect Status Indication message in invalid state :%s. Ignore the received message.\n", 
-									ftdm_channel_state2str (ftdmchan->state));
+			SS7_ERROR_CHAN(ftdmchan, "RX ACM in invalid state :%s...resetting CIC\n", 
+							ftdm_channel_state2str (ftdmchan->state));
+
+			/* throw the TX reset flag */
+			if (!sngss7_tx_reset_status_pending(sngss7_info)) {
+				sngss7_tx_reset_restart(sngss7_info);
+				sngss7_set_ckt_flag (sngss7_info, FLAG_REMOTE_REL);
+
+				/* go to RESTART */
+				ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_RESTART);
+			}
 			break;
 		}
 
@@ -637,11 +658,18 @@ ftdm_status_t handle_con_cfm(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 
 		break;
 
-	default:
+	default:        /* incorrect state...reset the CIC */
+		SS7_ERROR_CHAN(ftdmchan, "Got ANM/CON on channel in invalid state(%s)...reset!\n", ftdm_channel_state2str (ftdmchan->state));
 
-		SS7_ERROR_CHAN(ftdmchan, "Got ANM/CON on channel in invalid state(%s). Ignore the received ANM message.\n", ftdm_channel_state2str (ftdmchan->state));
+		/* throw the TX reset flag */
+		if (!sngss7_tx_reset_status_pending(sngss7_info)) {
+			sngss7_tx_reset_restart(sngss7_info);
+			sngss7_set_ckt_flag (sngss7_info, FLAG_REMOTE_REL);
+
+			/* go to RESTART */
+			ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_RESTART);
+		}
 		break;
-
 	}
 
 	ftdm_mutex_unlock(ftdmchan->mutex);
@@ -743,7 +771,15 @@ ftdm_status_t handle_rel_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 		ft_to_sngss7_rlc (ftdmchan);
 		
 	default:
-		SS7_INFO_CHAN(ftdmchan, "Got REL on channel in invalid state(%s). Ignoring received REL message.\n", ftdm_channel_state2str (ftdmchan->state));
+		SS7_ERROR_CHAN(ftdmchan, "Got REL on channel in invalid state(%s)...reset!\n", ftdm_channel_state2str (ftdmchan->state));
+		/* throw the TX reset flag */
+		if (!sngss7_tx_reset_status_pending(sngss7_info)) {
+			sngss7_set_ckt_flag (sngss7_info, FLAG_REMOTE_REL);
+			sngss7_tx_reset_restart(sngss7_info);
+
+			/* go to RESTART */
+			ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_RESTART);
+		}
 		break;
 	}
 
@@ -780,6 +816,10 @@ ftdm_status_t handle_rel_cfm(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 		break;
 	default:	
 		SS7_WARN_CHAN(ftdmchan, "Got REL CFM on channel in invalid state(%s).Ignore the received RLC message. \n", ftdm_channel_state2str (ftdmchan->state));
+		/* KONRAD: should just stop the call...but a reset is easier for now (since it does hangup the call) */
+
+		/* go to RESTART */
+		ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_RESTART);
 		break;
 	}
 
@@ -1124,20 +1164,17 @@ ftdm_status_t handle_reattempt(uint32_t suInstId, uint32_t spInstId, uint32_t ci
 	
 	ftdm_running_return(FTDM_FAIL);
 	if (g_ftdm_sngss7_data.cfg.isupCkt[circuit].type != SNG_CKT_VOICE) {
-		SS7_ERROR("[CIC:%d]Rx %s on non-voice CIC\n",
-					g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic,
-					DECODE_LCC_EVENT(evntType));
-
+		SS7_ERROR("[CIC:%d]Rx %s on non-voice CIC\n", g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic, DECODE_LCC_EVENT(evntType));
 		SS7_FUNC_TRACE_EXIT(__FUNCTION__);
 		return FTDM_FAIL;
-	} else {
-		if (extract_chan_data(circuit, &sngss7_info, &ftdmchan)) {
-			SS7_ERROR("Failed to extract channel data for ISUP circuit = %d!\n", circuit);
-			SS7_FUNC_TRACE_EXIT(__FUNCTION__);
-			return FTDM_FAIL;
-		}
 	}
-
+	
+	if (extract_chan_data(circuit, &sngss7_info, &ftdmchan)) {
+		SS7_ERROR("Failed to extract channel data for ISUP circuit = %d!\n", circuit);
+		SS7_FUNC_TRACE_EXIT(__FUNCTION__);
+		return FTDM_FAIL;
+	}
+	
 	SS7_INFO_CHAN(ftdmchan, "[CIC:%d]Rx %s\n", g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic, DECODE_LCC_EVENT(evntType));
 	ftdm_mutex_lock(ftdmchan->mutex);
 
