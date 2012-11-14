@@ -40,6 +40,8 @@
 #ifndef FREETDM_H
 #define FREETDM_H
 
+#define JZ_DBG 1
+
 #include "ftdm_declare.h"
 #include "ftdm_call_utils.h"
 
