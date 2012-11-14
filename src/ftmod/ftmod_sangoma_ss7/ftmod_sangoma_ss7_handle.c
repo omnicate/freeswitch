@@ -1219,7 +1219,7 @@ ftdm_status_t handle_reattempt(uint32_t suInstId, uint32_t spInstId, uint32_t ci
 
 		if (bHangup) {
 			/* setup the hangup cause */
-			ftdmchan->caller_data.hangup_cause = 34;	/* Circuit Congrestion */
+			ftdmchan->caller_data.hangup_cause = 34;	/* SIT_CCNOCIRCUIT - no circuit/channel available */
 
 			/* move the state of the channel to Terminating to end the call 
 			     in TERMINATING state, the release cause is set to REMOTE_REL 
