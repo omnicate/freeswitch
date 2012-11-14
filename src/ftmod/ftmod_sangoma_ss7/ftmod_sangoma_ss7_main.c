@@ -1688,7 +1688,7 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 	 					break;
 				}
 				
-				if (!bHandle) {
+				if (bHandle) {
 					SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Handling glare IAM. \n", sngss7_info->circuit->cic);
 					handle_con_ind (0, sngss7_info->glare.spInstId, sngss7_info->glare.circuit, &sngss7_info->glare.iam);				
 				}
