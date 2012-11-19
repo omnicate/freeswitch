@@ -4740,7 +4740,8 @@ static ftdm_status_t reload_span_config(void)
 	ftdm_span_t *span = NULL;
 	ftdm_status_t ret = FTDM_SUCCESS;
 	ftdm_channel_config_t chan_config;
-	unsigned d = 0;
+	unsigned d = 0, configured = 0;
+	ftdm_size_t len = 0;
 	
 	ftdm_log(FTDM_LOG_INFO, "Reload span configuration.\n");
 	
@@ -4749,7 +4750,7 @@ static ftdm_status_t reload_span_config(void)
 		ftdm_log(FTDM_LOG_ERROR, "Not able to open span config file %s. \n", cf);
 		return FTDM_FAIL;
 	}
-#ifdef JZ_DBG
+#ifdef RECONFIG_DBG
 	else {
 		ftdm_log(FTDM_LOG_DEBUG, "Successfully opened span config file %s. \n", cf);
 	}
@@ -4810,7 +4811,6 @@ static ftdm_status_t reload_span_config(void)
 				} else {
 					ftdm_log(FTDM_LOG_INFO, "Span [%s] was found in current running configuration. \n", name);
 				}
-
 			}
 
 			if (!span) {
@@ -4818,146 +4818,18 @@ static ftdm_status_t reload_span_config(void)
 			}
 
 			ftdm_log(FTDM_LOG_DEBUG, "span %d [%s]=[%s]\n", span->span_id, var, val);
-
-#if 0			
+			
+			
 			if (!strcasecmp(var, "trunk_type")) {
 				ftdm_trunk_type_t trtype = ftdm_str2ftdm_trunk_type(val);
 				ftdm_span_set_trunk_type(span, trtype);
 				ftdm_log(FTDM_LOG_DEBUG, "setting trunk type to '%s'\n", ftdm_trunk_type2str(trtype)); 
-			} else if (!strcasecmp(var, "name")) {
-				if (!strcasecmp(val, "undef")) {
-					chan_config.name[0] = '\0';
-				} else {
-					ftdm_copy_string(chan_config.name, val, FTDM_MAX_NAME_STR_SZ);
-				}
-			} else if (!strcasecmp(var, "number")) {
-				if (!strcasecmp(val, "undef")) {
-					chan_config.number[0] = '\0';
-				} else {
-					ftdm_copy_string(chan_config.number, val, FTDM_MAX_NUMBER_STR_SZ);
-				}
-			} else if (!strcasecmp(var, "analog-start-type")) {
-				if (span->trunk_type == FTDM_TRUNK_FXS || span->trunk_type == FTDM_TRUNK_FXO || span->trunk_type == FTDM_TRUNK_EM) {
-					if ((tmp = ftdm_str2ftdm_analog_start_type(val)) != FTDM_ANALOG_START_NA) {
-						span->start_type = tmp;
-						ftdm_log(FTDM_LOG_DEBUG, "changing start type to '%s'\n", ftdm_analog_start_type2str(span->start_type)); 
-					}
-				} else {
-					ftdm_log(FTDM_LOG_ERROR, "This option is only valid on analog trunks!\n");
-				}
-			} else if (!strcasecmp(var, "fxo-channel")) {
-				if (span->trunk_type == FTDM_TRUNK_NONE) {
-					span->trunk_type = FTDM_TRUNK_FXO;										
-					ftdm_log(FTDM_LOG_DEBUG, "setting trunk type to '%s' start(%s)\n", ftdm_trunk_type2str(span->trunk_type), 
-							ftdm_analog_start_type2str(span->start_type));
-				}
-				if (span->trunk_type == FTDM_TRUNK_FXO) {
-					unsigned chans_configured = 0;
-					chan_config.type = FTDM_CHAN_TYPE_FXO;
-					if (ftdm_configure_span_channels(span, val, &chan_config, &chans_configured) == FTDM_SUCCESS) {
-						configured += chans_configured;
-					}
-				} else {
-					ftdm_log(FTDM_LOG_WARNING, "Cannot add FXO channels to an FXS trunk!\n");
-				}
-			} else if (!strcasecmp(var, "fxs-channel")) {
-				if (span->trunk_type == FTDM_TRUNK_NONE) {
-					span->trunk_type = FTDM_TRUNK_FXS;
-					ftdm_log(FTDM_LOG_DEBUG, "setting trunk type to '%s' start(%s)\n", ftdm_trunk_type2str(span->trunk_type), 
-							ftdm_analog_start_type2str(span->start_type));
-				}
-				if (span->trunk_type == FTDM_TRUNK_FXS) {
-					unsigned chans_configured = 0;
-					chan_config.type = FTDM_CHAN_TYPE_FXS;
-					if (ftdm_configure_span_channels(span, val, &chan_config, &chans_configured) == FTDM_SUCCESS) {
-						configured += chans_configured;
-					}
-				} else {
-					ftdm_log(FTDM_LOG_WARNING, "Cannot add FXS channels to an FXO trunk!\n");
-				}
-			} else if (!strcasecmp(var, "em-channel")) {
-				if (span->trunk_type == FTDM_TRUNK_NONE) {
-					span->trunk_type = FTDM_TRUNK_EM;
-					ftdm_log(FTDM_LOG_DEBUG, "setting trunk type to '%s' start(%s)\n", ftdm_trunk_type2str(span->trunk_type), 
-							ftdm_analog_start_type2str(span->start_type));
-				}
-				if (span->trunk_type == FTDM_TRUNK_EM) {
-					unsigned chans_configured = 0;
-					chan_config.type = FTDM_CHAN_TYPE_EM;
-					if (ftdm_configure_span_channels(span, val, &chan_config, &chans_configured) == FTDM_SUCCESS) {
-						configured += chans_configured;
-					}
-				} else {
-					ftdm_log(FTDM_LOG_WARNING, "Cannot add EM channels to a non-EM trunk!\n");
-				}
 			} else if (!strcasecmp(var, "b-channel")) {
 				unsigned chans_configured = 0;
 				chan_config.type = FTDM_CHAN_TYPE_B;
 				if (ftdm_configure_span_channels(span, val, &chan_config, &chans_configured) == FTDM_SUCCESS) {
 					configured += chans_configured;
 				}
-			} else if (!strcasecmp(var, "d-channel")) {
-				if (d) {
-					ftdm_log(FTDM_LOG_WARNING, "ignoring extra d-channel\n");
-				} else {
-					unsigned chans_configured = 0;
-					if (!strncasecmp(val, "lapd:", 5)) {
-						chan_config.type = FTDM_CHAN_TYPE_DQ931;
-						val += 5;
-					} else {
-						chan_config.type = FTDM_CHAN_TYPE_DQ921;
-					}
-					if (ftdm_configure_span_channels(span, val, &chan_config, &chans_configured) == FTDM_SUCCESS) {
-						configured += chans_configured;
-					}
-					d++;
-				}
-			} else if (!strcasecmp(var, "cas-channel")) {
-				unsigned chans_configured = 0;
-				chan_config.type = FTDM_CHAN_TYPE_CAS;
-				
-				if (ftdm_configure_span_channels(span, val, &chan_config, &chans_configured) == FTDM_SUCCESS) {
-					configured += chans_configured;
-				}
-			} else if (!strcasecmp(var, "dtmf_hangup")) {
-				span->dtmf_hangup = ftdm_strdup(val);
-				span->dtmf_hangup_len = strlen(val);
-			} else if (!strcasecmp(var, "txgain")) {
-				if (sscanf(val, "%f", &(chan_config.txgain)) != 1) {
-					ftdm_log(FTDM_LOG_ERROR, "invalid txgain: '%s'\n", val);
-				}
-			} else if (!strcasecmp(var, "rxgain")) {
-				if (sscanf(val, "%f", &(chan_config.rxgain)) != 1) {
-					ftdm_log(FTDM_LOG_ERROR, "invalid rxgain: '%s'\n", val);
-				}
-			} else if (!strcasecmp(var, "debugdtmf")) {
-				chan_config.debugdtmf = ftdm_true(val);
-				ftdm_log(FTDM_LOG_DEBUG, "Setting debugdtmf to '%s'\n", chan_config.debugdtmf ? "yes" : "no");
-			} else if (!strncasecmp(var, "dtmfdetect_ms", sizeof("dtmfdetect_ms")-1)) {
-				if (chan_config.dtmf_on_start == FTDM_TRUE) {
-					chan_config.dtmf_on_start = FTDM_FALSE;
-					ftdm_log(FTDM_LOG_WARNING, "dtmf_on_start parameter disabled because dtmfdetect_ms specified\n");
-				}
-				if (sscanf(val, "%d", &(chan_config.dtmfdetect_ms)) != 1) {
-					ftdm_log(FTDM_LOG_ERROR, "invalid dtmfdetect_ms: '%s'\n", val);
-				}
-			} else if (!strncasecmp(var, "dtmf_on_start", sizeof("dtmf_on_start")-1)) {
-				if (chan_config.dtmfdetect_ms) {
-					ftdm_log(FTDM_LOG_WARNING, "dtmf_on_start parameter ignored because dtmf_detect_ms specified\n");
-				} else {
-					if (ftdm_true(val)) {
-						chan_config.dtmf_on_start = FTDM_TRUE;
-					} else {
-						chan_config.dtmf_on_start = FTDM_FALSE;
-					}
-				}
-			} else if (!strncasecmp(var, "iostats", sizeof("iostats")-1)) {
-				if (ftdm_true(val)) {
-					chan_config.iostats = FTDM_TRUE;
-				} else {
-					chan_config.iostats = FTDM_FALSE;
-				}
-				ftdm_log(FTDM_LOG_DEBUG, "Setting iostats to '%s'\n", chan_config.iostats ? "yes" : "no");
 			} else if (!strcasecmp(var, "group")) {
 				len = strlen(val);
 				if (len >= FTDM_MAX_NAME_STR_SZ) {
@@ -4966,73 +4838,28 @@ static ftdm_status_t reload_span_config(void)
 				}
 				memcpy(chan_config.group_name, val, len);
 				chan_config.group_name[len] = '\0';
-			} else {
-				ftdm_log(FTDM_LOG_ERROR, "unknown span variable '%s'\n", var);
-			}
-		} else if (!strncasecmp(cfg.category, "general", 7)) {
-			if (!strncasecmp(var, "cpu_monitor", sizeof("cpu_monitor")-1)) {
-				if (!strncasecmp(val, "yes", 3)) {
-					globals.cpu_monitor.enabled = 1;
-					if (!globals.cpu_monitor.alarm_action_flags) {
-						globals.cpu_monitor.alarm_action_flags |= FTDM_CPU_ALARM_ACTION_WARN;
-					}
+			}  else if (!strcasecmp(var, "txgain")) {
+				if (sscanf(val, "%f", &(chan_config.txgain)) != 1) {
+					ftdm_log(FTDM_LOG_ERROR, "invalid txgain: '%s'\n", val);
 				}
-			} else if (!strncasecmp(var, "debugdtmf_directory", sizeof("debugdtmf_directory")-1)) {
-				ftdm_set_string(globals.dtmfdebug_directory, val);
-				ftdm_log(FTDM_LOG_DEBUG, "Debug DTMF directory set to '%s'\n", globals.dtmfdebug_directory);
-			} else if (!strncasecmp(var, "cpu_monitoring_interval", sizeof("cpu_monitoring_interval")-1)) {
-				if (atoi(val) > 0) {
-					globals.cpu_monitor.interval = atoi(val);
-				} else {
-					ftdm_log(FTDM_LOG_ERROR, "Invalid cpu monitoring interval %s\n", val);
+			} else if (!strcasecmp(var, "rxgain")) {
+				if (sscanf(val, "%f", &(chan_config.rxgain)) != 1) {
+					ftdm_log(FTDM_LOG_ERROR, "invalid rxgain: '%s'\n", val);
 				}
-			} else if (!strncasecmp(var, "cpu_set_alarm_threshold", sizeof("cpu_set_alarm_threshold")-1)) {
-				intparam = atoi(val);
-				if (intparam > 0 && intparam < 100) {
-					globals.cpu_monitor.set_alarm_threshold = (uint8_t)intparam;
-				} else {
-					ftdm_log(FTDM_LOG_ERROR, "Invalid cpu alarm set threshold %s\n", val);
-				}
-			} else if (!strncasecmp(var, "cpu_reset_alarm_threshold", sizeof("cpu_reset_alarm_threshold")-1) ||
-			           !strncasecmp(var, "cpu_clear_alarm_threshold", sizeof("cpu_clear_alarm_threshold")-1)) {
-				intparam = atoi(val);
-				if (intparam > 0 && intparam < 100) {
-					globals.cpu_monitor.clear_alarm_threshold = (uint8_t)intparam;
-					if (globals.cpu_monitor.clear_alarm_threshold > globals.cpu_monitor.set_alarm_threshold) {
-						globals.cpu_monitor.clear_alarm_threshold = globals.cpu_monitor.set_alarm_threshold - 10;
-						ftdm_log(FTDM_LOG_ERROR, "Cpu alarm clear threshold must be lower than set threshold, "
-								"setting clear threshold to %d\n", globals.cpu_monitor.clear_alarm_threshold);
-					}
-				} else {
-					ftdm_log(FTDM_LOG_ERROR, "Invalid cpu alarm reset threshold %s\n", val);
-				}
-			} else if (!strncasecmp(var, "cpu_alarm_action", sizeof("cpu_alarm_action")-1)) {
-				char* p = val;
-				do {
-					if (!strncasecmp(p, "reject", sizeof("reject")-1)) {
-						globals.cpu_monitor.alarm_action_flags |= FTDM_CPU_ALARM_ACTION_REJECT;
-					} else if (!strncasecmp(p, "warn", sizeof("warn")-1)) {
-						globals.cpu_monitor.alarm_action_flags |= FTDM_CPU_ALARM_ACTION_WARN;
-					}
-					p = strchr(p, ',');
-					if (p) {
-						while(*p++) if (*p != 0x20) break;
-					}
-				} while (p);
-			}
-#endif
+			}			
 		} else {
 			ftdm_log(FTDM_LOG_ERROR, "unknown param [%s] '%s' / '%s'\n", span_cfg.category, var, val);
 		}
 	}
-
-
-
-
-
+	ftdm_log(FTDM_LOG_DEBUG, "mod_freetdm reload config, %d new channels have been configured. \n", configured);
+	
 done:
 	ftdm_config_close_file(&span_cfg);
+
+#ifdef RECONFIG_DBG
 	ftdm_log(FTDM_LOG_DEBUG, "Successfully closed span config file %s. \n", cf);
+#endif
+
 	return ret;
 }
 
