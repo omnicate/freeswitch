@@ -169,7 +169,7 @@ static void *SWITCH_THREAD_FUNC record_video_thread(switch_thread_t *thread, voi
 		start_bit = hdr[1] & 0x80;
 		iframe = (((fragment_type == 28 || fragment_type == 29) && nal_type == 5 && start_bit == 128) || fragment_type == 5 || fragment_type ==7 || fragment_type ==8) ? 1 : 0;
 
-#if 1
+#if 0
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "%02x %02x %02x | len:%d m:%d st:%d i:%d\n", hdr[0], hdr[1], hdr[2], bytes, read_frame->m, start_bit, iframe);
 #endif
 
