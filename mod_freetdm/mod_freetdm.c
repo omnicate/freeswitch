@@ -3556,8 +3556,8 @@ static switch_status_t load_config(void)
 				continue;
 			}
 
-            if (name) {
-                zstatus = ftdm_span_find_by_name(name, &span);
+            		if (name) {
+                		zstatus = ftdm_span_find_by_name(name, &span);
 			} else {
 				if (switch_is_number(id)) {
 					span_id = atoi(id);
@@ -4810,6 +4810,8 @@ static ftdm_status_t reload_span_config(void)
 					}
 				} else {
 					ftdm_log(FTDM_LOG_INFO, "Span [%s] was found in current running configuration. \n", name);
+					span = NULL;
+					continue;
 				}
 			}
 
@@ -4868,22 +4870,168 @@ static ftdm_status_t reload_ss7_signal_config(void)
 	const char *cf = "freetdm.conf";
 	switch_xml_t xml, xml_cfg;
 	
-	ftdm_log(FTDM_LOG_INFO, "Reload signaling configuration.\n");
+	switch_xml_t spans, myspan;
+	switch_xml_t param;
 	
+	ftdm_conf_node_t *ss7confnode = NULL;
+	const char *err;
+
+#ifdef RECONFIG_DBG
+	ftdm_log(FTDM_LOG_INFO, "Reload signaling configuration.\n");
+#endif
+
 	/* step 1: load signaling xml */
+	if (switch_xml_reload(&err) == SWITCH_STATUS_SUCCESS) {
+		ftdm_log(FTDM_LOG_DEBUG, "Successfully reloaded XML files. \n");
+	} else {
+		ftdm_log(FTDM_LOG_ERROR, "Failed reloading XML files. \n");
+		return FTDM_FAIL;
+	}
+
 	xml = switch_xml_open_cfg(cf, &xml_cfg, NULL);
 	if (!xml) {
 		ftdm_log(FTDM_LOG_ERROR, "Failed to open configuration file %s.xml. \n", cf);
 		return FTDM_FAIL;
 	}
-#ifdef JZ_DBG
+#ifdef RECONFIG_DBG
 	else {
 		ftdm_log(FTDM_LOG_DEBUG, "Successfully opened configuration file %s.xml. \n", cf);
 	}
 #endif
 
-	switch_xml_free(xml);
-	ftdm_log(FTDM_LOG_DEBUG, "Successfully closed configuration file %s.xml. \n", cf);
+	if ((spans = switch_xml_child(xml_cfg, "sangoma_ss7_spans"))) {
+		for (myspan = switch_xml_child(spans, "span"); myspan; myspan = myspan->next) {
+			ftdm_status_t zstatus = FTDM_FAIL;
+			const char *context = "default";
+			const char *dialplan = "XML";
+			ftdm_conf_parameter_t spanparameters[FTDM_MAX_SIG_PARAMETERS];
+			char *name = (char *) switch_xml_attr(myspan, "name");
+			char *id = (char *) switch_xml_attr(myspan, "id");
+			char *configname = (char *) switch_xml_attr(myspan, "cfgprofile");
+			char *operating_mode = (char *) switch_xml_attr(myspan, "operating_mode");
+			ftdm_span_t *span = NULL;
+			uint32_t span_id = 0;
+			unsigned paramindex = 0;
+
+			unsigned b_span_found = 0;
+			ftdm_conf_node_t *tmp_node=NULL;
+			
+			if (!name && !id) {
+				LOAD_ERROR("ss7 span missing required attribute 'id' or 'name', skipping ...\n");
+				continue;
+			} else {
+				ftdm_log(FTDM_LOG_INFO, "Found span [%s]\n", name);
+			}
+
+			if (!configname) {
+				LOAD_ERROR("ss7 span missing required attribute, skipping ...\n");
+				continue;
+			}
+
+            		if (name) {
+                		zstatus = ftdm_span_find_by_name(name, &span);
+			} else {
+				if (switch_is_number(id)) {
+					span_id = atoi(id);
+					zstatus = ftdm_span_find(span_id, &span);
+				}
+
+				if (zstatus != FTDM_SUCCESS) {
+					zstatus = ftdm_span_find_by_name(id, &span);
+				}
+			}
+
+			if (zstatus != FTDM_SUCCESS) {
+				LOAD_ERROR("Error finding FreeTDM span id:%s name:%s\n", switch_str_nil(id), switch_str_nil(name));
+				continue;
+			}
+			
+			if (!span_id) {
+				span_id = ftdm_span_get_id(span);
+			}
+
+			b_span_found = 0;
+			for (int i = 0; i < FTDM_MAX_SPANS_INTERFACE; i++) {
+				if (SPAN_CONFIG[i].span) {
+					if (!strcasecmp(name, SPAN_CONFIG[i].span->name)) {
+						b_span_found = 1;
+						break;
+					}
+				}
+			}
+
+			if (b_span_found) {
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "ss7 config %s was found in the hash already. skipping it.\n", configname);
+				continue;
+			}
+			
+			tmp_node = switch_core_hash_find(globals.ss7_configs, configname);
+			if (tmp_node) {
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "ss7 config %s was found. Deleting current hash entry.\n", configname);
+				switch_core_hash_delete(globals.ss7_configs, configname);
+			}
+			ss7confnode = _get_ss7_config_node(xml_cfg, configname, operating_mode);
+			if (!ss7confnode) {
+				LOAD_ERROR("Error finding ss7config '%s' for FreeTDM span id: %s\n", configname, switch_str_nil(id));
+				continue;
+			}
+
+			memset(spanparameters, 0, sizeof(spanparameters));
+			paramindex = 0;
+
+			if(operating_mode){
+				spanparameters[paramindex].var = "operating-mode";
+				spanparameters[paramindex].val = operating_mode;
+				paramindex++;
+			}
+
+			spanparameters[paramindex].var = "confnode";
+			spanparameters[paramindex].ptr = ss7confnode;
+			paramindex++;
+			for (param = switch_xml_child(myspan, "param"); param; param = param->next) {
+				char *var = (char *) switch_xml_attr_soft(param, "name");
+				char *val = (char *) switch_xml_attr_soft(param, "value");
+
+				if (ftdm_array_len(spanparameters) - 1 == paramindex) {
+					LOAD_ERROR("Too many parameters for ss7 span, ignoring any parameter after %s\n", var);
+					break;
+				}
+
+				if (!strcasecmp(var, "context")) {
+					context = val;
+				} else if (!strcasecmp(var, "dialplan")) {
+					dialplan = val;
+				} else {
+					spanparameters[paramindex].var = var;
+					spanparameters[paramindex].val = val;
+					paramindex++;
+				}
+			}
+
+			if (ftdm_configure_span_signaling(span, 
+						          "sangoma_ss7", 
+						          on_clear_channel_signal,
+							  spanparameters) != FTDM_SUCCESS) {
+				LOAD_ERROR("Error configuring ss7 FreeTDM span %d\n", span_id);
+				continue;
+			}
+			SPAN_CONFIG[span_id].span = span;
+			switch_copy_string(SPAN_CONFIG[span_id].context, context, sizeof(SPAN_CONFIG[span_id].context));
+			switch_copy_string(SPAN_CONFIG[span_id].dialplan, dialplan, sizeof(SPAN_CONFIG[span_id].dialplan));
+			switch_copy_string(SPAN_CONFIG[span_id].type, "Sangoma (SS7)", sizeof(SPAN_CONFIG[span_id].type));
+			ftdm_log(FTDM_LOG_DEBUG, "Configured ss7 FreeTDM span %d with config node %s\n", span_id, configname);
+			if(FTDM_SUCCESS != ftdm_span_start(span)){
+				LOAD_ERROR("Error Starting ss7 FreeTDM span %d\n", span_id);
+				continue;
+			}
+		}
+	}
+
+	if (xml) {
+		switch_xml_free(xml);
+		ftdm_log(FTDM_LOG_DEBUG, "Successfully closed configuration file %s.xml. \n", cf);
+	}
+	
 	return FTDM_SUCCESS;
 }
 
