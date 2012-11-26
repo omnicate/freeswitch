@@ -305,8 +305,9 @@ ftdm_status_t ftmod_ss7_m2ua_cfg(void)
 			}else {
 				ftdm_log (FTDM_LOG_INFO ,"M2UA DLSAP[%d] configuration: OK\n", x);
 			}
+			
+			g_ftdm_sngss7_data.cfg.g_m2ua_cfg.m2ua[x].flags |= SNGSS7_CONFIGURED;
 		} /* END - SNGSS7_CONFIGURED */
-		g_ftdm_sngss7_data.cfg.g_m2ua_cfg.m2ua[x].flags |= SNGSS7_CONFIGURED;
 		x++;
 	}/* END - M2UA Interfaces for loop*/
 /****************************************************************************************************/
@@ -323,8 +324,8 @@ ftdm_status_t ftmod_ss7_m2ua_cfg(void)
 				}else{
 					ftdm_log (FTDM_LOG_INFO ,"NIF DLSAP[%d] configuration: OK\n", x);
 				}
+				g_ftdm_sngss7_data.cfg.g_m2ua_cfg.nif[x].flags |= SNGSS7_CONFIGURED;
 			}
-			g_ftdm_sngss7_data.cfg.g_m2ua_cfg.nif[x].flags |= SNGSS7_CONFIGURED;
 			x++;
 		}
 		sngss7_set_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_NIF_STARTED);
