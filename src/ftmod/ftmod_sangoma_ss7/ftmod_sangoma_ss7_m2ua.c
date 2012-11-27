@@ -262,7 +262,7 @@ ftdm_status_t ftmod_ss7_m2ua_cfg(void)
 	int x=0;
 
 	/* SCTP configuration */
-	if(ftmod_cfg_sctp()){
+	if (ftmod_cfg_sctp()) {
 		ftdm_log (FTDM_LOG_ERROR ,"SCTP Configuration : NOT OK\n");
 		return FTDM_FAIL;
 	} else {
@@ -272,17 +272,17 @@ ftdm_status_t ftmod_ss7_m2ua_cfg(void)
 	/****************************************************************************************************/
 	/* M2UA SCTP SAP configurations */
 	x = 1;
-	while(x<MW_MAX_NUM_OF_INTF){
-		if((g_ftdm_sngss7_data.cfg.g_m2ua_cfg.m2ua[x].id !=0) && 
+	while (x<MW_MAX_NUM_OF_INTF) {
+		if ((g_ftdm_sngss7_data.cfg.g_m2ua_cfg.m2ua[x].id !=0) && 
 				(!(g_ftdm_sngss7_data.cfg.g_m2ua_cfg.m2ua[x].flags & SNGSS7_CONFIGURED))) {
 
 			/****************************************************************************************************/
 			/* M2UA PEER configurations */
 
-			if(ftmod_m2ua_peer_config(x)) {
+			if (ftmod_m2ua_peer_config(x)) {
 				ftdm_log (FTDM_LOG_ERROR ,"M2UA PEER configuration for M2UA INTF[%d] : NOT OK\n", x);
 				return FTDM_FAIL;
-			}else {
+			} else {
 				ftdm_log (FTDM_LOG_INFO ,"M2UA PEER configuration for M2UA INTF[%d] : OK\n", x);
 			}
 			/****************************************************************************************************/
@@ -398,58 +398,58 @@ static int ftmod_tucl_gen_config(void)
 
 static int ftmod_tucl_sap_config(int id)
 {
-        HiMngmt cfg;
-        Pst     pst;
-        HiSapCfg  *pCfg;
+    HiMngmt cfg;
+    Pst     pst;
+    HiSapCfg  *pCfg;
 
-	sng_sctp_link_t *k = &g_ftdm_sngss7_data.cfg.sctpCfg.linkCfg[id];
+    sng_sctp_link_t *k = &g_ftdm_sngss7_data.cfg.sctpCfg.linkCfg[id];
 
-        /* initalize the post structure */
-        smPstInit(&pst);
+    /* initalize the post structure */
+    smPstInit(&pst);
 
-        /* insert the destination Entity */
-        pst.dstEnt = ENTHI;
+    /* insert the destination Entity */
+    pst.dstEnt = ENTHI;
 
-        /* clear the configuration structure */
-        memset(&cfg, 0, sizeof(cfg));
+    /* clear the configuration structure */
+    memset(&cfg, 0, sizeof(cfg));
 
-	/*fill LM  post structure*/
-	cfg.t.cfg.s.hiGen.lmPst.dstProcId   = SFndProcId();
-	cfg.t.cfg.s.hiGen.lmPst.dstInst     = S_INST;
+    /*fill LM  post structure*/
+    cfg.t.cfg.s.hiGen.lmPst.dstProcId   = SFndProcId();
+    cfg.t.cfg.s.hiGen.lmPst.dstInst     = S_INST;
 
-	cfg.t.cfg.s.hiGen.lmPst.dstProcId   = SFndProcId();
-	cfg.t.cfg.s.hiGen.lmPst.dstEnt      = ENTSM;
-	cfg.t.cfg.s.hiGen.lmPst.dstInst     = S_INST;
+    cfg.t.cfg.s.hiGen.lmPst.dstProcId   = SFndProcId();
+    cfg.t.cfg.s.hiGen.lmPst.dstEnt      = ENTSM;
+    cfg.t.cfg.s.hiGen.lmPst.dstInst     = S_INST;
 
-	cfg.t.cfg.s.hiGen.lmPst.prior       = PRIOR0;
-	cfg.t.cfg.s.hiGen.lmPst.route       = RTESPEC;
-	cfg.t.cfg.s.hiGen.lmPst.region      = S_REG;
-	cfg.t.cfg.s.hiGen.lmPst.pool        = S_POOL;
-	cfg.t.cfg.s.hiGen.lmPst.selector    = 0;
+    cfg.t.cfg.s.hiGen.lmPst.prior       = PRIOR0;
+    cfg.t.cfg.s.hiGen.lmPst.route       = RTESPEC;
+    cfg.t.cfg.s.hiGen.lmPst.region      = S_REG;
+    cfg.t.cfg.s.hiGen.lmPst.pool        = S_POOL;
+    cfg.t.cfg.s.hiGen.lmPst.selector    = 0;
 
 
-        /*fill in the specific fields of the header */
-        cfg.hdr.msgType         = TCFG;
-        cfg.hdr.entId.ent       = ENTHI;
-        cfg.hdr.entId.inst      = 0;
-        cfg.hdr.elmId.elmnt     = STTSAP;
+    /*fill in the specific fields of the header */
+    cfg.hdr.msgType         = TCFG;
+    cfg.hdr.entId.ent       = ENTHI;
+    cfg.hdr.entId.inst      = 0;
+    cfg.hdr.elmId.elmnt     = STTSAP;
 
-        pCfg = &cfg.t.cfg.s.hiSap;
+    pCfg = &cfg.t.cfg.s.hiSap;
 
-        pCfg->spId 	= k->id ; /* each SCTP link there will be one tucl sap */ 
-        pCfg->uiSel 	= 0x00;  /*loosley coupled */
-        pCfg->flcEnb = TRUE;
-        pCfg->txqCongStrtLim = HI_SAP_TXN_QUEUE_CONG_START_LIMIT;
-        pCfg->txqCongDropLim = HI_SAP_TXN_QUEUE_CONG_DROP_LIMIT;
-        pCfg->txqCongStopLim = HI_SAP_TXN_QUEUE_CONG_STOP_LIMIT;
-        pCfg->numBins = 10;
+    pCfg->spId 	= k->id ; /* each SCTP link there will be one tucl sap */ 
+    pCfg->uiSel 	= 0x00;  /*loosley coupled */
+    pCfg->flcEnb = TRUE;
+    pCfg->txqCongStrtLim = HI_SAP_TXN_QUEUE_CONG_START_LIMIT;
+    pCfg->txqCongDropLim = HI_SAP_TXN_QUEUE_CONG_DROP_LIMIT;
+    pCfg->txqCongStopLim = HI_SAP_TXN_QUEUE_CONG_STOP_LIMIT;
+    pCfg->numBins = 10;
 
-        pCfg->uiMemId.region = S_REG;
-        pCfg->uiMemId.pool   = S_POOL;
-        pCfg->uiPrior        = PRIOR0;
-        pCfg->uiRoute        = RTESPEC;
+    pCfg->uiMemId.region = S_REG;
+    pCfg->uiMemId.pool   = S_POOL;
+    pCfg->uiPrior        = PRIOR0;
+    pCfg->uiRoute        = RTESPEC;
 
-        return(sng_cfg_tucl(&pst, &cfg));
+    return(sng_cfg_tucl(&pst, &cfg));
 }
 
 /****************************************************************************************************/
@@ -1234,7 +1234,7 @@ void ftmod_ss7_disable_m2ua_sg_logging(void){
 }
 
 /***********************************************************************************************************************/
-int ftmod_ss7_m2ua_start(void){
+int ftmod_ss7_m2ua_start(void) {
 	int x=0;
 
 /***********************************************************************************************************************/
