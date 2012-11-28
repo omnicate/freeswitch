@@ -3496,6 +3496,50 @@ static int ftmod_ss7_next_timeslot(char *ch_map, sng_timeslot_t *timeslot)
 
 	return FTDM_SUCCESS;
 }
+/******************************************************************************/
+
+int ftmod_ss7_get_mtp1_id_by_span_id(int span_id)
+{
+    int x = 0;
+    int mtp1_cfg_id = 0;
+    x = 1;
+    while (x < (MAX_MTP_LINKS)) {
+        if ((g_ftdm_sngss7_data.cfg.mtp1Link[x].id != 0) &&
+                ((g_ftdm_sngss7_data.cfg.mtp1Link[x].flags & SNGSS7_CONFIGURED))) {
+
+            if (span_id == g_ftdm_sngss7_data.cfg.mtp1Link[x].span) {
+                SS7_DEVEL_DEBUG("Found matching mtp1 config index at[%d]\n", x);
+                mtp1_cfg_id = x;
+                break;
+            }
+        }
+        x++;
+    }
+
+    return mtp1_cfg_id;
+}
+
+/******************************************************************************/
+int ftmod_ss7_get_mtp2_id_by_mtp1_id(int mtp1Id)
+{
+    int x = 0;
+    int mtp2_cfg_id = 0;
+    x = 1;
+    while (x < (MAX_MTP_LINKS)) {
+        if ((g_ftdm_sngss7_data.cfg.mtp2Link[x].id != 0) &&
+                ((g_ftdm_sngss7_data.cfg.mtp2Link[x].flags & SNGSS7_CONFIGURED))) {
+
+            if (mtp1Id == g_ftdm_sngss7_data.cfg.mtp2Link[x].mtp1Id) {
+                SS7_DEVEL_DEBUG("Found matching mtp2 config index at[%d]\n", x);
+                mtp2_cfg_id = x;
+                break;
+            }
+        }
+        x++;
+    }
+
+    return mtp2_cfg_id;
+}
 
 /******************************************************************************/
 

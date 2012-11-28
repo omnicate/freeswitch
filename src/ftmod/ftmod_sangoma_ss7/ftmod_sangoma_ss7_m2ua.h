@@ -144,6 +144,7 @@ void ftmod_ss7_m2ua_free(void);
 
 ftdm_status_t ftmod_ss7_m2ua_cfg(void);
 ftdm_status_t ftmod_ss7_m2ua_init(void);
+ftdm_status_t ftmod_ss7_m2ua_span_stop(int span_id);
 
 int ftmod_sctp_ssta_req(int elemt, int id, SbMgmt* cfm);
 int ftmod_m2ua_ssta_req(int elemt, int id, MwMgmt* cfm);

@@ -2519,6 +2519,10 @@ ftdm_status_t ftdm_sangoma_ss7_stop(ftdm_span_t * span)
 
 	/* KONRAD FIX ME - deconfigure any circuits, links, attached to this span */
 
+    if (SNG_SS7_OPR_MODE_M2UA_SG == g_ftdm_operating_mode) {
+        ftmod_ss7_m2ua_span_stop(span->span_id);
+    }
+
 	ftdm_log (FTDM_LOG_DEBUG, "Finished stopping span %s:%u.\n", span->name, span->span_id);
 
 	return FTDM_SUCCESS;

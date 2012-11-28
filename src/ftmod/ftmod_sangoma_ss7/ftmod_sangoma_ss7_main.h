@@ -1137,6 +1137,8 @@ void sngss7_set_sig_status(sngss7_chan_data_t *sngss7_info, ftdm_signaling_statu
 ftdm_status_t sngss7_add_var(sngss7_chan_data_t *ss7_info, const char* var, const char* val);
 ftdm_status_t sngss7_add_raw_data(sngss7_chan_data_t *sngss7_info, uint8_t* data, ftdm_size_t data_len);
 int ftmod_ss7_isup_debug(int action);
+int ftmod_ss7_get_mtp1_id_by_span_id(int span_id);
+int ftmod_ss7_get_mtp2_id_by_mtp1_id(int mtp1_cfg_id);
 
 /* in ftmod_sangoma_ss7_timers.c */
 void handle_isup_t35(void *userdata);

@@ -62,7 +62,7 @@ static int ftmod_sctp_tucl_tsap_bind(int idx);
 static int ftmod_m2ua_sctp_sctsap_bind(int idx);
 static int ftmod_open_endpoint(int idx);
 static int ftmod_init_sctp_assoc(int peer_id);
-static int ftmod_nif_m2ua_dlsap_bind(int id);
+static int ftmod_nif_m2ua_dlsap_bind(int id, int action);
 static int ftmod_nif_mtp2_dlsap_bind(int id);
 static int ftmod_m2ua_debug(int action);
 static int ftmod_tucl_debug(int action);
@@ -72,6 +72,8 @@ static int ftmod_ss7_sctp_shutdown(void);
 static int ftmod_ss7_m2ua_shutdown(void);
 static int ftmod_ss7_tucl_shutdown(void);
 static int ftmod_m2ua_enable_alarm(void);
+static int ftmod_ss7_get_nif_id_by_mtp2_id(int mtp2_id);
+static int ftmod_m2ua_contrl_request(int id ,int action);
 
 
 /******************************************************************************/
@@ -255,7 +257,61 @@ static int ftmod_ss7_sctp_shutdown()
 
 /******************************************************************************/
 
+ftdm_status_t ftmod_ss7_m2ua_span_stop(int span_id)
+{
+    int mtp1_cfg_id=0;
+    int mtp2_cfg_id=0;
+    int nif_cfg_id=0;
+    int m2ua_cfg_id=0;
 
+    if (SNG_SS7_OPR_MODE_M2UA_SG != g_ftdm_operating_mode) {
+
+        /* valid only for m2ua sg as of now */
+
+        return FTDM_SUCCESS;
+    }
+
+    /* as we dont have information which m2ua links belongs to this span so we need perform
+     * below serios of steps in order to get associated m2ua link */
+
+    /* get MTP1 configuration against this span  */
+    mtp1_cfg_id = ftmod_ss7_get_mtp1_id_by_span_id(span_id);
+    /* get MTP2 configuration against mtp1_cfg_id   */
+    mtp2_cfg_id = ftmod_ss7_get_mtp2_id_by_mtp1_id(mtp1_cfg_id);
+    /* get M2UA configuration against mtp2_cfg_id   */
+    nif_cfg_id = ftmod_ss7_get_nif_id_by_mtp2_id(mtp2_cfg_id);
+
+    m2ua_cfg_id = g_ftdm_sngss7_data.cfg.g_m2ua_cfg.nif[nif_cfg_id].m2uaLnkNmb;
+
+    if (!m2ua_cfg_id) {
+        ftdm_log (FTDM_LOG_ERROR ,"Invalid M2UA ID against span[%d] \n", m2ua_cfg_id, span_id);
+        return FTDM_FAIL;
+    }
+
+#if 0
+    if (ftmod_nif_m2ua_dlsap_bind(nif_cfg_id, AUBND )) {
+        ftdm_log (FTDM_LOG_ERROR ,"KAPIL: Control request to UN-Bind DLSAP[%d] between NIF and M2UA: NOT OK\n", nif_cfg_id);
+        return 1;
+    } else {
+        ftdm_log (FTDM_LOG_INFO ,"KAPIL: Control request to UN-Bind DLSAP[%d] between NIF and M2UA : OK\n", nif_cfg_id);
+    }
+#endif
+
+
+    /* First unbound sap */
+    ftmod_m2ua_contrl_request(m2ua_cfg_id, AUBND);
+
+    /* now delete sap */
+    ftmod_m2ua_contrl_request(m2ua_cfg_id, ADEL);
+
+    // disable config structures associated with this span
+    // TODO - need to see if we need to really memset g_ftdm_sngss7_data.cfg.g_m2ua_cfg associated with this span 
+
+
+    return FTDM_SUCCESS;
+}
+
+/******************************************************************************/
 
 ftdm_status_t ftmod_ss7_m2ua_cfg(void)
 {
@@ -1279,13 +1335,13 @@ int ftmod_ss7_m2ua_start(void) {
 			if ((g_ftdm_sngss7_data.cfg.g_m2ua_cfg.nif[x].id !=0) && 
 					(!(g_ftdm_sngss7_data.cfg.g_m2ua_cfg.nif[x].flags & SNGSS7_ACTIVE))) {
 				/* Send a control request to bind the DLSAP between NIF, M2UA and MTP-2 */
-				if(ftmod_nif_m2ua_dlsap_bind(x)) {
+				if (ftmod_nif_m2ua_dlsap_bind(x, ABND )) {
 					ftdm_log (FTDM_LOG_ERROR ,"Control request to bind DLSAP[%d] between NIF and M2UA: NOT OK\n", x);
 					return 1;
-				}else {
+				} else {
 					ftdm_log (FTDM_LOG_INFO ,"Control request to bind DLSAP[%d] between NIF and M2UA : OK\n", x);
 				}
-				if(ftmod_nif_mtp2_dlsap_bind(x)) {
+				if (ftmod_nif_mtp2_dlsap_bind(x)) {
 					ftdm_log (FTDM_LOG_ERROR ,"Control request to bind DLSAP[%d] between NIF and MTP2: NOT OK\n", x);
 					return 1;
 				}else {
@@ -1342,6 +1398,47 @@ int ftmod_ss7_m2ua_start(void) {
 	}
 
 	return 0;
+}
+/***********************************************************************************************************************/
+static int ftmod_m2ua_contrl_request(int id, int action)
+{
+	int ret = 0x00;
+	Pst pst;
+	MwMgmt cntrl;  
+	//sng_m2ua_cfg_t* m2ua  = &g_ftdm_sngss7_data.cfg.g_m2ua_cfg.m2ua[id];
+	//sng_m2ua_cluster_cfg_t*     clust = &g_ftdm_sngss7_data.cfg.g_m2ua_cfg.m2ua_clus[m2ua->clusterId];
+
+	memset((U8 *)&pst, 0, sizeof(Pst));
+	memset((U8 *)&cntrl, 0, sizeof(MwMgmt));
+
+	smPstInit(&pst);
+
+	pst.dstEnt = ENTMW;
+
+	/* prepare header */
+	cntrl.hdr.msgType     = TCNTRL;         /* message type */
+	cntrl.hdr.entId.ent   = ENTMW;          /* entity */
+	cntrl.hdr.entId.inst  = 0;              /* instance */
+	cntrl.hdr.elmId.elmnt = STMWDLSAP;       /* General */
+	cntrl.hdr.transId     = 1;     /* transaction identifier */
+
+	cntrl.hdr.response.selector    = 0;
+	cntrl.hdr.response.prior       = PRIOR0;
+	cntrl.hdr.response.route       = RTESPEC;
+	cntrl.hdr.response.mem.region  = S_REG;
+	cntrl.hdr.response.mem.pool    = S_POOL;
+
+
+	cntrl.t.cntrl.action = action;
+	cntrl.t.cntrl.s.suId = id; 
+
+	
+	if (0 != (ret = sng_cntrl_m2ua (&pst, &cntrl))) {
+        ftdm_log (FTDM_LOG_ERROR ,"Failure in M2UA action[%s] \n", (action==ADEL)?"ADEL":"AUBND");
+	} else {
+        ftdm_log (FTDM_LOG_ERROR ," M2UA action[%s] succes \n", (action==ADEL)?"ADEL":"AUBND");
+    }
+	return ret;
 }
 /***********************************************************************************************************************/
 
@@ -1504,7 +1601,7 @@ static int ftmod_m2ua_sctp_sctsap_bind(int id)
    return ret;
 }   
 /***********************************************************************************************************************/
-static int ftmod_nif_m2ua_dlsap_bind(int id)
+static int ftmod_nif_m2ua_dlsap_bind(int id , int action)
 {
   Pst pst;
   NwMgmt cntrl;  
@@ -2005,6 +2102,27 @@ int ftmod_asp_ac(int peer_id)
 
    return (sng_cntrl_m2ua (&pst, &cntrl));
 }
+/************************************************************************************/
+static int ftmod_ss7_get_nif_id_by_mtp2_id(int mtp2_id)
+{
+    int nif_id = 0x00;
+    int x = 1;
+    while(x<MW_MAX_NUM_OF_INTF) {
+        if ((g_ftdm_sngss7_data.cfg.g_m2ua_cfg.nif[x].id !=0) && 
+                ((g_ftdm_sngss7_data.cfg.g_m2ua_cfg.nif[x].flags & SNGSS7_CONFIGURED))) {
+
+            if (mtp2_id == g_ftdm_sngss7_data.cfg.g_m2ua_cfg.nif[x].mtp2LnkNmb) {
+                nif_id = x; 
+                ftdm_log (FTDM_LOG_INFO ,"Matched associated NIF id [%d] \n", nif_id);
+                break;
+            }
+        }
+        x++;
+    }
+
+    return nif_id;
+}
+
 /************************************************************************************/
 
 
