@@ -65,6 +65,13 @@ typedef struct sng_m2ua_cfg{
 	uint16_t    		 clusterId;	/* idx to m2ua_cluster profile */
 }sng_m2ua_cfg_t;
 
+typedef enum{
+	SNG_M2UA_TIMER_ASP_UP        = 0x1,     /* ASP UP Timer Event */
+	SNG_M2UA_TIMER_ASP_ACTIVE    = 0x2,     /* ASP ACTIVE Timer Event */
+	SNG_M2UA_TIMER_MTP3_LINKSET_BIND_ENABLE = 0x3,     /* MTP3 Link Bind & Enable */ 
+}sng_m2ua_tmr_evt_types_e;
+
+
 typedef struct sng_m2ua_peer_cfg{
 	char 	    		 name[MAX_NAME_LEN];
 	uint32_t    		 flags;
@@ -77,6 +84,8 @@ typedef struct sng_m2ua_peer_cfg{
 	uint32_t    	         destAddrList[SCT_MAX_NET_ADDRS+1]; /* Destination adddress list */
 	uint16_t    		 locOutStrms;	/*Number of outgoing streams supported by this association*/ 
 	int 			 init_sctp_assoc; /* flag to tell if we need to initiate SCTP association */
+	sng_m2ua_tmr_evt_types_e  tmr_event; /* timer event type */
+	int 			tmr_running; 		/* timer specific data */
 }sng_m2ua_peer_cfg_t;
 
 typedef enum{
@@ -106,20 +115,18 @@ typedef struct sng_m2ua_cluster_cfg{
 }sng_m2ua_cluster_cfg_t;
 
 
-typedef enum{
-	SNG_M2UA_TIMER_ASP_UP        = 0x1,     /* ASP UP Timer Event */
-	SNG_M2UA_TIMER_ASP_ACTIVE    = 0x2,     /* ASP ACTIVE Timer Event */
-	SNG_M2UA_TIMER_MTP3_LINKSET_BIND_ENABLE = 0x3,     /* MTP3 Link Bind & Enable */ 
-}sng_m2ua_tmr_evt_types_e;
+
+#define SNG_M2UA_PRINT_TIMER(_timer)\
+(_timer == SNG_M2UA_TIMER_ASP_UP)?"SNG_M2UA_TIMER_ASP_UP":\
+(_timer == SNG_M2UA_TIMER_ASP_ACTIVE)?"SNG_M2UA_TIMER_ASP_ACTIVE":\
+(_timer == SNG_M2UA_TIMER_MTP3_LINKSET_BIND_ENABLE)?"SNG_M2UA_TIMER_MTP3_LINKSET_BIND_ENABLE":\
+"unknown timer"
 
 
-typedef struct sng_m2ua_tmr{
+typedef struct sng_m2ua_tmr {
 	ftdm_sched_t            *tmr_sched;
 	ftdm_timer_id_t         tmr_id;
-	int 			peer_id; 		/* timer specific data */
-	int 			tmr_running; 		/* timer specific data */
-	sng_m2ua_tmr_evt_types_e  tmr_event;
-}sng_m2ua_tmr_sched_t;
+} sng_m2ua_tmr_sched_t;
 
 typedef struct sng_m2ua_gbl_cfg{
 	sng_nif_cfg_t 		nif[MW_MAX_NUM_OF_INTF+1];

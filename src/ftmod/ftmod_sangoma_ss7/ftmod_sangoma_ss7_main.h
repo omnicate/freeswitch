@@ -1152,7 +1152,8 @@ void handle_disable_ubl_timeout(void *userdata);
 void handle_disable_tx_ubl_timeout_on_tx_blo(void *userdata);
 #endif
 
-void ftmod_ss7_enable_linkset(void);
+void ftmod_ss7_enable_all_linksets(void);
+void ftmod_ss7_enable_linkset(int linkset_id);
 
 /******************************************************************************/
 

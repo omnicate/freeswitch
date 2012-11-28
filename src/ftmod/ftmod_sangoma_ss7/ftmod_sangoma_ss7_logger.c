@@ -935,7 +935,7 @@ void handle_sng_m2ua_alarm(Pst *pst, MwMgmt *sta)
 							/* AS becomes ACTIVE..now establish MTP3 link alignment procedures */
 							/* we can not send message back to trillium stack from receiving message thread 
 							 * start timer */
-							ftdm_m2ua_start_timer(SNG_M2UA_TIMER_MTP3_LINKSET_BIND_ENABLE, 0x00);
+							ftdm_m2ua_start_timer(SNG_M2UA_TIMER_MTP3_LINKSET_BIND_ENABLE, sta->t.usta.s.peerId);
 						}
 					}
 				}
