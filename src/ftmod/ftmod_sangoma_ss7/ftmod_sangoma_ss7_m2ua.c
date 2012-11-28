@@ -1928,28 +1928,29 @@ void ftdm_m2ua_start_timer(sng_m2ua_tmr_evt_types_e evt_type , int peer_id)
 {
 	char timer_name[128];
 	sng_m2ua_tmr_sched_t  *sched = &g_ftdm_sngss7_data.cfg.g_m2ua_cfg.sched;
+    sng_m2ua_peer_cfg_t   *peer  = &g_ftdm_sngss7_data.cfg.g_m2ua_cfg.m2ua_peer[peer_id];
 
 	memset(&timer_name[0],0,sizeof(timer_name));
 
-	if(sched->tmr_running){
-		SS7_INFO (" Timer[%d] already running with timer-id[%d]\n",sched->tmr_event, sched->tmr_id);
+    
+	if (peer->tmr_running) {
+		SS7_INFO (" Timer[%s] already running with timer-id[%d]\n",
+                 SNG_M2UA_PRINT_TIMER(peer->tmr_event), sched->tmr_id);
 		return;
 	}
 
-	sched->tmr_event = evt_type;
+	peer->tmr_event = evt_type;
 
 	switch(evt_type)
 	{
 		case SNG_M2UA_TIMER_ASP_UP:
 			{
 				strcpy(&timer_name[0],"asp-up-timer");
-				sched->peer_id = peer_id;
 				break;
 			}
 		case SNG_M2UA_TIMER_ASP_ACTIVE:
 			{
 				strcpy(&timer_name[0],"asp-active-timer");
-				sched->peer_id = peer_id;
 				break;
 			}
 		case SNG_M2UA_TIMER_MTP3_LINKSET_BIND_ENABLE:
@@ -1966,13 +1967,14 @@ void ftdm_m2ua_start_timer(sng_m2ua_tmr_evt_types_e evt_type , int peer_id)
 				&timer_name[0],	
 				2000, /* time is in ms - starting tmr for 2 sec */	
 				ftdm_m2ua_handle_tmr_expiry,	
-				sched,	
+				peer,	
 				&sched->tmr_id))
 	{
-		SS7_ERROR ("Unable to schedule ASP-UP timer\n");
+		SS7_ERROR ("Unable to schedule %s timer\n", &timer_name[0]);
 	}else{
-		SS7_INFO (" Timer[%s] started with timer-id[%d] for 100 ms\n",&timer_name[0], sched->tmr_id);
-		sched->tmr_running = 0x01;
+		SS7_INFO ("Timer[%s] started with timer-id[%d] for 100 ms for peer[%d]\n",
+                    &timer_name[0], sched->tmr_id,peer->id);
+		peer->tmr_running = 0x01;
 	}
 
 	return;
@@ -1980,43 +1982,90 @@ void ftdm_m2ua_start_timer(sng_m2ua_tmr_evt_types_e evt_type , int peer_id)
 /************************************************************************************/
 void ftdm_m2ua_handle_tmr_expiry(void *userdata)
 {
-	sng_m2ua_tmr_sched_t  *sched = (sng_m2ua_tmr_sched_t*)userdata;
+	int x , y , a , b, peer_id = 0;
+    sng_m2ua_peer_cfg_t         *peer = (sng_m2ua_peer_cfg_t*)userdata;
+	sng_m2ua_cluster_cfg_t*     clust = NULL; 
+	sng_m2ua_cfg_t*             m2ua  = NULL; 
 
-	if(NULL == sched) {
+	if (NULL == peer) {
 		ftdm_log (FTDM_LOG_ERROR ,"Invalid userdata \n");
 		return;
 	}
 
-	g_ftdm_sngss7_data.cfg.g_m2ua_cfg.sched.tmr_running = 0x00;
+	peer->tmr_running = 0x00;
 
-	switch(sched->tmr_event)
+    ftdm_log (FTDM_LOG_INFO ,"Timer[%s] Expiry for peer[%d] \n", 
+                SNG_M2UA_PRINT_TIMER(peer->tmr_event), peer->id);
+
+	switch(peer->tmr_event)
 	{
 		case SNG_M2UA_TIMER_ASP_UP:
 			{
-				ftdm_log (FTDM_LOG_INFO ,"M2UA ASP-UP Timer Expiry \n");
-				if(ftmod_asp_up(sched->peer_id)) {
+				if (ftmod_asp_up(peer->id)) {
 					ftdm_log (FTDM_LOG_ERROR ,"ftmod_asp_up FAIL  \n");
-				}else {
+				} else {
 					ftdm_log (FTDM_LOG_INFO ,"ftmod_asp_up SUCCESS  \n");
 				}
 				break;
 			}
 		case SNG_M2UA_TIMER_ASP_ACTIVE:
 			{
-				ftdm_log (FTDM_LOG_INFO ,"M2UA ASP-ACTIVE Timer Expiry \n");
-				if(ftmod_asp_ac(sched->peer_id)) {
+				if (ftmod_asp_ac(peer->id)) {
 					ftdm_log (FTDM_LOG_ERROR ,"ftmod_asp_ac FAIL  \n");
-				}else {
+				} else {
 					ftdm_log (FTDM_LOG_INFO ,"ftmod_asp_ac SUCCESS  \n");
 				}
 				break;
 			}
 		case SNG_M2UA_TIMER_MTP3_LINKSET_BIND_ENABLE:
-			{
-				ftdm_log (FTDM_LOG_INFO ,"M2UA ASP- MTP3 LINKSET bind-enable Timer Expiry \n");
-				ftmod_ss7_enable_linkset();
-				break;
-			}
+            {
+                /* reverse approach - peer_id to mtp3 linkset id 
+                 * 1st - get cluster id
+                 * 2nd - get m2ua id
+                 * 3rd - get mtp3_link id 
+                 * */
+
+                x=1;
+                while (x < MW_MAX_NUM_OF_CLUSTER) {
+                    clust = &g_ftdm_sngss7_data.cfg.g_m2ua_cfg.m2ua_clus[x];
+                
+                    for (y = 0; y < clust->numOfPeers;y++) {
+                        peer_id = clust->peerIdLst[y];
+                        if (peer_id == peer->id) {
+                            /* got matched cluster-id, now try to get m2ua_id */
+                            a = 1;
+                            while ( a < MW_MAX_NUM_OF_INTF ) {
+                                m2ua = &g_ftdm_sngss7_data.cfg.g_m2ua_cfg.m2ua[a];
+                                if (clust->id == m2ua->clusterId) {
+                                    /* got m2ua id */
+
+                                    /* loop through mtp3_link to get linkset-id */
+                                    b = 1;
+                                    while (b < (MAX_MTP_LINKS)) {
+                                        if ((g_ftdm_sngss7_data.cfg.mtp3Link[b].id != 0) &&
+                                                ((g_ftdm_sngss7_data.cfg.mtp3Link[b].flags & SNGSS7_CONFIGURED))) {
+
+                                            if (m2ua->id == g_ftdm_sngss7_data.cfg.mtp3Link[b].mtp2Id) {
+                                                ftdm_log (FTDM_LOG_INFO ,"Configuring linkset-id[%d]\n",
+                                                        g_ftdm_sngss7_data.cfg.mtp3Link[b].linkSetId);                                   
+                                                ftmod_ss7_enable_linkset(g_ftdm_sngss7_data.cfg.mtp3Link[b].linkSetId);
+                                            }
+                                        }
+                                        b++;
+                                    } /* MAX_MTP_LINKS while loop */
+                                }
+                                a++;
+                            } /* MW_MAX_NUM_OF_INTF while loop */
+
+                        } /* if (peer_id == peer->id) */
+
+                    } /* clust->numOfPeers for loop */
+
+                    x++;
+                } /* MW_MAX_NUM_OF_CLUSTER */
+
+                break;
+            }
 		default:
 			return;
 	}

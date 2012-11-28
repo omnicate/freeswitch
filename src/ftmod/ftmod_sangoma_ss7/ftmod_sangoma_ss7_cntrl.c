@@ -131,7 +131,7 @@ int ft_to_sngss7_activate_all(void)
 }
 
 /******************************************************************************/
-void ftmod_ss7_enable_linkset()
+void ftmod_ss7_enable_all_linksets()
 {
 	int x = 0x00;
 	if (g_ftdm_sngss7_data.cfg.mtpRoute[1].id != 0) {
@@ -154,6 +154,27 @@ void ftmod_ss7_enable_linkset()
 
 			x++;
 		} /* while (x < (MAX_MTP_LINKSETS+1)) */
+	}
+}
+
+/******************************************************************************/
+void ftmod_ss7_enable_linkset(int linkset_id)
+{
+	if (g_ftdm_sngss7_data.cfg.mtpRoute[1].id != 0) {
+			/* check if this link has already been actived */
+			if ((g_ftdm_sngss7_data.cfg.mtpLinkSet[linkset_id].id != 0) &&
+					(!(g_ftdm_sngss7_data.cfg.mtpLinkSet[linkset_id].flags & SNGSS7_ACTIVE))) {
+
+				if (ftmod_ss7_enable_mtpLinkSet(linkset_id)) {	
+					SS7_CRITICAL("LinkSet \"%s\" Enable: NOT OK\n", g_ftdm_sngss7_data.cfg.mtpLinkSet[linkset_id].name);
+					return ;
+				} else {
+					SS7_INFO("LinkSet \"%s\" Enable: OK\n", g_ftdm_sngss7_data.cfg.mtpLinkSet[linkset_id].name);
+				}
+
+				/* set the SNGSS7_ACTIVE flag */
+				g_ftdm_sngss7_data.cfg.mtpLinkSet[linkset_id].flags |= SNGSS7_ACTIVE;
+			} /* if !SNGSS7_ACTIVE */
 	}
 }
 
