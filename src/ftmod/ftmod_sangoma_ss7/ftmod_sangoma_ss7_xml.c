@@ -1549,47 +1549,34 @@ static int ftmod_ss7_parse_mtp_routes(ftdm_conf_node_t *mtp_routes)
 /******************************************************************************/
 static int ftmod_ss7_parse_mtp_route(ftdm_conf_node_t *mtp_route)
 {
-	sng_route_t		 		mtpRoute;
+	sng_route_t		 	mtpRoute;
 	ftdm_conf_parameter_t	*parm = mtp_route->parameters;
-	int					 	num_parms = mtp_route->n_parameters;
-	int					 	i;
+	int					num_parms = mtp_route->n_parameters;
+	int					i;
 	sng_link_set_list_t		*lnkSet;
 
 	ftdm_conf_node_t		*linkset;
-	int						numLinks;
+	int					numLinks;
 
-	/* initalize the mtpRoute structure */
 	memset(&mtpRoute, 0x0, sizeof(mtpRoute));
-
-	/* confirm that we are looking at an mtp_link */
 	if (strcasecmp(mtp_route->name, "mtp_route")) {
 		SS7_ERROR("We're looking at \"%s\"...but we're supposed to be looking at \"mtp_route\"!\n",mtp_route->name);
 		return FTDM_FAIL;
-	} else {
-		SS7_DEBUG("Parsing \"mtp_route\"...\n");
-	}
+	} 
+
+	SS7_DEBUG("Parsing \"mtp_route\"...\n");
 
 	for (i = 0; i < num_parms; i++) {
-	/**************************************************************************/
-
-		/* try to match the parameter to what we expect */
 		if (!strcasecmp(parm->var, "name")) {
-		/**********************************************************************/
 			strcpy((char *)mtpRoute.name, parm->val);
 			SS7_DEBUG("Found an mtpRoute named = %s\n", mtpRoute.name);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "id")) {
-		/**********************************************************************/
 			mtpRoute.id = atoi(parm->val);
 			SS7_DEBUG("Found an mtpRoute id = %d\n", mtpRoute.id);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "dpc")) {
-		/**********************************************************************/
 			mtpRoute.dpc = atoi(parm->val);
 			SS7_DEBUG("Found an mtpRoute dpc = %d\n", mtpRoute.dpc);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isSTP")) {
-		/**********************************************************************/
 			if (!strcasecmp(parm->val, "no")) {
 				mtpRoute.isSTP = 0;
 				SS7_DEBUG("Found an mtpRoute isSTP = no\n");
@@ -1597,73 +1584,46 @@ static int ftmod_ss7_parse_mtp_route(ftdm_conf_node_t *mtp_route)
 				mtpRoute.isSTP = 1;
 				SS7_DEBUG("Found an mtpRoute isSTP = yes\n");
 			} else {
-				SS7_ERROR("Found an invalid parameter for isSTP %s!\n", parm->val);
-			   return FTDM_FAIL;
+				SS7_ERROR("Found an invalid parameter for isSTP. Set to default value NO. %s!\n", parm->val);
+				mtpRoute.isSTP = 0;
 			}
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "mtp3.t6")) {
-		/**********************************************************************/
 			mtpRoute.t6 = atoi(parm->val);
 			SS7_DEBUG("Found an mtp3 t6 = %d\n",mtpRoute.t6);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "mtp3.t8")) {
-		/**********************************************************************/
 			mtpRoute.t8 = atoi(parm->val);
 			SS7_DEBUG("Found an mtp3 t8 = %d\n",mtpRoute.t8);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "mtp3.t10")) {
-		/**********************************************************************/
 			mtpRoute.t10 = atoi(parm->val);
 			SS7_DEBUG("Found an mtp3 t10 = %d\n",mtpRoute.t10);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "mtp3.t11")) {
-		/**********************************************************************/
 			mtpRoute.t11 = atoi(parm->val);
 			SS7_DEBUG("Found an mtp3 t11 = %d\n",mtpRoute.t11);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "mtp3.t15")) {
-		/**********************************************************************/
 			mtpRoute.t15 = atoi(parm->val);
 			SS7_DEBUG("Found an mtp3 t15 = %d\n",mtpRoute.t15);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "mtp3.t16")) {
-		/**********************************************************************/
 			mtpRoute.t16 = atoi(parm->val);
 			SS7_DEBUG("Found an mtp3 t16 = %d\n",mtpRoute.t16);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "mtp3.t18")) {
-		/**********************************************************************/
 			mtpRoute.t18 = atoi(parm->val);
 			SS7_DEBUG("Found an mtp3 t18 = %d\n",mtpRoute.t18);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "mtp3.t19")) {
-		/**********************************************************************/
 			mtpRoute.t19 = atoi(parm->val);
 			SS7_DEBUG("Found an mtp3 t19 = %d\n",mtpRoute.t19);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "mtp3.t21")) {
-		/**********************************************************************/
 			mtpRoute.t21 = atoi(parm->val);
 			SS7_DEBUG("Found an mtp3 t21 = %d\n",mtpRoute.t21);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "mtp3.t25")) {
-		/**********************************************************************/
 			mtpRoute.t25 = atoi(parm->val);
 			SS7_DEBUG("Found an mtp3 t25 = %d\n",mtpRoute.t25);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "mtp3.t26")) {
-		/**********************************************************************/
 			mtpRoute.t26 = atoi(parm->val);
 			SS7_DEBUG("Found an mtp3 t26 = %d\n",mtpRoute.t26);
-		/**********************************************************************/
 		} else {
-		/**********************************************************************/
-			SS7_ERROR("Found an invalid parameter \"%s\"!\n", parm->val);
-			return FTDM_FAIL;
-		/**********************************************************************/
+			SS7_WARN("Found an invalid parameter \"%s\"!Ignoring it.\n", parm->var);
 		}
 
-		/* move to the next parameter */
 		parm = parm + 1;
 	}
 
@@ -1674,11 +1634,7 @@ static int ftmod_ss7_parse_mtp_route(ftdm_conf_node_t *mtp_route)
 	/* parse in the list of linksets this route is reachable by */
 	linkset = mtp_route->child->child;
 
-	/* initalize the link-list of linkSet Ids */
-	lnkSet = &mtpRoute.lnkSets;
-
-	while (linkset != NULL) {
-	/**************************************************************************/
+	for (lnkSet = &mtpRoute.lnkSets; linkset != NULL;linkset = linkset->next) {
 		/* extract the linkset Id */
 		lnkSet->lsId = atoi(linkset->parameters->val);
 
@@ -1686,13 +1642,13 @@ static int ftmod_ss7_parse_mtp_route(ftdm_conf_node_t *mtp_route)
 			SS7_DEBUG("Found mtpRoute linkset id = %d that is valid\n",lnkSet->lsId);
 		} else {
 			SS7_ERROR("Found mtpRoute linkset id = %d that is invalid\n",lnkSet->lsId);
-			goto move_along;
+			continue;
 		}
 
 		/* pull up the linktype, switchtype, and SSF from the linkset */
-		mtpRoute.linkType = g_ftdm_sngss7_data.cfg.mtpLinkSet[lnkSet->lsId].linkType;
-		mtpRoute.switchType = g_ftdm_sngss7_data.cfg.mtpLinkSet[lnkSet->lsId].switchType;
-		mtpRoute.ssf = g_ftdm_sngss7_data.cfg.mtpLinkSet[lnkSet->lsId].ssf;
+		mtpRoute.linkType 		= g_ftdm_sngss7_data.cfg.mtpLinkSet[lnkSet->lsId].linkType;
+		mtpRoute.switchType 	= g_ftdm_sngss7_data.cfg.mtpLinkSet[lnkSet->lsId].switchType;
+		mtpRoute.ssf 			= g_ftdm_sngss7_data.cfg.mtpLinkSet[lnkSet->lsId].ssf;
 		
 		/* extract the number of cmbLinkSetId aleady on this linkset */
 		numLinks = g_ftdm_sngss7_data.cfg.mtpLinkSet[lnkSet->lsId].numLinks;
@@ -1708,16 +1664,9 @@ static int ftmod_ss7_parse_mtp_route(ftdm_conf_node_t *mtp_route)
 		lnkSet = lnkSet->next;
 		lnkSet->lsId = 0;
 		lnkSet->next = NULL;
-
-move_along:
-		/* move to the next linkset element */
-		linkset = linkset->next;
-	/**************************************************************************/
-	} /* while (linkset != null) */
-
+	}
 
 	ftmod_ss7_fill_in_mtp3_route(&mtpRoute);
-
 	ftmod_ss7_fill_in_nsap(&mtpRoute);
 
 	return FTDM_SUCCESS;
@@ -1777,33 +1726,20 @@ static int ftmod_ss7_parse_isup_interface(ftdm_conf_node_t *isup_interface)
 	}
 
 
-	for (i = 0; i < num_parms; i++) {
-	/**************************************************************************/
-
-		/* try to match the parameter to what we expect */
+	for (i = 0; i < num_parms; i++, parm++) {
 		if (!strcasecmp(parm->var, "name")) {
-		/**********************************************************************/
 			strcpy((char *)sng_isup.name, parm->val);
 			SS7_DEBUG("Found an isup_interface named = %s\n", sng_isup.name);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "id")) {
-		/**********************************************************************/
 			sng_isup.id = atoi(parm->val);
 			SS7_DEBUG("Found an isup id = %d\n", sng_isup.id);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "spc")) {
-		/**********************************************************************/
 			sng_isup.spc = atoi(parm->val);
 			SS7_DEBUG("Found an isup SPC = %d\n", sng_isup.spc);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "mtprouteId")) {
-		/**********************************************************************/
 			sng_isup.mtpRouteId=atoi(parm->val);
-
 			SS7_DEBUG("Found an isup mptRouteId = %d\n", sng_isup.mtpRouteId);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "ssf")) {
-		/**********************************************************************/
 			ret = find_ssf_type_in_map(parm->val);
 			if (ret == -1) {
 				SS7_ERROR("Found an invalid isup ssf = %s\n", parm->var);
@@ -1813,249 +1749,151 @@ static int ftmod_ss7_parse_isup_interface(ftdm_conf_node_t *isup_interface)
 				sng_isap.ssf = sng_ssf_type_map[ret].tril_type;
 				SS7_DEBUG("Found an isup ssf = %s\n", sng_ssf_type_map[ret].sng_type);
 			}
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isup.t1")) {
-		/**********************************************************************/
 			sng_isap.t1 = atoi(parm->val);
 			SS7_DEBUG("Found isup t1 = %d\n",sng_isap.t1);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isup.t2")) {
-		/**********************************************************************/
 			sng_isap.t2 = atoi(parm->val);
 			SS7_DEBUG("Found isup t2 = %d\n",sng_isap.t2);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isup.t4")) {
-		/**********************************************************************/
 			sng_isup.t4 = atoi(parm->val);
 			SS7_DEBUG("Found isup t4 = %d\n",sng_isup.t4);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isup.t5")) {
-		/**********************************************************************/
 			sng_isap.t5 = atoi(parm->val);
 			SS7_DEBUG("Found isup t5 = %d\n",sng_isap.t5);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isup.t6")) {
-		/**********************************************************************/
 			sng_isap.t6 = atoi(parm->val);
 			SS7_DEBUG("Found isup t6 = %d\n",sng_isap.t6);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isup.t7")) {
-		/**********************************************************************/
 			sng_isap.t7 = atoi(parm->val);
 			SS7_DEBUG("Found isup t7 = %d\n",sng_isap.t7);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isup.t8")) {
-		/**********************************************************************/
 			sng_isap.t8 = atoi(parm->val);
 			SS7_DEBUG("Found isup t8 = %d\n",sng_isap.t8);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isup.t9")) {
-		/**********************************************************************/
 			sng_isap.t9 = atoi(parm->val);
 			SS7_DEBUG("Found isup t9 = %d\n",sng_isap.t9);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isup.t11")) {
-		/**********************************************************************/
 			sng_isup.t11 = atoi(parm->val);
 			SS7_DEBUG("Found isup t11 = %d\n",sng_isup.t11);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isup.t18")) {
-		/**********************************************************************/
 			sng_isup.t18 = atoi(parm->val);
 			SS7_DEBUG("Found isup t18 = %d\n",sng_isup.t18);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isup.t19")) {
-		/**********************************************************************/
 			sng_isup.t19 = atoi(parm->val);
 			SS7_DEBUG("Found isup t19 = %d\n",sng_isup.t19);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isup.t20")) {
-		/**********************************************************************/
 			sng_isup.t20 = atoi(parm->val);
 			SS7_DEBUG("Found isup t20 = %d\n",sng_isup.t20);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isup.t21")) {
-		/**********************************************************************/
 			sng_isup.t21 = atoi(parm->val);
 			SS7_DEBUG("Found isup t21 = %d\n",sng_isup.t21);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isup.t22")) {
-		/**********************************************************************/
 			sng_isup.t22 = atoi(parm->val);
 			SS7_DEBUG("Found isup t22 = %d\n",sng_isup.t22);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isup.t23")) {
-		/**********************************************************************/
 			sng_isup.t23 = atoi(parm->val);
 			SS7_DEBUG("Found isup t23 = %d\n",sng_isup.t23);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isup.t24")) {
-		/**********************************************************************/
 			sng_isup.t24 = atoi(parm->val);
 			SS7_DEBUG("Found isup t24 = %d\n",sng_isup.t24);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isup.t25")) {
-		/**********************************************************************/
 			sng_isup.t25 = atoi(parm->val);
 			SS7_DEBUG("Found isup t25 = %d\n",sng_isup.t25);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isup.t26")) {
-		/**********************************************************************/
 			sng_isup.t26 = atoi(parm->val);
 			SS7_DEBUG("Found isup t26 = %d\n",sng_isup.t26);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isup.t28")) {
-		/**********************************************************************/
 			sng_isup.t28 = atoi(parm->val);
 			SS7_DEBUG("Found isup t28 = %d\n",sng_isup.t28);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isup.t29")) {
-		/**********************************************************************/
 			sng_isup.t29 = atoi(parm->val);
 			SS7_DEBUG("Found isup t29 = %d\n",sng_isup.t29);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isup.t30")) {
-		/**********************************************************************/
 			sng_isup.t30 = atoi(parm->val);
 			SS7_DEBUG("Found isup t30 = %d\n",sng_isup.t30);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isup.t31")) {
-		/**********************************************************************/
 			sng_isap.t31 = atoi(parm->val);
 			SS7_DEBUG("Found isup t31 = %d\n",sng_isap.t31);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isup.t32")) {
-		/**********************************************************************/
 			sng_isup.t32 = atoi(parm->val);
 			SS7_DEBUG("Found isup t32 = %d\n",sng_isup.t32);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isup.t33")) {
-		/**********************************************************************/
 			sng_isap.t33 = atoi(parm->val);
 			SS7_DEBUG("Found isup t33 = %d\n",sng_isap.t33);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isup.t34")) {
-		/**********************************************************************/
 			sng_isap.t34 = atoi(parm->val);
 			SS7_DEBUG("Found isup t34 = %d\n",sng_isap.t34);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isup.t36")) {
-		/**********************************************************************/
 			sng_isap.t36 = atoi(parm->val);
 			SS7_DEBUG("Found isup t36 = %d\n",sng_isap.t36);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isup.t37")) {
-		/**********************************************************************/
 			sng_isup.t37 = atoi(parm->val);
 			SS7_DEBUG("Found isup t37 = %d\n",sng_isup.t37);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isup.t38")) {
-		/**********************************************************************/
 			sng_isup.t38 = atoi(parm->val);
 			SS7_DEBUG("Found isup t38 = %d\n",sng_isup.t38);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isup.t39")) {
-		/**********************************************************************/
 			sng_isup.t39 = atoi(parm->val);
 			SS7_DEBUG("Found isup t39 = %d\n",sng_isup.t39);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isup.tccr")) {
-		/**********************************************************************/
 			sng_isap.tccr = atoi(parm->val);
 			SS7_DEBUG("Found isup tccr = %d\n",sng_isap.tccr);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isup.tccrt")) {
-		/**********************************************************************/
 			sng_isap.tccrt = atoi(parm->val);
 			SS7_DEBUG("Found isup tccrt = %d\n",sng_isap.tccrt);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isup.tex")) {
-		/**********************************************************************/
 			sng_isap.tex = atoi(parm->val);
 			SS7_DEBUG("Found isup tex = %d\n",sng_isap.tex);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isup.tect")) {
-		/**********************************************************************/
 			sng_isap.tect = atoi(parm->val);
 			SS7_DEBUG("Found isup tect = %d\n",sng_isap.tect);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isup.tcrm")) {
-		/**********************************************************************/
 			sng_isap.tcrm = atoi(parm->val);
 			SS7_DEBUG("Found isup tcrm = %d\n",sng_isap.tcrm);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isup.tcra")) {
-		/**********************************************************************/
 			sng_isap.tcra = atoi(parm->val);
 			SS7_DEBUG("Found isup tcra = %d\n",sng_isap.tcra);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isup.tfgr")) {
-		/**********************************************************************/
 			sng_isup.tfgr = atoi(parm->val);
 			SS7_DEBUG("Found isup tfgr = %d\n",sng_isup.tfgr);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isup.trelrsp")) {
-		/**********************************************************************/
 			sng_isap.trelrsp = atoi(parm->val);
 			SS7_DEBUG("Found isup trelrsp = %d\n",sng_isap.trelrsp);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isup.tfnlrelrsp")) {
-		/**********************************************************************/
 			sng_isap.tfnlrelrsp = atoi(parm->val);
 			SS7_DEBUG("Found isup tfnlrelrsp = %d\n",sng_isap.tfnlrelrsp);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isup.tfnlrelrsp")) {
-		/**********************************************************************/
 			sng_isap.tfnlrelrsp = atoi(parm->val);
 			SS7_DEBUG("Found isup tfnlrelrsp = %d\n",sng_isap.tfnlrelrsp);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isup.tpause")) {
-		/**********************************************************************/
 			sng_isup.tpause = atoi(parm->val);
 			SS7_DEBUG("Found isup tpause = %d\n",sng_isup.tpause);
-		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isup.tstaenq")) {
-		/**********************************************************************/
 			sng_isup.tstaenq = atoi(parm->val);
 			SS7_DEBUG("Found isup tstaenq = %d\n",sng_isup.tstaenq);
-		/**********************************************************************/
 		} else {
-		/**********************************************************************/
-			SS7_ERROR("Found an invalid parameter %s!\n", parm->val);
-			return FTDM_FAIL;
-		/**********************************************************************/
+			SS7_ERROR("Found an invalid parameter %s!Ignoring it.\n", parm->var);
 		}
-
-		/* move to the next parameter */
-		parm = parm + 1;
-	/**************************************************************************/
-	} /* for (i = 0; i < num_parms; i++) */
+	} 
 
 	/* default the interface to paused state */
 	sngss7_set_flag(&sng_isup, SNGSS7_PAUSED);
 
-
-
 	/* trickle down the SPC to all sub entities */
 	lnkSet = &g_ftdm_sngss7_data.cfg.mtpRoute[sng_isup.mtpRouteId].lnkSets;
 	while (lnkSet->next != NULL) {
-	/**************************************************************************/
 		/* go through all the links and check if they belong to this linkset*/
-		i = 1;
-		while (i < (MAX_MTP_LINKS)) {
+		for (i = 1; i < MAX_MTP_LINKS;i++) {
 			/* check if this link is in the linkset */
 			if (g_ftdm_sngss7_data.cfg.mtp3Link[i].linkSetId == lnkSet->lsId) {
 				/* fill in the spc */
 				g_ftdm_sngss7_data.cfg.mtp3Link[i].spc = sng_isup.spc;
 			}
-	
-			i++;
 		}
-	
-		/* move to the next lnkSet */
+
 		lnkSet = lnkSet->next;
-	/**************************************************************************/
-	} /* while (lnkSet->next != NULL) */
+	} 
 
 	/* pull values from the lower levels */
 	sng_isap.switchType = g_ftdm_sngss7_data.cfg.mtpRoute[sng_isup.mtpRouteId].switchType;
@@ -2064,8 +1902,8 @@ static int ftmod_ss7_parse_isup_interface(ftdm_conf_node_t *isup_interface)
 	ftmod_ss7_fill_in_isap(&sng_isap);
 
 	/* pull values from the lower levels */
-	sng_isup.isap 		= sng_isap.id;
-	sng_isup.dpc 		= g_ftdm_sngss7_data.cfg.mtpRoute[sng_isup.mtpRouteId].dpc;
+	sng_isup.isap 			= sng_isap.id;
+	sng_isup.dpc 			= g_ftdm_sngss7_data.cfg.mtpRoute[sng_isup.mtpRouteId].dpc;
 	sng_isup.switchType	= g_ftdm_sngss7_data.cfg.mtpRoute[sng_isup.mtpRouteId].switchType;
 	sng_isup.nwId 		= g_ftdm_sngss7_data.cfg.mtpRoute[sng_isup.mtpRouteId].nwId;
 
