@@ -691,6 +691,36 @@ int ftmod_ss7_shutdown_mtp3(void)
 }
 
 /******************************************************************************/
+int ftmod_ss7_delete_mtp2_link(int lnkNmb)
+{
+	SdMngmt cntrl;
+	Pst pst;
+
+	/* initalize the post structure */
+	smPstInit(&pst);
+
+	/* insert the destination Entity */
+	pst.dstEnt = ENTSD;
+
+	/* initalize the control structure */
+	memset(&cntrl, 0x0, sizeof(SdMngmt));
+
+	/* initalize the control header */
+	smHdrInit(&cntrl.hdr);
+
+	cntrl.hdr.msgType			= TCNTRL;	/* this is a control request */
+	cntrl.hdr.entId.ent			= ENTSD;
+	cntrl.hdr.entId.inst		= S_INST;
+	cntrl.hdr.elmId.elmnt		= STDLSAP;
+	cntrl.hdr.elmId.elmntInst1		= lnkNmb;
+
+	cntrl.t.cntrl.action		= ADEL;	/* Activate */
+	cntrl.t.cntrl.subAction		= SAELMNT;			/* specificed element */
+
+	return (sng_cntrl_mtp2(&pst, &cntrl));
+}
+
+/******************************************************************************/
 int ftmod_ss7_shutdown_mtp2(void)
 {
 	SdMngmt cntrl;
@@ -719,6 +749,36 @@ int ftmod_ss7_shutdown_mtp2(void)
 	return (sng_cntrl_mtp2(&pst, &cntrl));
 }
 
+/******************************************************************************/
+int ftmod_ss7_delete_mtp1_link (int sap_id)
+{
+    L1Mngmt cntrl;
+    Pst pst;
+
+    /* initalize the post structure */
+    smPstInit(&pst);
+
+    /* insert the destination Entity */
+    pst.dstEnt = ENTL1;
+
+    /* initalize the control structure */
+    memset(&cntrl, 0x0, sizeof(cntrl));
+
+    /* initalize the control header */
+    smHdrInit(&cntrl.hdr);
+
+    cntrl.hdr.msgType           = TCNTRL;   /* this is a control request */
+    cntrl.hdr.entId.ent         = ENTL1;
+    cntrl.hdr.entId.inst        = S_INST;
+    cntrl.hdr.elmId.elmnt       = STPSAP;
+
+    cntrl.t.cntrl.action        = ADEL;    /* Activate */
+    cntrl.t.cntrl.subAction     = SAELMNT;          /* specificed element */
+
+	cntrl.t.cntrl.spId		    = sap_id;
+
+    return (sng_cntrl_mtp1(&pst, &cntrl));
+}
 /******************************************************************************/
 int ftmod_ss7_shutdown_mtp1(void)
 {

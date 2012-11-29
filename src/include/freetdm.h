@@ -1686,6 +1686,20 @@ FT_DECLARE(ftdm_status_t) ftdm_span_start(ftdm_span_t *span);
 FT_DECLARE(ftdm_status_t) ftdm_span_stop(ftdm_span_t *span);
 
 /*! 
+ * \brief delete span from freetdm
+ * delete span from global span hash table 
+ * frees all ftdm resources associated with span
+ * invoke signaling cb "ftdm_span_stop" to stop signaling
+ *
+ * \param span The span to stop
+ *
+ * \retval FTDM_SUCCESS success 
+ * \retval FTDM_FAIL failure 
+ */
+FT_DECLARE(ftdm_status_t) ftdm_span_delete(ftdm_span_t *span);
+
+
+/*! 
  * \brief Register a custom I/O interface with the FreeTDM core
  *
  * \param io_interface the Interface to register

@@ -4646,6 +4646,31 @@ FTDM_CLI_DECLARE(ftdm_cmd_list)
 	return SWITCH_STATUS_SUCCESS;
 }
 
+FTDM_CLI_DECLARE(ftdm_cmd_destroy)
+{
+	char *span_name = argv[1];
+	ftdm_span_t *span = NULL;
+	ftdm_status_t status;
+
+	if (argc < 2) {
+		print_usage(stream, cli);
+		goto end;
+	}
+
+	ftdm_span_find_by_name(span_name, &span);
+	if (!span) {
+		stream->write_function(stream, "-ERR span %s not found\n", span_name);
+		goto end;
+	}
+	
+    SPAN_CONFIG[span->span_id].span = NULL;
+    status = ftdm_span_delete(span);
+
+	stream->write_function(stream, status == FTDM_SUCCESS ? "+OK\n" : "-ERR failure\n");
+end:
+	return SWITCH_STATUS_SUCCESS;
+}
+
 FTDM_CLI_DECLARE(ftdm_cmd_start_stop)
 {
 	char *span_name = argv[1];
@@ -5566,6 +5591,7 @@ static ftdm_cli_entry_t ftdm_cli_options[] =
 	{ "list", "", "", ftdm_cmd_list },
 	{ "start", "<span_id|span_name>", "", ftdm_cmd_start_stop },
 	{ "stop", "<span_id|span_name>", "", ftdm_cmd_start_stop },
+	{ "destroy", "<span_id|span_name>", "", ftdm_cmd_destroy },
 	{ "reset", "<span_id|span_name> [<chan_id>]", "", ftdm_cmd_reset },
 	{ "alarms", "<span_id> <chan_id>", "", ftdm_cmd_alarms },
 	{ "dump", "<span_id|span_name> [<chan_id>]", "", ftdm_cmd_dump },

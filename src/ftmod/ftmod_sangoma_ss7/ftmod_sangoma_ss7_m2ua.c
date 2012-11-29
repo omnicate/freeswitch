@@ -63,7 +63,7 @@ static int ftmod_m2ua_sctp_sctsap_bind(int idx);
 static int ftmod_open_endpoint(int idx);
 static int ftmod_init_sctp_assoc(int peer_id);
 static int ftmod_nif_m2ua_dlsap_bind(int id, int action);
-static int ftmod_nif_mtp2_dlsap_bind(int id);
+static int ftmod_nif_mtp2_dlsap_bind(int id, int action);
 static int ftmod_m2ua_debug(int action);
 static int ftmod_tucl_debug(int action);
 static int ftmod_sctp_debug(int action);
@@ -271,16 +271,17 @@ ftdm_status_t ftmod_ss7_m2ua_span_stop(int span_id)
         return FTDM_SUCCESS;
     }
 
-    /* as we dont have information which m2ua links belongs to this span so we need perform
+    /* as we dont have information which m2ua links belongs to this span so we need to perform
      * below serios of steps in order to get associated m2ua link */
 
     /* get MTP1 configuration against this span  */
     mtp1_cfg_id = ftmod_ss7_get_mtp1_id_by_span_id(span_id);
     /* get MTP2 configuration against mtp1_cfg_id   */
     mtp2_cfg_id = ftmod_ss7_get_mtp2_id_by_mtp1_id(mtp1_cfg_id);
-    /* get M2UA configuration against mtp2_cfg_id   */
+    /* get NIF configuration against mtp2_cfg_id   */
     nif_cfg_id = ftmod_ss7_get_nif_id_by_mtp2_id(mtp2_cfg_id);
 
+    /* get M2UA configuration id  */
     m2ua_cfg_id = g_ftdm_sngss7_data.cfg.g_m2ua_cfg.nif[nif_cfg_id].m2uaLnkNmb;
 
     if (!m2ua_cfg_id) {
@@ -288,25 +289,31 @@ ftdm_status_t ftmod_ss7_m2ua_span_stop(int span_id)
         return FTDM_FAIL;
     }
 
-#if 0
-    if (ftmod_nif_m2ua_dlsap_bind(nif_cfg_id, AUBND )) {
-        ftdm_log (FTDM_LOG_ERROR ,"KAPIL: Control request to UN-Bind DLSAP[%d] between NIF and M2UA: NOT OK\n", nif_cfg_id);
+    /* Delete NIF sap operation will internally unbound NIF to MTP2 and M2UA */
+    if (ftmod_nif_m2ua_dlsap_bind(nif_cfg_id, ADEL )) {
+        ftdm_log (FTDM_LOG_ERROR ,"Control request to delete NIF NSAP[%d] : NOT OK\n", nif_cfg_id);
         return 1;
     } else {
-        ftdm_log (FTDM_LOG_INFO ,"KAPIL: Control request to UN-Bind DLSAP[%d] between NIF and M2UA : OK\n", nif_cfg_id);
+        ftdm_log (FTDM_LOG_ERROR ,"Control request to delete NIF NSAP[%d] : OK\n", nif_cfg_id);
     }
-#endif
 
 
-    /* First unbound sap */
-    ftmod_m2ua_contrl_request(m2ua_cfg_id, AUBND);
-
-    /* now delete sap */
+    /* now delete M2UA sap */
     ftmod_m2ua_contrl_request(m2ua_cfg_id, ADEL);
 
-    // disable config structures associated with this span
-    // TODO - need to see if we need to really memset g_ftdm_sngss7_data.cfg.g_m2ua_cfg associated with this span 
+    /* now delete MTP2 sap */
+    ftmod_ss7_delete_mtp2_link(g_ftdm_sngss7_data.cfg.mtp2Link[mtp2_cfg_id].id);
 
+    /* now delete associated MTP1 sap */
+    ftmod_ss7_delete_mtp1_link(g_ftdm_sngss7_data.cfg.mtp1Link[mtp1_cfg_id].id);
+
+    
+    /* disable all config flags for this span, so during reconfiguration we can perform
+     * configuration against same configuration-id */
+    g_ftdm_sngss7_data.cfg.g_m2ua_cfg.m2ua[m2ua_cfg_id].flags = 0x00;
+    g_ftdm_sngss7_data.cfg.g_m2ua_cfg.nif[nif_cfg_id].flags  = 0x00; 
+    g_ftdm_sngss7_data.cfg.mtp2Link[mtp2_cfg_id].flags = 0x00;
+    g_ftdm_sngss7_data.cfg.mtp1Link[mtp1_cfg_id].flags = 0x00;
 
     return FTDM_SUCCESS;
 }
@@ -1043,42 +1050,56 @@ static int ftmod_m2ua_peer_config1(int m2ua_inf_id, int peer_id)
 /* M2UA - Cluster configuration */
 static int ftmod_m2ua_cluster_config(int id)
 {
-   int i;
-   Pst    pst; 
-   MwMgmt cfg;
-   sng_m2ua_cfg_t* 	    m2ua  = &g_ftdm_sngss7_data.cfg.g_m2ua_cfg.m2ua[id];
-   sng_m2ua_cluster_cfg_t*  clust = &g_ftdm_sngss7_data.cfg.g_m2ua_cfg.m2ua_clus[m2ua->clusterId];
+    int i   = 0x00 ;
+    int ret = 0x00;
+    Pst    pst; 
+    MwMgmt cfg;
+    sng_m2ua_cfg_t* 	    m2ua  = &g_ftdm_sngss7_data.cfg.g_m2ua_cfg.m2ua[id];
+    sng_m2ua_cluster_cfg_t*  clust = &g_ftdm_sngss7_data.cfg.g_m2ua_cfg.m2ua_clus[m2ua->clusterId];
 
-   memset((U8 *)&cfg, 0, sizeof(MwMgmt));
-   memset((U8 *)&pst, 0, sizeof(Pst));
+    /* We only have to configure cluster one time, 
+     * so that during run-time any other m2ua link can attach with existing active cluster.
+     * */
 
-   smPstInit(&pst);
+    if((clust->flags & SNGSS7_ACTIVE)){
+        ftdm_log (FTDM_LOG_INFO, " ftmod_m2ua_cluster_config: Cluster [%s] is already active \n", clust->name);
+        return 0x00;
+    }
 
-   pst.dstEnt = ENTMW;
+    memset((U8 *)&cfg, 0, sizeof(MwMgmt));
+    memset((U8 *)&pst, 0, sizeof(Pst));
 
-   /* prepare header */
-   cfg.hdr.msgType     = TCFG;           /* message type */
-   cfg.hdr.entId.ent   = ENTMW;          /* entity */
-   cfg.hdr.entId.inst  = 0;              /* instance */
-   cfg.hdr.elmId.elmnt = STMWCLUSTER;    /* Cluster */
-   cfg.hdr.transId     = 0;     /* transaction identifier */
+    smPstInit(&pst);
 
-   cfg.hdr.response.selector    = 0;
-   cfg.hdr.response.prior       = PRIOR0;
-   cfg.hdr.response.route       = RTESPEC;
-   cfg.hdr.response.mem.region  = S_REG;
-   cfg.hdr.response.mem.pool    = S_POOL;
+    pst.dstEnt = ENTMW;
+
+    /* prepare header */
+    cfg.hdr.msgType     = TCFG;           /* message type */
+    cfg.hdr.entId.ent   = ENTMW;          /* entity */
+    cfg.hdr.entId.inst  = 0;              /* instance */
+    cfg.hdr.elmId.elmnt = STMWCLUSTER;    /* Cluster */
+    cfg.hdr.transId     = 0;     /* transaction identifier */
+
+    cfg.hdr.response.selector    = 0;
+    cfg.hdr.response.prior       = PRIOR0;
+    cfg.hdr.response.route       = RTESPEC;
+    cfg.hdr.response.mem.region  = S_REG;
+    cfg.hdr.response.mem.pool    = S_POOL;
 
 
-   cfg.t.cfg.s.clusterCfg.clusterId 	= clust->id;
-   cfg.t.cfg.s.clusterCfg.trfMode   	= clust->trfMode;
-   cfg.t.cfg.s.clusterCfg.loadshareMode = clust->loadShareAlgo;
-   cfg.t.cfg.s.clusterCfg.reConfig.nmbPeer = clust->numOfPeers;
-   for(i=0; i<(clust->numOfPeers);i++) {
-	   cfg.t.cfg.s.clusterCfg.reConfig.peer[i] = clust->peerIdLst[i];
-   }
+    cfg.t.cfg.s.clusterCfg.clusterId 	= clust->id;
+    cfg.t.cfg.s.clusterCfg.trfMode   	= clust->trfMode;
+    cfg.t.cfg.s.clusterCfg.loadshareMode = clust->loadShareAlgo;
+    cfg.t.cfg.s.clusterCfg.reConfig.nmbPeer = clust->numOfPeers;
+    for(i=0; i<(clust->numOfPeers);i++) {
+        cfg.t.cfg.s.clusterCfg.reConfig.peer[i] = clust->peerIdLst[i];
+    }
 
-     return (sng_cfg_m2ua (&pst, &cfg));
+    if (0 == (ret = sng_cfg_m2ua (&pst, &cfg))) {
+        clust->flags |= SNGSS7_CONFIGURED;
+    }
+
+    return ret;
 }
 
 /**********************************************************************************************/
@@ -1341,7 +1362,7 @@ int ftmod_ss7_m2ua_start(void) {
 				} else {
 					ftdm_log (FTDM_LOG_INFO ,"Control request to bind DLSAP[%d] between NIF and M2UA : OK\n", x);
 				}
-				if (ftmod_nif_mtp2_dlsap_bind(x)) {
+				if (ftmod_nif_mtp2_dlsap_bind(x, ABND)) {
 					ftdm_log (FTDM_LOG_ERROR ,"Control request to bind DLSAP[%d] between NIF and MTP2: NOT OK\n", x);
 					return 1;
 				}else {
@@ -1627,16 +1648,15 @@ static int ftmod_nif_m2ua_dlsap_bind(int id , int action)
    cntrl.hdr.response.mem.region  = S_REG;
    cntrl.hdr.response.mem.pool    = S_POOL;
 
-   cntrl.t.cntrl.action = ABND;
+   cntrl.t.cntrl.action = action;
    cntrl.t.cntrl.suId = nif->id;      /* NIF DL sap Id */
    cntrl.t.cntrl.entity = ENTMW; /* M2UA */
 
-     return (sng_cntrl_nif (&pst, &cntrl));
-
+   return (sng_cntrl_nif (&pst, &cntrl));
 }   
 
 /***********************************************************************************************************************/
-static int ftmod_nif_mtp2_dlsap_bind(int id)
+static int ftmod_nif_mtp2_dlsap_bind(int id, int action)
 {
   Pst pst;
   NwMgmt cntrl;  
@@ -1662,7 +1682,7 @@ static int ftmod_nif_mtp2_dlsap_bind(int id)
    cntrl.hdr.response.mem.region  = S_REG;
    cntrl.hdr.response.mem.pool    = S_POOL;
 
-   cntrl.t.cntrl.action = ABND;
+   cntrl.t.cntrl.action = action;
    cntrl.t.cntrl.suId = nif->id;      /* NIF DL sap Id */
    cntrl.t.cntrl.entity = ENTSD;      /* MTP2 */
 

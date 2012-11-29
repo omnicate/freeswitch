@@ -133,6 +133,7 @@ static ftdm_status_t ftdm_channel_sig_indicate(ftdm_channel_t *ftdmchan, ftdm_ch
 
 static const char *ftdm_val2str(unsigned long long val, val_str_t *val_str_table, ftdm_size_t array_size, const char *default_str);
 static unsigned long long ftdm_str2val(const char *str, val_str_t *val_str_table, ftdm_size_t array_size, unsigned long long default_val);
+static int ftdm_get_span_id (void);
 
 
 static int time_is_init = 0;
@@ -801,6 +802,47 @@ static void ftdm_span_add(ftdm_span_t *span)
 	ftdm_mutex_unlock(globals.span_mutex);
 }
 
+FT_DECLARE(ftdm_status_t) ftdm_span_delete(ftdm_span_t *span)
+{
+	ftdm_span_t *cur_span;
+	ftdm_span_t *prev_span;
+    ftdm_mutex_lock(globals.span_mutex);
+
+    if (span == globals.spans) {
+        /* first node */
+        if (NULL == globals.spans->next) {
+            /*only one node */
+            globals.spans = NULL;
+        } else {
+            globals.spans = globals.spans->next;
+        }
+    } else {
+        /* loop till we get match */
+        for (cur_span = globals.spans; cur_span && cur_span!=span; cur_span=cur_span->next) {
+            prev_span = cur_span;
+        }
+        prev_span->next = prev_span->next->next;
+    }
+
+    if (span) {
+        if (ftdm_test_flag(span, FTDM_SPAN_CONFIGURED)) {
+            ftdm_span_destroy(span);
+        }
+
+        hashtable_remove(globals.span_hash, (void *)span->name);
+        ftdm_safe_free(span->dtmf_hangup);
+        ftdm_safe_free(span->type);
+        ftdm_safe_free(span->name);
+        ftdm_safe_free(span);
+        span = NULL;
+
+        --globals.span_index;
+    }
+    ftdm_mutex_unlock(globals.span_mutex);
+
+    return FTDM_SUCCESS;
+}
+
 FT_DECLARE(ftdm_status_t) ftdm_span_stop(ftdm_span_t *span)
 {
 	ftdm_status_t status =  FTDM_SUCCESS;
@@ -831,6 +873,34 @@ done:
 	ftdm_mutex_unlock(span->mutex);
 
 	return status;
+}
+
+static int ftdm_get_span_id (void)
+{
+    ftdm_span_t *sp;
+    int span_id = 0x01;
+    ftdm_mutex_lock(globals.span_mutex);
+
+    if (NULL == globals.spans) goto done;
+
+    /* due to dynamic deletion/creation of spans , we can have holes in span numbering
+     * so to avoid that, looping around span list to see first available free span_id
+     * for example - If initially span list has 1, 2 ,3 span_id nodes and if runtime we delete 2nd node then
+     * we left with 1 and 3 span_id nodes in span list, this api should return span_id=2 for next span creation*/
+
+    for (sp = globals.spans; sp;) {
+        if (sp->span_id != span_id) {
+            /* first unmatch span_id */
+            break;
+        }
+        sp = sp->next;
+        span_id++;
+    }
+
+done:
+    ftdm_mutex_unlock(globals.span_mutex);
+    ftdm_log(FTDM_LOG_INFO, "Allocating span-id[%d]\n", span_id);
+    return span_id;
 }
 
 FT_DECLARE(ftdm_status_t) ftdm_span_create(const char *iotype, const char *name, ftdm_span_t **span)
@@ -874,7 +944,8 @@ FT_DECLARE(ftdm_status_t) ftdm_span_create(const char *iotype, const char *name,
 		ftdm_assert(status == FTDM_SUCCESS, "mutex creation failed\n");
 
 		ftdm_set_flag(new_span, FTDM_SPAN_CONFIGURED);
-		new_span->span_id = ++globals.span_index;
+		new_span->span_id = ftdm_get_span_id();
+        ++globals.span_index;
 		new_span->fio = fio;
 		ftdm_copy_string(new_span->tone_map[FTDM_TONEMAP_DIAL], "%(1000,0,350,440)", FTDM_TONEMAP_LEN);
 		ftdm_copy_string(new_span->tone_map[FTDM_TONEMAP_RING], "%(2000,4000,440,480)", FTDM_TONEMAP_LEN);

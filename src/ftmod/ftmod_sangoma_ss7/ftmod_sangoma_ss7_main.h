@@ -917,6 +917,9 @@ ftdm_status_t sngss7_activate_mtp2api(ftdm_span_t * span);
 ftdm_status_t sngss7_cfg_mtp2api(ftdm_span_t * span);
 int ft_to_sngss7_activate_mtp2(ftdm_channel_t *ftdmchan);
 
+int ftmod_ss7_delete_mtp2_link(int lnkNmb);
+int ftmod_ss7_delete_mtp1_link(int lnkNmb);
+
 int ftmod_ss7_inhibit_mtp3link(uint32_t id);
 int ftmod_ss7_uninhibit_mtp3link(uint32_t id);
 int ftmod_ss7_bind_mtp3link(uint32_t id);
