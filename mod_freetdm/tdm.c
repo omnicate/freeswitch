@@ -31,6 +31,7 @@
 
 #include <switch.h>
 #include "freetdm.h"
+#include "private/ftdm_core.h"
 
 void ctdm_init(switch_loadable_module_interface_t *module_interface);
 
@@ -76,6 +77,7 @@ static switch_status_t channel_send_dtmf(switch_core_session_t *session, const s
 
 
 static ftdm_status_t ctdm_span_prepare(ftdm_span_t *span);
+static ftdm_status_t reload_span_config(void);
 
 switch_state_handler_table_t ctdm_state_handlers = {
 	.on_init = channel_on_init,
@@ -97,7 +99,7 @@ static void ctdm_report_alarms(ftdm_channel_t *channel)
 	ftdm_alarm_flag_t alarmflag = 0;
 
 	if (switch_event_create(&event, SWITCH_EVENT_TRAP) != SWITCH_STATUS_SUCCESS) {
-		ftdm_log(FTDM_LOG_ERROR, "failed to create alarms events\n");
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "failed to create alarms events\n");
 		return;
 	}
 	
@@ -179,6 +181,16 @@ static void ctdm_event_handler(switch_event_t *event)
 					return;
 				}
 
+                if (!strcmp(cond, "mg-tdm-reload")) {
+                    status = reload_span_config();
+                    if (status == FTDM_SUCCESS) {
+                        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "span configuration reloaded successfully\n");
+                    } else if (status != FTDM_EINVAL) {
+                        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "span configuration reloading failed\n");
+                    }
+                    return;
+                }
+
 				span_name = switch_event_get_header(event, "span-name");
 				
 				if (ftdm_span_find_by_name(span_name, &span) != FTDM_SUCCESS) {
@@ -193,7 +205,7 @@ static void ctdm_event_handler(switch_event_t *event)
 					} else if (status != FTDM_EINVAL) {
 						switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "%s:Failed to prepare span\n", span_name);
 					}
-				} else if (!strcmp(cond, "mg-tdm-check")) {
+                } else if (!strcmp(cond, "mg-tdm-check")) {
 					channel = ctdm_get_channel_from_event(event, span);
 					if (!channel) {
 						switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Could not find channel\n");
@@ -261,12 +273,12 @@ static FIO_SIGNAL_CB_FUNCTION(on_signal_cb)
 		case FTDM_SIGEVENT_ALARM_TRAP:
 			{
 				if (ftdm_channel_get_alarms(sigmsg->channel, &alarmbits) != FTDM_SUCCESS) {
-					ftdm_log(FTDM_LOG_ERROR, "failed to retrieve alarms\n");
+					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "failed to retrieve alarms\n");
 					return FTDM_FAIL;
 				}
 
 				if (switch_event_create(&event, SWITCH_EVENT_TRAP) != SWITCH_STATUS_SUCCESS) {
-					ftdm_log(FTDM_LOG_ERROR, "failed to create alarms events\n");
+					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "failed to create alarms events\n");
 					return FTDM_FAIL;
 				}
 				if (sigmsg->event_id == FTDM_SIGEVENT_ALARM_CLEAR) {
@@ -593,7 +605,7 @@ top:
         for (p = dtmf; p && *p; p++) {
             if (is_dtmf(*p)) {
                 _dtmf.digit = *p;
-                ftdm_log(FTDM_LOG_DEBUG, "Queuing DTMF [%c] in channel %s device %d:%d\n", *p, name, span_id, chan_id);
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Queuing DTMF [%c] in channel %s device %d:%d\n", *p, name, span_id, chan_id);
                 switch_channel_queue_dtmf(channel, &_dtmf);
             }
         }
@@ -740,3 +752,144 @@ static switch_status_t channel_receive_event(switch_core_session_t *session, swi
     return SWITCH_STATUS_SUCCESS;
 }
 
+static ftdm_status_t reload_span_config(void)
+{
+	/* 
+	1. load span config file
+	2. foreach span {
+	3.     if (span not existing)  {
+	4.          add new span and start signaling configuration;
+	        }
+	    }
+	*/
+	const char *cf = "freetdm.conf";
+	ftdm_config_t span_cfg;
+	char *var, *val;
+	int catno = -1;
+	ftdm_span_t *span = NULL;
+	ftdm_status_t ret = FTDM_SUCCESS;
+	ftdm_channel_config_t chan_config;
+	unsigned d = 0, configured = 0;
+	ftdm_size_t len = 0;
+	
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Reload span configuration.\n");
+	
+	/* step 1: load span config file */
+	if (!ftdm_config_open_file(&span_cfg, cf)) {
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Not able to open span config file %s. \n", cf);
+		return FTDM_FAIL;
+	}
+#ifdef RECONFIG_DBG
+	else {
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Successfully opened span config file %s. \n", cf);
+	}
+#endif
+
+	while (ftdm_config_next_pair(&span_cfg, &var, &val)) {
+		if (*span_cfg.category == '#') {
+			if (span_cfg.catno != catno) {
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Skipping %s\n", span_cfg.category);
+				catno = span_cfg.catno;
+			}
+		} else if (!strncasecmp(span_cfg.category, "span", 4)) {
+			if (span_cfg.catno != catno) {
+				char *type = span_cfg.category + 4;
+				char *name;
+				
+				if (*type == ' ') {
+					type++;
+				}
+				
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "found config for span\n");
+				catno = span_cfg.catno;
+				
+				if (ftdm_strlen_zero(type)) {
+					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "failure creating span, no type specified.\n");
+					span = NULL;
+					continue;
+				}
+
+				if ((name = strchr(type, ' '))) {
+					*name++ = '\0';
+				}
+
+				/* Verify is trunk_type was specified for previous span */
+				if (span && span->trunk_type == FTDM_TRUNK_NONE) {
+					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "trunk_type not specified for span %d (%s)\n", span->span_id, span->name);
+					ret = FTDM_FAIL;
+					goto done;
+				}
+
+
+				if (FTDM_FAIL == ftdm_span_find_by_name(name, &span) ) {
+					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Span [%s] was NOT found in current running configuration. \n Trying to create span. \n", name);
+					
+					if (ftdm_span_create(type, name, &span) == FTDM_SUCCESS) {
+						switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "created span %d (%s) of type %s\n", span->span_id, span->name, type);
+						d = 0;
+						/* it is confusing that parameters from one span affect others, so let's clear them */
+						memset(&chan_config, 0, sizeof(chan_config));
+						sprintf(chan_config.group_name, "__default");
+						/* default to storing iostats */
+						chan_config.iostats = FTDM_TRUE;
+					} else {
+						switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "failure creating span of type %s\n", type);
+						span = NULL;
+						continue;
+					}
+				} else {
+					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Span [%s] was found in current running configuration. \n", name);
+					span = NULL;
+					continue;
+				}
+			}
+
+			if (!span) {
+				continue;
+			}
+
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "span %d [%s]=[%s]\n", span->span_id, var, val);
+			
+			
+			if (!strcasecmp(var, "trunk_type")) {
+				ftdm_trunk_type_t trtype = ftdm_str2ftdm_trunk_type(val);
+				ftdm_span_set_trunk_type(span, trtype);
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "setting trunk type to '%s'\n", ftdm_trunk_type2str(trtype)); 
+			} else if (!strcasecmp(var, "b-channel")) {
+				unsigned chans_configured = 0;
+				chan_config.type = FTDM_CHAN_TYPE_B;
+				if (ftdm_configure_span_channels(span, val, &chan_config, &chans_configured) == FTDM_SUCCESS) {
+					configured += chans_configured;
+				}
+			} else if (!strcasecmp(var, "group")) {
+				len = strlen(val);
+				if (len >= FTDM_MAX_NAME_STR_SZ) {
+					len = FTDM_MAX_NAME_STR_SZ - 1;
+					ftdm_log(FTDM_LOG_WARNING, "Truncating group name %s to %"FTDM_SIZE_FMT" length\n", val, len);
+				}
+				memcpy(chan_config.group_name, val, len);
+				chan_config.group_name[len] = '\0';
+			}  else if (!strcasecmp(var, "txgain")) {
+				if (sscanf(val, "%f", &(chan_config.txgain)) != 1) {
+					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "invalid txgain: '%s'\n", val);
+				}
+			} else if (!strcasecmp(var, "rxgain")) {
+				if (sscanf(val, "%f", &(chan_config.rxgain)) != 1) {
+					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "invalid rxgain: '%s'\n", val);
+				}
+			}			
+		} else {
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "unknown param [%s] '%s' / '%s'\n", span_cfg.category, var, val);
+		}
+	}
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "mod_freetdm reload config, %d new channels have been configured. \n", configured);
+	
+done:
+	ftdm_config_close_file(&span_cfg);
+
+#ifdef RECONFIG_DBG
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Successfully closed span config file %s. \n", cf);
+#endif
+
+	return ret;
+}
