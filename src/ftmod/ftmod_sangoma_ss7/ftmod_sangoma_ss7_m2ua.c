@@ -1398,6 +1398,7 @@ int ftmod_ss7_m2ua_start(void) {
 	x = 1;
 	while (x < (MW_MAX_NUM_OF_PEER)) {
 		if ((g_ftdm_sngss7_data.cfg.g_m2ua_cfg.m2ua_peer[x].id !=0) &&
+                (g_ftdm_sngss7_data.cfg.g_m2ua_cfg.m2ua_peer[x].flags & SNGSS7_CONFIGURED ) &&
 				(!(g_ftdm_sngss7_data.cfg.g_m2ua_cfg.m2ua_peer[x].flags & SNGSS7_M2UA_INIT_ASSOC_DONE)) && 
 				(g_ftdm_sngss7_data.cfg.g_m2ua_cfg.m2ua_peer[x].init_sctp_assoc)) {
 			if(ftmod_init_sctp_assoc(x)) {
