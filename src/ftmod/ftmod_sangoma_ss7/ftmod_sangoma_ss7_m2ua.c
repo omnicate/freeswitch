@@ -2046,7 +2046,7 @@ void ftdm_m2ua_handle_tmr_expiry(void *userdata)
                  * 3rd - get mtp3_link id 
                  * */
 
-                x=1;
+                x = 1;
                 while (x < MW_MAX_NUM_OF_CLUSTER) {
                     clust = &g_ftdm_sngss7_data.cfg.g_m2ua_cfg.m2ua_clus[x];
                 
@@ -2177,7 +2177,7 @@ static int ftmod_ss7_get_nif_id_by_mtp2_id(int mtp2_id)
 {
     int nif_id = 0x00;
     int x = 1;
-    while(x<MW_MAX_NUM_OF_INTF) {
+    while (x<MW_MAX_NUM_OF_INTF) {
         if ((g_ftdm_sngss7_data.cfg.g_m2ua_cfg.nif[x].id !=0) && 
                 ((g_ftdm_sngss7_data.cfg.g_m2ua_cfg.nif[x].flags & SNGSS7_CONFIGURED))) {
 

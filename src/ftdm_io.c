@@ -133,7 +133,7 @@ static ftdm_status_t ftdm_channel_sig_indicate(ftdm_channel_t *ftdmchan, ftdm_ch
 
 static const char *ftdm_val2str(unsigned long long val, val_str_t *val_str_table, ftdm_size_t array_size, const char *default_str);
 static unsigned long long ftdm_str2val(const char *str, val_str_t *val_str_table, ftdm_size_t array_size, unsigned long long default_val);
-static int ftdm_get_span_id (void);
+static int ftdm_get_new_span_id (void);
 
 
 static int time_is_init = 0;
@@ -875,7 +875,7 @@ done:
 	return status;
 }
 
-static int ftdm_get_span_id (void)
+static int ftdm_get_new_span_id (void)
 {
     ftdm_span_t *sp;
     int span_id = 0x01;
@@ -944,7 +944,7 @@ FT_DECLARE(ftdm_status_t) ftdm_span_create(const char *iotype, const char *name,
 		ftdm_assert(status == FTDM_SUCCESS, "mutex creation failed\n");
 
 		ftdm_set_flag(new_span, FTDM_SPAN_CONFIGURED);
-		new_span->span_id = ftdm_get_span_id();
+		new_span->span_id = ftdm_get_new_span_id();
         ++globals.span_index;
 		new_span->fio = fio;
 		ftdm_copy_string(new_span->tone_map[FTDM_TONEMAP_DIAL], "%(1000,0,350,440)", FTDM_TONEMAP_LEN);
