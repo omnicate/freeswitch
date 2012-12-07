@@ -4775,7 +4775,7 @@ end:
 	return SWITCH_STATUS_SUCCESS;
 }
 
-FTDM_CLI_DECLARE(reload_ss7_config)
+FTDM_CLI_DECLARE(ftdm_cmd_reload)
 {
     if (FTDM_SUCCESS != ftdm_global_reconfiguration()) {
         ftdm_log (FTDM_LOG_ERROR, "Freetdm span reconfiguration failed \n");
@@ -5328,7 +5328,7 @@ static ftdm_cli_entry_t ftdm_cli_options[] =
 	{ "core flag", "[!]<flag-int-value|flag-name> [<span_id|span_name>] [<chan_id>]", "", NULL },
 	{ "core spanflag", "[!]<flag-int-value|flag-name> [<span_id|span_name>]", "", NULL },
 	{ "core calls", "", "", NULL },
-	{ "reload", "", "", reload_ss7_config },
+	{ "reload", "", "", ftdm_cmd_reload },
 };
 
 static void print_usage(switch_stream_handle_t *stream, ftdm_cli_entry_t *cli)
