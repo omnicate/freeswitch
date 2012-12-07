@@ -5147,7 +5147,7 @@ FT_DECLARE(ftdm_status_t) ftdm_configure_span_channels(ftdm_span_t *span, const 
 }
 
 
-static ftdm_status_t load_config(void)
+static ftdm_status_t load_config(int reload)
 {
 	char cfg_name[] = "freetdm.conf";
 	ftdm_config_t cfg;
@@ -5202,6 +5202,12 @@ static ftdm_status_t load_config(void)
 					ret = FTDM_FAIL;
 					goto done;
 				}
+
+                if ((reload) && (FTDM_SUCCESS == ftdm_span_find_by_name(name, &span) )) {
+                    ftdm_log(FTDM_LOG_INFO, "Span [%s] found in current running configuration \n", name);
+                    span = NULL;
+                    continue;
+                }
 
 				if (ftdm_span_create(type, name, &span) == FTDM_SUCCESS) {
 					ftdm_log(FTDM_LOG_DEBUG, "created span %d (%s) of type %s\n", span->span_id, span->name, type);
@@ -6346,7 +6352,7 @@ FT_DECLARE(ftdm_status_t) ftdm_global_configuration(void)
 	globals.cpu_monitor.set_alarm_threshold = 92;
 	globals.cpu_monitor.clear_alarm_threshold = 82;
 
-	if (load_config() != FTDM_SUCCESS) {
+	if (load_config(0x00) != FTDM_SUCCESS) {
 		globals.running = 0;
 		ftdm_log(FTDM_LOG_ERROR, "FreeTDM global configuration failed!\n");
 		return FTDM_FAIL;
@@ -6363,6 +6369,22 @@ FT_DECLARE(ftdm_status_t) ftdm_global_configuration(void)
 		}
 	}
 
+
+	return FTDM_SUCCESS;
+}
+
+FT_DECLARE(ftdm_status_t) ftdm_global_reconfiguration(void)
+{
+	if (!globals.running) {
+		return FTDM_FAIL;
+	}
+	
+	if (load_config(0x01) != FTDM_SUCCESS) {
+		ftdm_log(FTDM_LOG_ERROR, "FreeTDM global re-configuration failed!\n");
+		return FTDM_FAIL;
+	}
+
+    ftdm_log(FTDM_LOG_DEBUG, "FreeTDM global re-configuration passed!\n");
 
 	return FTDM_SUCCESS;
 }

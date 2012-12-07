@@ -301,11 +301,11 @@ ftdm_status_t ftmod_ss7_m2ua_span_stop(int span_id)
     /* now delete M2UA sap */
     ftmod_m2ua_contrl_request(m2ua_cfg_id, ADEL);
 
-    /* now delete MTP2 sap */
-    ftmod_ss7_delete_mtp2_link(g_ftdm_sngss7_data.cfg.mtp2Link[mtp2_cfg_id].id);
-
     /* now delete associated MTP1 sap */
     ftmod_ss7_delete_mtp1_link(g_ftdm_sngss7_data.cfg.mtp1Link[mtp1_cfg_id].id);
+
+    /* now delete MTP2 sap */
+    ftmod_ss7_delete_mtp2_link(g_ftdm_sngss7_data.cfg.mtp2Link[mtp2_cfg_id].id);
 
     
     /* disable all config flags for this span, so during reconfiguration we can perform

@@ -1859,6 +1859,10 @@ FT_DECLARE(ftdm_status_t) ftdm_global_init(void);
 /*! \brief Create spans and channels reading the freetdm.conf file */
 FT_DECLARE(ftdm_status_t) ftdm_global_configuration(void);
 
+/*! \brief reading freetdm.conf file and create spans and channels , 
+ * skip already created spans*/
+FT_DECLARE(ftdm_status_t) ftdm_global_reconfiguration(void);
+
 /*! \brief Shutdown the library */
 FT_DECLARE(ftdm_status_t) ftdm_global_destroy(void);
 
