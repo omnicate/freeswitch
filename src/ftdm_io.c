@@ -804,8 +804,8 @@ static void ftdm_span_add(ftdm_span_t *span)
 
 FT_DECLARE(ftdm_status_t) ftdm_span_delete(ftdm_span_t *span)
 {
-	ftdm_span_t *cur_span;
-	ftdm_span_t *prev_span;
+	ftdm_span_t *cur_span  = NULL;
+	ftdm_span_t *prev_span = NULL;
     ftdm_mutex_lock(globals.span_mutex);
 
     if (span == globals.spans) {

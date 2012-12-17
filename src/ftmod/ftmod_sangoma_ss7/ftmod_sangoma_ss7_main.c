@@ -300,10 +300,11 @@ static void handle_hw_alarm(ftdm_event_t *e)
 			/* NC. Its possible for alarms to come in the middle of configuration
 			   especially on large systems */
 			if (!ss7_info || !ss7_info->ftdmchan) {
-				SS7_DEBUG("handle_hw_alarm: span=%i chan=%i ckt=%i x=%i - ss7_info=%p ftdmchan=%p\n",
-						ftdmchan->physical_span_id,ftdmchan->physical_chan_id,
+				SS7_DEBUG("handle_hw_alarm: Invalid ss7_info/ftdmchan pointer "
+                        "ckt=%i x=%i - ss7_info=%p ftdmchan=%p\n",
 						g_ftdm_sngss7_data.cfg.isupCkt[x].id,x,
-						ss7_info,ss7_info?ss7_info->ftdmchan:NULL);
+						ss7_info?ss7_info:NULL,
+                        ss7_info?ss7_info->ftdmchan:NULL);
 				continue;
 			}
 

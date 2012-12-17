@@ -1893,6 +1893,13 @@ ftdm_status_t handle_grs_rsp(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 	int range = 0;
 	
 	ftdm_running_return(FTDM_FAIL);
+
+    if (NULL == siStaEvnt) {
+		SS7_ERROR("NULL siStaEvnt pointer \n");
+		SS7_FUNC_TRACE_EXIT(__FUNCTION__);
+		return FTDM_FAIL;
+    }
+
 	if (g_ftdm_sngss7_data.cfg.isupCkt[circuit].type != SNG_CKT_VOICE) {
 		SS7_ERROR("[CIC:%d]Rx %s on non-voice CIC\n", g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic, DECODE_LCC_EVENT(evntType));
 		SS7_FUNC_TRACE_EXIT(__FUNCTION__);

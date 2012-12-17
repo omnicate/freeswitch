@@ -518,7 +518,7 @@ void handle_sng_isup_alarm(Pst *pst, SiMngmt *sta)
 	p = strcat(p, "[ISUP]");
 
 	/* go through the dgnVals */
-	for (x = 0; x < 5; x++) {
+	for (x = 0; x < LSI_USTA_MAX_DGNVAL; x++) {
 		switch (sta->t.usta.dgn.dgnVal[x].type) {
 		/**********************************************************************/
 		case (LSI_USTA_DGNVAL_NONE):
