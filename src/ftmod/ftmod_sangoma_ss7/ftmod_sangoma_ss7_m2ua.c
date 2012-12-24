@@ -74,6 +74,7 @@ static int ftmod_ss7_tucl_shutdown(void);
 static int ftmod_m2ua_enable_alarm(void);
 static int ftmod_ss7_get_nif_id_by_mtp2_id(int mtp2_id);
 static int ftmod_m2ua_contrl_request(int id ,int action);
+static ftdm_status_t ftmod_is_sctp_associated_with_peer(int sctp_id);
 
 
 /******************************************************************************/
@@ -577,6 +578,23 @@ static int ftmod_sctp_gen_config(void)
 }
 
 /****************************************************************************************************/
+static ftdm_status_t ftmod_is_sctp_associated_with_peer(int sctp_id)
+{
+    int x     = 0x01;
+    int found = 0x00;
+    while (x<MW_MAX_NUM_OF_PEER) {
+        if ((g_ftdm_sngss7_data.cfg.g_m2ua_cfg.m2ua_peer[x].id !=0) && 
+                (sctp_id == g_ftdm_sngss7_data.cfg.g_m2ua_cfg.m2ua_peer[x].sctpId)) {
+            found = 0x01;
+            break;
+        }
+        x++;
+    }
+    if ( found ) return FTDM_SUCCESS;
+
+    return FTDM_FAIL;
+}
+/****************************************************************************************************/
 static int ftmod_cfg_sctp(void)
 {
 	int x = 0;
@@ -585,20 +603,29 @@ static int ftmod_cfg_sctp(void)
 	while (x<MAX_SCTP_LINK) {
 
 		if ((g_ftdm_sngss7_data.cfg.sctpCfg.linkCfg[x].id !=0) && 
-				(!(g_ftdm_sngss7_data.cfg.sctpCfg.linkCfg[x].flags & SNGSS7_CONFIGURED))) {
+                (!(g_ftdm_sngss7_data.cfg.sctpCfg.linkCfg[x].flags & SNGSS7_CONFIGURED))) {
 
-			if (  ftmod_sctp_config(x) == FTDM_FAIL) {
-				SS7_CRITICAL("SCTP %d configuration FAILED!\n", x);
-				return FTDM_FAIL;
-			} else {
-				SS7_INFO("SCTP %d configuration DONE!\n", x);
-			}
-			g_ftdm_sngss7_data.cfg.sctpCfg.linkCfg[x].flags |= SNGSS7_CONFIGURED;
-		}
+            /* check if this sctp is associated with any peer 
+             * If not associated then simply ignore */
+
+            if (FTDM_FAIL == ftmod_is_sctp_associated_with_peer(g_ftdm_sngss7_data.cfg.sctpCfg.linkCfg[x].id)) {
+                x++; 
+                continue; 
+            }
+
+            if (  ftmod_sctp_config(x) == FTDM_FAIL) {
+                SS7_CRITICAL("SCTP %d configuration FAILED!\n", x);
+                return FTDM_FAIL;
+            } else {
+                SS7_INFO("SCTP %d configuration DONE!\n", x);
+            }
+            g_ftdm_sngss7_data.cfg.sctpCfg.linkCfg[x].flags |= SNGSS7_CONFIGURED;
+        }
 		x++;
 	}
 	return FTDM_SUCCESS;
 }
+
 
 /****************************************************************************************************/
 int ftmod_sctp_config(int id)
@@ -1319,6 +1346,11 @@ int ftmod_ss7_m2ua_start(void) {
     while (x<MAX_SCTP_LINK) {
         if ((g_ftdm_sngss7_data.cfg.sctpCfg.linkCfg[x].id !=0) && 
                 (!(g_ftdm_sngss7_data.cfg.sctpCfg.linkCfg[x].flags & SNGSS7_ACTIVE))) {
+
+            if (FTDM_FAIL == ftmod_is_sctp_associated_with_peer(g_ftdm_sngss7_data.cfg.sctpCfg.linkCfg[x].id)) {
+                x++; 
+                continue; 
+            }
 
             /* Send a control request to bind the TSAP between SCTP and TUCL */
             if (ftmod_sctp_tucl_tsap_bind(x)) {
