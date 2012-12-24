@@ -4792,6 +4792,34 @@ FTDM_CLI_DECLARE(ftdm_cmd_reload)
     return SWITCH_STATUS_SUCCESS;
 }
 
+FTDM_CLI_DECLARE(ftdm_cmd_xml_status)
+{
+	ftdm_span_t *span;
+    /* this cli command as of now only shows if span is 
+     * present in freetdm or not */
+
+	if (argc < 2) {
+		print_usage(stream, cli);
+		goto end;
+	}
+
+	ftdm_span_find_by_name(argv[1], &span);
+
+    stream->write_function(stream, "<span>\n");
+
+    if (!span) {
+        stream->write_function(stream, "<status> NOT_PRESENT </status>\n");
+        stream->write_function(stream, "</span>\n");
+        goto end;
+    }
+
+    stream->write_function(stream, "<status> PRESENT </status>\n");
+    stream->write_function(stream, "</span>\n");
+
+end:
+	return SWITCH_STATUS_SUCCESS;
+}
+
 FTDM_CLI_DECLARE(ftdm_cmd_dump)
 {
 	ftdm_iterator_t *chaniter = NULL;
@@ -5326,6 +5354,7 @@ static ftdm_cli_entry_t ftdm_cli_options[] =
 	{ "reset", "<span_id|span_name> [<chan_id>]", "", ftdm_cmd_reset },
 	{ "alarms", "<span_id> <chan_id>", "", ftdm_cmd_alarms },
 	{ "dump", "[<span_id|span_name>] [<chan_id>]", "", ftdm_cmd_dump },
+	{ "xmlstatus", "<span_id|span_name>", "", ftdm_cmd_xml_status },
 	{ "sigstatus", "get|set <span_id|span_name> [<chan_id>] [<sigstatus>]", "::[set:get", ftdm_cmd_sigstatus },
 	{ "trace", "<path> <span_id|span_name> [<chan_id>]", "", ftdm_cmd_trace },
 	{ "notrace", "<span_id|span_name> [<chan_id>]", "", ftdm_cmd_notrace },
