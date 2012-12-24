@@ -4820,6 +4820,40 @@ static void print_span_flag_values(ftdm_stream_handle_t *stream)
 	}
 }
 
+FT_DECLARE(int ) ftdm_get_all_span_list(char *buffer)
+{
+    ftdm_span_t *sp;
+    int          len = 0x00;
+    int count = 0x00;
+
+    if (NULL == buffer) return 0x00;
+
+    ftdm_mutex_lock(globals.span_mutex);
+
+    if (NULL == globals.spans) {
+        len = len + sprintf(buffer+len, "No configured span found\n");
+        goto done;
+    }
+
+    for (sp = globals.spans; sp;) {
+        len = len + sprintf(buffer+len, "************************\n");
+        len = len + sprintf(buffer+len, "span name = %s\n", (sp->name)?sp->name:"NULL");
+        len = len + sprintf(buffer+len, "span id   = %d\n", sp->span_id);
+        len = len + sprintf(buffer+len, "channel count   = %d\n", sp->chan_count);
+        len = len + sprintf(buffer+len, "Signal Type   = %d\n", sp->signal_type);
+        len = len + sprintf(buffer+len, "Trunk Type    = %s\n", ftdm_span_get_trunk_type_str(sp));
+        sp = sp->next;
+        count++;
+    }
+
+    len = len + sprintf(buffer+len, "************************\n");
+    len = len + sprintf(buffer+len, "Total Span found = %d \n", count);
+
+done:
+    ftdm_mutex_unlock(globals.span_mutex);
+	return len;
+}
+
 static char *handle_core_command(const char *cmd)
 {
 	char *mycmd = NULL;
@@ -5007,7 +5041,7 @@ FT_DECLARE(char *) ftdm_api_execute(const char *cmd)
 	if (!strcasecmp(type, "core")) {
 		return handle_core_command(cmd);
 	}
-	
+
 	ftdm_mutex_lock(globals.mutex);
 	if (!(fio = (ftdm_io_interface_t *) hashtable_search(globals.interface_hash, (void *)type))) {
 		ftdm_load_module_assume(type);

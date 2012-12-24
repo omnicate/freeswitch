@@ -1735,6 +1735,17 @@ FT_DECLARE(ftdm_iterator_t *) ftdm_span_get_chan_iterator(const ftdm_span_t *spa
 FT_DECLARE(char *) ftdm_api_execute(const char *cmd);
 
 /*! 
+ * \brief get all span details buffer
+ *
+ * \param input buffer which will be filled by ftdm with span details 
+ *
+ * \retval FTDM_SUCCESS success 
+ * \retval FTDM_FAIL failure 
+ */
+FT_DECLARE(int ) ftdm_get_all_span_list(char *buffer);
+
+
+/*! 
  * \brief Create a configuration node
  *
  * \param name The name of the configuration node

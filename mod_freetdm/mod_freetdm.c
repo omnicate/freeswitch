@@ -4799,6 +4799,19 @@ FTDM_CLI_DECLARE(ftdm_cmd_dump)
 	uint32_t chan_id = 0;
 	ftdm_span_t *span;
 	char *as = NULL;
+    char buffer[1024];
+
+    memset(&buffer,0,sizeof(buffer));
+
+    if (argc == 1) {
+        /* list all present spans */
+        if (ftdm_get_all_span_list(&buffer[0])) {
+            stream->write_function(stream, "%s\n", &buffer[0]);
+        } else {
+            stream->write_function(stream, "-ERR getting span details\n");
+        }
+        goto end;
+    }
 	
 	if (argc < 2) {
 		print_usage(stream, cli);
@@ -5312,7 +5325,7 @@ static ftdm_cli_entry_t ftdm_cli_options[] =
 	{ "destroy", "<span_id|span_name>", "", ftdm_cmd_destroy },
 	{ "reset", "<span_id|span_name> [<chan_id>]", "", ftdm_cmd_reset },
 	{ "alarms", "<span_id> <chan_id>", "", ftdm_cmd_alarms },
-	{ "dump", "<span_id|span_name> [<chan_id>]", "", ftdm_cmd_dump },
+	{ "dump", "[<span_id|span_name>] [<chan_id>]", "", ftdm_cmd_dump },
 	{ "sigstatus", "get|set <span_id|span_name> [<chan_id>] [<sigstatus>]", "::[set:get", ftdm_cmd_sigstatus },
 	{ "trace", "<path> <span_id|span_name> [<chan_id>]", "", ftdm_cmd_trace },
 	{ "notrace", "<span_id|span_name> [<chan_id>]", "", ftdm_cmd_notrace },
