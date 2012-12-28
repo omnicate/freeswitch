@@ -892,20 +892,20 @@ static int ftmod_m2ua_peer_config(int id)
     for (x = 0; x < clust->numOfPeers;x++) {
         peer_id = clust->peerIdLst[x];
         peer = &g_ftdm_sngss7_data.cfg.g_m2ua_cfg.m2ua_peer[peer_id];
-        if (ftmod_m2ua_sctsap_config(id, peer->sctpId)) {
+        if (ftmod_m2ua_sctsap_config(peer->sctpId, peer->sctpId)) {
             ftdm_log (FTDM_LOG_ERROR, " ftmod_m2ua_sctsap_config: M2UA SCTSAP for M2UA Intf Id[%d] config FAILED \n", id);
             return 0x01;
         } else {
             ftdm_log (FTDM_LOG_INFO, " ftmod_m2ua_sctsap_config: M2UA SCTSAP for M2UA Intf Id[%d] config SUCCESS \n", id);
         }
-        if (ftmod_m2ua_peer_config1(id, peer_id)) {
+        if (ftmod_m2ua_peer_config1(peer->sctpId, peer_id)) {
             ftdm_log (FTDM_LOG_ERROR, " ftmod_m2ua_peer_config1: M2UA Peer[%d] configuration for M2UA Intf Id[%d] config FAILED \n", peer_id, id);
             return 0x01;
         } else {
             ftdm_log (FTDM_LOG_INFO, " ftmod_m2ua_peer_config1: M2UA Peer[%d] configuration for M2UA Intf Id[%d] config SUCCESS \n", peer_id, id);
         }
 
-        clust->sct_sap_id = id;
+        clust->sct_sap_id = peer->sctpId;
 
         /* set configured flag for cluster and peer */
         clust->flags |= SNGSS7_CONFIGURED;
