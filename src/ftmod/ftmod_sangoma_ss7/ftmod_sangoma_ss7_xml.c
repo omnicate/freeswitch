@@ -283,8 +283,8 @@ int ftmod_ss7_parse_xml(ftdm_conf_parameter_t *ftdm_parameters, ftdm_span_t *spa
         i++;
 	}
 
-	var = ftdm_parameters[i].var;
-	val = ftdm_parameters[i].val;
+    var = ftdm_parameters[i].var;
+    val = ftdm_parameters[i].val;
 	ptr = (ftdm_conf_node_t *)ftdm_parameters[i].ptr;
 
 	/* confirm that the 2nd parameter is the "confnode" */
@@ -685,8 +685,16 @@ static int ftmod_ss7_parse_sng_gen(ftdm_conf_node_t *sng_gen, char* operating_mo
 			SS7_DEBUG("Found INR force configuration = %s\n", parm->val);
         } else if (!strcasecmp(parm->var, "operating_mode")) {
                 strcpy(operating_mode, parm->val);
-		} else {
-			SS7_ERROR("Found an invalid parameter \"%s\"!\n", parm->val);
+        } else if (!strcasecmp(parm->var, "stack-logging-enable")) {
+            if (ftdm_true(parm->val)) {
+                g_ftdm_sngss7_data.stack_logging_enable = 1;
+            } else {
+                g_ftdm_sngss7_data.stack_logging_enable = 0;
+            }
+			SS7_DEBUG("SS7 Stack Initial Logging [%s] \n", 
+            (g_ftdm_sngss7_data.stack_logging_enable)?"ENABLE":"DISABLE");
+        } else {
+			SS7_ERROR("Found an invalid parameter \"%s\"!\n", parm->var);
 			return FTDM_FAIL;
 		}
 

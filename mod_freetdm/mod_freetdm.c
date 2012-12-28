@@ -3614,7 +3614,7 @@ static switch_status_t load_config(int reload)
 			memset(spanparameters, 0, sizeof(spanparameters));
 			paramindex = 0;
 
-			if(operating_mode){
+			if (operating_mode) {
 				spanparameters[paramindex].var = "operating-mode";
 				spanparameters[paramindex].val = operating_mode;
 				paramindex++;

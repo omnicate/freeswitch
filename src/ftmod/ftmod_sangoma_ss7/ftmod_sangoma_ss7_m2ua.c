@@ -325,6 +325,10 @@ ftdm_status_t ftmod_ss7_m2ua_cfg(void)
 {
     int x=0;
 
+    if (g_ftdm_sngss7_data.stack_logging_enable) {
+        ftmod_ss7_enable_m2ua_sg_logging();
+    }
+
     /* SCTP configuration */
     if (ftmod_cfg_sctp()) {
         ftdm_log (FTDM_LOG_ERROR ,"SCTP Configuration : NOT OK\n");
@@ -1335,6 +1339,8 @@ void ftmod_ss7_disable_m2ua_sg_logging(void){
 	ftmod_sctp_debug(ADISIMM);
 	ftmod_m2ua_debug(ADISIMM);
 	ftmod_tucl_debug(ADISIMM);
+
+    g_ftdm_sngss7_data.stack_logging_enable = 0x00;
 }
 
 /***********************************************************************************************************************/

@@ -544,6 +544,7 @@ typedef struct ftdm_sngss7_data {
 	int					message_trace_level;
     sng_ss7_mtp2api_data_t  mtp2api;
 	fio_signal_cb_t		sig_cb;
+	int					stack_logging_enable;
 } ftdm_sngss7_data_t;
 
 typedef enum{
