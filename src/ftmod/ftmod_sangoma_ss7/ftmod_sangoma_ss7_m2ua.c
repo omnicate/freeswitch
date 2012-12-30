@@ -1587,7 +1587,7 @@ static int ftmod_open_endpoint(int id)
 
 
     cntrl.t.cntrl.action = AMWENDPOPEN;
-    cntrl.t.cntrl.s.suId = m2ua->id; /* M2UA sct sap Id */
+    cntrl.t.cntrl.s.suId = clust->sct_sap_id; /* M2UA sct sap Id */
 
 
     if (0 == (ret = sng_cntrl_m2ua (&pst, &cntrl))) {
@@ -1703,7 +1703,7 @@ static int ftmod_m2ua_sctp_sctsap_bind(int id)
     cntrl.hdr.response.mem.pool    = S_POOL;
 
     cntrl.t.cntrl.action = ABND;
-    cntrl.t.cntrl.s.suId = m2ua->id;
+    cntrl.t.cntrl.s.suId = clust->sct_sap_id;
 
     if (0 == (ret = sng_cntrl_m2ua (&pst, &cntrl))) {
         clust->flags |= SNGSS7_ACTIVE;
