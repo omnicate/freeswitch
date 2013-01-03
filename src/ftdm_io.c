@@ -859,13 +859,22 @@ FT_DECLARE(ftdm_status_t) ftdm_span_stop(ftdm_span_t *span)
 		goto done;
 	}
 
-	if (!span->stop) {
-		status = FTDM_ENOSYS;
-		goto done;
+	if (span->signal_type == FTDM_SIGTYPE_NONE) {
+		/* there is no signaling component, we're responsible for stopping the ftdm_span_service_events thread */
+		ftdm_set_flag(span, FTDM_SPAN_STOP_THREAD);
+		ftdm_wait_for_flag_cleared(span, FTDM_SPAN_IN_THREAD, 1000);
+		status = FTDM_SUCCESS;
+	} else {
+		if (!span->stop) {
+			status = FTDM_ENOSYS;
+			goto done;
+		}
+
+		/* Stop SIG */
+		status = span->stop(span);
 	}
 
-	status = span->stop(span);
-	if (FTDM_SUCCESS == status) {
+	if (status == FTDM_SUCCESS) {
 		ftdm_clear_flag(span, FTDM_SPAN_STARTED);
 	}
 
@@ -945,7 +954,7 @@ FT_DECLARE(ftdm_status_t) ftdm_span_create(const char *iotype, const char *name,
 
 		ftdm_set_flag(new_span, FTDM_SPAN_CONFIGURED);
 		new_span->span_id = ftdm_get_new_span_id();
-        ++globals.span_index;
+		++globals.span_index;
 		new_span->fio = fio;
 		ftdm_copy_string(new_span->tone_map[FTDM_TONEMAP_DIAL], "%(1000,0,350,440)", FTDM_TONEMAP_LEN);
 		ftdm_copy_string(new_span->tone_map[FTDM_TONEMAP_RING], "%(2000,4000,440,480)", FTDM_TONEMAP_LEN);
@@ -5829,12 +5838,14 @@ static void *ftdm_span_service_events(ftdm_thread_t *me, void *obj)
 		poll_events[i] |= FTDM_EVENTS;
 	}
 
+	ftdm_set_flag(span, FTDM_SPAN_IN_THREAD);
+	ftdm_log(FTDM_LOG_DEBUG, "%s: Core events thread is now running\n", span->name);
 	while (ftdm_running() && !(ftdm_test_flag(span, FTDM_SPAN_STOP_THREAD))) {
 		waitms = 1000;
 		status = ftdm_span_poll_event(span, waitms, poll_events);
 		switch (status) {
 			case FTDM_FAIL:
-				ftdm_log(FTDM_LOG_CRIT, "%s:Failed to poll span for events\n", span->name);
+				ftdm_log(FTDM_LOG_CRIT, "%s: Failed to poll span for events\n", span->name);
 				break;
 			case FTDM_TIMEOUT:
 				break;
@@ -5843,9 +5854,15 @@ static void *ftdm_span_service_events(ftdm_thread_t *me, void *obj)
 				while (ftdm_span_next_event(span, &event) == FTDM_SUCCESS);
 				break;
 			default:
-				ftdm_log(FTDM_LOG_CRIT, "%s:Unhandled IO event\n", span->name);
+				ftdm_log(FTDM_LOG_CRIT, "%s: Unhandled IO event\n", span->name);
+				break;
 		}
 	}
+
+	ftdm_safe_free(poll_events);
+	ftdm_clear_flag(span, FTDM_SPAN_IN_THREAD);
+	ftdm_log(FTDM_LOG_DEBUG, "%s: Core events thread is now stopped\n", span->name);
+
 	return NULL;
 }
 
@@ -5865,6 +5882,9 @@ FT_DECLARE(ftdm_status_t) ftdm_span_start(ftdm_span_t *span)
 		goto done;
 	}
 	if (span->signal_type == FTDM_SIGTYPE_NONE) {
+		ftdm_clear_flag(span, FTDM_SPAN_STOP_THREAD);
+		ftdm_clear_flag(span, FTDM_SPAN_IN_THREAD);
+		ftdm_clear_flag(span, FTDM_SPAN_STARTED);
 		/* If there is no signalling component, start a thread to poll events */
 		status = ftdm_thread_create_detached(ftdm_span_service_events, span);
 		if (status != FTDM_SUCCESS) {
