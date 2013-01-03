@@ -3369,7 +3369,7 @@ static int ftmod_ss7_next_timeslot(char *ch_map, sng_timeslot_t *timeslot)
 	memset(&new_ch_map[0], '\0', sizeof(new_ch_map));
 	memset(timeslot, 0x0, sizeof(sng_timeslot_t));
 
-	SS7_DEVEL_DEBUG("Old channel map = \"%s\"\n", ch_map);
+	SS7_DEBUG("Old channel map = \"%s\"\n", ch_map);
 
 	/* start at the beginning of the ch_map */
 	x = 0;
@@ -3384,10 +3384,10 @@ static int ftmod_ss7_next_timeslot(char *ch_map, sng_timeslot_t *timeslot)
 		x++;
 		if (ch_map[x] == ',') {
 			timeslot->hole = 1;
-			SS7_DEVEL_DEBUG(" Found a siglink in the channel map with a hole in the cic map\n");
+			SS7_DEBUG(" Found a siglink in the channel map with a hole in the cic map\n");
 		} else if (isdigit(ch_map[x])) {
 			/* consume all digits until a comma as this is the channel */
-			SS7_DEVEL_DEBUG(" Found a siglink in the channel map with out a hole in the cic map\n");
+			SS7_DEBUG(" Found a siglink in the channel map with out a hole in the cic map\n");
 		} else {
 			SS7_ERROR("Found an illegal channel map character after signal link flag = \"%c\"!\n", ch_map[x]);
 			return FTDM_FAIL;
@@ -3402,9 +3402,9 @@ static int ftmod_ss7_next_timeslot(char *ch_map, sng_timeslot_t *timeslot)
 		x++;
 		if (ch_map[x] == ',') {
 			timeslot->hole = 1;
-			SS7_DEVEL_DEBUG(" Found a gap in the channel map with a hole in the cic map\n");
+			SS7_DEBUG(" Found a gap in the channel map with a hole in the cic map\n");
 		} else if (isdigit(ch_map[x])) {
-			SS7_DEVEL_DEBUG(" Found a gap in the channel map with out a hole in the cic map\n");
+			SS7_DEBUG(" Found a gap in the channel map with out a hole in the cic map\n");
 			/* consume all digits until a comma as this is the channel */
 		} else {
 			SS7_ERROR("Found an illegal channel map character after signal link flag = \"%c\"!\n", ch_map[x]);
@@ -3422,7 +3422,7 @@ static int ftmod_ss7_next_timeslot(char *ch_map, sng_timeslot_t *timeslot)
 	case '8':
 	case '9':   /* we have a channel */
 		/* consume all digits until a comma or a dash */
-		SS7_DEVEL_DEBUG("Found a starting channel in the channel map\n");
+		SS7_DEBUG("Found a starting channel in the channel map\n");
 		break;
 	/**************************************************************************/
 	default:
@@ -3500,7 +3500,7 @@ static int ftmod_ss7_next_timeslot(char *ch_map, sng_timeslot_t *timeslot)
 		/* nothing to do */
 	}
 
-	SS7_DEVEL_DEBUG("New channel map = \"%s\"\n", ch_map);
+	SS7_DEBUG("New channel map = \"%s\"\n", ch_map);
 
 	return FTDM_SUCCESS;
 }

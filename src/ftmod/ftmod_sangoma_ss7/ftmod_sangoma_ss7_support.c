@@ -1246,12 +1246,11 @@ ftdm_status_t copy_txMedReq_to_sngss7(ftdm_channel_t *ftdmchan, SiTxMedReq *txMe
 
 ftdm_status_t copy_usrServInfoA_to_sngss7(ftdm_channel_t *ftdmchan, SiUsrServInfo *usrServInfoA)
 {
-	int bProceed = 0;
 	const char *val = NULL;
+	int itc_type = 0;
 	
 	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_iam_usi_trans_cap");
 	if (!ftdm_strlen_zero(val)) {
-		int itc_type = 0;
 		if (!strcasecmp(val, "SPEECH")) {
 			itc_type = ITC_SPEECH;
 		} else if (!strcasecmp(val, "UNRESTRICTED")) {
@@ -1267,83 +1266,80 @@ ftdm_status_t copy_usrServInfoA_to_sngss7(ftdm_channel_t *ftdmchan, SiUsrServInf
 		} else if (!strcasecmp(val, "VIDEO")) {
 			itc_type = ITC_VIDEO;
 		} else {
-			itc_type = ITC_SPEECH;
-			ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI transmission capability parameter is wrong : %s. Setting to default SPEECH. \n", val );
+			itc_type = ITC_A31KHZ;
+			ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI transmission capability parameter is wrong : %s. Setting to default 31KHZ. \n", val );
 		}
-		
-		usrServInfoA->infoTranCap.pres	= PRSNT_NODEF;
-		usrServInfoA->infoTranCap.val = get_trillium_val(bc_cap_codes, ftdmchan->caller_data.bearer_capability, itc_type);
-		bProceed = 1;		
 	} else {
-		usrServInfoA->infoTranCap.pres	= NOTPRSNT;
+		itc_type = ITC_A31KHZ;
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI transmission capability parameter is not set. Set to default 31KHZ. %s \n", "");
 	}
+	usrServInfoA->infoTranCap.pres	= PRSNT_NODEF;
+	usrServInfoA->infoTranCap.val = get_trillium_val(bc_cap_codes, ftdmchan->caller_data.bearer_capability, itc_type);
 
 	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_iam_usi_code_standard");
 	if (!ftdm_strlen_zero(val)) {		
-		usrServInfoA->cdeStand.pres			= PRSNT_NODEF;
-		usrServInfoA->cdeStand.val			= (int)atoi(val);	/* default is 0x0 */
-		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI coding standard = %d\n", usrServInfoA->cdeStand.val );
-		bProceed = 1;
+		usrServInfoA->cdeStand.val = (int)atoi(val);	/* default is 0x0 */
 	} else {
-		usrServInfoA->cdeStand.pres			= NOTPRSNT;	
+		usrServInfoA->cdeStand.val = 0x0;
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI coding standard is not set. Set to default value 0x0. %s \n", "");
 	}
+	usrServInfoA->cdeStand.pres = PRSNT_NODEF;
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI coding standard = %d\n", usrServInfoA->cdeStand.val );
 	
 	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_iam_usi_trans_mode");
 	if (!ftdm_strlen_zero(val)) {
-		usrServInfoA->tranMode.pres			= PRSNT_NODEF;
-		usrServInfoA->tranMode.val			= (int)atoi(val);				/* transfer mode, default is 0x0*/
-		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI transfer mode = %d\n", usrServInfoA->tranMode.val );
-		bProceed = 1;
+		usrServInfoA->tranMode.val = (int)atoi(val);				/* transfer mode, default is 0x0*/
 	} else {
-		usrServInfoA->tranMode.pres			= NOTPRSNT;	
+		usrServInfoA->tranMode.val = 0x0;
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI transfer mode is not set. Set to default value 0x0. %s \n", "" );
 	}
+	usrServInfoA->tranMode.pres			= PRSNT_NODEF;
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI transfer mode = %d\n", usrServInfoA->tranMode.val );
 	
 	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_iam_usi_trans_rate_0");	
 	if (!ftdm_strlen_zero(val)) {
-		usrServInfoA->infoTranRate0.pres		= PRSNT_NODEF;
-		usrServInfoA->infoTranRate0.val		= (int)atoi(val);			/* default is 0x10, 64kbps origination to destination*/
-		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI trans rate 0 = %d\n", usrServInfoA->infoTranRate0.val );
-		bProceed = 1;
+		usrServInfoA->infoTranRate0.val = (int)atoi(val);
 	} else {
-		usrServInfoA->infoTranRate0.pres		= NOTPRSNT;	
+		usrServInfoA->infoTranRate0.val = 16;
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI trans rate 0 is not set. Set to default value 0x10. %s \n", "");
 	}
+	usrServInfoA->infoTranRate0.pres		= PRSNT_NODEF;
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI trans rate 0 = %d\n", usrServInfoA->infoTranRate0.val );
 	
 	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_iam_usi_trans_rate_1");
 	if (!ftdm_strlen_zero(val)) {
 		usrServInfoA->infoTranRate1.pres		= PRSNT_NODEF;
 		usrServInfoA->infoTranRate1.val		= (int)atoi(val);			/* 64kbps destination to origination, default is 0x10 */
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI trans rate 1 = %d\n", usrServInfoA->infoTranRate1.val );
-		bProceed = 1;
 	} else {
 		usrServInfoA->infoTranRate1.pres		= NOTPRSNT;
 	}
 	
 	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_iam_usi_layer1_ident");
 	if (!ftdm_strlen_zero(val)) {		
-		usrServInfoA->lyr1Ident.pres			= PRSNT_NODEF;
-		usrServInfoA->lyr1Ident.val			= (int)atoi(val);		/*default value is 0x01 */
-		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI layer 1 indentification = %d\n", usrServInfoA->lyr1Ident.val );
-		bProceed = 1;
+		usrServInfoA->lyr1Ident.val = (int)atoi(val);		/*default value is 0x01 */
 	} else {
-		usrServInfoA->lyr1Ident.pres			= NOTPRSNT;	
+		usrServInfoA->lyr1Ident.val = 1;
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI layer 1 indentification is not set. Set to default value 0x01. %s \n", "");
 	}
+	usrServInfoA->lyr1Ident.pres			= PRSNT_NODEF;
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI layer 1 indentification = %d\n", usrServInfoA->lyr1Ident.val );
 	
 	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_iam_usi_layer1_prot");
 	if (!ftdm_strlen_zero(val)) {
-		usrServInfoA->usrInfLyr1Prot.pres		= PRSNT_NODEF;
-		usrServInfoA->usrInfLyr1Prot.val		= (int)atoi(val);		/*default value is 0x02 */
-		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI layer 1 protocol = %d\n", usrServInfoA->usrInfLyr1Prot.val );
-		bProceed = 1;
+		usrServInfoA->usrInfLyr1Prot.val = (int)atoi(val);		/*default value is 0x02 */
 	} else {
-		usrServInfoA->usrInfLyr1Prot.pres		= NOTPRSNT;
+		usrServInfoA->usrInfLyr1Prot.val = 2;		
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI layer 1 protocol is not set. Set to default value 0x02. %s \n", "");
 	}
+	usrServInfoA->usrInfLyr1Prot.pres = PRSNT_NODEF;
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI layer 1 protocol = %d\n", usrServInfoA->usrInfLyr1Prot.val );
 	
 	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_iam_usi_layer2_ident");
 	if (!ftdm_strlen_zero(val)) {
 		usrServInfoA->lyr2Ident.pres			= PRSNT_NODEF;
 		usrServInfoA->lyr2Ident.val			= (int)atoi(val);		/*default value is 0x01 */
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI layer 2 indentification = %d\n", usrServInfoA->lyr2Ident.val );
-		bProceed = 1;
 	} else {
 		usrServInfoA->lyr2Ident.pres			= NOTPRSNT;	
 	}
@@ -1353,7 +1349,6 @@ ftdm_status_t copy_usrServInfoA_to_sngss7(ftdm_channel_t *ftdmchan, SiUsrServInf
 		usrServInfoA->usrInfLyr2Prot.pres		= PRSNT_NODEF;
 		usrServInfoA->usrInfLyr2Prot.val		= (int)atoi(val);		/*default value is 0x02 */
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI layer 2 protocol = %d\n", usrServInfoA->usrInfLyr2Prot.val );
-		bProceed = 1;
 	} else {
 		usrServInfoA->usrInfLyr2Prot.pres		= NOTPRSNT;	
 	}
@@ -1363,7 +1358,6 @@ ftdm_status_t copy_usrServInfoA_to_sngss7(ftdm_channel_t *ftdmchan, SiUsrServInf
 		usrServInfoA->lyr3Ident.pres			= PRSNT_NODEF;
 		usrServInfoA->lyr3Ident.val			= (int)atoi(val);		/*default value is 0x01 */
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI layer 3 indentification = %d\n", usrServInfoA->lyr3Ident.val );
-		bProceed = 1;
 	} else {
 		usrServInfoA->lyr3Ident.pres			= NOTPRSNT;
 	}
@@ -1373,7 +1367,6 @@ ftdm_status_t copy_usrServInfoA_to_sngss7(ftdm_channel_t *ftdmchan, SiUsrServInf
 		usrServInfoA->usrInfLyr3Prot.pres		= PRSNT_NODEF;
 		usrServInfoA->usrInfLyr3Prot.val		= (int)atoi(val);		/*default value is 0x02 */
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI layer 3 protocol = %d\n", usrServInfoA->usrInfLyr3Prot.val );
-		bProceed = 1;
 	} else {
 		usrServInfoA->usrInfLyr3Prot.pres		= NOTPRSNT;
 	}
@@ -1383,7 +1376,6 @@ ftdm_status_t copy_usrServInfoA_to_sngss7(ftdm_channel_t *ftdmchan, SiUsrServInf
 		usrServInfoA->chanStruct.pres			= PRSNT_NODEF;
 		usrServInfoA->chanStruct.val			= (int)atoi(val);                          /* default value is 0x1, 8kHz integrity */
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI channel structure = %d\n", usrServInfoA->chanStruct.val );
-		bProceed = 1;
 	} else {
 		usrServInfoA->chanStruct.pres			= NOTPRSNT;
 	}
@@ -1393,7 +1385,6 @@ ftdm_status_t copy_usrServInfoA_to_sngss7(ftdm_channel_t *ftdmchan, SiUsrServInf
 		usrServInfoA->config.pres				= PRSNT_NODEF;
 		usrServInfoA->config.val				= (int)atoi(val);                          /* default value is 0x0, point to point configuration */
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI configuration = %d\n", usrServInfoA->config.val );
-		bProceed = 1;
 	} else {
 		usrServInfoA->config.pres				= NOTPRSNT;	
 	}
@@ -1403,7 +1394,6 @@ ftdm_status_t copy_usrServInfoA_to_sngss7(ftdm_channel_t *ftdmchan, SiUsrServInf
 		usrServInfoA->establish.pres			= PRSNT_NODEF;
 		usrServInfoA->establish.val			= (int)atoi(val);                           /* default value is 0x0, on demand */
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI establishment = %d\n", usrServInfoA->establish.val );
-		bProceed = 1;
 	} else {
 		usrServInfoA->establish.pres			= NOTPRSNT;	
 	}
@@ -1413,7 +1403,6 @@ ftdm_status_t copy_usrServInfoA_to_sngss7(ftdm_channel_t *ftdmchan, SiUsrServInf
 		usrServInfoA->symmetry.pres			= PRSNT_NODEF;
 		usrServInfoA->symmetry.val			= (int)atoi(val);                           /* default value is 0x0, bi-directional symmetric */
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI symmetry = %d\n", usrServInfoA->symmetry.val );
-		bProceed = 1;
 	} else {
 		usrServInfoA->symmetry.pres			= NOTPRSNT;	
 	}
@@ -1423,17 +1412,11 @@ ftdm_status_t copy_usrServInfoA_to_sngss7(ftdm_channel_t *ftdmchan, SiUsrServInf
 		usrServInfoA->rateMultiplier.pres		= PRSNT_NODEF;
 		usrServInfoA->rateMultiplier.val		= (int)atoi(val);                           /* default value is 0x1, 1x rate multipler */
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI rate multipier = %d\n", usrServInfoA->rateMultiplier.val );
-		bProceed = 1;
 	} else {
 		usrServInfoA->rateMultiplier.pres		= NOTPRSNT;
 	}
 	
-	if (bProceed) {
-		usrServInfoA->eh.pres				= PRSNT_NODEF;
-	} else {
-		usrServInfoA->eh.pres				= NOTPRSNT;
-	}
-
+	usrServInfoA->eh.pres				= PRSNT_NODEF;
 	return FTDM_SUCCESS;
 }
 
