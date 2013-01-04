@@ -1478,7 +1478,7 @@ int ftmod_ss7_isup_ckt_config(int id)
 #if (SI_218_COMP || SS7_ANS88 || SS7_ANS92 || SS7_ANS95 || SS7_BELL)
 	cfg.t.cfg.s.siCir.firstCic			= 1;					/* First cic in the circuit group		  */
 	cfg.t.cfg.s.siCir.numCir			= 24;					/* Number of circuits in the circuit group */
-	cfg.t.cfg.s.siCir.nonSS7Con			= TRUE;				/* connecting to non SS7 network			*/
+	cfg.t.cfg.s.siCir.nonSS7Con			= FALSE;				/* connecting to non SS7 network			*/
 	cfg.t.cfg.s.siCir.outTrkGrpN.length	= 0;					/* outgoing trunk group number (For EXM)	*/
 	cfg.t.cfg.s.siCir.cvrTrkClli.length	= 0;					/* Trunk Group number (For CVR validation) */
 	cfg.t.cfg.s.siCir.clli.length		= 0;					/* common language location identifier	 */
