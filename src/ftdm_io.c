@@ -2512,21 +2512,34 @@ FT_DECLARE(ftdm_status_t) _ftdm_channel_call_indicate(const char *file, const ch
 		ftdm_set_flag(ftdmchan, FTDM_CHANNEL_IND_ACK_PENDING);
 	}
 
-    switch(indication) {
-        case FTDM_CHANNEL_INDICATE_FACILITY:
-        case FTDM_CHANNEL_INDICATE_RAW:
-            /* These indications can be performed in any state */
-            break;
-        default:
-            if (ftdm_test_flag(ftdmchan, FTDM_CHANNEL_OUTBOUND)) {
+	if (!ftdm_test_flag(ftdmchan, FTDM_CHANNEL_OUTBOUND)) {
+		switch(indication) {
+			case FTDM_CHANNEL_INDICATE_PROGRESS_MEDIA:
+			case FTDM_CHANNEL_INDICATE_ANSWER:
+				if (ftdmchan->prebuffer_size_opt && !ftdmchan->pre_buffer) {
+					ftdm_channel_command(ftdmchan, FTDM_COMMAND_SET_PRE_BUFFER_SIZE, &ftdmchan->prebuffer_size_opt);
+				}
+				break;
+			default:
+				break;
+		}
+	}
 
-                ftdm_log_chan_ex(ftdmchan, file, func, line, FTDM_LOG_LEVEL_WARNING, "Cannot indicate %s in outgoing channel in state %s\n",
-                        ftdm_channel_indication2str(indication), ftdm_channel_state2str(ftdmchan->state));
-                status = FTDM_EINVAL;
-                goto done;
-            }
-            break;
-    }
+	switch(indication) {
+		case FTDM_CHANNEL_INDICATE_FACILITY:
+		case FTDM_CHANNEL_INDICATE_RAW:
+			/* These indications can be performed in any state */
+			break;
+		default:
+			if (ftdm_test_flag(ftdmchan, FTDM_CHANNEL_OUTBOUND)) {
+
+				ftdm_log_chan_ex(ftdmchan, file, func, line, FTDM_LOG_LEVEL_WARNING, "Cannot indicate %s in outgoing channel in state %s\n",
+						ftdm_channel_indication2str(indication), ftdm_channel_state2str(ftdmchan->state));
+				status = FTDM_EINVAL;
+				goto done;
+			}
+			break;
+	}
 
 	if (ftdmchan->state == FTDM_CHANNEL_STATE_TERMINATING) {
 		ftdm_log_chan_ex(ftdmchan, file, func, line, FTDM_LOG_LEVEL_DEBUG, "Ignoring indication %s because the call is in %s state\n",
@@ -3395,7 +3408,6 @@ FT_DECLARE(ftdm_status_t) ftdm_channel_command(ftdm_channel_t *ftdmchan, ftdm_co
 			}
 
 			ftdmchan->pre_buffer_size = val * 8;
-
 			ftdm_mutex_lock(ftdmchan->pre_buffer_mutex);
 			if (!ftdmchan->pre_buffer_size) {
 				ftdm_buffer_destroy(&ftdmchan->pre_buffer);
@@ -4199,7 +4211,6 @@ FT_DECLARE(ftdm_status_t) ftdm_channel_process_media(ftdm_channel_t *ftdmchan, v
 				}
 			}
 		}
-
 		if (ftdm_test_flag(ftdmchan, FTDM_CHANNEL_DTMF_DETECT) && !ftdm_channel_test_feature(ftdmchan, FTDM_CHANNEL_FEATURE_DTMF_DETECT)) {
 			teletone_hit_type_t hit;
 			char digit_char;
@@ -4214,7 +4225,6 @@ FT_DECLARE(ftdm_status_t) ftdm_channel_process_media(ftdm_channel_t *ftdmchan, v
 					char digit_str[2] = { 0 };
 
 					digit_str[0] = digit_char;
-					
 					if (!ftdmchan->span->sig_dtmf || (ftdmchan->span->sig_dtmf(ftdmchan, (const char*)digit_str) != FTDM_BREAK)) {
 						ftdm_channel_queue_dtmf(ftdmchan, digit_str);
 					}
@@ -5070,6 +5080,9 @@ FT_DECLARE(ftdm_status_t) ftdm_configure_span_channels(ftdm_span_t *span, const 
 		if (chan_config->dtmf_on_start) {
 			span->channels[chan_index]->dtmfdetect.trigger_on_start = 1;
 		}
+		if (chan_config->prebuffer_size) {
+			span->channels[chan_index]->prebuffer_size_opt = chan_config->prebuffer_size;
+		}
 	}
 
 	return FTDM_SUCCESS;
@@ -5266,6 +5279,10 @@ static ftdm_status_t load_config(void)
 			} else if (!strcasecmp(var, "debugdtmf")) {
 				chan_config.debugdtmf = ftdm_true(val);
 				ftdm_log(FTDM_LOG_DEBUG, "Setting debugdtmf to '%s'\n", chan_config.debugdtmf ? "yes" : "no");
+			} else if (!strncasecmp(var, "pre_buffer_size", sizeof("pre_buffer_size")-1)) {
+				if (sscanf(val, "%d", &(chan_config.prebuffer_size)) != 1) {
+					ftdm_log(FTDM_LOG_ERROR, "invalid prebuffer_size: '%s'\n", val);
+				}
 			} else if (!strncasecmp(var, "dtmfdetect_ms", sizeof("dtmfdetect_ms")-1)) {
 				if (chan_config.dtmf_on_start == FTDM_TRUE) {
 					chan_config.dtmf_on_start = FTDM_FALSE;

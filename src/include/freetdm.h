@@ -502,6 +502,7 @@ typedef struct ftdm_channel_config {
 	uint8_t debugdtmf;
 	uint8_t dtmf_on_start;
 	uint32_t dtmfdetect_ms;
+	int prebuffer_size;
 	uint8_t iostats;
 } ftdm_channel_config_t;
 

@@ -433,6 +433,7 @@ struct ftdm_channel {
 	uint32_t skip_read_frames;
 	ftdm_buffer_t *dtmf_buffer;
 	ftdm_buffer_t *gen_dtmf_buffer;
+	int prebuffer_size_opt;
 	ftdm_buffer_t *pre_buffer;
 	ftdm_buffer_t *digit_buffer;
 	ftdm_buffer_t *fsk_buffer;
