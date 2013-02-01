@@ -38,7 +38,7 @@
 
 #include <switch.h>
 
-#include <mp4v2.h>
+#include <mp4v2/mp4v2.h>
 #include <mp4av_h264.h>
 
 SWITCH_MODULE_LOAD_FUNCTION(mod_mp4v2_load);
