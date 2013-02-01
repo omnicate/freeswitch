@@ -177,15 +177,20 @@ static void *SWITCH_THREAD_FUNC record_video_thread(switch_thread_t *thread, voi
 		switch_core_session_write_video_frame(session, read_frame, SWITCH_IO_FLAG_NONE, 0);
 
 		if (fragment_type == 7 && !sps_set) { //sps
+			switch_mutex_lock(eh->mutex);
 			MP4AddH264SequenceParameterSet(mp4, video, read_frame->data, bytes);
+			switch_mutex_unlock(eh->mutex);
 			sps_set = 1;
 		} else if (fragment_type == 8 && !pps_set) { //pps
+			switch_mutex_lock(eh->mutex);
 			MP4AddH264PictureParameterSet(mp4, video, read_frame->data, bytes);
+			switch_mutex_unlock(eh->mutex);
 			pps_set = 1;
 		}
 
 		if (!hint_set) {
 			uint8_t payload_number = MP4_SET_DYNAMIC_PAYLOAD;
+			switch_mutex_lock(eh->mutex);
 			MP4SetHintTrackRtpPayload(
 				mp4,
 				hint,
@@ -195,20 +200,26 @@ static void *SWITCH_THREAD_FUNC record_video_thread(switch_thread_t *thread, voi
 				NULL,
 				false,
 				false);
+			switch_mutex_unlock(eh->mutex);
 			hint_set = 1;
 		}
 
 		if ((!sps_set) && (!pps_set)) continue;
 
 		if (len == 0) {
+			switch_mutex_lock(eh->mutex);
 			MP4AddRtpVideoHint(mp4, hint, iframe, (uint8_t)MP4_INVALID_DURATION);
+			switch_mutex_unlock(eh->mutex);
+
 			hint_start = 1;
 		}
 
 		offset = len;
 
+		switch_mutex_lock(eh->mutex);
 		MP4AddRtpPacket(mp4, hint, read_frame->m, (uint8_t)MP4_INVALID_DURATION);
 		MP4AddRtpSampleData(mp4, hint, sample_id++, offset, read_frame->datalen+4);
+		switch_mutex_unlock(eh->mutex);
 
 		// offset += 4 + read_frame->datalen;
 		len += 4 + read_frame->datalen;
@@ -223,10 +234,13 @@ static void *SWITCH_THREAD_FUNC record_video_thread(switch_thread_t *thread, voi
 		size = (uint32_t *)((uint8_t *)size + 4 + read_frame->datalen);
 
 		if (read_frame->m) {
+			switch_mutex_lock(eh->mutex);
 			MP4WriteRtpHint(mp4, hint, MP4_INVALID_DURATION, iframe);
 			MP4WriteSample(mp4, video, buf, len, DURATION, 0, iframe);
+			switch_mutex_unlock(eh->mutex);
 			len = 0;
 			size = (uint32_t *)buf;
+
 		}
 
 	}
@@ -259,6 +273,8 @@ SWITCH_STANDARD_APP(record_mp4_function)
 	int duration = size;
 	int sample_id = 1;
 	switch_event_t *event;
+
+	memset(&codec, 0, sizeof(switch_codec_t));
 
 	switch_core_session_get_read_impl(session, &read_impl);
 	switch_channel_answer(channel);
@@ -442,9 +458,12 @@ end:
 
 	switch_core_session_set_read_codec(session, NULL);
 
-	if (switch_core_codec_ready(&codec)) switch_core_codec_destroy(&codec);
+	if (eh.fd != MP4_INVALID_FILE_HANDLE) {
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "closing file %s\n", (char *)data);
+		MP4Close(eh.fd, 0);
+	}
 
-	if (eh.fd != MP4_INVALID_FILE_HANDLE) MP4Close(eh.fd, 0);
+	if (switch_core_codec_ready(&codec)) switch_core_codec_destroy(&codec);
 
 }
 
