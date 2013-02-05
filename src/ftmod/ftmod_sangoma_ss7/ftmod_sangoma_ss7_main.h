@@ -544,6 +544,7 @@ typedef struct ftdm_sngss7_data {
 	int					message_trace_level;
     sng_ss7_mtp2api_data_t  mtp2api;
 	fio_signal_cb_t		sig_cb;
+	int					stack_logging_enable;
 } ftdm_sngss7_data_t;
 
 typedef enum{
@@ -917,6 +918,9 @@ ftdm_status_t sngss7_activate_mtp2api(ftdm_span_t * span);
 ftdm_status_t sngss7_cfg_mtp2api(ftdm_span_t * span);
 int ft_to_sngss7_activate_mtp2(ftdm_channel_t *ftdmchan);
 
+int ftmod_ss7_delete_mtp2_link(int lnkNmb);
+int ftmod_ss7_delete_mtp1_link(int lnkNmb);
+
 int ftmod_ss7_inhibit_mtp3link(uint32_t id);
 int ftmod_ss7_uninhibit_mtp3link(uint32_t id);
 int ftmod_ss7_bind_mtp3link(uint32_t id);
@@ -1137,6 +1141,8 @@ void sngss7_set_sig_status(sngss7_chan_data_t *sngss7_info, ftdm_signaling_statu
 ftdm_status_t sngss7_add_var(sngss7_chan_data_t *ss7_info, const char* var, const char* val);
 ftdm_status_t sngss7_add_raw_data(sngss7_chan_data_t *sngss7_info, uint8_t* data, ftdm_size_t data_len);
 int ftmod_ss7_isup_debug(int action);
+int ftmod_ss7_get_mtp1_id_by_span_id(int span_id);
+int ftmod_ss7_get_mtp2_id_by_mtp1_id(int mtp1_cfg_id);
 
 /* in ftmod_sangoma_ss7_timers.c */
 void handle_isup_t35(void *userdata);
@@ -1152,7 +1158,8 @@ void handle_disable_ubl_timeout(void *userdata);
 void handle_disable_tx_ubl_timeout_on_tx_blo(void *userdata);
 #endif
 
-void ftmod_ss7_enable_linkset(void);
+void ftmod_ss7_enable_all_linksets(void);
+void ftmod_ss7_enable_linkset(int linkset_id);
 
 /******************************************************************************/
 

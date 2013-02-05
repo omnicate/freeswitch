@@ -300,10 +300,11 @@ static void handle_hw_alarm(ftdm_event_t *e)
 			/* NC. Its possible for alarms to come in the middle of configuration
 			   especially on large systems */
 			if (!ss7_info || !ss7_info->ftdmchan) {
-				SS7_DEBUG("handle_hw_alarm: span=%i chan=%i ckt=%i x=%i - ss7_info=%p ftdmchan=%p\n",
-						ftdmchan->physical_span_id,ftdmchan->physical_chan_id,
+				SS7_DEBUG("handle_hw_alarm: Invalid ss7_info/ftdmchan pointer "
+                        "ckt=%i x=%i - ss7_info=%p ftdmchan=%p\n",
 						g_ftdm_sngss7_data.cfg.isupCkt[x].id,x,
-						ss7_info,ss7_info?ss7_info->ftdmchan:NULL);
+						ss7_info?ss7_info:NULL,
+                        ss7_info?ss7_info->ftdmchan:NULL);
 				continue;
 			}
 
@@ -2518,6 +2519,10 @@ ftdm_status_t ftdm_sangoma_ss7_stop(ftdm_span_t * span)
 	}
 
 	/* KONRAD FIX ME - deconfigure any circuits, links, attached to this span */
+
+    if (SNG_SS7_OPR_MODE_M2UA_SG == g_ftdm_operating_mode) {
+        ftmod_ss7_m2ua_span_stop(span->span_id);
+    }
 
 	ftdm_log (FTDM_LOG_DEBUG, "Finished stopping span %s:%u.\n", span->name, span->span_id);
 

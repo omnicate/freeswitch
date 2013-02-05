@@ -97,7 +97,7 @@ static void ctdm_report_alarms(ftdm_channel_t *channel)
 	ftdm_alarm_flag_t alarmflag = 0;
 
 	if (switch_event_create(&event, SWITCH_EVENT_TRAP) != SWITCH_STATUS_SUCCESS) {
-		ftdm_log(FTDM_LOG_ERROR, "failed to create alarms events\n");
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "failed to create alarms events\n");
 		return;
 	}
 	
@@ -193,7 +193,7 @@ static void ctdm_event_handler(switch_event_t *event)
 					} else if (status != FTDM_EINVAL) {
 						switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "%s:Failed to prepare span\n", span_name);
 					}
-				} else if (!strcmp(cond, "mg-tdm-check")) {
+                } else if (!strcmp(cond, "mg-tdm-check")) {
 					channel = ctdm_get_channel_from_event(event, span);
 					if (!channel) {
 						switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Could not find channel\n");
@@ -261,12 +261,12 @@ static FIO_SIGNAL_CB_FUNCTION(on_signal_cb)
 		case FTDM_SIGEVENT_ALARM_TRAP:
 			{
 				if (ftdm_channel_get_alarms(sigmsg->channel, &alarmbits) != FTDM_SUCCESS) {
-					ftdm_log(FTDM_LOG_ERROR, "failed to retrieve alarms\n");
+					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "failed to retrieve alarms\n");
 					return FTDM_FAIL;
 				}
 
 				if (switch_event_create(&event, SWITCH_EVENT_TRAP) != SWITCH_STATUS_SUCCESS) {
-					ftdm_log(FTDM_LOG_ERROR, "failed to create alarms events\n");
+					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "failed to create alarms events\n");
 					return FTDM_FAIL;
 				}
 				if (sigmsg->event_id == FTDM_SIGEVENT_ALARM_CLEAR) {
@@ -593,7 +593,7 @@ top:
         for (p = dtmf; p && *p; p++) {
             if (is_dtmf(*p)) {
                 _dtmf.digit = *p;
-                ftdm_log(FTDM_LOG_DEBUG, "Queuing DTMF [%c] in channel %s device %d:%d\n", *p, name, span_id, chan_id);
+                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Queuing DTMF [%c] in channel %s device %d:%d\n", *p, name, span_id, chan_id);
                 switch_channel_queue_dtmf(channel, &_dtmf);
             }
         }
@@ -739,4 +739,3 @@ static switch_status_t channel_receive_event(switch_core_session_t *session, swi
 
     return SWITCH_STATUS_SUCCESS;
 }
-

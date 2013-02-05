@@ -908,7 +908,7 @@ ftdm_status_t copy_natConInd_to_sngss7(ftdm_channel_t *ftdmchan, SiNatConInd *na
 ftdm_status_t four_char_to_hex(const char* in, uint16_t* out) 
 {
 	int i= 4; 
-	char a, b, c, d;
+	char a = 0, b = 0, c = 0,  d = 0;
 	if (!in || 4>strlen(in)) {
 		return FTDM_FAIL;
 	}

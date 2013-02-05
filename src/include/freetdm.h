@@ -40,6 +40,8 @@
 #ifndef FREETDM_H
 #define FREETDM_H
 
+#define RECONFIG_DBG 1
+
 #include "ftdm_declare.h"
 #include "ftdm_call_utils.h"
 
@@ -1685,6 +1687,20 @@ FT_DECLARE(ftdm_status_t) ftdm_span_start(ftdm_span_t *span);
 FT_DECLARE(ftdm_status_t) ftdm_span_stop(ftdm_span_t *span);
 
 /*! 
+ * \brief delete span from freetdm
+ * delete span from global span hash table 
+ * frees all ftdm resources associated with span
+ * invoke signaling cb "ftdm_span_stop" to stop signaling
+ *
+ * \param span The span to stop
+ *
+ * \retval FTDM_SUCCESS success 
+ * \retval FTDM_FAIL failure 
+ */
+FT_DECLARE(ftdm_status_t) ftdm_span_delete(ftdm_span_t *span);
+
+
+/*! 
  * \brief Register a custom I/O interface with the FreeTDM core
  *
  * \param io_interface the Interface to register
@@ -1718,6 +1734,17 @@ FT_DECLARE(ftdm_iterator_t *) ftdm_span_get_chan_iterator(const ftdm_span_t *spa
  * \retval FTDM_FAIL failure 
  */
 FT_DECLARE(char *) ftdm_api_execute(const char *cmd);
+
+/*! 
+ * \brief get all span details buffer
+ *
+ * \param input buffer which will be filled by ftdm with span details 
+ *
+ * \retval FTDM_SUCCESS success 
+ * \retval FTDM_FAIL failure 
+ */
+FT_DECLARE(int ) ftdm_get_all_span_list(char *buffer);
+
 
 /*! 
  * \brief Create a configuration node
@@ -1843,6 +1870,10 @@ FT_DECLARE(ftdm_status_t) ftdm_global_init(void);
 
 /*! \brief Create spans and channels reading the freetdm.conf file */
 FT_DECLARE(ftdm_status_t) ftdm_global_configuration(void);
+
+/*! \brief reading freetdm.conf file and create spans and channels , 
+ * skip already created spans*/
+FT_DECLARE(ftdm_status_t) ftdm_global_reconfiguration(void);
 
 /*! \brief Shutdown the library */
 FT_DECLARE(ftdm_status_t) ftdm_global_destroy(void);

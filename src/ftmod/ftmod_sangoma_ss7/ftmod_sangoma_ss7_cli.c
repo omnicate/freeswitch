@@ -927,6 +927,9 @@ static ftdm_status_t handle_print_usage(ftdm_stream_handle_t *stream)
 	stream->write_function(stream, "ftmod_sangoma_ss7 signaling information:\n");
 	stream->write_function(stream, "ftdm ss7 show \n");
 	stream->write_function(stream, "ftdm ss7 show status mtp2 X\n");
+
+	if (SNG_SS7_OPR_MODE_M2UA_SG != g_ftdm_operating_mode) {
+
 	stream->write_function(stream, "ftdm ss7 show status mtp3 X\n");
 	stream->write_function(stream, "ftdm ss7 show status linkset X\n");
 	stream->write_function(stream, "\n");
@@ -970,6 +973,11 @@ static ftdm_status_t handle_print_usage(ftdm_stream_handle_t *stream)
 	stream->write_function(stream, "ftdm ss7 show relay\n");
 	stream->write_function(stream, "\n");
 
+    } /* (SNG_SS7_OPR_MODE_M2UA_SG != g_ftdm_operating_mode) */
+
+	if ((SNG_SS7_OPR_MODE_M2UA_ASP == g_ftdm_operating_mode) ||
+	   (SNG_SS7_OPR_MODE_M2UA_SG == g_ftdm_operating_mode)) {
+
 	stream->write_function(stream, "ftmod_sangoma_ss7 M2UA :\n");
 	stream->write_function(stream, "ftdm ss7 xmlshow sctp \n");
 	stream->write_function(stream, "ftdm ss7 xmlshow sctp <sctp_interface_name>\n");
@@ -977,13 +985,19 @@ static ftdm_status_t handle_print_usage(ftdm_stream_handle_t *stream)
 	stream->write_function(stream, "ftdm ss7 xmlshow m2ua <m2ua_interface_name>\n");
 	stream->write_function(stream, "ftdm ss7 xmlshow m2ua <m2ua_interface_name> peerstatus\n");
 	stream->write_function(stream, "ftdm ss7 xmlshow m2ua <m2ua_interface_name> clusterstatus\n");
+
+	if (SNG_SS7_OPR_MODE_M2UA_SG == g_ftdm_operating_mode) {
+
 	stream->write_function(stream, "ftdm ss7 xmlshow nif \n");
 	stream->write_function(stream, "ftdm ss7 xmlshow nif <nif_interface_name>\n");
 	stream->write_function(stream, "\n");
+    }
 
 
 	stream->write_function(stream, "ftmod_sangoma_ss7 M2UA logging:\n");
 	stream->write_function(stream, "ftdm ss7 m2ua logging [enable|disable] \n");
+
+    } /* M2UA SG & M2UA ASP */
 
 	stream->write_function(stream, "\n");
 
@@ -2927,7 +2941,7 @@ static ftdm_status_t cli_ss7_show_general(ftdm_stream_handle_t *stream)
 	stream->write_function(stream, "MTP2 status: \n");
 	cli_ss7_show_all_mtp2link(stream);
 
-	if(SNG_SS7_OPR_MODE_M2UA_SG != g_ftdm_operating_mode){
+	if (SNG_SS7_OPR_MODE_M2UA_SG != g_ftdm_operating_mode) {
 		stream->write_function(stream, "\nMTP3 status: \n");
 		cli_ss7_show_all_mtp3link(stream);
 

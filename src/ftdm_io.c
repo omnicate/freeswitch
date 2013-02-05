@@ -133,6 +133,7 @@ static ftdm_status_t ftdm_channel_sig_indicate(ftdm_channel_t *ftdmchan, ftdm_ch
 
 static const char *ftdm_val2str(unsigned long long val, val_str_t *val_str_table, ftdm_size_t array_size, const char *default_str);
 static unsigned long long ftdm_str2val(const char *str, val_str_t *val_str_table, ftdm_size_t array_size, unsigned long long default_val);
+static int ftdm_get_new_span_id (void);
 
 
 static int time_is_init = 0;
@@ -801,6 +802,47 @@ static void ftdm_span_add(ftdm_span_t *span)
 	ftdm_mutex_unlock(globals.span_mutex);
 }
 
+FT_DECLARE(ftdm_status_t) ftdm_span_delete(ftdm_span_t *span)
+{
+	ftdm_span_t *cur_span  = NULL;
+	ftdm_span_t *prev_span = NULL;
+    ftdm_mutex_lock(globals.span_mutex);
+
+    if (span == globals.spans) {
+        /* first node */
+        if (NULL == globals.spans->next) {
+            /*only one node */
+            globals.spans = NULL;
+        } else {
+            globals.spans = globals.spans->next;
+        }
+    } else {
+        /* loop till we get match */
+        for (cur_span = globals.spans; cur_span && cur_span!=span; cur_span=cur_span->next) {
+            prev_span = cur_span;
+        }
+        prev_span->next = prev_span->next->next;
+    }
+
+    if (span) {
+        if (ftdm_test_flag(span, FTDM_SPAN_CONFIGURED)) {
+            ftdm_span_destroy(span);
+        }
+
+        hashtable_remove(globals.span_hash, (void *)span->name);
+        ftdm_safe_free(span->dtmf_hangup);
+        ftdm_safe_free(span->type);
+        ftdm_safe_free(span->name);
+        ftdm_safe_free(span);
+        span = NULL;
+
+        --globals.span_index;
+    }
+    ftdm_mutex_unlock(globals.span_mutex);
+
+    return FTDM_SUCCESS;
+}
+
 FT_DECLARE(ftdm_status_t) ftdm_span_stop(ftdm_span_t *span)
 {
 	ftdm_status_t status =  FTDM_SUCCESS;
@@ -817,13 +859,22 @@ FT_DECLARE(ftdm_status_t) ftdm_span_stop(ftdm_span_t *span)
 		goto done;
 	}
 
-	if (!span->stop) {
-		status = FTDM_ENOSYS;
-		goto done;
+	if (span->signal_type == FTDM_SIGTYPE_NONE) {
+		/* there is no signaling component, we're responsible for stopping the ftdm_span_service_events thread */
+		ftdm_set_flag(span, FTDM_SPAN_STOP_THREAD);
+		ftdm_wait_for_flag_cleared(span, FTDM_SPAN_IN_THREAD, 1000);
+		status = FTDM_SUCCESS;
+	} else {
+		if (!span->stop) {
+			status = FTDM_ENOSYS;
+			goto done;
+		}
+
+		/* Stop SIG */
+		status = span->stop(span);
 	}
 
-	status = span->stop(span);
-	if (FTDM_SUCCESS == status) {
+	if (status == FTDM_SUCCESS) {
 		ftdm_clear_flag(span, FTDM_SPAN_STARTED);
 	}
 
@@ -831,6 +882,34 @@ done:
 	ftdm_mutex_unlock(span->mutex);
 
 	return status;
+}
+
+static int ftdm_get_new_span_id (void)
+{
+    ftdm_span_t *sp;
+    int span_id = 0x01;
+    ftdm_mutex_lock(globals.span_mutex);
+
+    if (NULL == globals.spans) goto done;
+
+    /* due to dynamic deletion/creation of spans , we can have holes in span numbering
+     * so to avoid that, looping around span list to see first available free span_id
+     * for example - If initially span list has 1, 2 ,3 span_id nodes and if runtime we delete 2nd node then
+     * we left with 1 and 3 span_id nodes in span list, this api should return span_id=2 for next span creation*/
+
+    for (sp = globals.spans; sp;) {
+        if (sp->span_id != span_id) {
+            /* first unmatch span_id */
+            break;
+        }
+        sp = sp->next;
+        span_id++;
+    }
+
+done:
+    ftdm_mutex_unlock(globals.span_mutex);
+    ftdm_log(FTDM_LOG_INFO, "Allocating span-id[%d]\n", span_id);
+    return span_id;
 }
 
 FT_DECLARE(ftdm_status_t) ftdm_span_create(const char *iotype, const char *name, ftdm_span_t **span)
@@ -874,7 +953,8 @@ FT_DECLARE(ftdm_status_t) ftdm_span_create(const char *iotype, const char *name,
 		ftdm_assert(status == FTDM_SUCCESS, "mutex creation failed\n");
 
 		ftdm_set_flag(new_span, FTDM_SPAN_CONFIGURED);
-		new_span->span_id = ++globals.span_index;
+		new_span->span_id = ftdm_get_new_span_id();
+		++globals.span_index;
 		new_span->fio = fio;
 		ftdm_copy_string(new_span->tone_map[FTDM_TONEMAP_DIAL], "%(1000,0,350,440)", FTDM_TONEMAP_LEN);
 		ftdm_copy_string(new_span->tone_map[FTDM_TONEMAP_RING], "%(2000,4000,440,480)", FTDM_TONEMAP_LEN);
@@ -4759,6 +4839,40 @@ static void print_span_flag_values(ftdm_stream_handle_t *stream)
 	}
 }
 
+FT_DECLARE(int ) ftdm_get_all_span_list(char *buffer)
+{
+    ftdm_span_t *sp;
+    int          len = 0x00;
+    int count = 0x00;
+
+    if (NULL == buffer) return 0x00;
+
+    ftdm_mutex_lock(globals.span_mutex);
+
+    if (NULL == globals.spans) {
+        len = len + sprintf(buffer+len, "No configured span found\n");
+        goto done;
+    }
+
+    for (sp = globals.spans; sp;) {
+        len = len + sprintf(buffer+len, "************************\n");
+        len = len + sprintf(buffer+len, "span name = %s\n", (sp->name)?sp->name:"NULL");
+        len = len + sprintf(buffer+len, "span id   = %d\n", sp->span_id);
+        len = len + sprintf(buffer+len, "channel count   = %d\n", sp->chan_count);
+        len = len + sprintf(buffer+len, "Signal Type   = %d\n", sp->signal_type);
+        len = len + sprintf(buffer+len, "Trunk Type    = %s\n", ftdm_span_get_trunk_type_str(sp));
+        sp = sp->next;
+        count++;
+    }
+
+    len = len + sprintf(buffer+len, "************************\n");
+    len = len + sprintf(buffer+len, "Total Span found = %d \n", count);
+
+done:
+    ftdm_mutex_unlock(globals.span_mutex);
+	return len;
+}
+
 static char *handle_core_command(const char *cmd)
 {
 	char *mycmd = NULL;
@@ -4946,7 +5060,7 @@ FT_DECLARE(char *) ftdm_api_execute(const char *cmd)
 	if (!strcasecmp(type, "core")) {
 		return handle_core_command(cmd);
 	}
-	
+
 	ftdm_mutex_lock(globals.mutex);
 	if (!(fio = (ftdm_io_interface_t *) hashtable_search(globals.interface_hash, (void *)type))) {
 		ftdm_load_module_assume(type);
@@ -5089,7 +5203,7 @@ FT_DECLARE(ftdm_status_t) ftdm_configure_span_channels(ftdm_span_t *span, const 
 }
 
 
-static ftdm_status_t load_config(void)
+static ftdm_status_t load_config(int reload)
 {
 	char cfg_name[] = "freetdm.conf";
 	ftdm_config_t cfg;
@@ -5144,6 +5258,12 @@ static ftdm_status_t load_config(void)
 					ret = FTDM_FAIL;
 					goto done;
 				}
+
+                if ((reload) && (FTDM_SUCCESS == ftdm_span_find_by_name(name, &span) )) {
+                    ftdm_log(FTDM_LOG_INFO, "Span [%s] found in current running configuration \n", name);
+                    span = NULL;
+                    continue;
+                }
 
 				if (ftdm_span_create(type, name, &span) == FTDM_SUCCESS) {
 					ftdm_log(FTDM_LOG_DEBUG, "created span %d (%s) of type %s\n", span->span_id, span->name, type);
@@ -5735,12 +5855,14 @@ static void *ftdm_span_service_events(ftdm_thread_t *me, void *obj)
 		poll_events[i] |= FTDM_EVENTS;
 	}
 
+	ftdm_set_flag(span, FTDM_SPAN_IN_THREAD);
+	ftdm_log(FTDM_LOG_DEBUG, "%s: Core events thread is now running\n", span->name);
 	while (ftdm_running() && !(ftdm_test_flag(span, FTDM_SPAN_STOP_THREAD))) {
 		waitms = 1000;
 		status = ftdm_span_poll_event(span, waitms, poll_events);
 		switch (status) {
 			case FTDM_FAIL:
-				ftdm_log(FTDM_LOG_CRIT, "%s:Failed to poll span for events\n", span->name);
+				ftdm_log(FTDM_LOG_CRIT, "%s: Failed to poll span for events\n", span->name);
 				break;
 			case FTDM_TIMEOUT:
 				break;
@@ -5749,9 +5871,15 @@ static void *ftdm_span_service_events(ftdm_thread_t *me, void *obj)
 				while (ftdm_span_next_event(span, &event) == FTDM_SUCCESS);
 				break;
 			default:
-				ftdm_log(FTDM_LOG_CRIT, "%s:Unhandled IO event\n", span->name);
+				ftdm_log(FTDM_LOG_CRIT, "%s: Unhandled IO event\n", span->name);
+				break;
 		}
 	}
+
+	ftdm_safe_free(poll_events);
+	ftdm_clear_flag(span, FTDM_SPAN_IN_THREAD);
+	ftdm_log(FTDM_LOG_DEBUG, "%s: Core events thread is now stopped\n", span->name);
+
 	return NULL;
 }
 
@@ -5771,6 +5899,9 @@ FT_DECLARE(ftdm_status_t) ftdm_span_start(ftdm_span_t *span)
 		goto done;
 	}
 	if (span->signal_type == FTDM_SIGTYPE_NONE) {
+		ftdm_clear_flag(span, FTDM_SPAN_STOP_THREAD);
+		ftdm_clear_flag(span, FTDM_SPAN_IN_THREAD);
+		ftdm_clear_flag(span, FTDM_SPAN_STARTED);
 		/* If there is no signalling component, start a thread to poll events */
 		status = ftdm_thread_create_detached(ftdm_span_service_events, span);
 		if (status != FTDM_SUCCESS) {
@@ -6292,7 +6423,7 @@ FT_DECLARE(ftdm_status_t) ftdm_global_configuration(void)
 	globals.cpu_monitor.set_alarm_threshold = 92;
 	globals.cpu_monitor.clear_alarm_threshold = 82;
 
-	if (load_config() != FTDM_SUCCESS) {
+	if (load_config(0x00) != FTDM_SUCCESS) {
 		globals.running = 0;
 		ftdm_log(FTDM_LOG_ERROR, "FreeTDM global configuration failed!\n");
 		return FTDM_FAIL;
@@ -6309,6 +6440,22 @@ FT_DECLARE(ftdm_status_t) ftdm_global_configuration(void)
 		}
 	}
 
+
+	return FTDM_SUCCESS;
+}
+
+FT_DECLARE(ftdm_status_t) ftdm_global_reconfiguration(void)
+{
+	if (!globals.running) {
+		return FTDM_FAIL;
+	}
+	
+	if (load_config(0x01) != FTDM_SUCCESS) {
+		ftdm_log(FTDM_LOG_ERROR, "FreeTDM global re-configuration failed!\n");
+		return FTDM_FAIL;
+	}
+
+    ftdm_log(FTDM_LOG_DEBUG, "FreeTDM global re-configuration passed!\n");
 
 	return FTDM_SUCCESS;
 }

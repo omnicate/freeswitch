@@ -34,6 +34,7 @@
  */
 #include <switch.h>
 #include "freetdm.h"
+#include "private/ftdm_core.h"
 
 //#define CUDATEL_DEBUG
 #ifdef CUDATEL_DEBUG
@@ -179,6 +180,8 @@ ftdm_status_t ftdm_channel_from_event(ftdm_sigmsg_t *sigmsg, switch_core_session
 void dump_chan(ftdm_span_t *span, uint32_t chan_id, switch_stream_handle_t *stream);
 void dump_chan_xml(ftdm_span_t *span, uint32_t chan_id, switch_stream_handle_t *stream);
 void ctdm_init(switch_loadable_module_interface_t *module_interface);
+
+
 
 static switch_core_session_t *ftdm_channel_get_session(ftdm_channel_t *channel, int32_t id)
 {
@@ -3478,7 +3481,7 @@ static void parse_bri_pri_spans(switch_xml_t cfg, switch_xml_t spans)
 	}
 }
 
-static switch_status_t load_config(void)
+static switch_status_t load_config(int reload)
 {
 	const char *cf = "freetdm.conf";
 	switch_xml_t cfg, xml, settings, param, spans, myspan;
@@ -3542,6 +3545,9 @@ static switch_status_t load_config(void)
 			ftdm_span_t *span = NULL;
 			uint32_t span_id = 0;
 			unsigned paramindex = 0;
+			uint32_t b_span_found = 0;
+            ftdm_conf_node_t *tmp_node = NULL;
+
 			if (!name && !id) {
 				LOAD_ERROR("ss7 span missing required attribute 'id' or 'name', skipping ...\n");
 				continue;
@@ -3551,8 +3557,8 @@ static switch_status_t load_config(void)
 				continue;
 			}
 
-            if (name) {
-                zstatus = ftdm_span_find_by_name(name, &span);
+           if (name) {
+                		zstatus = ftdm_span_find_by_name(name, &span);
 			} else {
 				if (switch_is_number(id)) {
 					span_id = atoi(id);
@@ -3573,6 +3579,32 @@ static switch_status_t load_config(void)
 				span_id = ftdm_span_get_id(span);
 			}
 
+            if (reload ) {
+                b_span_found = 0;
+                for (int i = 0; i < FTDM_MAX_SPANS_INTERFACE; i++) {
+                    if (SPAN_CONFIG[i].span) {
+                        if (!strcasecmp(name, SPAN_CONFIG[i].span->name)) {
+                            b_span_found = 1;
+                            break;
+                        }
+                    }
+                }
+
+                if (b_span_found) {
+                    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "ss7 config %s was found in the hash already. skipping it.\n", configname);
+                    continue;
+                }
+
+
+
+                tmp_node = switch_core_hash_find(globals.ss7_configs, configname);
+                if (tmp_node) {
+                    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "ss7 config %s was found. Deleting current hash entry.\n", configname);
+                    switch_core_hash_delete(globals.ss7_configs, configname);
+                }
+            } /* reload */
+
+
 			ss7confnode = _get_ss7_config_node(cfg, configname, operating_mode);
 			if (!ss7confnode) {
 				LOAD_ERROR("Error finding ss7config '%s' for FreeTDM span id: %s\n", configname, switch_str_nil(id));
@@ -3582,7 +3614,7 @@ static switch_status_t load_config(void)
 			memset(spanparameters, 0, sizeof(spanparameters));
 			paramindex = 0;
 
-			if(operating_mode){
+			if (operating_mode) {
 				spanparameters[paramindex].var = "operating-mode";
 				spanparameters[paramindex].val = operating_mode;
 				paramindex++;
@@ -4641,6 +4673,31 @@ FTDM_CLI_DECLARE(ftdm_cmd_list)
 	return SWITCH_STATUS_SUCCESS;
 }
 
+FTDM_CLI_DECLARE(ftdm_cmd_destroy)
+{
+	char *span_name = argv[1];
+	ftdm_span_t *span = NULL;
+	ftdm_status_t status;
+
+	if (argc < 2) {
+		print_usage(stream, cli);
+		goto end;
+	}
+
+	ftdm_span_find_by_name(span_name, &span);
+	if (!span) {
+		stream->write_function(stream, "-ERR span %s not found\n", span_name);
+		goto end;
+	}
+	
+    SPAN_CONFIG[span->span_id].span = NULL;
+    status = ftdm_span_delete(span);
+
+	stream->write_function(stream, status == FTDM_SUCCESS ? "+OK\n" : "-ERR failure\n");
+end:
+	return SWITCH_STATUS_SUCCESS;
+}
+
 FTDM_CLI_DECLARE(ftdm_cmd_start_stop)
 {
 	char *span_name = argv[1];
@@ -4718,6 +4775,51 @@ end:
 	return SWITCH_STATUS_SUCCESS;
 }
 
+FTDM_CLI_DECLARE(ftdm_cmd_reload)
+{
+    if (FTDM_SUCCESS != ftdm_global_reconfiguration()) {
+        ftdm_log (FTDM_LOG_ERROR, "Freetdm span reconfiguration failed \n");
+        return SWITCH_STATUS_FALSE;
+    }
+
+    if (SWITCH_STATUS_SUCCESS !=  load_config(0x01) ) {
+        ftdm_log (FTDM_LOG_ERROR, "Freetdm SS7 reconfiguration failed \n");
+        return SWITCH_STATUS_FALSE;
+    }
+
+    ftdm_log (FTDM_LOG_DEBUG, "Successfully reloaded freetdm SS7 configuration. \n");
+
+    return SWITCH_STATUS_SUCCESS;
+}
+
+FTDM_CLI_DECLARE(ftdm_cmd_xml_status)
+{
+	ftdm_span_t *span;
+    /* this cli command as of now only shows if span is 
+     * present in freetdm or not */
+
+	if (argc < 2) {
+		print_usage(stream, cli);
+		goto end;
+	}
+
+	ftdm_span_find_by_name(argv[1], &span);
+
+    stream->write_function(stream, "<span>\n");
+
+    if (!span) {
+        stream->write_function(stream, "<status> NOT_PRESENT </status>\n");
+        stream->write_function(stream, "</span>\n");
+        goto end;
+    }
+
+    stream->write_function(stream, "<status> PRESENT </status>\n");
+    stream->write_function(stream, "</span>\n");
+
+end:
+	return SWITCH_STATUS_SUCCESS;
+}
+
 FTDM_CLI_DECLARE(ftdm_cmd_dump)
 {
 	ftdm_iterator_t *chaniter = NULL;
@@ -4725,6 +4827,19 @@ FTDM_CLI_DECLARE(ftdm_cmd_dump)
 	uint32_t chan_id = 0;
 	ftdm_span_t *span;
 	char *as = NULL;
+    char buffer[1024];
+
+    memset(&buffer,0,sizeof(buffer));
+
+    if (argc == 1) {
+        /* list all present spans */
+        if (ftdm_get_all_span_list(&buffer[0])) {
+            stream->write_function(stream, "%s\n", &buffer[0]);
+        } else {
+            stream->write_function(stream, "-ERR getting span details\n");
+        }
+        goto end;
+    }
 	
 	if (argc < 2) {
 		print_usage(stream, cli);
@@ -5235,9 +5350,11 @@ static ftdm_cli_entry_t ftdm_cli_options[] =
 	{ "list", "", "", ftdm_cmd_list },
 	{ "start", "<span_id|span_name>", "", ftdm_cmd_start_stop },
 	{ "stop", "<span_id|span_name>", "", ftdm_cmd_start_stop },
+	{ "destroy", "<span_id|span_name>", "", ftdm_cmd_destroy },
 	{ "reset", "<span_id|span_name> [<chan_id>]", "", ftdm_cmd_reset },
 	{ "alarms", "<span_id> <chan_id>", "", ftdm_cmd_alarms },
-	{ "dump", "<span_id|span_name> [<chan_id>]", "", ftdm_cmd_dump },
+	{ "dump", "[<span_id|span_name>] [<chan_id>]", "", ftdm_cmd_dump },
+	{ "xmlstatus", "<span_id|span_name>", "", ftdm_cmd_xml_status },
 	{ "sigstatus", "get|set <span_id|span_name> [<chan_id>] [<sigstatus>]", "::[set:get", ftdm_cmd_sigstatus },
 	{ "trace", "<path> <span_id|span_name> [<chan_id>]", "", ftdm_cmd_trace },
 	{ "notrace", "<span_id|span_name> [<chan_id>]", "", ftdm_cmd_notrace },
@@ -5253,6 +5370,7 @@ static ftdm_cli_entry_t ftdm_cli_options[] =
 	{ "core flag", "[!]<flag-int-value|flag-name> [<span_id|span_name>] [<chan_id>]", "", NULL },
 	{ "core spanflag", "[!]<flag-int-value|flag-name> [<span_id|span_name>]", "", NULL },
 	{ "core calls", "", "", NULL },
+	{ "reload", "", "", ftdm_cmd_reload },
 };
 
 static void print_usage(switch_stream_handle_t *stream, ftdm_cli_entry_t *cli)
@@ -5314,6 +5432,7 @@ end:
 
 	return SWITCH_STATUS_SUCCESS;
 }
+
 
 SWITCH_STANDARD_APP(enable_dtmf_function)
 {
@@ -5403,7 +5522,7 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_freetdm_load)
 		return SWITCH_STATUS_TERM;
 	}
 	
-	if (load_config() != SWITCH_STATUS_SUCCESS) {
+	if (load_config(0x00) != SWITCH_STATUS_SUCCESS) {
 		ftdm_global_destroy();
 		return SWITCH_STATUS_TERM;
 	}
