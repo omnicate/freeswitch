@@ -1424,13 +1424,48 @@ static FIO_API_FUNCTION(ftdm_sangoma_isdn_api)
 				status = FTDM_FAIL;
 				goto done;
 			}
-			status = sngisdn_show_span(stream, span);
+			status = sngisdn_show_span(stream, span, 0);
 			goto done;
 		}
-		status = sngisdn_show_spans(stream);
+		status = sngisdn_show_spans(stream, 0);
+		goto done;
+	}
+
+	if (!strcasecmp(argv[0], "show_spans_xml")) {
+		ftdm_span_t *span = NULL;
+		if (argc == 2) {
+			status = ftdm_span_find_by_name(argv[1], &span);
+			if (FTDM_SUCCESS != status) {
+				stream->write_function(stream, "-ERR failed to find span with name %s\n", argv[1]);
+				
+				stream->write_function(stream, "Usage: %s\n", SANGOMA_ISDN_API_USAGE_SHOW_SPANS);
+				status = FTDM_FAIL;
+				goto done;
+			}
+			status = sngisdn_show_span(stream, span, 1);
+			goto done;
+		}
+		status = sngisdn_show_spans(stream, 1);
 		goto done;
 	}
 	
+	if (!strcasecmp(argv[0], "show_calls_xml")) {
+		ftdm_span_t *span = NULL;
+		if (argc == 2) {
+			status = ftdm_span_find_by_name(argv[1], &span);
+			if (FTDM_SUCCESS != status) {
+				stream->write_function(stream, "-ERR failed to find span with name %s\n", argv[1]);
+				
+				stream->write_function(stream, "Usage: %s\n", SANGOMA_ISDN_API_USAGE_SHOW_SPANS);
+				status = FTDM_FAIL;
+				goto done;
+			}
+			status = sngisdn_show_calls_span(stream, span, 1);
+			goto done;
+		}
+		status = sngisdn_show_calls(stream, 1);
+		goto done;
+	}
 	if (!strcasecmp(argv[0], "check_ids")) {
 		status = sngisdn_check_free_ids();
 		goto done;

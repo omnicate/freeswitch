@@ -1449,7 +1449,7 @@ ftdm_status_t sngisdn_show_l1_stats(ftdm_stream_handle_t *stream, ftdm_span_t *s
 }
 
 
-ftdm_status_t sngisdn_show_span(ftdm_stream_handle_t *stream, ftdm_span_t *span)
+ftdm_status_t sngisdn_show_span(ftdm_stream_handle_t *stream, ftdm_span_t *span, uint8_t xml)
 {
 	ftdm_signaling_status_t sigstatus;
 	ftdm_alarm_flag_t alarmbits;
@@ -1461,18 +1461,61 @@ ftdm_status_t sngisdn_show_span(ftdm_stream_handle_t *stream, ftdm_span_t *span)
 	}
 			
 	ftdm_span_get_sig_status(span, &sigstatus);
-	stream->write_function(stream, "span:%s physical:%s signalling:%s\n",
+	if (xml) {
+		stream->write_function(stream, "<span name=\"%s\">\n\t<status type=\"physical\" value=\"%s\"/>\n\t<status type=\"signalling\" value=\"%s\"/>\n<span/>\n",
 										span->name, alarmbits ? "ALARMED" : "OK",
 										ftdm_signaling_status2str(sigstatus));
+	} else {
+		stream->write_function(stream, "span:%s physical:%s signalling:%s\n",
+										span->name, alarmbits ? "ALARMED" : "OK",
+										ftdm_signaling_status2str(sigstatus));
+
+	}
 	return FTDM_SUCCESS;
 }
 
-ftdm_status_t sngisdn_show_spans(ftdm_stream_handle_t *stream)
+ftdm_status_t sngisdn_show_spans(ftdm_stream_handle_t *stream, uint8_t xml)
 {
 	int i;	
 	for(i=1;i<=MAX_L1_LINKS;i++) {		
 		if (g_sngisdn_data.spans[i]) {
-			sngisdn_show_span(stream, g_sngisdn_data.spans[i]->ftdm_span);
+			sngisdn_show_span(stream, g_sngisdn_data.spans[i]->ftdm_span, xml);
+		}
+	}
+	return FTDM_SUCCESS;
+}
+
+ftdm_status_t sngisdn_show_calls_span(ftdm_stream_handle_t *stream, ftdm_span_t *span, uint8_t xml)
+{
+	ftdm_channel_t *ftdmchan = NULL;
+	ftdm_iterator_t *chaniter = NULL;
+	ftdm_iterator_t *curr = NULL;
+
+	stream->write_function(stream, "<span name=\"%s\">\n", span->name);
+	chaniter = ftdm_span_get_chan_iterator(span, NULL);
+	for (curr = chaniter; curr; curr = ftdm_iterator_next(curr)) {
+		ftdmchan = (ftdm_channel_t*)ftdm_iterator_current(curr);
+
+		if (ftdmchan->type == FTDM_CHAN_TYPE_DQ921) {
+			stream->write_function(stream, "\t<chan number=\"%d\">\n", ftdmchan->physical_chan_id);
+		} else {
+			stream->write_function(stream, "\t<chan number=\"%d\" call=\"%s\">\n", ftdmchan->physical_chan_id,
+						(ftdmchan->state != FTDM_CHANNEL_STATE_DOWN) ? "yes" : "no");
+		}
+	}
+	ftdm_iterator_free(chaniter);
+
+	stream->write_function(stream, "<span/>\n");
+
+	return FTDM_SUCCESS;
+}
+
+ftdm_status_t sngisdn_show_calls(ftdm_stream_handle_t *stream, uint8_t xml)
+{
+	int i;	
+	for(i=1;i<=MAX_L1_LINKS;i++) {		
+		if (g_sngisdn_data.spans[i]) {
+			sngisdn_show_calls_span(stream, g_sngisdn_data.spans[i]->ftdm_span, xml);
 		}
 	}
 	return FTDM_SUCCESS;

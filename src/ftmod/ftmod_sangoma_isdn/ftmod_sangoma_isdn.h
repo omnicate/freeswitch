@@ -566,8 +566,10 @@ ftdm_status_t sngisdn_stack_stop(ftdm_span_t *span);
 ftdm_status_t sngisdn_wake_up_phy(ftdm_span_t *span);
 
 ftdm_status_t sngisdn_show_l1_stats(ftdm_stream_handle_t *stream, ftdm_span_t *span);
-ftdm_status_t sngisdn_show_spans(ftdm_stream_handle_t *stream);
-ftdm_status_t sngisdn_show_span(ftdm_stream_handle_t *stream, ftdm_span_t *span);
+ftdm_status_t sngisdn_show_spans(ftdm_stream_handle_t *stream, uint8_t xml);
+ftdm_status_t sngisdn_show_span(ftdm_stream_handle_t *stream, ftdm_span_t *span, uint8_t xml);
+ftdm_status_t sngisdn_show_calls(ftdm_stream_handle_t *stream, uint8_t xml);
+ftdm_status_t sngisdn_show_calls_span(ftdm_stream_handle_t *stream, ftdm_span_t *span, uint8_t xml);
 
 #endif /* __FTMOD_SNG_ISDN_H__ */
 
