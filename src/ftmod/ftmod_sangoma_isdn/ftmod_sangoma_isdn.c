@@ -1460,6 +1460,11 @@ static FIO_API_FUNCTION(ftdm_sangoma_isdn_api)
 				status = FTDM_FAIL;
 				goto done;
 			}
+			if (span->signal_type != FTDM_SIGTYPE_ISDN) {
+				stream->write_function(stream, "-ERR %s: is not a sangoma_isdn span\n", argv[1]);
+				status = FTDM_FAIL;
+				goto done;
+			}
 			status = sngisdn_show_calls_span(stream, span, 1);
 			goto done;
 		}
