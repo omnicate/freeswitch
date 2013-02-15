@@ -193,7 +193,7 @@ AM_CONDITIONAL([HAVE_OPENR2], [test "${HAVE_OPENR2}" = "yes"])
 # WAT GSM stack
 #
 HAVE_WAT="no"
-AC_CHECK_LIB([wat], [wat_version], [HAVE_WAT="yes"])
+#AC_CHECK_LIB([wat], [wat_version], [HAVE_WAT="yes"])
 AC_MSG_RESULT([checking whether to build ftmod_wat... ${HAVE_WAT}])
 AM_CONDITIONAL([HAVE_WAT], [test "${HAVE_WAT}" = "yes"])
 
