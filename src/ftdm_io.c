@@ -6079,6 +6079,9 @@ FT_DECLARE(ftdm_status_t) ftdm_span_send_signal(ftdm_span_t *span, ftdm_sigmsg_t
 			if (fchan->state != FTDM_CHANNEL_STATE_PROGRESS_MEDIA) {
 				ftdm_log_chan(fchan, FTDM_LOG_WARNING, "FTDM_SIGEVENT_PROGRESS_MEDIA sent in state %s\n", ftdm_channel_state2str(fchan->state));
 			}
+			if (fchan->prebuffer_size_opt && !fchan->pre_buffer) {
+				ftdm_channel_command(fchan, FTDM_COMMAND_SET_PRE_BUFFER_SIZE, &fchan->prebuffer_size_opt);
+			}
 		}
 		break;
 
@@ -6087,6 +6090,9 @@ FT_DECLARE(ftdm_status_t) ftdm_span_send_signal(ftdm_span_t *span, ftdm_sigmsg_t
 			/* test signaling module compliance */
 			if (fchan->state != FTDM_CHANNEL_STATE_UP) {
 				ftdm_log_chan(fchan, FTDM_LOG_WARNING, "FTDM_SIGEVENT_UP sent in state %s\n", ftdm_channel_state2str(fchan->state));
+			}
+			if (fchan->prebuffer_size_opt && !fchan->pre_buffer) {
+				ftdm_channel_command(fchan, FTDM_COMMAND_SET_PRE_BUFFER_SIZE, &fchan->prebuffer_size_opt);
 			}
 		}
 		break;
