@@ -109,6 +109,24 @@ ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 		return FTDM_FAIL;
 	}
 
+	if( ftdmchan->span->trunk_type == FTDM_TRUNK_T1 ) {
+		if( siConEvnt->usrServInfo.eh.pres == PRSNT_NODEF && 
+			siConEvnt->usrServInfo.usrInfLyr1Prot.pres == PRSNT_NODEF &&
+			siConEvnt->usrServInfo.usrInfLyr1Prot.val != 0x02 /* ulaw */ ) {
+			SS7_ERROR("Codec other than ulaw being used on T1");
+		}
+	} else if( ftdmchan->span->trunk_type == FTDM_TRUNK_E1 ) {
+		if( siConEvnt->usrServInfo.eh.pres == PRSNT_NODEF && 
+			siConEvnt->usrServInfo.usrInfLyr1Prot.pres == PRSNT_NODEF &&
+			siConEvnt->usrServInfo.usrInfLyr1Prot.val != 0x03 /* alaw */ ) {
+			SS7_ERROR("Codec other than alaw being used on E1");
+		}
+	} else {
+		SS7_ERROR("Wrong circuit type. circuit = %d\n", circuit);
+		SS7_FUNC_TRACE_EXIT(__FUNCTION__);
+		return FTDM_FAIL;
+	}
+
 	/* lock the channel */
 	ftdm_mutex_lock(ftdmchan->mutex);
 
