@@ -302,6 +302,7 @@ ftdm_status_t ftmod_isdn_parse_cfg(ftdm_conf_parameter_t *ftdm_parameters, ftdm_
 
 	signal_data->cid_name_method = SNGISDN_CID_NAME_AUTO;
 	signal_data->send_cid_name = SNGISDN_OPT_DEFAULT;
+	signal_data->send_connect_ack = SNGISDN_OPT_DEFAULT;
 	
 	span->default_caller_data.dnis.plan = FTDM_NPI_INVALID;
 	span->default_caller_data.dnis.type = FTDM_TON_INVALID;
@@ -433,6 +434,8 @@ ftdm_status_t ftmod_isdn_parse_cfg(ftdm_conf_parameter_t *ftdm_parameters, ftdm_
 				ftdm_log(FTDM_LOG_WARNING, "Invalid option %s for parameter %s\n", val, var);
 				signal_data->send_cid_name = SNGISDN_OPT_DEFAULT;
 			}
+                } else if (!strcasecmp(var, "send-connect-ack")) {
+                        parse_yesno(var, val, &signal_data->send_connect_ack);
 		} else if (!strcasecmp(var, "timer-t301")) {
 			parse_timer(val, &signal_data->timer_t301);
 		} else if (!strcasecmp(var, "timer-t302")) {

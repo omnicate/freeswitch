@@ -275,6 +275,7 @@ typedef struct sngisdn_span_data {
 	uint8_t			force_sending_complete;
 	uint8_t			cid_name_method;
 	uint8_t			send_cid_name;
+	uint8_t                 send_connect_ack;
 
 	int32_t			timer_t301;
 	int32_t			timer_t302;
