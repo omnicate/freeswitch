@@ -135,6 +135,7 @@ ftdm_state_map_t sangoma_ss7_state_map = {
 	{FTDM_CHANNEL_STATE_PROGRESS, FTDM_END},
 	{FTDM_CHANNEL_STATE_SUSPENDED, FTDM_CHANNEL_STATE_RESTART,
 	 FTDM_CHANNEL_STATE_TERMINATING, FTDM_CHANNEL_STATE_HANGUP,
+	 FTDM_CHANNEL_STATE_UP,
 	 FTDM_CHANNEL_STATE_PROGRESS_MEDIA, FTDM_END}
 	},
    {
@@ -223,7 +224,7 @@ ftdm_state_map_t sangoma_ss7_state_map = {
    {
 	ZSD_OUTBOUND,
 	ZSM_UNACCEPTABLE,
-	{FTDM_CHANNEL_STATE_DIALING, FTDM_END},
+	{FTDM_CHANNEL_STATE_RINGING, FTDM_END},
 	{FTDM_CHANNEL_STATE_SUSPENDED, FTDM_CHANNEL_STATE_RESTART,
 	 FTDM_CHANNEL_STATE_CANCEL, FTDM_CHANNEL_STATE_TERMINATING,
 	 FTDM_CHANNEL_STATE_HANGUP, FTDM_CHANNEL_STATE_PROGRESS,
@@ -232,9 +233,20 @@ ftdm_state_map_t sangoma_ss7_state_map = {
    {
 	ZSD_OUTBOUND,
 	ZSM_UNACCEPTABLE,
+	{FTDM_CHANNEL_STATE_DIALING, FTDM_END},
+	{FTDM_CHANNEL_STATE_SUSPENDED, FTDM_CHANNEL_STATE_RESTART,
+	 FTDM_CHANNEL_STATE_CANCEL, FTDM_CHANNEL_STATE_TERMINATING,
+	 FTDM_CHANNEL_STATE_HANGUP, FTDM_CHANNEL_STATE_PROGRESS,
+	 FTDM_CHANNEL_STATE_RINGING,
+	 FTDM_CHANNEL_STATE_PROGRESS_MEDIA ,FTDM_CHANNEL_STATE_UP, FTDM_END}
+	},
+   {
+	ZSD_OUTBOUND,
+	ZSM_UNACCEPTABLE,
 	{FTDM_CHANNEL_STATE_PROGRESS, FTDM_END},
 	{FTDM_CHANNEL_STATE_SUSPENDED, FTDM_CHANNEL_STATE_RESTART,
 	 FTDM_CHANNEL_STATE_TERMINATING, FTDM_CHANNEL_STATE_HANGUP,
+	 FTDM_CHANNEL_STATE_UP,
 	 FTDM_CHANNEL_STATE_PROGRESS_MEDIA, FTDM_END}
 	},
    {
@@ -1325,6 +1337,23 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 	/**************************************************************************/
 	/* We handle RING indication the same way we would indicate PROGRESS */
 	case FTDM_CHANNEL_STATE_RINGING:
+		if (ftdm_test_flag (ftdmchan, FTDM_CHANNEL_OUTBOUND)) {
+			sngss7_send_signal(sngss7_info, FTDM_SIGEVENT_RINGING);
+			SS7_DEBUG_CHAN(ftdmchan, "Signal freetdm outgoing channel is in RINGING state %s \n", " ");
+		} else {
+			/* handle incoming call RINGING state */
+			SS7_DEBUG_CHAN(ftdmchan, "Signal freetdm incoming channel is in RINGING state %s \n", " ");
+			if (!sngss7_test_ckt_flag(sngss7_info, FLAG_SENT_ACM)) {
+				sngss7_set_ckt_flag(sngss7_info, FLAG_SENT_ACM);
+				ft_to_sngss7_acm(ftdmchan);
+			} else {
+				if (!sngss7_test_ckt_flag(sngss7_info, FLAG_SENT_CPG)) {
+					sngss7_set_ckt_flag(sngss7_info, FLAG_SENT_CPG);
+					ft_to_sngss7_cpg(ftdmchan, EV_ALERT, EVPR_NOIND);
+				}
+			}
+		}
+		break;
 	case FTDM_CHANNEL_STATE_PROGRESS:
 
 		if (ftdmchan->last_state == FTDM_CHANNEL_STATE_SUSPENDED) {
@@ -1338,8 +1367,10 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 			sngss7_send_signal(sngss7_info, FTDM_SIGEVENT_PROGRESS);
 
 			/* move to progress media  */
+			/*
 			state_flag = 0;
 			ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_PROGRESS_MEDIA);
+			*/
 		} else {
 			/* inbound call so we need to send out ACM */
 			if (!sngss7_test_ckt_flag(sngss7_info, FLAG_SENT_ACM)) {
@@ -1349,7 +1380,7 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 			if (g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].cpg_on_progress == FTDM_TRUE) {
 				if (!sngss7_test_ckt_flag(sngss7_info, FLAG_SENT_CPG)) {
 					sngss7_set_ckt_flag(sngss7_info, FLAG_SENT_CPG);
-					ft_to_sngss7_cpg(ftdmchan);
+					ft_to_sngss7_cpg(ftdmchan, EV_PROGRESS, EVPR_NOIND);
 				}
 			}
 		}
@@ -1370,12 +1401,17 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 			if (!sngss7_test_ckt_flag(sngss7_info, FLAG_SENT_ACM)) {
 				sngss7_set_ckt_flag(sngss7_info, FLAG_SENT_ACM);
 				ft_to_sngss7_acm(ftdmchan);
+			} else {
+				if (!sngss7_test_ckt_flag(sngss7_info, FLAG_SENT_CPG)) {
+					sngss7_set_ckt_flag(sngss7_info, FLAG_SENT_CPG);
+					ft_to_sngss7_cpg(ftdmchan, EV_PROGRESS, EVPR_NOIND);
+				}
 			}
+
 			if (g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].cpg_on_progress_media == FTDM_TRUE) {
 				if (!sngss7_test_ckt_flag(sngss7_info, FLAG_SENT_CPG)) {
 					sngss7_set_ckt_flag(sngss7_info, FLAG_SENT_CPG);
-					ft_to_sngss7_cpg(ftdmchan);
-				}
+					ft_to_sngss7_cpg(ftdmchan, EV_INBAND, EVPR_NOIND); }
 			}
 		}
 
@@ -2574,6 +2610,7 @@ static FIO_CONFIGURE_SPAN_SIGNALING_FUNCTION(ftdm_sangoma_ss7_span_config)
 	ftdm_set_flag (span, FTDM_SPAN_USE_CHAN_QUEUE);
 	/* set the flag to indicate that this span uses sig event queues */
 	ftdm_set_flag (span, FTDM_SPAN_USE_SIGNALS_QUEUE);
+	ftdm_set_flag (span, FTDM_SPAN_USE_SKIP_STATES);
 
 
 

@@ -397,35 +397,68 @@ ftdm_status_t handle_con_sta(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 
 		switch (ftdmchan->state) {
 		case FTDM_CHANNEL_STATE_DIALING:
-			/* KONRAD: should we confirm the instance ids ? */
+			{
+				ftdm_channel_state_t next_state = FTDM_CHANNEL_STATE_INVALID;
 
-			/* need to grab the sp instance id */ 
-			sngss7_info->spInstId = spInstId;
+				/* need to grab the sp instance id */ 
+				sngss7_info->spInstId = spInstId;
 
-			if ((siCnStEvnt->optBckCalInd.eh.pres) && 
-				(siCnStEvnt->optBckCalInd.inbndInfoInd.pres)) {
+				if (siCnStEvnt->bckCallInd.eh.pres == PRSNT_NODEF) {
+					if (siCnStEvnt->bckCallInd.cadPtyStatInd.pres == PRSNT_NODEF) {
+						if (siCnStEvnt->bckCallInd.cadPtyStatInd.val == CADSTAT_NOIND ) {
+							if (ftdmchan->state != FTDM_CHANNEL_STATE_PROGRESS &&
+								ftdmchan->state != FTDM_CHANNEL_STATE_PROGRESS_MEDIA) {
+									next_state = FTDM_CHANNEL_STATE_PROGRESS;
+									goto state_change;
+							}
+						} else if (siCnStEvnt->bckCallInd.cadPtyStatInd.val == 0x1) {
+							next_state = FTDM_CHANNEL_STATE_RINGING;
+							goto state_change;
+						}
+					}
+					if (siCnStEvnt->bckCallInd.intInd.pres == PRSNT_NODEF &&
+						siCnStEvnt->bckCallInd.intInd.val == 0x1) {
+						if (ftdmchan->state != FTDM_CHANNEL_STATE_PROGRESS_MEDIA) {
+							next_state = FTDM_CHANNEL_STATE_PROGRESS_MEDIA;
+							goto state_change;
+						}
+					}
+				} 
 
-				if (siCnStEvnt->optBckCalInd.inbndInfoInd.val) {
-					/* go to PROGRESS_MEDIA */
-					ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_PROGRESS_MEDIA);
+				if ((siCnStEvnt->optBckCalInd.eh.pres) && 
+					(siCnStEvnt->optBckCalInd.inbndInfoInd.pres)) {
+
+					if (siCnStEvnt->optBckCalInd.inbndInfoInd.val) {
+						if (ftdmchan->state != FTDM_CHANNEL_STATE_PROGRESS_MEDIA) {
+							next_state = FTDM_CHANNEL_STATE_PROGRESS_MEDIA;
+							goto state_change;
+						}
+					} else {
+						if (ftdmchan->state != FTDM_CHANNEL_STATE_PROGRESS &&
+							ftdmchan->state != FTDM_CHANNEL_STATE_PROGRESS_MEDIA) {
+							next_state = FTDM_CHANNEL_STATE_PROGRESS;
+							goto state_change;
+						}
+					} 
 				} else {
-					/* go to PROGRESS */
-					ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_PROGRESS);
-				} /* if (inband) */
-			} else {
-				/* go to PROGRESS_MEDIA */
-				ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_PROGRESS_MEDIA);
-			}
-			
+					if (ftdmchan->state != FTDM_CHANNEL_STATE_PROGRESS_MEDIA) {
+						next_state = FTDM_CHANNEL_STATE_PROGRESS_MEDIA;
+						goto state_change;
+					}
+				}
+state_change:
+				ftdm_set_state(ftdmchan, next_state);
+			}	
 			break;
 		case FTDM_CHANNEL_STATE_DOWN:
 			SS7_WARN_CHAN(ftdmchan, "RX ACM in DOWN state CIC[%d]. Ignore the message.\n",  sngss7_info->circuit->cic );
 			break;
 			
-		default:	/* incorrect state...reset the CIC */
-			SS7_ERROR_CHAN(ftdmchan, "RX ACM in invalid state :%s...resetting CIC [%d]\n", 
+		default:
+			SS7_ERROR_CHAN(ftdmchan, "RX ACM in invalid state :%s...CIC [%d]\n", 
 							ftdm_channel_state2str (ftdmchan->state),  sngss7_info->circuit->cic);
 
+#if 0
 			/* throw the TX reset flag */
 			if (!sngss7_tx_reset_status_pending(sngss7_info)) {
 				sngss7_tx_reset_restart(sngss7_info);
@@ -434,6 +467,8 @@ ftdm_status_t handle_con_sta(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 				/* go to RESTART */
 				ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_RESTART);
 			}
+#endif
+
 			break;
 		}
 
@@ -450,6 +485,47 @@ ftdm_status_t handle_con_sta(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 		break;
 	case (PROGRESS):
 		SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Rx CPG\n", sngss7_info->circuit->cic);
+
+		switch (ftdmchan->state) {
+		case FTDM_CHANNEL_STATE_DIALING:
+		case FTDM_CHANNEL_STATE_PROGRESS:
+		case FTDM_CHANNEL_STATE_PROGRESS_MEDIA:
+		case FTDM_CHANNEL_STATE_RING:
+		case FTDM_CHANNEL_STATE_RINGING:
+
+			sngss7_info->spInstId = spInstId;
+			if (siCnStEvnt->evntInfo.eh.pres == PRSNT_NODEF && 
+				siCnStEvnt->evntInfo.evntInd.pres == PRSNT_NODEF) {
+				switch (siCnStEvnt->evntInfo.evntInd.val) {
+				case EV_ALERT:
+					ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_RINGING);
+					break;
+				case EV_PROGRESS:
+				case EV_INBAND:
+				case EV_FWDONNOREP:
+					ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_PROGRESS_MEDIA);
+					break;
+				case EV_FWDONBUSY:
+				case EV_FWDUNCONDIT:
+					/* need to send SIP 181 in the future when type is above */
+					SS7_INFO_CHAN(ftdmchan,"No state to set for transmitting 181  %s \n", " ");
+					break;
+				default:
+					SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Wrong event info type %d. Ignoring.\n", 
+								  sngss7_info->circuit->cic, siCnStEvnt->evntInfo.evntInd.val);
+					break;
+				}
+			} else {
+				ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_PROGRESS_MEDIA);
+			}
+			break;
+		default:	
+			SS7_ERROR_CHAN(ftdmchan, "Rx CPG in invalid state :%s...... ignoring\n", 
+									ftdm_channel_state2str (ftdmchan->state));
+
+			break;
+		}
+
 		break;
 	case (FRWDTRSFR):
 		SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Rx FOT\n", sngss7_info->circuit->cic);
@@ -651,6 +727,7 @@ ftdm_status_t handle_con_cfm(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 	/* check whether the ftdm channel is in a state to accept a call */
 	switch (ftdmchan->state) {
 
+	case FTDM_CHANNEL_STATE_RINGING:
 	case FTDM_CHANNEL_STATE_PROGRESS:
 	case FTDM_CHANNEL_STATE_PROGRESS_MEDIA:
 		SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Rx ANM\n", sngss7_info->circuit->cic);

@@ -431,7 +431,7 @@ void ft_to_sngss7_acm (ftdm_channel_t * ftdmchan)
 	return;
 }
 
-void ft_to_sngss7_cpg (ftdm_channel_t *ftdmchan)
+void ft_to_sngss7_cpg (ftdm_channel_t *ftdmchan, int indication, int presentation)
 {
 	SiCnStEvnt cpg;
 	SS7_FUNC_TRACE_ENTER (__FUNCTION__);
@@ -444,10 +444,11 @@ void ft_to_sngss7_cpg (ftdm_channel_t *ftdmchan)
 	cpg.evntInfo.eh.pres = PRSNT_NODEF;
 
 	cpg.evntInfo.evntInd.pres = PRSNT_NODEF;
-	cpg.evntInfo.evntInd.val = SNGSS7_EVNTINFO_IND_INBAND_AVAIL; /* Event Indicator = In-band info is now available */
+	cpg.evntInfo.evntInd.val = indication; /* Event Indicator:  = In-band info is now available */
+
 	
 	cpg.evntInfo.evntPresResInd.pres = PRSNT_NODEF;
-	cpg.evntInfo.evntPresResInd.val = 0;	/* Event presentation restricted indicator = no indication */
+	cpg.evntInfo.evntPresResInd.val = presentation;		
 	
 	/* send the CPG request to LibSngSS7 */
 	sng_cc_con_status  (1, sngss7_info->suInstId, sngss7_info->spInstId, sngss7_info->circuit->id, &cpg, PROGRESS);
