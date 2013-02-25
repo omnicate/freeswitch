@@ -406,48 +406,26 @@ ftdm_status_t handle_con_sta(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 				if (siCnStEvnt->bckCallInd.eh.pres == PRSNT_NODEF) {
 					if (siCnStEvnt->bckCallInd.cadPtyStatInd.pres == PRSNT_NODEF) {
 						if (siCnStEvnt->bckCallInd.cadPtyStatInd.val == CADSTAT_NOIND ) {
-							if (ftdmchan->state != FTDM_CHANNEL_STATE_PROGRESS &&
-								ftdmchan->state != FTDM_CHANNEL_STATE_PROGRESS_MEDIA) {
-									next_state = FTDM_CHANNEL_STATE_PROGRESS;
-									goto state_change;
-							}
-						} else if (siCnStEvnt->bckCallInd.cadPtyStatInd.val == 0x1) {
+							next_state = FTDM_CHANNEL_STATE_PROGRESS;
+						} else if (siCnStEvnt->bckCallInd.cadPtyStatInd.val == CADSTAT_SUBFREE) {
 							next_state = FTDM_CHANNEL_STATE_RINGING;
-							goto state_change;
 						}
 					}
 					if (siCnStEvnt->bckCallInd.intInd.pres == PRSNT_NODEF &&
-						siCnStEvnt->bckCallInd.intInd.val == 0x1) {
-						if (ftdmchan->state != FTDM_CHANNEL_STATE_PROGRESS_MEDIA) {
-							next_state = FTDM_CHANNEL_STATE_PROGRESS_MEDIA;
-							goto state_change;
-						}
+						siCnStEvnt->bckCallInd.intInd.val == INTIND_INTW) {
+						next_state = FTDM_CHANNEL_STATE_PROGRESS_MEDIA;
 					}
 				} 
 
-				if ((siCnStEvnt->optBckCalInd.eh.pres) && 
-					(siCnStEvnt->optBckCalInd.inbndInfoInd.pres)) {
+				if (siCnStEvnt->optBckCalInd.eh.pres == PRSNT_NODEF && 
+				    siCnStEvnt->optBckCalInd.inbndInfoInd.pres == PRSNT_NODEF && 
+				    siCnStEvnt->optBckCalInd.inbndInfoInd.val) {
 
-					if (siCnStEvnt->optBckCalInd.inbndInfoInd.val) {
-						if (ftdmchan->state != FTDM_CHANNEL_STATE_PROGRESS_MEDIA) {
-							next_state = FTDM_CHANNEL_STATE_PROGRESS_MEDIA;
-							goto state_change;
-						}
-					} else {
-						if (ftdmchan->state != FTDM_CHANNEL_STATE_PROGRESS &&
-							ftdmchan->state != FTDM_CHANNEL_STATE_PROGRESS_MEDIA) {
-							next_state = FTDM_CHANNEL_STATE_PROGRESS;
-							goto state_change;
-						}
-					} 
-				} else {
-					if (ftdmchan->state != FTDM_CHANNEL_STATE_PROGRESS_MEDIA) {
-						next_state = FTDM_CHANNEL_STATE_PROGRESS_MEDIA;
-						goto state_change;
-					}
+					next_state = FTDM_CHANNEL_STATE_PROGRESS_MEDIA;
 				}
-state_change:
-				ftdm_set_state(ftdmchan, next_state);
+				if (next_state != FTDM_CHANNEL_STATE_INVALID) {
+					ftdm_set_state(ftdmchan, next_state);
+				}
 			}	
 			break;
 		case FTDM_CHANNEL_STATE_DOWN:
@@ -498,17 +476,20 @@ state_change:
 				siCnStEvnt->evntInfo.evntInd.pres == PRSNT_NODEF) {
 				switch (siCnStEvnt->evntInfo.evntInd.val) {
 				case EV_ALERT:
-					ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_RINGING);
+					if (ftdmchan->state != FTDM_CHANNEL_STATE_PROGRESS_MEDIA) {
+						ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_RINGING);
+					}
 					break;
 				case EV_PROGRESS:
 				case EV_INBAND:
 				case EV_FWDONNOREP:
-					ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_PROGRESS_MEDIA);
+					if (ftdmchan->state != FTDM_CHANNEL_STATE_PROGRESS_MEDIA) {
+						ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_PROGRESS_MEDIA);
+					}
 					break;
 				case EV_FWDONBUSY:
 				case EV_FWDUNCONDIT:
 					/* need to send SIP 181 in the future when type is above */
-					SS7_INFO_CHAN(ftdmchan,"No state to set for transmitting 181  %s \n", " ");
 					break;
 				default:
 					SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Wrong event info type %d. Ignoring.\n", 
@@ -516,7 +497,9 @@ state_change:
 					break;
 				}
 			} else {
-				ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_PROGRESS_MEDIA);
+				if (ftdmchan->state != FTDM_CHANNEL_STATE_PROGRESS_MEDIA) {
+					ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_PROGRESS_MEDIA);
+				}
 			}
 			break;
 		default:	
