@@ -1191,56 +1191,6 @@ SWITCH_DECLARE(switch_status_t) switch_thread_join(switch_status_t *retval, swit
 }
 
 
-SWITCH_DECLARE(switch_status_t) switch_atomic_init(switch_memory_pool_t *pool)
-{
-	return apr_atomic_init((apr_pool_t *) pool);
-}
-
-SWITCH_DECLARE(uint32_t) switch_atomic_read(volatile switch_atomic_t *mem)
-{
-#ifdef apr_atomic_t
-	return apr_atomic_read((apr_atomic_t *)mem);
-#else
-	return apr_atomic_read32((apr_uint32_t *)mem);
-#endif
-}
-
-SWITCH_DECLARE(void) switch_atomic_set(volatile switch_atomic_t *mem, uint32_t val)
-{
-#ifdef apr_atomic_t
-	apr_atomic_set((apr_atomic_t *)mem, val);
-#else
-	apr_atomic_set32((apr_uint32_t *)mem, val);
-#endif
-}
-
-SWITCH_DECLARE(void) switch_atomic_add(volatile switch_atomic_t *mem, uint32_t val)
-{
-#ifdef apr_atomic_t
-	apr_atomic_add((apr_atomic_t *)mem, val);
-#else
-	apr_atomic_add32((apr_uint32_t *)mem, val);
-#endif
-}
-
-SWITCH_DECLARE(void) switch_atomic_inc(volatile switch_atomic_t *mem)
-{
-#ifdef apr_atomic_t
-	apr_atomic_inc((apr_atomic_t *)mem);
-#else
-	apr_atomic_inc32((apr_uint32_t *)mem);
-#endif
-}
-
-SWITCH_DECLARE(int) switch_atomic_dec(volatile switch_atomic_t *mem)
-{
-#ifdef apr_atomic_t
-	return apr_atomic_dec((apr_atomic_t *)mem);
-#else
-	return apr_atomic_dec32((apr_uint32_t *)mem);
-#endif
-}
-
 SWITCH_DECLARE(char *) switch_strerror(switch_status_t statcode, char *buf, switch_size_t bufsize)
 {
        return apr_strerror(statcode, buf, bufsize);
