@@ -211,7 +211,8 @@ library_include_HEADERS = \
 	src/include/switch_odbc.h \
 	src/include/switch_pgsql.h \
 	src/include/switch_dispatcher.h \
-	src/include/switch_atomic.h
+	src/include/switch_atomic.h \
+	src/include/switch_list.h
 
 nodist_libfreeswitch_la_SOURCES = \
 	src/include/switch_frame.h \
@@ -221,6 +222,7 @@ nodist_libfreeswitch_la_SOURCES = \
 libfreeswitch_la_SOURCES = \
 	src/switch_apr.c \
 	src/switch_atomic.c \
+	src/switch_list.c \
 	src/switch_buffer.c \
 	src/switch_caller.c \
 	src/switch_channel.c \

@@ -145,6 +145,7 @@
 #include "switch_limit.h"
 #include "switch_atomic.h"
 #include "switch_dispatcher.h"
+#include "switch_list.h"
 #include <libteletone.h>
 
 
