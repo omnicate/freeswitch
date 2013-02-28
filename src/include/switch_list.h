@@ -75,7 +75,7 @@ SWITCH_BEGIN_EXTERN_C
  */
 #define SWITCH_DEFINE_LIST_PROTOTYPES(typename, type)					\
 	struct typename##_list;												\
-	typedef struct typename##_list switch_list_t;						\
+	typedef struct typename##_list typename##_list_t;					\
 	struct typename##_list_node;										\
 	typedef struct typename##_list_node typename##_list_node_t;			\
 																		\
@@ -532,6 +532,36 @@ SWITCH_DEFINE_LIST_PROTOTYPES(switch, void)
 	SWITCH_DECLARE(typename##_list_t *) typename##_list_slicen(typename##_list_t *src_list, typename##_list_node_t *first, const switch_size_t count) \
 	{																	\
 		typename##_list_t *list = NULL;									\
+		typename##_list_node_t *cur_node = NULL;						\
+		switch_size_t nodes = count, n = 0;								\
+		switch_bool_t update_src_list_size = SWITCH_FALSE;				\
+																		\
+		if (!src_list) goto done;										\
+																		\
+		if (!first) first = list->head;									\
+		if (!nodes) nodes = typename##_list_size(src_list);				\
+																		\
+		cur_node = first;												\
+		while (cur_node && n < count) {									\
+			++n;														\
+			cur_node = cur_node->next;									\
+		}																\
+																		\
+		list->size = n;													\
+		list->size_dirty = SWITCH_FALSE;								\
+																		\
+		if (!src_list->size_dirty) {									\
+			update_src_list_size = SWITCH_TRUE;							\
+		}																\
+																		\
+		list = typename##_list_slice(src_list, first, cur_node);		\
+																		\
+		if (update_src_list_size) {										\
+			src_list->size -= n;										\
+			src_list->size_dirty = SWITCH_FALSE;						\
+		}																\
+																		\
+	done:																\
 		return list;													\
 	}																	\
 																		\
@@ -539,6 +569,44 @@ SWITCH_DEFINE_LIST_PROTOTYPES(switch, void)
 																 typename##_list_node_t *replace_end, typename##_list_t **to_insert) \
 	{																	\
 		switch_status_t status = SWITCH_STATUS_SUCCESS;					\
+		typename##_list_node_t *end1 = NULL, *end2 = NULL;				\
+		switch_size_t n = 0;											\
+																		\
+		if (!list || !to_insert) goto done;								\
+																		\
+		if (!replace_start) replace_start = list->head;					\
+		if (!replace_end) replace_end = list->tail;						\
+																		\
+		if (replace_start->prev) end1 = replace_start->prev;			\
+		if (replace_end->next) end2 = replace_end->next;				\
+																		\
+		if (end1) {														\
+			end1->next = (*to_insert)->head;							\
+			(*to_insert)->head->prev = end1;							\
+		} else {														\
+			list->head = (*to_insert)->head;							\
+		}																\
+																		\
+		if (end2) {														\
+			end2->prev = (*to_insert)->tail;							\
+			(*to_insert)->tail->next = end2;							\
+		} else {														\
+			list->tail = (*to_insert)->tail;							\
+		}																\
+																		\
+		end1 = replace_start;											\
+		while (end1) {													\
+			end2 = end1->next;											\
+			switch_safe_free(end1);										\
+			end1 = end2;												\
+			n++;														\
+		}																\
+																		\
+		if (!list->size_dirty && !(*to_insert)->size_dirty) {			\
+			list->size = (list->size - n) + (*to_insert)->size;			\
+		}																\
+																		\
+	done:																\
 		return status;													\
 	}																	\
 																		\
@@ -546,6 +614,17 @@ SWITCH_DEFINE_LIST_PROTOTYPES(switch, void)
 																	 typename##_list_node_t *replace_end, const typename##_list_t *to_insert) \
 	{																	\
 		switch_status_t status = SWITCH_STATUS_SUCCESS;					\
+		typename##_list_t *dup = NULL;									\
+																		\
+		if (!list || !to_insert) goto done;								\
+																		\
+		if ((status = typename##_list_dup(&dup, to_insert)) != SWITCH_STATUS_SUCCESS) {	\
+			goto done;													\
+		}																\
+																		\
+		status = typename##_list_splice_range(list, replace_start, replace_end, &dup); \
+																		\
+	done:																\
 		return status;													\
 	}																	\
 																		\
@@ -553,6 +632,27 @@ SWITCH_DEFINE_LIST_PROTOTYPES(switch, void)
 															const switch_size_t count, typename##_list_t **to_insert) \
 	{																	\
 		switch_status_t status = SWITCH_STATUS_SUCCESS;					\
+		typename##_list_node_t *cur_node = NULL;						\
+		switch_size_t nodes = count, n = 0;								\
+																		\
+		if (!list || !to_insert) goto done;								\
+																		\
+		if (!replace_start) replace_start = list->head;					\
+		if (!nodes) nodes = typename##_list_size(list);					\
+																		\
+		cur_node = replace_start;										\
+		while (cur_node && n < nodes) {									\
+			++n;														\
+			cur_node = cur_node->next;									\
+		}																\
+																		\
+		if (!list->size_dirty && !(*to_insert)->size_dirty) {			\
+			list->size = (list->size - n) + (*to_insert)->size;			\
+		}																\
+																		\
+	    status = typename##_list_splice_range(list, replace_start, cur_node, to_insert); \
+																		\
+	done:																\
 		return status;													\
 	}																	\
 																		\
@@ -560,6 +660,17 @@ SWITCH_DEFINE_LIST_PROTOTYPES(switch, void)
 																const switch_size_t count, const typename##_list_t *to_insert) \
 	{																	\
 		switch_status_t status = SWITCH_STATUS_SUCCESS;					\
+		typename##_list_t *dup = NULL;									\
+																		\
+		if (!list || !to_insert) goto done;								\
+																		\
+		if ((status = typename##_list_dup(&dup, to_insert)) != SWITCH_STATUS_SUCCESS) {	\
+			goto done;													\
+		}																\
+																		\
+		status = typename##_list_splicen(list, replace_start, count, &dup);	\
+																		\
+	done:																\
 		return status;													\
 	}																	\
 																		\
