@@ -119,7 +119,9 @@ ftdm_state_map_t sangoma_ss7_state_map = {
 	{FTDM_CHANNEL_STATE_RING, FTDM_END},
 	{FTDM_CHANNEL_STATE_SUSPENDED, FTDM_CHANNEL_STATE_RESTART,
 	 FTDM_CHANNEL_STATE_TERMINATING, FTDM_CHANNEL_STATE_HANGUP,
-	 FTDM_CHANNEL_STATE_RINGING, FTDM_CHANNEL_STATE_PROGRESS, FTDM_END}
+	 FTDM_CHANNEL_STATE_RINGING, FTDM_CHANNEL_STATE_PROGRESS, 
+	 FTDM_CHANNEL_STATE_PROGRESS_MEDIA, FTDM_CHANNEL_STATE_UP,
+	 FTDM_END}
 	},
 	{
 	 ZSD_INBOUND,
@@ -1411,7 +1413,8 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 			if (g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].cpg_on_progress_media == FTDM_TRUE) {
 				if (!sngss7_test_ckt_flag(sngss7_info, FLAG_SENT_CPG)) {
 					sngss7_set_ckt_flag(sngss7_info, FLAG_SENT_CPG);
-					ft_to_sngss7_cpg(ftdmchan, EV_INBAND, EVPR_NOIND); }
+					ft_to_sngss7_cpg(ftdmchan, EV_INBAND, EVPR_NOIND); 
+				}
 			}
 		}
 
