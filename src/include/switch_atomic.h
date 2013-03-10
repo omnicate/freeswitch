@@ -149,6 +149,9 @@ SWITCH_DECLARE(int32_t) switch_atomic32_val_cas(switch_atomic32_t *loc, int32_t 
 SWITCH_DECLARE(switch_bool_t) switch_atomic64_bool_cas(switch_atomic64_t *loc, int64_t old_value, int64_t new_value);
 SWITCH_DECLARE(int64_t) switch_atomic64_val_cas(switch_atomic64_t *loc, int64_t old_value, int64_t new_value);
 
+SWITCH_DECLARE(switch_atomic_ptr_t) switch_atomic_ptr_get(switch_atomic_ptr_t *loc);
+SWITCH_DECLARE(switch_atomic_ptr_t) switch_atomic_ptr_set(switch_atomic_ptr_t *loc, switch_atomic_ptr_t value);
+SWITCH_DECLARE(switch_atomic_ptr_t) switch_atomic_ptr_cas(switch_atomic_ptr_t *loc, switch_atomic_ptr_t old_value, switch_atomic_ptr_t new_value);
 
 
 SWITCH_END_EXTERN_C

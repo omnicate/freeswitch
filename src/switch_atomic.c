@@ -70,6 +70,13 @@
 #include <apr_uuid.h>
 #include <apr_md5.h>
 
+#ifdef WIN32
+#include <windows.h>
+#endif
+
+#ifdef DARWIN
+#include <libkern/OSAtomic.h>
+#endif
 
 SWITCH_DECLARE(int32_t) switch_atomic32_fetch_and_add(switch_atomic32_t *loc, int32_t value)
 {
@@ -556,7 +563,58 @@ SWITCH_DECLARE(int64_t) switch_atomic64_val_cas(switch_atomic64_t *loc, int64_t 
 #ifdef WIN32
 	ret_val = InterlockedCompareExchange64((LONGLONG*)loc, (LONGLONG)new_value, (LONGLONG)old_value);
 #elseif DARWIN
-	ret_val = (OSAtomicCompareAndSwap64Barrier(old_value, new_value, loc) ? old_value : switch_atomic32_get(loc));
+	ret_val = (OSAtomicCompareAndSwap64Barrier(old_value, new_value, loc) ? old_value : switch_atomic64_get(loc));
+#else
+	ret_val = __sync_val_compare_and_swap(loc, old_value, new_value);
+#endif
+	return ret_val;
+}
+
+
+SWITCH_DECLARE(switch_atomic_ptr_t) switch_atomic_ptr_get(switch_atomic_ptr_t *loc)
+{
+	switch_atomic_ptr_t ret_val = NULL;
+#ifdef WIN32
+	ret_val = InterlockedCompareExchangePointer((PVOID*)loc, (PVOID)0, (PVOID)0);
+#elseif DARWIN
+	OSMemoryBarrier();
+	ret_val = *loc;    /* Assumes the location is 32-bit aligned on 32-bit systems and 64-bit aligned on 64-bit systems */
+	OSMemoryBarrier();
+#else
+	ret_val = __sync_val_compare_and_swap(loc, 0, 0);
+#endif
+	return ret_val;
+}
+
+SWITCH_DECLARE(switch_atomic_ptr_t) switch_atomic_ptr_set(switch_atomic_ptr_t *loc, switch_atomic_ptr_t value)
+{
+	switch_atomic_ptr_t ret_val = NULL;
+#ifdef WIN32
+	while (1) {
+		ret_val = switch_atomic_ptr_get(loc);
+		if (InterlockedCompareExchangePointer((PVOID*)loc, (PVOID)value, (PVOID)ret_val) == ret_val) break;
+#elseif DARWIN
+	while (1) {
+		OSMemoryBarrier();
+		ret_val = *loc;    /* Assumes the location is 32-bit aligned on 32-bit systems and 64-bit aligned on 64-bit systems */
+		if (OSAtomicCompareAndSwapPtrBarrier(ret_val, value, loc)) break;
+	}
+#else
+	while (1) {
+		ret_val = switch_atomic_ptr_get(loc);
+		if (__sync_val_compare_and_swap(loc, ret_val, value) == ret_val) break;
+	}
+#endif
+	return ret_val;
+}
+
+SWITCH_DECLARE(switch_atomic_ptr_t) switch_atomic_ptr_cas(switch_atomic_ptr_t *loc, switch_atomic_ptr_t old_value, switch_atomic_ptr_t new_value)
+{
+	switch_atomic_ptr_t ret_val = NULL;
+#ifdef WIN32
+	ret_val = InterlockedCompareExchangePointer((PVOID*)loc, (PVOID)new_value, (PVOID)old_value);
+#elseif DARWIN
+	ret_val = (OSAtomicCompareAndSwapPtrBarrier(old_value, new_value, loc) ? old_value : switch_atomic_ptr_get(loc));
 #else
 	ret_val = __sync_val_compare_and_swap(loc, old_value, new_value);
 #endif
