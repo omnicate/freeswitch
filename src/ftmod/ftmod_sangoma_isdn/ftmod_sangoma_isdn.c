@@ -1309,7 +1309,7 @@ static FIO_SIG_LOAD_FUNCTION(ftdm_sangoma_isdn_init)
 	g_sngisdn_event_interface.sta.sng_cc_sta_ind	= sngisdn_rcv_cc_ind;
 
 	g_sngisdn_event_interface.io.sng_l1_data_req	= sngisdn_rcv_l1_data_req;
-	g_sngisdn_event_interface.io.sng_l1_cmd_req		= sngisdn_rcv_l1_cmd_req;
+	g_sngisdn_event_interface.io.sng_l1_cmd_req	= sngisdn_rcv_l1_cmd_req;
 	
 	for(i=1;i<=MAX_VARIANTS;i++) {		
 		ftdm_mutex_create(&g_sngisdn_data.ccs[i].mutex);

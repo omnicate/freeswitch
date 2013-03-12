@@ -1462,7 +1462,7 @@ ftdm_status_t sngisdn_show_span(ftdm_stream_handle_t *stream, ftdm_span_t *span,
 			
 	ftdm_span_get_sig_status(span, &sigstatus);
 	if (xml) {
-		stream->write_function(stream, "<span name=\"%s\">\n\t<status type=\"physical\" value=\"%s\"/>\n\t<status type=\"signalling\" value=\"%s\"/>\n<span/>\n",
+		stream->write_function(stream, "<span name=\"%s\">\n\t<status type=\"physical\" value=\"%s\"/>\n\t<status type=\"signalling\" value=\"%s\"/>\n</span>\n",
 										span->name, alarmbits ? "ALARMED" : "OK",
 										ftdm_signaling_status2str(sigstatus));
 	} else {
@@ -1505,7 +1505,7 @@ ftdm_status_t sngisdn_show_calls_span(ftdm_stream_handle_t *stream, ftdm_span_t 
 	}
 	ftdm_iterator_free(chaniter);
 
-	stream->write_function(stream, "<span/>\n");
+	stream->write_function(stream, "</span>\n");
 
 	return FTDM_SUCCESS;
 }

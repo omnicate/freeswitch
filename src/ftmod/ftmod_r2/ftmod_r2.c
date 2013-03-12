@@ -2169,7 +2169,7 @@ ftdm_status_t r2_show_calls_span(ftdm_stream_handle_t *stream, ftdm_span_t *span
 	}
 	ftdm_iterator_free(chaniter);
 
-	stream->write_function(stream, "<span/>\n");
+	stream->write_function(stream, "</span>\n");
 
 	return FTDM_SUCCESS;
 }
