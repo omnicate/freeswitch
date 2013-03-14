@@ -1497,9 +1497,9 @@ ftdm_status_t sngisdn_show_calls_span(ftdm_stream_handle_t *stream, ftdm_span_t 
 		ftdmchan = (ftdm_channel_t*)ftdm_iterator_current(curr);
 
 		if (ftdmchan->type == FTDM_CHAN_TYPE_DQ921) {
-			stream->write_function(stream, "\t<chan number=\"%d\">\n", ftdmchan->physical_chan_id);
+			stream->write_function(stream, "\t<chan number=\"%d\"/>\n", ftdmchan->physical_chan_id);
 		} else {
-			stream->write_function(stream, "\t<chan number=\"%d\" call=\"%s\">\n", ftdmchan->physical_chan_id,
+			stream->write_function(stream, "\t<chan number=\"%d\" call=\"%s\"/>\n", ftdmchan->physical_chan_id,
 						(ftdmchan->state != FTDM_CHANNEL_STATE_DOWN) ? "yes" : "no");
 		}
 	}
