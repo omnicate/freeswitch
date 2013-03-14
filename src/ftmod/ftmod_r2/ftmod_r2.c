@@ -2164,7 +2164,7 @@ ftdm_status_t r2_show_calls_span(ftdm_stream_handle_t *stream, ftdm_span_t *span
 	for (curr = chaniter; curr; curr = ftdm_iterator_next(curr)) {
 		ftdmchan = (ftdm_channel_t*)ftdm_iterator_current(curr);
 
-		stream->write_function(stream, "\t<chan number=\"%d\" call=\"%s\">\n", ftdmchan->physical_chan_id,
+		stream->write_function(stream, "\t<chan number=\"%d\" call=\"%s\"/>\n", ftdmchan->physical_chan_id,
 					(ftdmchan->state != FTDM_CHANNEL_STATE_DOWN) ? "yes" : "no");
 	}
 	ftdm_iterator_free(chaniter);

@@ -1487,24 +1487,23 @@ ftdm_status_t sngisdn_show_spans(ftdm_stream_handle_t *stream, uint8_t xml)
 
 ftdm_status_t sngisdn_show_calls_span(ftdm_stream_handle_t *stream, ftdm_span_t *span, uint8_t xml)
 {
+
+	int i;
 	ftdm_channel_t *ftdmchan = NULL;
 	ftdm_iterator_t *chaniter = NULL;
 	ftdm_iterator_t *curr = NULL;
 
-	stream->write_function(stream, "<span name=\"%s\">\n", span->name);
-	chaniter = ftdm_span_get_chan_iterator(span, NULL);
-	for (curr = chaniter; curr; curr = ftdm_iterator_next(curr)) {
-		ftdmchan = (ftdm_channel_t*)ftdm_iterator_current(curr);
+	sngisdn_span_data_t *signal_data = (sngisdn_span_data_t*) span->signal_data;
 
-		if (ftdmchan->type == FTDM_CHAN_TYPE_DQ921) {
+	stream->write_function(stream, "<span name=\"%s\">\n", span->name);
+	for (i = 0; i < span->chan_count; i++) {
+		if (signal_data->phy_channels[i]->type == FTDM_CHAN_TYPE_DQ921) {
 			stream->write_function(stream, "\t<chan number=\"%d\"/>\n", ftdmchan->physical_chan_id);
 		} else {
 			stream->write_function(stream, "\t<chan number=\"%d\" call=\"%s\"/>\n", ftdmchan->physical_chan_id,
 						(ftdmchan->state != FTDM_CHANNEL_STATE_DOWN) ? "yes" : "no");
 		}
 	}
-	ftdm_iterator_free(chaniter);
-
 	stream->write_function(stream, "</span>\n");
 
 	return FTDM_SUCCESS;

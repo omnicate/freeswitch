@@ -170,6 +170,7 @@ static ftdm_status_t parse_switchtype(const char* switch_name, ftdm_span_t *span
 	for (curr = chaniter; curr; curr = ftdm_iterator_next(curr)) {
 		int32_t chan_id;
 		ftdm_channel_t *ftdmchan = (ftdm_channel_t*)ftdm_iterator_current(curr);
+		signal_data->phy_channels[ftdmchan->physical_chan_id] = ftdmchan;
 		if (ftdmchan->type == FTDM_CHAN_TYPE_DQ921) {
 			/* set the d-channel */
 			signal_data->dchan = ftdmchan;
