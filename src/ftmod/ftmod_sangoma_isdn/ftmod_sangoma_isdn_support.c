@@ -1493,7 +1493,7 @@ ftdm_status_t sngisdn_show_calls_span(ftdm_stream_handle_t *stream, ftdm_span_t 
 	sngisdn_span_data_t *signal_data = (sngisdn_span_data_t*) span->signal_data;
 
 	stream->write_function(stream, "<span name=\"%s\">\n", span->name);
-	for (i = 0; i < span->chan_count; i++) {
+	for (i = 0; i <= span->chan_count; i++) {
 		ftdmchan = signal_data->phy_channels[i];
 		if (ftdmchan) {
 			if (ftdmchan->type == FTDM_CHAN_TYPE_DQ921) {
