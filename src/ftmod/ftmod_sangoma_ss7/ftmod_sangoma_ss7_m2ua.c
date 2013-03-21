@@ -311,6 +311,9 @@ ftdm_status_t ftmod_ss7_m2ua_span_stop(int span_id)
     
     /* disable all config flags for this span, so during reconfiguration we can perform
      * configuration against same configuration-id */
+    memset(&g_ftdm_sngss7_data.cfg.g_m2ua_cfg.m2ua[m2ua_cfg_id],0x00,sizeof(sng_m2ua_cfg_t));
+    memset(&g_ftdm_sngss7_data.cfg.g_m2ua_cfg.nif[nif_cfg_id],0x00,sizeof(sng_nif_cfg_t));
+    memset(&g_ftdm_sngss7_data.cfg.g_m2ua_cfg.m2ua[m2ua_cfg_id],0x00,sizeof(sng_m2ua_cfg_t));
     g_ftdm_sngss7_data.cfg.g_m2ua_cfg.m2ua[m2ua_cfg_id].flags = 0x00;
     g_ftdm_sngss7_data.cfg.g_m2ua_cfg.nif[nif_cfg_id].flags  = 0x00; 
     g_ftdm_sngss7_data.cfg.mtp2Link[mtp2_cfg_id].flags = 0x00;
