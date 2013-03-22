@@ -51,7 +51,7 @@ static int ftmod_sctp_config(int id);
 static ftdm_status_t ftmod_sctp_sap_config(int id);
 static ftdm_status_t ftmod_sctp_tsap_config(int id);
 static int ftmod_m2ua_gen_config(void);
-static int ftmod_m2ua_sctsap_config(int sct_sap_id, int sctp_id);
+static int ftmod_m2ua_sctsap_config(int m2ua_cfg_id, int sct_sap_id, int sctp_id);
 static int ftmod_m2ua_peer_config(int id);
 static int ftmod_m2ua_peer_config1(int m2ua_inf_id, int peer_id);
 static int ftmod_m2ua_cluster_config(int idx);
@@ -949,7 +949,7 @@ static int ftmod_m2ua_peer_config(int id)
     for (x = 0; x < clust->numOfPeers;x++) {
         peer_id = clust->peerIdLst[x];
         peer = &g_ftdm_sngss7_data.cfg.g_m2ua_cfg.m2ua_peer[peer_id];
-        if (ftmod_m2ua_sctsap_config(peer->sctpId, peer->sctpId)) {
+        if (ftmod_m2ua_sctsap_config(id, peer->sctpId, peer->sctpId)) {
             ftdm_log (FTDM_LOG_ERROR, " ftmod_m2ua_sctsap_config: M2UA SCTSAP for M2UA Intf Id[%d] config FAILED \n", id);
             return 0x01;
         } else {
@@ -973,7 +973,7 @@ static int ftmod_m2ua_peer_config(int id)
 }
 
 
-static int ftmod_m2ua_sctsap_config(int sct_sap_id, int sctp_id)
+static int ftmod_m2ua_sctsap_config(int m2ua_cfg_id,int sct_sap_id, int sctp_id)
 {
     int    i;
     int    ret;
@@ -989,8 +989,9 @@ static int ftmod_m2ua_sctsap_config(int sct_sap_id, int sctp_id)
     memset((U8 *)&pst, 0, sizeof(Pst));
 
     /* check is sct_sap is already configured */
-    if (!ftmod_m2ua_ssta_req(STMWSCTSAP, sct_sap_id, &cfm )) {
-        ftdm_log (FTDM_LOG_INFO, " ftmod_m2ua_sctsap_config: SCT SAP [%s] is already configured \n", sctp->name);
+    /* ftmod_m2ua_ssta_req needs m2ua config id to fetch STMWSCTSAP status */
+    if (!ftmod_m2ua_ssta_req(STMWSCTSAP, m2ua_cfg_id, &cfm )) {
+        ftdm_log (FTDM_LOG_INFO, " ftmod_m2ua_sctsap_config: SCT SAP [%s] for m2ua_cfg_id[%d] sct_sap_id[%d] is already configured \n", sctp->name,m2ua_cfg_id, sct_sap_id);
         return 0x00;
     }
 
@@ -1106,6 +1107,7 @@ static int ftmod_m2ua_peer_config1(int m2ua_inf_id, int peer_id)
     }
 
     cfg.t.cfg.s.peerCfg.assocCfg.suId    = peer->sctpId; 	  /* SCTSAP ID */
+        ftdm_log (FTDM_LOG_INFO, " ftmod_m2ua_peer_config1: peerId [%d] with sctsap-id[%d] \n", peer->id,peer->sctpId);
     cfg.t.cfg.s.peerCfg.assocCfg.dstAddrLst.nmb = peer->numDestAddr;
     for (i=0; i <= (peer->numDestAddr); i++) {
         cfg.t.cfg.s.peerCfg.assocCfg.dstAddrLst.nAddr[i].type = CM_NETADDR_IPV4;
