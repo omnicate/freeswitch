@@ -733,12 +733,17 @@ FT_DECLARE(ftdm_status_t) ftdm_get_channel_from_string(const char *string_id, ft
 #define ftdm_channel_lock(chan) ftdm_mutex_lock((chan)->mutex)
 #define ftdm_channel_unlock(chan) ftdm_mutex_unlock((chan)->mutex)
 
+#define FTDM_THROTTLE_LOG_INTERVAL 1000
+extern ftdm_time_t time_last_throttle_log;
+
 #define ftdm_log_throttle(level, ...) \
-	time_current_throttle_log = ftdm_current_time_in_ms(); \
-	if (time_current_throttle_log - time_last_throttle_log > FTDM_THROTTLE_LOG_INTERVAL) {\
-		ftdm_log(level, __VA_ARGS__); \
-		time_last_throttle_log = time_current_throttle_log; \
-	} 
+	do { \
+		ftdm_time_t time_current_throttle_log = ftdm_current_time_in_ms(); \
+		if (time_current_throttle_log - time_last_throttle_log > FTDM_THROTTLE_LOG_INTERVAL) {\
+			ftdm_log(level, __VA_ARGS__); \
+			time_last_throttle_log = time_current_throttle_log; \
+		} \
+	} while (0);
 
 #define ftdm_log_chan_ex(fchan, file, func, line, level, format, ...) ftdm_log(file, func, line, level, "[s%dc%d][%d:%d] " format, fchan->span_id, fchan->chan_id, fchan->physical_span_id, fchan->physical_chan_id, __VA_ARGS__)
 
