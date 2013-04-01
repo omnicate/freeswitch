@@ -5487,9 +5487,13 @@ done:
 	ftdm_config_close_file(&cfg);
 
 	ftdm_log(FTDM_LOG_INFO, "Configured %u channel(s)\n", configured);
+	
+#if 0
+	/* nothing configured is as good as success */
 	if (!configured) {
 		ret = FTDM_FAIL;
 	}
+#endif
 	
 	return ret;
 }
