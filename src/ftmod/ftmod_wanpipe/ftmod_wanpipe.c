@@ -991,7 +991,7 @@ static void wanpipe_read_stats(ftdm_channel_t *ftdmchan, wp_tdm_api_rx_hdr_t *rx
 	}
 
 	if (ftdmchan->iostats.rx.queue_len >= (0.8 * ftdmchan->iostats.rx.queue_size)) {
-		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Rx Queue length exceeded 80% threshold (%d/%d)\n",
+		ftdm_log_chan_throttle(ftdmchan, FTDM_LOG_DEBUG, "Rx Queue length exceeded 80% threshold (%d/%d)\n",
 					  		ftdmchan->iostats.rx.queue_len, ftdmchan->iostats.rx.queue_size);
 		ftdm_set_flag(&(ftdmchan->iostats.rx), FTDM_IOSTATS_ERROR_QUEUE_THRES);
 	} else if (ftdm_test_flag(&(ftdmchan->iostats.rx), FTDM_IOSTATS_ERROR_QUEUE_THRES)){
