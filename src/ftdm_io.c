@@ -4047,7 +4047,12 @@ static ftdm_status_t handle_tone_generation(ftdm_channel_t *ftdmchan)
 		}
 
 		if (ftdm_buffer_read(ftdmchan->gen_dtmf_buffer, digits, dblen) && !ftdm_strlen_zero_buf(digits)) {
-			ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Generating DTMF [%s]\n", digits);
+			ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Generating DTMF [%s] Pre Buffer(%d/%p)\n", 
+				digits,ftdmchan->pre_buffer_size, ftdmchan->pre_buffer);
+			if (!ftdm_buffer_inuse(ftdmchan->dtmf_buffer)) {
+				/* Only flush DTMF buffers if Tx buffers are not in use */ 
+				ftdm_channel_command(ftdmchan, FTDM_COMMAND_FLUSH_TX_BUFFERS, NULL);
+			}
 
 			cur = digits;
 
@@ -4085,6 +4090,7 @@ static ftdm_status_t handle_tone_generation(ftdm_channel_t *ftdmchan)
 
 	/* if we picked a buffer, time to read from it and write the linear data to the device */
 	if (buffer) {
+		ftdm_wait_flag_t w_flags = FTDM_WRITE;
 		uint8_t auxbuf[1024];
 		ftdm_size_t dlen = ftdmchan->packet_len;
 		ftdm_size_t len, br, max = sizeof(auxbuf);
@@ -4124,9 +4130,17 @@ static ftdm_status_t handle_tone_generation(ftdm_channel_t *ftdmchan)
 			}
 		}
 		
+		/* safety net to sync write thread, should never sleep more
+		 * than a couple of milliseconds if at all */
+		ftdm_channel_wait(ftdmchan, &w_flags, -1);
+
+		if (!(w_flags & FTDM_WRITE)) {
+			ftdm_log_chan_msg(ftdmchan, FTDM_LOG_CRIT, "DTMF Wait to write, timed out without a write \n");
+		} 
+
 		/* write the tone to the channel */
 		return ftdm_raw_write(ftdmchan, auxbuf, &dlen);
-	} 
+	}
 
 	return FTDM_SUCCESS;
 
@@ -4158,8 +4172,12 @@ FT_DECLARE(ftdm_status_t) ftdm_channel_process_media(ftdm_channel_t *ftdmchan, v
 {
 	fio_codec_t codec_func = NULL;
 	ftdm_size_t max = *datalen;
+	ftdm_status_t tone_status;
 
-	handle_tone_generation(ftdmchan);
+	tone_status = handle_tone_generation(ftdmchan);
+	if (tone_status != FTDM_SUCCESS) {
+		ftdm_log_chan_msg(ftdmchan, FTDM_LOG_CRIT, "Failed handle tone generation on read\n");
+	}
 
 	if (ftdm_test_flag(ftdmchan, FTDM_CHANNEL_DIGITAL_MEDIA)) {
 		goto done;
@@ -4414,6 +4432,8 @@ FT_DECLARE(ftdm_status_t) ftdm_channel_write(ftdm_channel_t *ftdmchan, void *dat
 		 (ftdmchan->fsk_buffer && ftdm_buffer_inuse(ftdmchan->fsk_buffer)))) {
 		/* generating some kind of tone at the moment (see handle_tone_generation), 
 		 * we ignore user data ... */
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Data write dropping due to DTMF/FSK/Buffer Delay dtmfbuffer=%i\n",
+			ftdm_buffer_inuse(ftdmchan->dtmf_buffer));
 		goto done;
 	}
 
@@ -4475,6 +4495,9 @@ do_write:
 	}
 
 	status = ftdm_raw_write(ftdmchan, data, datalen);
+	if (status != FTDM_SUCCESS) {
+		ftdm_log_chan(ftdmchan, FTDM_LOG_WARNING, "Channel raw write failed to write (len=%i)\n",*datalen);			
+	}
 
 done:
 	ftdm_channel_unlock(ftdmchan);

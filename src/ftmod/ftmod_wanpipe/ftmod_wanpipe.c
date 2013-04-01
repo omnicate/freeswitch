@@ -121,6 +121,8 @@ FIO_SPAN_POLL_EVENT_FUNCTION(wanpipe_poll_event);
 FIO_SPAN_NEXT_EVENT_FUNCTION(wanpipe_span_next_event);
 FIO_CHANNEL_NEXT_EVENT_FUNCTION(wanpipe_channel_next_event);
 
+static void wanpipe_read_stats(ftdm_channel_t *ftdmchan, wp_tdm_api_rx_hdr_t *rx_stats);
+
 static void wp_swap16(char *data, int datalen)
 {
 	int i = 0;
@@ -879,6 +881,7 @@ static FIO_COMMAND_FUNCTION(wanpipe_command)
 		break;
 	case FTDM_COMMAND_FLUSH_TX_BUFFERS:
 		{
+			ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Flushing Tx %s\n","buffer");
 			err = sangoma_flush_tx_bufs(ftdmchan->sockfd, &tdm_api);
 		}
 		break;
@@ -1086,6 +1089,18 @@ static FIO_READ_FUNCTION(wanpipe_read)
 	}
 	*datalen = rx_len;
 
+	if (ftdm_channel_test_feature(ftdmchan, FTDM_CHANNEL_FEATURE_IO_STATS) && !ftdmchan->iostats.rx.packets) {
+		wanpipe_tdm_api_t tdm_api;
+		int err;
+		memset(&tdm_api, 0, sizeof(tdm_api));
+		ftdm_log_chan_msg(ftdmchan, FTDM_LOG_DEBUG, "Flusing on first rx frame\n");
+		/* if this is the first write ever, flush the tx first to have clean stats */
+		err = sangoma_flush_rx_bufs(ftdmchan->sockfd, &tdm_api);
+		if (err) {
+			ftdm_log_chan_msg(ftdmchan, FTDM_LOG_WARNING, "Failed to flush rx on first read\n");
+		}
+	}
+
 	if (ftdm_channel_test_feature(ftdmchan, FTDM_CHANNEL_FEATURE_IO_STATS)) {
 		wanpipe_read_stats(ftdmchan, &hdrframe);
 	}
@@ -1124,6 +1139,7 @@ static FIO_WRITE_FUNCTION(wanpipe_write)
 		wanpipe_tdm_api_t tdm_api;
 		memset(&tdm_api, 0, sizeof(tdm_api));
 		/* if this is the first write ever, flush the tx first to have clean stats */
+		ftdm_log_chan_msg(ftdmchan, FTDM_LOG_DEBUG, "Flush buffers on first write\n");
 		err = sangoma_flush_tx_bufs(ftdmchan->sockfd, &tdm_api);
 		if (err) {
 			ftdm_log_chan_msg(ftdmchan, FTDM_LOG_WARNING, "Failed to flush on first write\n");
@@ -1142,7 +1158,10 @@ static FIO_WRITE_FUNCTION(wanpipe_write)
 			}
 		}
 		return FTDM_SUCCESS;
-	}
+	} 
+
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Failed to write on channel (dtmfbuffer=%i)\n",
+		ftdm_buffer_inuse(ftdmchan->dtmf_buffer));
 
 	return FTDM_FAIL;
 }
