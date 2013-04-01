@@ -60,7 +60,6 @@ struct tm *localtime_r(const time_t *clock, struct tm *result);
 #define FTDM_FULL_DTMF_PAUSE 1000
 
 ftdm_time_t time_last_throttle_log = 0;
-ftdm_time_t time_current_throttle_log = 0;
 
 typedef struct val_str {
 	const char *str;
