@@ -1470,6 +1470,10 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 			sngss7_send_signal(sngss7_info, FTDM_SIGEVENT_UP);
 		} else {
 			/*INBOUND...so FS told us it was going to answer...tell the stack */
+			if (!sngss7_test_ckt_flag(sngss7_info, FLAG_SENT_ACM)) {
+				sngss7_set_ckt_flag(sngss7_info, FLAG_SENT_ACM);
+				ft_to_sngss7_acm(ftdmchan);
+			}
 			ft_to_sngss7_anm(ftdmchan);
 		}
 
