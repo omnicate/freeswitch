@@ -4351,8 +4351,6 @@ FT_DECLARE(ftdm_status_t) ftdm_channel_write(ftdm_channel_t *ftdmchan, void *dat
 		 (ftdmchan->fsk_buffer && ftdm_buffer_inuse(ftdmchan->fsk_buffer)))) {
 		/* generating some kind of tone at the moment (see handle_tone_generation), 
 		 * we ignore user data ... */
-		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Data write dropping due to DTMF/FSK/Buffer Delay dtmfbuffer=%i\n",
-			ftdm_buffer_inuse(ftdmchan->dtmf_buffer));
 		goto done;
 	}
 
