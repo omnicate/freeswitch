@@ -1,7 +1,7 @@
 #ifndef PA_DITHER_H
 #define PA_DITHER_H
 /*
- * $Id: pa_dither.h 1097 2006-08-26 08:27:53Z rossb $
+ * $Id: pa_dither.h 1418 2009-10-12 21:00:53Z philburk $
  * Portable Audio I/O Library triangular dither generator
  *
  * Based on the Open Source API proposed by Ross Bencina
