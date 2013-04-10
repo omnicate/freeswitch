@@ -476,7 +476,7 @@ ftdm_status_t handle_con_sta(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 				siCnStEvnt->evntInfo.evntInd.pres == PRSNT_NODEF) {
 				switch (siCnStEvnt->evntInfo.evntInd.val) {
 				case EV_ALERT:
-					if (ftdmchan->state != FTDM_CHANNEL_STATE_PROGRESS_MEDIA) {
+					if (ftdmchan->state != FTDM_CHANNEL_STATE_RINGING) {
 						ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_RINGING);
 					}
 					break;
