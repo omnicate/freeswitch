@@ -1438,6 +1438,8 @@ static switch_call_cause_t channel_outgoing_channel(switch_core_session_t *sessi
 		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-CallerNumber");
 		if (sipvar) {
 			ftdm_set_string(caller_data.cid_num.digits, sipvar);
+		} else {
+			ftdm_set_string(caller_data.cid_num.digits, switch_str_nil(outbound_profile->caller_id_number));
 		}
 
 		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-ANI");
@@ -1690,7 +1692,6 @@ static switch_call_cause_t channel_outgoing_channel(switch_core_session_t *sessi
 	caller_data.rdnis.plan = outbound_profile->rdnis_numplan;
 
 	ftdm_set_string(caller_data.cid_name, outbound_profile->caller_id_name);
-	ftdm_set_string(caller_data.cid_num.digits, switch_str_nil(outbound_profile->caller_id_number));
 
 	memset(&hunting, 0, sizeof(hunting));
 
