@@ -286,9 +286,11 @@ ftdm_status_t ftmod_ss7_m2ua_span_stop(int span_id)
     m2ua_cfg_id = g_ftdm_sngss7_data.cfg.g_m2ua_cfg.nif[nif_cfg_id].m2uaLnkNmb;
 
     if (!m2ua_cfg_id) {
-        ftdm_log (FTDM_LOG_ERROR ,"Invalid M2UA ID against span[%d] \n", m2ua_cfg_id, span_id);
+        ftdm_log (FTDM_LOG_ERROR ,"Invalid M2UA ID against span[%d]. mtp1_cfg_id[%d] mtp2_cfg_id[%d] nif_cfg_id[%d] \n", span_id,mtp1_cfg_id, mtp2_cfg_id, nif_cfg_id);
         return FTDM_FAIL;
     }
+
+    ftdm_log (FTDM_LOG_DEBUG ,"Found M2UA ID[%d] against span[%d]. mtp1_cfg_id[%d] mtp2_cfg_id[%d] nif_cfg_id[%d] \n", m2ua_cfg_id,span_id,mtp1_cfg_id, mtp2_cfg_id, nif_cfg_id);
 
     /* Delete NIF sap operation will internally unbound NIF to MTP2 and M2UA */
     if (ftmod_nif_m2ua_dlsap_bind(nif_cfg_id, ADEL )) {
@@ -308,6 +310,7 @@ ftdm_status_t ftmod_ss7_m2ua_span_stop(int span_id)
     /* now delete MTP2 sap */
     ftmod_ss7_delete_mtp2_link(g_ftdm_sngss7_data.cfg.mtp2Link[mtp2_cfg_id].id);
 
+    ftdm_log (FTDM_LOG_DEBUG ," Resetting m2ua[%d] , NIF[%d] configuration\n",m2ua_cfg_id,nif_cfg_id);
     
     /* disable all config flags for this span, so during reconfiguration we can perform
      * configuration against same configuration-id */
