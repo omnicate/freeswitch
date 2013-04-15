@@ -883,31 +883,52 @@ done:
 	return status;
 }
 
-static int ftdm_get_new_span_id (void)
+static int ftdm_is_span_used(int span_id)
 {
     ftdm_span_t *sp;
-    int span_id = 0x01;
     ftdm_mutex_lock(globals.span_mutex);
+    for (sp = globals.spans; sp;) {
+        if (sp->span_id == span_id) {
+    		ftdm_mutex_unlock(globals.span_mutex);
+            return 1;
+        }
+        sp = sp->next;
+    }
+    ftdm_mutex_unlock(globals.span_mutex);
+    return 0;
+}
 
-    if (NULL == globals.spans) goto done;
+static int ftdm_get_new_span_id (void)
+{
+    int span_id = 0x01;
+   	int span_found  = 0; 
+
+    if (NULL == globals.spans) {
+   		span_found=1; 
+		goto done;
+	}
 
     /* due to dynamic deletion/creation of spans , we can have holes in span numbering
      * so to avoid that, looping around span list to see first available free span_id
      * for example - If initially span list has 1, 2 ,3 span_id nodes and if runtime we delete 2nd node then
      * we left with 1 and 3 span_id nodes in span list, this api should return span_id=2 for next span creation*/
 
-    for (sp = globals.spans; sp;) {
-        if (sp->span_id != span_id) {
-            /* first unmatch span_id */
-            break;
-        }
-        sp = sp->next;
-        span_id++;
+    for (span_id=1;span_id<FTDM_MAX_SPANS_INTERFACE;span_id++) {
+		if (ftdm_is_span_used(span_id)) {
+			continue;
+		} 
+		span_found=1;
+		break;
     }
 
 done:
-    ftdm_mutex_unlock(globals.span_mutex);
-    ftdm_log(FTDM_LOG_INFO, "Allocating span-id[%d]\n", span_id);
+
+	if (span_found) {
+    	ftdm_log(FTDM_LOG_INFO, "Allocating span-id[%d]\n", span_id);
+	} else {
+    	ftdm_log(FTDM_LOG_CRIT, "Failed: Allocating span-id Maximum Span ID Reached [%d]\n", FTDM_MAX_SPANS_INTERFACE);
+		ftdm_assert(0, "Failed: Allocating span-id Maximum Span ID Reached\n");
+	}
     return span_id;
 }
 
@@ -941,6 +962,16 @@ FT_DECLARE(ftdm_status_t) ftdm_span_create(const char *iotype, const char *name,
 		ftdm_log(FTDM_LOG_CRIT, "failure creating span, no configure_span method for I/O type '%s'\n", iotype);
 		return FTDM_FAIL;
 	}
+		
+	if (!ftdm_strlen_zero(name)) {
+		ftdm_mutex_lock(globals.span_mutex);
+		if (hashtable_search(globals.span_hash, (void *)name)) {
+			ftdm_mutex_unlock(globals.span_mutex);
+			ftdm_log(FTDM_LOG_CRIT, "Error: name %s is already used failing to configure span\n", name);
+			return FTDM_FAIL;
+		}	
+		ftdm_mutex_unlock(globals.span_mutex);
+	}
 
 	ftdm_mutex_lock(globals.mutex);
 	if (globals.span_index < FTDM_MAX_SPANS_INTERFACE) {
@@ -961,6 +992,22 @@ FT_DECLARE(ftdm_status_t) ftdm_span_create(const char *iotype, const char *name,
 		ftdm_copy_string(new_span->tone_map[FTDM_TONEMAP_ATTN], "%(100,100,1400,2060,2450,2600)", FTDM_TONEMAP_LEN);
 		new_span->trunk_type = FTDM_TRUNK_NONE;
 		new_span->data_type = FTDM_TYPE_SPAN;
+
+
+		/* NC: This is a bit Sangoma specific. Needs refactoring */	
+		if (name) {	
+			int wp_span=0;
+			int err=sscanf(name, "wp%d", &wp_span);
+			if (err==1) {
+				if (wp_span > 0 && wp_span < FTDM_MAX_SPANS_INTERFACE && new_span->span_id != wp_span) {
+					if (!ftdm_is_span_used(wp_span)) {
+						ftdm_log(FTDM_LOG_NOTICE, "Name %s span-id[%d] does not match new span-id[%d] - using the span-id from name\n",
+								name,wp_span,new_span->span_id);
+						new_span->span_id=wp_span;
+					}
+				}
+			}
+		}	
 
 		ftdm_mutex_lock(globals.span_mutex);
 		if (!ftdm_strlen_zero(name) && hashtable_search(globals.span_hash, (void *)name)) {
