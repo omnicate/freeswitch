@@ -271,7 +271,7 @@ static ftdm_status_t disable_dtmf_debug(ftdm_channel_t *ftdmchan)
 	}
 
 	if (!ftdmchan->rxdump.buffer) {
-		ftdm_log_chan_msg(ftdmchan, FTDM_LOG_ERROR, "DTMF debug enabled but no rx dump?\n");	
+		ftdm_log_chan_msg(ftdmchan, FTDM_LOG_ERROR, "DTMF debug enabled but no rx dump?\n");
 		return FTDM_FAIL;
 	}
 
@@ -307,7 +307,7 @@ static struct {
 	ftdm_span_t *spans;
 	ftdm_group_t *groups;
 	cpu_monitor_t cpu_monitor;
-	
+
 	ftdm_caller_data_t *call_ids[MAX_CALLIDS+1];
 	ftdm_mutex_t *call_id_mutex;
 	uint32_t last_call_id;
@@ -885,51 +885,51 @@ done:
 
 static int ftdm_is_span_used(int span_id)
 {
-    ftdm_span_t *sp;
-    ftdm_mutex_lock(globals.span_mutex);
-    for (sp = globals.spans; sp;) {
-        if (sp->span_id == span_id) {
-    		ftdm_mutex_unlock(globals.span_mutex);
-            return 1;
-        }
-        sp = sp->next;
-    }
-    ftdm_mutex_unlock(globals.span_mutex);
-    return 0;
+	ftdm_span_t *sp;
+	ftdm_mutex_lock(globals.span_mutex);
+	for (sp = globals.spans; sp;) {
+		if (sp->span_id == span_id) {
+			ftdm_mutex_unlock(globals.span_mutex);
+			return 1;
+		}
+		sp = sp->next;
+	}
+	ftdm_mutex_unlock(globals.span_mutex);
+	return 0;
 }
 
 static int ftdm_get_new_span_id (void)
 {
-    int span_id = 0x01;
-   	int span_found  = 0; 
+	int span_id = 0x01;
+	int span_found  = 0; 
 
-    if (NULL == globals.spans) {
-   		span_found=1; 
+	if (NULL == globals.spans) {
+		span_found=1; 
 		goto done;
 	}
 
-    /* due to dynamic deletion/creation of spans , we can have holes in span numbering
-     * so to avoid that, looping around span list to see first available free span_id
-     * for example - If initially span list has 1, 2 ,3 span_id nodes and if runtime we delete 2nd node then
-     * we left with 1 and 3 span_id nodes in span list, this api should return span_id=2 for next span creation*/
+	/* due to dynamic deletion/creation of spans , we can have holes in span numbering
+	 * so to avoid that, looping around span list to see first available free span_id
+	 * for example - If initially span list has 1, 2 ,3 span_id nodes and if runtime we delete 2nd node then
+	 * we left with 1 and 3 span_id nodes in span list, this api should return span_id=2 for next span creation*/
 
-    for (span_id=1;span_id<FTDM_MAX_SPANS_INTERFACE;span_id++) {
+	for (span_id=1;span_id<FTDM_MAX_SPANS_INTERFACE;span_id++) {
 		if (ftdm_is_span_used(span_id)) {
 			continue;
 		} 
 		span_found=1;
 		break;
-    }
+	}
 
 done:
 
 	if (span_found) {
-    	ftdm_log(FTDM_LOG_INFO, "Allocating span-id[%d]\n", span_id);
+		ftdm_log(FTDM_LOG_INFO, "Allocating span-id[%d]\n", span_id);
 	} else {
-    	ftdm_log(FTDM_LOG_CRIT, "Failed: Allocating span-id Maximum Span ID Reached [%d]\n", FTDM_MAX_SPANS_INTERFACE);
+		ftdm_log(FTDM_LOG_CRIT, "Failed: Allocating span-id Maximum Span ID Reached [%d]\n", FTDM_MAX_SPANS_INTERFACE);
 		ftdm_assert(0, "Failed: Allocating span-id Maximum Span ID Reached\n");
 	}
-    return span_id;
+	return span_id;
 }
 
 FT_DECLARE(ftdm_status_t) ftdm_span_create(const char *iotype, const char *name, ftdm_span_t **span)
@@ -994,16 +994,16 @@ FT_DECLARE(ftdm_status_t) ftdm_span_create(const char *iotype, const char *name,
 		new_span->data_type = FTDM_TYPE_SPAN;
 
 
-		/* NC: This is a bit Sangoma specific. Needs refactoring */	
-		if (name) {	
-			int wp_span=0;
+		/* NC: This is a bit Sangoma specific. Needs refactoring */
+		if (name) {
+			int wp_span = 0;
 			int err=sscanf(name, "wp%d", &wp_span);
-			if (err==1) {
+			if (err == 1) {
 				if (wp_span > 0 && wp_span < FTDM_MAX_SPANS_INTERFACE && new_span->span_id != wp_span) {
 					if (!ftdm_is_span_used(wp_span)) {
 						ftdm_log(FTDM_LOG_NOTICE, "Name %s span-id[%d] does not match new span-id[%d] - using the span-id from name\n",
 								name,wp_span,new_span->span_id);
-						new_span->span_id=wp_span;
+						new_span->span_id = wp_span;
 					}
 				}
 			}
