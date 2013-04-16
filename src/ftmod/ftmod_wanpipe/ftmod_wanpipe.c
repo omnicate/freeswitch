@@ -1161,7 +1161,7 @@ static FIO_WRITE_FUNCTION(wanpipe_write)
 	} 
 
 	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Failed to write on channel (dtmfbuffer=%i)\n",
-		ftdm_buffer_inuse(ftdmchan->dtmf_buffer));
+		ftdmchan->dtmf_buffer?ftdm_buffer_inuse(ftdmchan->dtmf_buffer):0);
 
 	return FTDM_FAIL;
 }
