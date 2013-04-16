@@ -674,7 +674,7 @@ ftdm_status_t copy_access_transport_to_sngss7(ftdm_channel_t *ftdmchan, SiAccTrn
 	}
 	else {
 		char *val_dec = NULL;
-		int val_len = strlen (val);
+		ftdm_size_t val_len = strlen (val);
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found Access Transport IE encoded : %s\n", val);
 
 		accTrnspt->eh.pres = PRSNT_NODEF;

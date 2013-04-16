@@ -119,7 +119,9 @@ ftdm_state_map_t sangoma_ss7_state_map = {
 	{FTDM_CHANNEL_STATE_RING, FTDM_END},
 	{FTDM_CHANNEL_STATE_SUSPENDED, FTDM_CHANNEL_STATE_RESTART,
 	 FTDM_CHANNEL_STATE_TERMINATING, FTDM_CHANNEL_STATE_HANGUP,
-	 FTDM_CHANNEL_STATE_RINGING, FTDM_CHANNEL_STATE_PROGRESS, FTDM_END}
+	 FTDM_CHANNEL_STATE_RINGING, FTDM_CHANNEL_STATE_PROGRESS, 
+	 FTDM_CHANNEL_STATE_PROGRESS_MEDIA, FTDM_CHANNEL_STATE_UP,
+	 FTDM_END}
 	},
 	{
 	 ZSD_INBOUND,
@@ -135,6 +137,7 @@ ftdm_state_map_t sangoma_ss7_state_map = {
 	{FTDM_CHANNEL_STATE_PROGRESS, FTDM_END},
 	{FTDM_CHANNEL_STATE_SUSPENDED, FTDM_CHANNEL_STATE_RESTART,
 	 FTDM_CHANNEL_STATE_TERMINATING, FTDM_CHANNEL_STATE_HANGUP,
+	 FTDM_CHANNEL_STATE_UP,
 	 FTDM_CHANNEL_STATE_PROGRESS_MEDIA, FTDM_END}
 	},
    {
@@ -223,7 +226,7 @@ ftdm_state_map_t sangoma_ss7_state_map = {
    {
 	ZSD_OUTBOUND,
 	ZSM_UNACCEPTABLE,
-	{FTDM_CHANNEL_STATE_DIALING, FTDM_END},
+	{FTDM_CHANNEL_STATE_RINGING, FTDM_END},
 	{FTDM_CHANNEL_STATE_SUSPENDED, FTDM_CHANNEL_STATE_RESTART,
 	 FTDM_CHANNEL_STATE_CANCEL, FTDM_CHANNEL_STATE_TERMINATING,
 	 FTDM_CHANNEL_STATE_HANGUP, FTDM_CHANNEL_STATE_PROGRESS,
@@ -232,9 +235,20 @@ ftdm_state_map_t sangoma_ss7_state_map = {
    {
 	ZSD_OUTBOUND,
 	ZSM_UNACCEPTABLE,
+	{FTDM_CHANNEL_STATE_DIALING, FTDM_END},
+	{FTDM_CHANNEL_STATE_SUSPENDED, FTDM_CHANNEL_STATE_RESTART,
+	 FTDM_CHANNEL_STATE_CANCEL, FTDM_CHANNEL_STATE_TERMINATING,
+	 FTDM_CHANNEL_STATE_HANGUP, FTDM_CHANNEL_STATE_PROGRESS,
+	 FTDM_CHANNEL_STATE_RINGING,
+	 FTDM_CHANNEL_STATE_PROGRESS_MEDIA ,FTDM_CHANNEL_STATE_UP, FTDM_END}
+	},
+   {
+	ZSD_OUTBOUND,
+	ZSM_UNACCEPTABLE,
 	{FTDM_CHANNEL_STATE_PROGRESS, FTDM_END},
 	{FTDM_CHANNEL_STATE_SUSPENDED, FTDM_CHANNEL_STATE_RESTART,
 	 FTDM_CHANNEL_STATE_TERMINATING, FTDM_CHANNEL_STATE_HANGUP,
+	 FTDM_CHANNEL_STATE_UP,
 	 FTDM_CHANNEL_STATE_PROGRESS_MEDIA, FTDM_END}
 	},
    {
@@ -568,6 +582,50 @@ ftdm_sangoma_ss7_run_exit:
 	return NULL;
 }
 
+/*
+This function moves events from a channel queue into its peer queue during native bridging
+
+Note this should happen only once during a call. This is needed because the incoming leg of
+a call (leg A) may receive multiple events (ie, IAM -> SAM -> SAM -> ITX) before the outbound
+leg (leg B) is created. It is a small time frame, depending on how long does the call routing
+takes. Once the B-leg is created, this transfer will occur either when the A-leg receives a
+new incoming message, or when the A-leg receives a message from its peer (B-leg, ie ACM)
+*/
+static void sngss7_transfer_peer_events(sngss7_chan_data_t *sngss7_info, ftdm_bool_t wakeup)
+{
+	ftdm_channel_t *ftdmchan = sngss7_info->ftdmchan;
+	ftdm_span_t *peer_span = sngss7_info->peer_data->ftdmchan->span;
+	sngss7_event_data_t *peer_event = NULL;
+	int qi = 0;
+	int cnt = 0;
+	if (!sngss7_info->peer_data) {
+		SS7_CRIT_CHAN(ftdmchan,"[CIC:%d]Wrong ss7 info, missing peer data!\n", sngss7_info->circuit->cic);
+		return;
+	}
+	SS7_DEBUG_CHAN(ftdmchan,"[CIC:%d]Transferring %d messages into my peer's queue ...\n",
+			sngss7_info->circuit->cic, sngss7_info->peer_event_transfer_cnt);
+	/* Transfer any messages we enqueued in our own queue to my peer's queue, peer_event_transfer_cnt
+	   is the number of messages in our queue that actually belong to the peer (top to bottom)  */
+	for (qi = 0; qi < sngss7_info->peer_event_transfer_cnt; qi++) {
+		peer_event = ftdm_queue_dequeue(sngss7_info->event_queue);
+		if (peer_event) {
+			ftdm_queue_enqueue(sngss7_info->peer_data->event_queue, peer_event);
+			cnt++;
+		} else {
+			/* This should never happen! */
+			SS7_CRIT_CHAN(ftdmchan,"[CIC:%d]What!? someone stole my messages!\n", sngss7_info->circuit->cic);
+			break;
+		}
+	}
+	SS7_DEBUG_CHAN(ftdmchan,"[CIC:%d]Transferred %d messages into my peer's queue (out of %d)\n",
+			sngss7_info->circuit->cic, cnt, sngss7_info->peer_event_transfer_cnt);
+	sngss7_info->peer_event_transfer_cnt = 0;
+	if (wakeup) {
+		/* wake the peer up so it consumes the events we just transferred */
+		ftdm_queue_enqueue(peer_span->pendingchans, sngss7_info->peer_data->ftdmchan);
+	}
+}
+
 /******************************************************************************/
 void ftdm_sangoma_ss7_process_stack_event (sngss7_event_data_t *sngss7_event)
 {
@@ -629,21 +687,7 @@ void ftdm_sangoma_ss7_process_stack_event (sngss7_event_data_t *sngss7_event)
 			if (sngss7_info->peer_data) {
 				ftdm_span_t *peer_span = sngss7_info->peer_data->ftdmchan->span;
 				if (sngss7_info->peer_event_transfer_cnt) {
-					sngss7_event_data_t *peer_event = NULL;
-					int qi = 0;
-					/* looks like for the first time we found our peer, transfer any messages we enqueued */
-					for (qi = 0; qi < sngss7_info->peer_event_transfer_cnt; qi++) {
-						peer_event = ftdm_queue_dequeue(sngss7_info->event_queue);
-						if (peer_event) {
-							ftdm_queue_enqueue(sngss7_info->peer_data->event_queue, peer_event);
-						} else {
-							/* This should never happen! */
-							SS7_CRIT_CHAN(ftdmchan,"[CIC:%d]What!? someone stole my messages!\n", sngss7_info->circuit->cic);
-						}
-					}
-					SS7_DEBUG_CHAN(ftdmchan,"[CIC:%d]Transferred %d messages into my peer's queue\n", 
-							sngss7_info->circuit->cic, sngss7_info->peer_event_transfer_cnt);
-					sngss7_info->peer_event_transfer_cnt = 0;
+					sngss7_transfer_peer_events(sngss7_info, FTDM_FALSE);
 				}
 				/* we already have a peer attached, wake him up */
 				ftdm_queue_enqueue(sngss7_info->peer_data->event_queue, event_clone);
@@ -760,6 +804,12 @@ static void ftdm_sangoma_ss7_process_peer_stack_event (ftdm_channel_t *ftdmchan,
 
 	SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Receiving message %s from bridged peer (our state = %s)\n", 
 			sngss7_info->circuit->cic, ftdm_sngss7_event2str(sngss7_event->event_id), ftdm_channel_state2str(ftdmchan->state));
+
+	/* It's obvious we have a peer now, since they enqueued something in our event queue,
+	   we can transfer stuff to them if needed, this should actually happen just once sometimes at the beginning of the call */
+	if (sngss7_info->peer_data && sngss7_info->peer_event_transfer_cnt) {
+		sngss7_transfer_peer_events(sngss7_info, FTDM_TRUE);
+	}
 
 	switch (sngss7_event->event_id) {
 
@@ -1052,6 +1102,7 @@ static ftdm_status_t ftdm_sangoma_ss7_native_bridge_state_change(ftdm_channel_t 
 			sngss7_clear_ckt_flag (sngss7_info, FLAG_SENT_CPG);
 
 			sngss7_flush_queue(sngss7_info->event_queue);
+			sngss7_info->peer_event_transfer_cnt = 0;
 			sngss7_info->peer_data = NULL;
 			ftdm_channel_close (&close_chan);
 		}
@@ -1326,6 +1377,23 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 	/**************************************************************************/
 	/* We handle RING indication the same way we would indicate PROGRESS */
 	case FTDM_CHANNEL_STATE_RINGING:
+		if (ftdm_test_flag (ftdmchan, FTDM_CHANNEL_OUTBOUND)) {
+			sngss7_send_signal(sngss7_info, FTDM_SIGEVENT_RINGING);
+			SS7_DEBUG_CHAN(ftdmchan, "Signal freetdm outgoing channel is in RINGING state %s \n", " ");
+		} else {
+			/* handle incoming call RINGING state */
+			SS7_DEBUG_CHAN(ftdmchan, "Signal freetdm incoming channel is in RINGING state %s \n", " ");
+			if (!sngss7_test_ckt_flag(sngss7_info, FLAG_SENT_ACM)) {
+				sngss7_set_ckt_flag(sngss7_info, FLAG_SENT_ACM);
+				ft_to_sngss7_acm(ftdmchan);
+			} else {
+				if (!sngss7_test_ckt_flag(sngss7_info, FLAG_SENT_CPG)) {
+					sngss7_set_ckt_flag(sngss7_info, FLAG_SENT_CPG);
+					ft_to_sngss7_cpg(ftdmchan, EV_ALERT, EVPR_NOIND);
+				}
+			}
+		}
+		break;
 	case FTDM_CHANNEL_STATE_PROGRESS:
 
 		if (ftdmchan->last_state == FTDM_CHANNEL_STATE_SUSPENDED) {
@@ -1339,8 +1407,10 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 			sngss7_send_signal(sngss7_info, FTDM_SIGEVENT_PROGRESS);
 
 			/* move to progress media  */
+			/*
 			state_flag = 0;
 			ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_PROGRESS_MEDIA);
+			*/
 		} else {
 			/* inbound call so we need to send out ACM */
 			if (!sngss7_test_ckt_flag(sngss7_info, FLAG_SENT_ACM)) {
@@ -1350,7 +1420,7 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 			if (g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].cpg_on_progress == FTDM_TRUE) {
 				if (!sngss7_test_ckt_flag(sngss7_info, FLAG_SENT_CPG)) {
 					sngss7_set_ckt_flag(sngss7_info, FLAG_SENT_CPG);
-					ft_to_sngss7_cpg(ftdmchan);
+					ft_to_sngss7_cpg(ftdmchan, EV_PROGRESS, EVPR_NOIND);
 				}
 			}
 		}
@@ -1371,11 +1441,17 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 			if (!sngss7_test_ckt_flag(sngss7_info, FLAG_SENT_ACM)) {
 				sngss7_set_ckt_flag(sngss7_info, FLAG_SENT_ACM);
 				ft_to_sngss7_acm(ftdmchan);
+			} else {
+				if (!sngss7_test_ckt_flag(sngss7_info, FLAG_SENT_CPG)) {
+					sngss7_set_ckt_flag(sngss7_info, FLAG_SENT_CPG);
+					ft_to_sngss7_cpg(ftdmchan, EV_PROGRESS, EVPR_NOIND);
+				}
 			}
+
 			if (g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].cpg_on_progress_media == FTDM_TRUE) {
 				if (!sngss7_test_ckt_flag(sngss7_info, FLAG_SENT_CPG)) {
 					sngss7_set_ckt_flag(sngss7_info, FLAG_SENT_CPG);
-					ft_to_sngss7_cpg(ftdmchan);
+					ft_to_sngss7_cpg(ftdmchan, EV_INBAND, EVPR_NOIND); 
 				}
 			}
 		}
@@ -1655,6 +1731,7 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 			/* close the channel */
 			SS7_DEBUG_CHAN(ftdmchan,"FTDM Channel Close %s\n", "");
 			sngss7_flush_queue(sngss7_info->event_queue);
+			sngss7_info->peer_event_transfer_cnt = 0;
 			ftdm_channel_close (&close_chan);
 		}
 
@@ -2583,6 +2660,7 @@ static FIO_CONFIGURE_SPAN_SIGNALING_FUNCTION(ftdm_sangoma_ss7_span_config)
 	ftdm_set_flag (span, FTDM_SPAN_USE_CHAN_QUEUE);
 	/* set the flag to indicate that this span uses sig event queues */
 	ftdm_set_flag (span, FTDM_SPAN_USE_SIGNALS_QUEUE);
+	ftdm_set_flag (span, FTDM_SPAN_USE_SKIP_STATES);
 
 
 
