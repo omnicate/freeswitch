@@ -1615,6 +1615,12 @@ int check_for_state_change(ftdm_channel_t *ftdmchan)
 /******************************************************************************/
 ftdm_status_t extract_chan_data(uint32_t circuit, sngss7_chan_data_t **sngss7_info, ftdm_channel_t **ftdmchan)
 {
+
+	if (!ftdm_running()) {
+		SS7_DEBUG("Error: FTDM Stopped: circuit #%d\n", circuit);
+		return FTDM_FAIL;
+	}
+
 	if (!g_ftdm_sngss7_data.cfg.isupCkt[circuit].obj) {
 		SS7_ERROR("No ss7 info for circuit #%d\n", circuit);
 		return FTDM_FAIL;
@@ -1630,8 +1636,13 @@ ftdm_status_t extract_chan_data(uint32_t circuit, sngss7_chan_data_t **sngss7_in
 	if (!(*sngss7_info)->ftdmchan->span) {
 		SS7_CRITICAL("ftdmchan->span = NULL for circuit #%d\n",circuit);
 		return FTDM_FAIL;
-		
 	}
+	
+	if (ftdm_test_flag ((*sngss7_info)->ftdmchan->span, FTDM_SPAN_STOP_THREAD)) {
+		SS7_DEBUG("ftdmchan->span is down for circuit #%d\n",circuit);
+		return FTDM_FAIL;
+	}
+
 	if (!(*sngss7_info)->ftdmchan->span->signal_data) {
 		SS7_CRITICAL("ftdmchan->span->signal_data = NULL for circuit #%d\n",circuit);
 		return FTDM_FAIL;
