@@ -527,6 +527,7 @@ struct ftdm_span {
 	ftdm_caller_data_t default_caller_data;
 	ftdm_queue_t *pendingchans; /*!< Channels pending of state processing */
 	ftdm_queue_t *pendingsignals; /*!< Signals pending from being delivered to the user */
+	uint8_t dtmf_filter_abcd;
 	struct ftdm_span *next;
 };
 

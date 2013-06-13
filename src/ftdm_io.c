@@ -3952,6 +3952,14 @@ skipdebug:
 		ftdm_buffer_zero(ftdmchan->pre_buffer);
 	}
 
+	if (ftdmchan->span->dtmf_filter_abcd) {
+		if (*dtmf == 'a' || *dtmf == 'b' || *dtmf == 'c' || *dtmf == 'd' ||
+		    *dtmf == 'A' || *dtmf == 'B' || *dtmf == 'C' || *dtmf == 'D' ) {
+			ftdm_log_chan(ftdmchan, FTDM_LOG_INFO, "Filtering out DTMF  %s\n", dtmf);
+			return FTDM_SUCCESS;
+		}
+	}
+
 	ftdm_mutex_lock(ftdmchan->mutex);
 
 	inuse = ftdm_buffer_inuse(ftdmchan->digit_buffer);
@@ -5363,6 +5371,11 @@ static ftdm_status_t load_config(int reload)
 					chan_config.name[0] = '\0';
 				} else {
 					ftdm_copy_string(chan_config.name, val, FTDM_MAX_NAME_STR_SZ);
+				}
+			} else if (!strcasecmp(var, "dtmf_filter_abcd")) {
+				if (!strncasecmp(val, "yes", 3)) {
+					span->dtmf_filter_abcd = 1;
+					ftdm_log(FTDM_LOG_DEBUG, "setting dtmf_filter_abcd to yes\n" ); 
 				}
 			} else if (!strcasecmp(var, "number")) {
 				if (!strcasecmp(val, "undef")) {
