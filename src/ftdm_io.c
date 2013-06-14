@@ -5374,7 +5374,7 @@ static ftdm_status_t load_config(int reload)
 				}
 			} else if (!strcasecmp(var, "dtmf_filter_abcd")) {
 				if (!strncasecmp(val, "yes", 3) || 
-				    !strncasecmp(val, "true", 4) || 	) {
+				    !strncasecmp(val, "true", 4) ) {
 					span->dtmf_filter_abcd = 1;
 					ftdm_log(FTDM_LOG_DEBUG, "setting dtmf_filter_abcd to yes\n" ); 
 				} else {
