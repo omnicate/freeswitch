@@ -5373,10 +5373,14 @@ static ftdm_status_t load_config(int reload)
 					ftdm_copy_string(chan_config.name, val, FTDM_MAX_NAME_STR_SZ);
 				}
 			} else if (!strcasecmp(var, "dtmf_filter_abcd")) {
-				if (!strncasecmp(val, "yes", 3)) {
+				if (!strncasecmp(val, "yes", 3) || 
+				    !strncasecmp(val, "true", 4) || 	) {
 					span->dtmf_filter_abcd = 1;
 					ftdm_log(FTDM_LOG_DEBUG, "setting dtmf_filter_abcd to yes\n" ); 
-				}
+				} else {
+					span->dtmf_filter_abcd = 0;
+					ftdm_log(FTDM_LOG_DEBUG, "setting dtmf_filter_abcd to no\n" ); 
+				}	
 			} else if (!strcasecmp(var, "number")) {
 				if (!strcasecmp(val, "undef")) {
 					chan_config.number[0] = '\0';
