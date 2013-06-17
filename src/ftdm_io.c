@@ -3955,7 +3955,7 @@ skipdebug:
 	if (ftdmchan->span->dtmf_filter_abcd) {
 		if (*dtmf == 'a' || *dtmf == 'b' || *dtmf == 'c' || *dtmf == 'd' ||
 		    *dtmf == 'A' || *dtmf == 'B' || *dtmf == 'C' || *dtmf == 'D' ) {
-			ftdm_log_chan(ftdmchan, FTDM_LOG_INFO, "Filtering out DTMF  %s\n", dtmf);
+			ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Filtering out DTMF  %s\n", dtmf);
 			return FTDM_SUCCESS;
 		}
 	}
