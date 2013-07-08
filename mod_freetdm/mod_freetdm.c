@@ -950,9 +950,9 @@ static switch_status_t channel_receive_message_cas(switch_core_session_t *sessio
 	assert(tech_pvt != NULL);
 	
 	if (switch_test_flag(tech_pvt, TFLAG_DEAD)) {
-        switch_channel_hangup(channel, SWITCH_CAUSE_LOSE_RACE);
-        return SWITCH_STATUS_FALSE;
-    }
+		switch_channel_hangup(channel, SWITCH_CAUSE_LOSE_RACE);
+		return SWITCH_STATUS_FALSE;
+	}
 
 	phy_id = ftdm_channel_get_ph_id(tech_pvt->ftdmchan);	
 	ftdm_log(FTDM_LOG_DEBUG, "Got Freeswitch message in R2 channel %d [%d]\n", phy_id, msg->message_id);
@@ -2785,6 +2785,23 @@ static FIO_SIGNAL_CB_FUNCTION(on_clear_channel_signal)
 			}
 		}
 		break;	
+	case FTDM_SIGEVENT_ALERTING:
+		{
+			switch_core_session_t *partner_session = NULL;
+			switch_core_session_message_t *msg = NULL;
+
+			if ((session = ftdm_channel_get_session(sigmsg->channel, 0))) {
+				if (switch_core_session_get_partner(session, &partner_session) == SWITCH_STATUS_SUCCESS) {
+					msg = switch_core_session_alloc(partner_session, sizeof(*msg));
+					msg->message_id = SWITCH_MESSAGE_INDICATE_ALERTING;
+					msg->from = (char*)__FILE__;
+					switch_core_session_queue_message(partner_session, msg);
+					switch_core_session_rwunlock(partner_session);
+				}
+			}
+		}
+
+		break;
 	case FTDM_SIGEVENT_SIGSTATUS_CHANGED:
 		{	
 			ftdm_signaling_status_t sigstatus = sigmsg->ev_data.sigstatus.status;
