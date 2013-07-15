@@ -977,13 +977,6 @@ static switch_status_t channel_receive_message_cas(switch_core_session_t *sessio
 			ftdm_channel_call_answer(tech_pvt->ftdmchan);
 		}
 		break;
-	case SWITCH_MESSAGE_INDICATE_BRIDGE:
-	case SWITCH_MESSAGE_INDICATE_AUDIO_SYNC:
-		{
-			ftdm_log(FTDM_LOG_DEBUG, "Got Freeswitch message BRIDGE/AUDIO SYNC  channel %d [%d]\n", phy_id, msg->message_id);
-			ftdm_channel_command(tech_pvt->ftdmchan, FTDM_COMMAND_FLUSH_BUFFERS, NULL);
-		}
-		break;
 	default:
 		break;
 	}
@@ -995,6 +988,9 @@ static switch_status_t channel_receive_message_b(switch_core_session_t *session,
 {
 	switch_channel_t *channel;
 	private_t *tech_pvt;
+	uint32_t phy_id = 0;
+
+	phy_id = ftdm_channel_get_ph_id(tech_pvt->ftdmchan);
 
 	channel = switch_core_session_get_channel(session);
 	assert(channel != NULL);
@@ -1051,6 +1047,13 @@ static switch_status_t channel_receive_message_b(switch_core_session_t *session,
 				switch_yield(100000);
 			}
 		}
+	case SWITCH_MESSAGE_INDICATE_BRIDGE:
+	case SWITCH_MESSAGE_INDICATE_AUDIO_SYNC:
+		{
+			ftdm_log(FTDM_LOG_DEBUG, "Got Freeswitch message BRIDGE/AUDIO SYNC  channel %d [%d]\n", phy_id, msg->message_id);
+			ftdm_channel_command(tech_pvt->ftdmchan, FTDM_COMMAND_FLUSH_BUFFERS, NULL);
+		}
+		break;
 	default:
 		break;
 	}
