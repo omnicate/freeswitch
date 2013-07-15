@@ -1087,7 +1087,7 @@ void sngisdn_process_sta_cfm (sngisdn_event_data_t *sngisdn_event)
 				}
 				break;
 			default:
-				ftdm_log_chan(ftdmchan, FTDM_LOG_CRIT, "Don't know how to handle incompatible state. remote call state:%d our state:%s\n", call_state, ftdm_channel_state2str(ftdmchan->state));
+				ftdm_log_chan(ftdmchan, FTDM_LOG_INFO, "Don't know how to handle incompatible state. remote call state:%d our state:%s\n", call_state, ftdm_channel_state2str(ftdmchan->state));
 						//ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_RESTART);
 				break;
 		}
