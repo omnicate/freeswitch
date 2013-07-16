@@ -1154,18 +1154,18 @@ static int ftdm_r2_io_write(openr2_chan_t *r2chan, const void *buf, int size)
 {
 	ftdm_channel_t *ftdm_chan = openr2_chan_get_fd(r2chan);
 	ftdm_size_t outsize = size;
-	ftdm_status_t status = ftdm_channel_write(ftdm_chan, (void *)buf, size, &outsize);
+	ftdm_status_t status = ftdm_channel_raw_write(ftdm_chan, (void *)buf, &outsize);
 	if (FTDM_FAIL == status) {
 		return -1;
 	}
-	return (int)outsize;
+	return (int)size;
 }
 
 static int ftdm_r2_io_read(openr2_chan_t *r2chan, const void *buf, int size)
 {
 	ftdm_channel_t *ftdm_chan = openr2_chan_get_fd(r2chan);
 	ftdm_size_t outsize = size;
-	ftdm_status_t status = ftdm_channel_read(ftdm_chan, (void *)buf, &outsize);
+	ftdm_status_t status = ftdm_channel_raw_read(ftdm_chan, (void *)buf, &outsize);
 	if (FTDM_FAIL == status) {
 		return -1;
 	}

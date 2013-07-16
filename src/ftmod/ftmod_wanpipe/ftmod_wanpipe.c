@@ -871,17 +871,19 @@ static FIO_COMMAND_FUNCTION(wanpipe_command)
 		break;
 	case FTDM_COMMAND_FLUSH_BUFFERS:
 		{
+			ftdm_log_chan_msg(ftdmchan, FTDM_LOG_DEBUG, "Flushing all buffers\n");
 			err = sangoma_flush_bufs(ftdmchan->sockfd, &tdm_api);
 		}
 		break;
 	case FTDM_COMMAND_FLUSH_RX_BUFFERS:
 		{
+			ftdm_log_chan_msg(ftdmchan, FTDM_LOG_DEBUG, "Flushing Rx buffer\n");
 			err = sangoma_flush_rx_bufs(ftdmchan->sockfd, &tdm_api);
 		}
 		break;
 	case FTDM_COMMAND_FLUSH_TX_BUFFERS:
 		{
-			ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Flushing Tx %s\n","buffer");
+			ftdm_log_chan_msg(ftdmchan, FTDM_LOG_DEBUG, "Flushing Tx buffer\n");
 			err = sangoma_flush_tx_bufs(ftdmchan->sockfd, &tdm_api);
 		}
 		break;

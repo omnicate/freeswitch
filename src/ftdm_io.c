@@ -3998,7 +3998,7 @@ skipdebug:
 	return status;
 }
 
-FT_DECLARE(ftdm_status_t) ftdm_raw_write (ftdm_channel_t *ftdmchan, void *data, ftdm_size_t *datalen)
+FT_DECLARE(ftdm_status_t) ftdm_channel_raw_write (ftdm_channel_t *ftdmchan, void *data, ftdm_size_t *datalen)
 {
 	int dlen = (int) *datalen;
 
@@ -4025,7 +4025,7 @@ FT_DECLARE(ftdm_status_t) ftdm_raw_write (ftdm_channel_t *ftdmchan, void *data, 
 	return ftdmchan->fio->write(ftdmchan, data, datalen);
 }
 
-FT_DECLARE(ftdm_status_t) ftdm_raw_read (ftdm_channel_t *ftdmchan, void *data, ftdm_size_t *datalen)
+FT_DECLARE(ftdm_status_t) ftdm_channel_raw_read (ftdm_channel_t *ftdmchan, void *data, ftdm_size_t *datalen)
 {
 	ftdm_status_t  status;
 	
@@ -4193,7 +4193,7 @@ static ftdm_status_t handle_tone_generation(ftdm_channel_t *ftdmchan)
 		} 
 
 		/* write the tone to the channel */
-		return ftdm_raw_write(ftdmchan, auxbuf, &dlen);
+		return ftdm_channel_raw_write(ftdmchan, auxbuf, &dlen);
 	}
 
 	return FTDM_SUCCESS;
@@ -4453,7 +4453,7 @@ FT_DECLARE(ftdm_status_t) ftdm_channel_read(ftdm_channel_t *ftdmchan, void *data
 		status = FTDM_FAIL;
 		goto done;
 	}
-	status = ftdm_raw_read(ftdmchan, data, datalen);
+	status = ftdm_channel_raw_read(ftdmchan, data, datalen);
 	if (status != FTDM_SUCCESS) {
 		ftdm_log_chan_msg(ftdmchan, FTDM_LOG_WARNING, "raw I/O read filed\n");
 		goto done;
@@ -4547,7 +4547,7 @@ do_write:
 		}
 	}
 
-	status = ftdm_raw_write(ftdmchan, data, datalen);
+	status = ftdm_channel_raw_write(ftdmchan, data, datalen);
 	if (status != FTDM_SUCCESS) {
 		ftdm_log_chan(ftdmchan, FTDM_LOG_WARNING, "Channel raw write failed to write (len=%i)\n",*datalen);			
 	}
@@ -6791,8 +6791,6 @@ FT_DECLARE(void) print_bits(uint8_t *b, int bl, char *buf, int blen, ftdm_endian
 	}
 
 }
-
-
 
 FT_DECLARE_NONSTD(ftdm_status_t) ftdm_console_stream_raw_write(ftdm_stream_handle_t *handle, uint8_t *data, ftdm_size_t datalen)
 {

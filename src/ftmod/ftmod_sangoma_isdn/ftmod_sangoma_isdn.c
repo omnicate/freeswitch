@@ -396,7 +396,7 @@ static void *ftdm_sangoma_isdn_io_run(ftdm_thread_t *me, void *obj)
 					if (FTDM_IS_VOICE_CHANNEL(ftdmchan)) {
 						if (ftdm_test_flag(ftdmchan, FTDM_CHANNEL_RX_DISABLED)) {
 							if (ftdm_test_io_flag(ftdmchan, FTDM_CHANNEL_IO_READ)) {
-								status = ftdm_raw_read(ftdmchan, data, &len);
+								status = ftdm_channel_raw_read(ftdmchan, data, &len);
 								if (status != FTDM_SUCCESS) {
 									ftdm_log_chan_msg(ftdmchan, FTDM_LOG_WARNING, "raw I/O read failed\n");
 									continue;
