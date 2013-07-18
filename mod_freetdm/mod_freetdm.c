@@ -986,11 +986,9 @@ static switch_status_t channel_receive_message_cas(switch_core_session_t *sessio
 
 static switch_status_t channel_receive_message_b(switch_core_session_t *session, switch_core_session_message_t *msg)
 {
-	switch_channel_t *channel;
-	private_t *tech_pvt;
+	switch_channel_t *channel = NULL;
+	private_t *tech_pvt = NULL;
 	uint32_t phy_id = 0;
-
-	phy_id = ftdm_channel_get_ph_id(tech_pvt->ftdmchan);
 
 	channel = switch_core_session_get_channel(session);
 	assert(channel != NULL);
@@ -1010,6 +1008,8 @@ static switch_status_t channel_receive_message_b(switch_core_session_t *session,
 	if (switch_channel_direction(channel) == SWITCH_CALL_DIRECTION_OUTBOUND) {
 		return SWITCH_STATUS_SUCCESS;
 	}
+
+	phy_id = ftdm_channel_get_ph_id(tech_pvt->ftdmchan);
 
 	switch (msg->message_id) {
 	case SWITCH_MESSAGE_INDICATE_RINGING:
