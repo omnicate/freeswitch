@@ -106,6 +106,17 @@ void ft_to_sngss7_iam (ftdm_channel_t * ftdmchan)
 			/* copy original incoming IAM */
 			memcpy(&iam, &event_clone->event.siConEvnt, sizeof(iam));
 
+
+                        if (iam.cdPtyNum.eh.pres == PRSNT_NODEF && iam.cdPtyNum.natAddrInd.pres == PRSNT_NODEF) {
+                                const char *val = NULL;
+                                val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_cld_nadi");
+                                if (!ftdm_strlen_zero(val)) {
+                                        ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found user supplied Called NADI value \"%s\"\n", val);
+                                        iam.cdPtyNum.natAddrInd.val = atoi(val);
+                                }
+                        }
+
+
 			/* Change DNIS to whatever was specified, do not change NADI or anything else! */
 			copy_tknStr_to_sngss7(caller_data->dnis.digits, &iam.cdPtyNum.addrSig, &iam.cdPtyNum.oddEven);
 
