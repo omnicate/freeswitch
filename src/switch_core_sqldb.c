@@ -501,6 +501,8 @@ SWITCH_DECLARE(switch_status_t) _switch_cache_db_get_db_handle(switch_cache_db_h
 			goto end;
 		}
 
+		new_dbh = create_handle(type);
+
 		switch_log_printf(SWITCH_CHANNEL_ID_LOG, file, func, line, NULL, SWITCH_LOG_DEBUG10,
 						  "Create Cached DB handle %s [%s] %s:%d\n", new_dbh->name, switch_cache_db_type_name(type), file, line);
 
@@ -1674,7 +1676,7 @@ static uint32_t do_trans(switch_sql_queue_manager_t *qm)
 		switch_cache_db_execute_sql_real(qm->event_db, qm->pre_trans_execute, &errmsg);
 		if (errmsg) {
 			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "SQL PRE TRANS EXEC %s [%s]\n", qm->pre_trans_execute, errmsg);
-			free(errmsg);
+			free(errmsg); errmsg = NULL;
 		}
 	}
 
@@ -2444,7 +2446,7 @@ static char create_channels_sql[] =
 	"   write_codec  VARCHAR(128),\n"
 	"   write_rate  VARCHAR(32),\n"
 	"   write_bit_rate  VARCHAR(32),\n"
-	"   secure VARCHAR(32),\n"
+	"   secure VARCHAR(64),\n"
 	"   hostname VARCHAR(256),\n"
 	"   presence_id VARCHAR(4096),\n"
 	"   presence_data VARCHAR(4096),\n"
@@ -2942,7 +2944,7 @@ SWITCH_DECLARE(void) switch_core_recovery_track(switch_core_session_t *session)
 			sql = switch_mprintf("insert into recovery (runtime_uuid, technology, profile_name, hostname, uuid, metadata) "
 								 "values ('%q','%q','%q','%q','%q','%q')",
 								 switch_core_get_uuid(), switch_str_nil(technology), 
-								 switch_str_nil(profile_name), switch_core_get_hostname(), switch_core_session_get_uuid(session), xml_cdr_text);
+								 switch_str_nil(profile_name), switch_core_get_switchname(), switch_core_session_get_uuid(session), xml_cdr_text);
 		}
 
 		switch_sql_queue_manager_push(sql_manager.qm, sql, 2, SWITCH_FALSE);
@@ -3235,11 +3237,15 @@ switch_status_t switch_core_sqldb_start(switch_memory_pool_t *pool, switch_bool_
 
 			
 			if (err) {
-				runtime.odbc_dsn = NULL;
-				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Transactions not supported on your DB, disabling non-SQLite support; using SQLite\n");
-				switch_cache_db_release_db_handle(&sql_manager.dbh);
-				free(err);
-				goto top;
+				//runtime.odbc_dsn = NULL;
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Database Error [%s]\n", err);
+				//switch_cache_db_release_db_handle(&sql_manager.dbh);
+                                if (switch_stristr("read-only", err)) { 
+                                        free(err);
+                                } else {
+                                        free(err);
+                                        goto top;
+                                }
 			}
 		}
 		break;
@@ -3501,5 +3507,5 @@ SWITCH_DECLARE(char*)switch_sql_concat(void)
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */

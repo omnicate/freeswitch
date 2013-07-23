@@ -465,8 +465,13 @@ static uint8_t check_channel_status(originate_global_t *oglobals, originate_stat
 				originate_status[i].peer_channel = switch_core_session_get_channel(originate_status[i].peer_session);
 				originate_status[i].caller_profile = switch_channel_get_caller_profile(originate_status[i].peer_channel);
 				switch_channel_set_flag(originate_status[i].peer_channel, CF_ORIGINATING);
-
+				
 				switch_channel_answer(originate_status[i].peer_channel);
+
+				switch_channel_set_variable(originate_status[i].peer_channel, "picked_up_uuid", switch_core_session_get_uuid(old_session));
+				switch_channel_execute_on(originate_status[i].peer_channel, "execute_on_pickup");
+				switch_channel_api_on(originate_status[i].peer_channel, "api_on_pickup");
+
 				switch_core_session_rwunlock(old_session);
 				break;
 			}
@@ -1375,7 +1380,7 @@ static void *SWITCH_THREAD_FUNC enterprise_originate_thread(switch_thread_t *thr
 	switch_mutex_unlock(handle->mutex);
 
 	if (handle->done != 2) {
-		if (handle->status == SWITCH_STATUS_SUCCESS) {
+		if (handle->status == SWITCH_STATUS_SUCCESS && handle->bleg) {
 			switch_channel_t *channel = switch_core_session_get_channel(handle->bleg);
 
 			switch_channel_set_variable(channel, "group_dial_status", "loser");
@@ -1639,6 +1644,11 @@ SWITCH_DECLARE(switch_status_t) switch_ivr_enterprise_originate(switch_core_sess
 	}
 
 	for (i = 0; i < x_argc; i++) {
+
+		if (channel) {
+			switch_channel_handle_cause(channel, handles[i].cause);
+		}
+
 		if (hp == &handles[i]) {
 			continue;
 		}
@@ -1665,6 +1675,16 @@ SWITCH_DECLARE(switch_status_t) switch_ivr_enterprise_originate(switch_core_sess
 	if (getcause == 1 && *cause == SWITCH_CAUSE_SUCCESS) {
 		*cause = SWITCH_CAUSE_NO_ANSWER;
 	}
+
+	if (channel) {
+		if (*cause == SWITCH_CAUSE_SUCCESS) {
+			switch_channel_set_variable(channel, "originate_disposition", "success");
+		} else {
+			switch_channel_set_variable(channel, "originate_disposition", "failure");
+			switch_channel_set_variable(channel, "hangup_cause", switch_channel_cause2str(*cause));
+		}
+	}
+
 
 	if (var_event && var_event != ovars) {
 		switch_event_destroy(&var_event);
@@ -1856,6 +1876,7 @@ SWITCH_DECLARE(switch_status_t) switch_ivr_originate(switch_core_session_t *sess
 	const char *ringback_data = NULL;
 	switch_event_t *var_event = NULL;
 	int8_t fail_on_single_reject = 0;
+	int8_t hangup_on_single_reject = 0;
 	char *fail_on_single_reject_var = NULL;
 	char *loop_data = NULL;
 	uint32_t progress_timelimit_sec = 0;
@@ -2060,7 +2081,16 @@ SWITCH_DECLARE(switch_status_t) switch_ivr_originate(switch_core_session_t *sess
 		goto done;
 	}
 
-
+	if (!(flags & SOF_NOBLOCK) && var_event && (var = switch_event_get_header(var_event, "originate_delay_start"))) {
+		int tmp = atoi(var);
+		if (tmp > 0) {
+			while (tmp && (!cancel_cause || *cancel_cause == 0)) {
+				switch_cond_next();
+				tmp--;
+			}
+		}
+	}
+	
 	if (oglobals.session) {
 		switch_event_header_t *hi;
 		const char *cdr_total_var;
@@ -2104,6 +2134,8 @@ SWITCH_DECLARE(switch_status_t) switch_ivr_originate(switch_core_session_t *sess
 				} else if (!strcasecmp((char *) hi->name, "forked_dial")) {
 					ok = 1;
 				} else if (!strcasecmp((char *) hi->name, "fail_on_single_reject")) {
+					ok = 1;
+				} else if (!strcasecmp((char *) hi->name, "hangup_on_single_reject")) {
 					ok = 1;
 				} else if (!strcasecmp((char *) hi->name, "ignore_early_media")) {
 					ok = 1;
@@ -2167,17 +2199,6 @@ SWITCH_DECLARE(switch_status_t) switch_ivr_originate(switch_core_session_t *sess
 
 		if (switch_channel_test_flag(caller_channel, CF_PROXY_MODE) || switch_channel_test_flag(caller_channel, CF_PROXY_MEDIA)) {
 			ringback_data = NULL;
-		} else if (zstr(ringback_data)) {
-			const char *vvar;
-
-			if ((vvar = switch_channel_get_variable(caller_channel, SWITCH_SEND_SILENCE_WHEN_IDLE_VARIABLE))) {
-				int sval = atoi(vvar);
-
-				if (sval) {
-					ringback_data = switch_core_session_sprintf(oglobals.session, "silence:%d", sval);
-				}
-
-			}
 		}
 	}
 #if 0
@@ -2213,7 +2234,11 @@ SWITCH_DECLARE(switch_status_t) switch_ivr_originate(switch_core_session_t *sess
 	   If the value is set to 'true' any fail cause will end the attempt otherwise it can contain a comma (,) separated
 	   list of cause names which should be considered fatal
 	 */
-	if ((var = switch_event_get_header(var_event, "fail_on_single_reject"))) {
+	if ((var = switch_event_get_header(var_event, "hangup_on_single_reject"))) {
+		hangup_on_single_reject = 1;
+	}
+
+	if (hangup_on_single_reject || (var = switch_event_get_header(var_event, "fail_on_single_reject"))) {
 		fail_on_single_reject_var = strdup(var);
 		if (switch_true(var)) {
 			fail_on_single_reject = 1;
@@ -2236,10 +2261,6 @@ SWITCH_DECLARE(switch_status_t) switch_ivr_originate(switch_core_session_t *sess
 			oglobals.early_ok = 0;
 			oglobals.ignore_early_media = 3;
 		}
-	}
-
-	if ((var_val = switch_event_get_header(var_event, "fax_enable_t38_request"))) {
-		switch_event_add_header_string(var_event, SWITCH_STACK_BOTTOM, "ignore_early_media", "true");
 	}
 
 	if ((var_val = switch_event_get_header(var_event, "ignore_early_media"))) {
@@ -2678,6 +2699,11 @@ SWITCH_DECLARE(switch_status_t) switch_ivr_originate(switch_core_session_t *sess
 				}
 				
 
+				if (local_var_event) {
+					const char *device_id = switch_event_get_header(local_var_event, "device_id");
+					switch_channel_set_profile_var(originate_status[i].peer_channel, "device_id", device_id);
+				}
+
 				if ((lc = switch_event_get_header(var_event, "local_var_clobber"))) {
 					local_clobber = switch_true(lc);
 				}
@@ -3020,7 +3046,7 @@ SWITCH_DECLARE(switch_status_t) switch_ivr_originate(switch_core_session_t *sess
 												 oglobals.sending_ringback > 1 || oglobals.bridge_early_media > -1)) {
 						if (oglobals.ringback_ok == 1) {
 							switch_status_t rst;
-							
+
 							rst = setup_ringback(&oglobals, originate_status, and_argc, ringback_data, &ringback, &write_frame, &write_codec);
 							
 							if (oglobals.bridge_early_media > -1) {
@@ -3808,6 +3834,10 @@ SWITCH_DECLARE(switch_status_t) switch_ivr_originate(switch_core_session_t *sess
 	switch_safe_free(write_frame.data);
 	switch_safe_free(fail_on_single_reject_var);
 
+	if (force_reason != SWITCH_CAUSE_NONE) {
+		*cause = force_reason;
+	}
+
 	if (caller_channel) {
 
 		switch_channel_execute_on(caller_channel, SWITCH_CHANNEL_EXECUTE_ON_POST_ORIGINATE_VARIABLE);
@@ -3815,11 +3845,12 @@ SWITCH_DECLARE(switch_status_t) switch_ivr_originate(switch_core_session_t *sess
 
 		switch_channel_clear_flag(caller_channel, CF_ORIGINATOR);
 		switch_channel_clear_flag(caller_channel, CF_XFER_ZOMBIE);
+
+		if (hangup_on_single_reject) {
+			switch_channel_hangup(caller_channel, *cause);
+		}
 	}
 
-	if (force_reason != SWITCH_CAUSE_NONE) {
-		*cause = force_reason;
-	}
 
 	switch_core_destroy_memory_pool(&oglobals.pool);
 
@@ -3834,5 +3865,5 @@ SWITCH_DECLARE(switch_status_t) switch_ivr_originate(switch_core_session_t *sess
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */

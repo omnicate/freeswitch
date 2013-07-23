@@ -139,6 +139,7 @@ SWITCH_DECLARE(void) switch_rtp_shutdown(void);
 SWITCH_DECLARE(switch_port_t) switch_rtp_set_start_port(switch_port_t port);
 
 SWITCH_DECLARE(switch_status_t) switch_rtp_set_ssrc(switch_rtp_t *rtp_session, uint32_t ssrc);
+SWITCH_DECLARE(switch_status_t) switch_rtp_set_remote_ssrc(switch_rtp_t *rtp_session, uint32_t ssrc);
 
 /*!
   \brief Set/Get RTP end port
@@ -500,9 +501,6 @@ SWITCH_DECLARE(void) switch_rtp_set_cng_pt(switch_rtp_t *rtp_session, switch_pay
 */
 SWITCH_DECLARE(void *) switch_rtp_get_private(switch_rtp_t *rtp_session);
 
-SWITCH_DECLARE(switch_status_t) switch_rtp_activate_stun_ping(switch_rtp_t *rtp_session, const char *stun_ip, switch_port_t stun_port,
-															  uint32_t packet_count, switch_bool_t funny);
-
 SWITCH_DECLARE(void) switch_rtp_intentional_bugs(switch_rtp_t *rtp_session, switch_rtp_bug_flag_t bugs);
 
 SWITCH_DECLARE(switch_rtp_stats_t *) switch_rtp_get_stats(switch_rtp_t *rtp_session, switch_memory_pool_t *pool);
@@ -512,6 +510,7 @@ SWITCH_DECLARE(void) switch_rtp_set_interdigit_delay(switch_rtp_t *rtp_session, 
 SWITCH_DECLARE(switch_status_t) switch_rtp_add_dtls(switch_rtp_t *rtp_session, dtls_fingerprint_t *local_fp, dtls_fingerprint_t *remote_fp, dtls_type_t type);
 
 SWITCH_DECLARE(int) switch_rtp_has_dtls(void);
+SWITCH_DECLARE(void) switch_rtp_video_refresh(switch_rtp_t *rtp_session);
 
 /*!
   \}
@@ -527,5 +526,5 @@ SWITCH_END_EXTERN_C
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */

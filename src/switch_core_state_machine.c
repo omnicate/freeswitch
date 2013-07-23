@@ -305,6 +305,7 @@ void switch_core_state_machine_init(switch_memory_pool_t *pool)
 #define STATE_MACRO(__STATE, __STATE_STR)						do {	\
 		midstate = state;												\
 		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "(%s) State %s\n", switch_channel_get_name(session->channel), __STATE_STR);	\
+		switch_core_session_refresh_video(session);\
 		if (!driver_state_handler->on_##__STATE || (driver_state_handler->on_##__STATE(session) == SWITCH_STATUS_SUCCESS \
 													)) {				\
 			while (do_extra_handlers && (application_state_handler = switch_channel_get_state_handler(session->channel, index++)) != 0) { \
@@ -577,6 +578,8 @@ SWITCH_DECLARE(void) switch_core_session_destroy_state(switch_core_session_t *se
 
 	STATE_MACRO(destroy, "DESTROY");
 
+	switch_channel_clear_device_record(session->channel);
+
 	return;
 }
 
@@ -675,6 +678,8 @@ SWITCH_DECLARE(void) switch_core_session_hangup_state(switch_core_session_t *ses
 
 	STATE_MACRO(hangup, "HANGUP");
 
+	switch_core_media_set_stats(session);
+
 	if ((hook_var = switch_channel_get_variable(session->channel, SWITCH_API_HANGUP_HOOK_VARIABLE))) {
 
 		if (switch_true(switch_channel_get_variable(session->channel, SWITCH_SESSION_IN_HANGUP_HOOK_VARIABLE))) {
@@ -684,6 +689,7 @@ SWITCH_DECLARE(void) switch_core_session_hangup_state(switch_core_session_t *ses
 		api_hook(session, hook_var, use_session);
 	}
 
+	switch_channel_set_callstate(session->channel, CCS_HANGUP);
 	switch_set_flag(session, SSF_HANGUP);
 
 }
@@ -797,5 +803,5 @@ SWITCH_DECLARE(void) switch_core_session_reporting_state(switch_core_session_t *
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */

@@ -52,25 +52,58 @@ static void *SWITCH_THREAD_FUNC video_bridge_thread(switch_thread_t *thread, voi
 	switch_channel_t *channel = switch_core_session_get_channel(vh->session_a);
 	switch_channel_t *b_channel = switch_core_session_get_channel(vh->session_b);
 	switch_status_t status;
-	switch_frame_t *read_frame;
+	switch_frame_t *read_frame = 0;
+	const char *source = switch_channel_get_variable(channel, "source");
+	const char *b_source = switch_channel_get_variable(b_channel, "source");
 
 	vh->up = 1;
-	while (switch_channel_ready(channel) && switch_channel_ready(b_channel) && vh->up == 1) {
-		status = switch_core_session_read_video_frame(vh->session_a, &read_frame, SWITCH_IO_FLAG_NONE, 0);
-		if (!SWITCH_READ_ACCEPTABLE(status)) {
-			break;
+
+	switch_core_session_read_lock(vh->session_a);
+	switch_core_session_read_lock(vh->session_b);
+
+	if (!switch_stristr("loopback", source) && !switch_stristr("loopback", b_source)) {
+		switch_channel_set_flag(channel, CF_VIDEO_PASSIVE);
+		switch_channel_set_flag(b_channel, CF_VIDEO_PASSIVE);
+	}
+
+	switch_core_session_refresh_video(vh->session_a);
+	switch_core_session_refresh_video(vh->session_b);
+
+	while (switch_channel_up_nosig(channel) && switch_channel_up_nosig(b_channel) && vh->up == 1) {
+
+		if (switch_channel_media_up(channel)) {
+			status = switch_core_session_read_video_frame(vh->session_a, &read_frame, SWITCH_IO_FLAG_NONE, 0);
+			
+			if (!SWITCH_READ_ACCEPTABLE(status)) {
+				switch_cond_next();
+				continue;
+			}
 		}
 
-		if (!switch_test_flag(read_frame, SFF_CNG)) {
+		if (switch_test_flag(read_frame, SFF_CNG)) {
+			continue;
+		}
+
+		if (switch_channel_media_up(b_channel)) {
 			if (switch_core_session_write_video_frame(vh->session_b, read_frame, SWITCH_IO_FLAG_NONE, 0) != SWITCH_STATUS_SUCCESS) {
-				break;
+				switch_cond_next();
+				continue;
 			}
 		}
 
 	}
 
+	switch_channel_clear_flag(channel, CF_VIDEO_PASSIVE);
+	switch_channel_clear_flag(b_channel, CF_VIDEO_PASSIVE);
+
 	switch_core_session_kill_channel(vh->session_b, SWITCH_SIG_BREAK);
 	switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(vh->session_a), SWITCH_LOG_DEBUG, "%s video thread ended.\n", switch_channel_get_name(channel));
+
+	switch_core_session_refresh_video(vh->session_a);
+	switch_core_session_refresh_video(vh->session_b);
+
+	switch_core_session_rwunlock(vh->session_a);
+	switch_core_session_rwunlock(vh->session_b);
 
 	vh->up = 0;
 	return NULL;
@@ -253,7 +286,13 @@ static void *audio_bridge_thread(switch_thread_t *thread, void *obj)
 	}
 
 	if (bypass_media_after_bridge) {
-		if (switch_stristr("loopback", switch_channel_get_name(chan_a)) || switch_stristr("loopback", switch_channel_get_name(chan_b))) {
+		const char *source_a = switch_channel_get_variable(chan_a, "source");
+		const char *source_b = switch_channel_get_variable(chan_b, "source");
+
+		if (!source_a) source_a = "";
+		if (!source_b) source_b = "";
+
+		if (switch_stristr("loopback", source_a) || switch_stristr("loopback", source_b)) {
 			switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session_a), SWITCH_LOG_WARNING, "Cannot bypass media while bridged to a loopback address.\n");
 			bypass_media_after_bridge = 0;
 		}
@@ -835,6 +874,8 @@ static switch_status_t uuid_bridge_on_soft_execute(switch_core_session_t *sessio
 		if (switch_ivr_wait_for_answer(session, other_session) != SWITCH_STATUS_SUCCESS) {
 			if (switch_true(switch_channel_get_variable(channel, "uuid_bridge_continue_on_cancel"))) {
 				switch_channel_set_state(channel, CS_EXECUTE);
+                        } else if (switch_true(switch_channel_get_variable(channel, "uuid_bridge_park_on_cancel"))) {
+				switch_ivr_park_session(session);
 			} else if (!switch_channel_test_flag(channel, CF_TRANSFER)) {
 				switch_channel_hangup(channel, SWITCH_CAUSE_ORIGINATOR_CANCEL);
 			}
@@ -1493,27 +1534,47 @@ SWITCH_DECLARE(switch_status_t) switch_ivr_multi_threaded_bridge(switch_core_ses
 
 	state = switch_channel_get_state(caller_channel);
 
-
 	if (!switch_channel_test_flag(caller_channel, CF_TRANSFER) && !switch_channel_test_flag(caller_channel, CF_REDIRECT) &&
 		!switch_channel_test_flag(caller_channel, CF_XFER_ZOMBIE) && !a_leg->clean_exit && !inner_bridge) {
+		switch_call_cause_t cause = switch_channel_get_cause(peer_channel);
+		const char *hup = switch_channel_get_variable(caller_channel, SWITCH_HANGUP_AFTER_BRIDGE_VARIABLE);
+		int explicit = 0;
+
+		if (cause == SWITCH_CAUSE_NONE) {
+			cause = SWITCH_CAUSE_NORMAL_CLEARING;
+		}
+		
+		if (hup) {
+			explicit = !strcasecmp(hup, "explicit");
+		}
+		
+		if (cause && !switch_channel_test_flag(peer_channel, CF_ANSWERED)) {
+			switch_channel_handle_cause(caller_channel, cause);
+		}
+		
+		if (explicit) {
+			if (switch_channel_test_flag(peer_channel, CF_INTERCEPTED)) {
+				switch_channel_set_flag(peer_channel, CF_INTERCEPT);
+			}
+			switch_channel_hangup(caller_channel, cause);
+		}
+
 		if ((state != CS_EXECUTE && state != CS_SOFT_EXECUTE && state != CS_PARK && state != CS_ROUTING) ||
 			(switch_channel_test_flag(peer_channel, CF_ANSWERED) && state < CS_HANGUP)) {
-
-			if (switch_true(switch_channel_get_variable(caller_channel, SWITCH_PARK_AFTER_BRIDGE_VARIABLE))) {
-				switch_ivr_park_session(session);
-			} else if ((var = switch_channel_get_variable(caller_channel, SWITCH_TRANSFER_AFTER_BRIDGE_VARIABLE))) {
-				transfer_after_bridge(session, var);
-			} else if (switch_channel_test_flag(peer_channel, CF_ANSWERED) &&
-					   switch_true(switch_channel_get_variable(caller_channel, SWITCH_HANGUP_AFTER_BRIDGE_VARIABLE))) {
-				switch_call_cause_t cause = switch_channel_get_cause(peer_channel);
-				if (cause == SWITCH_CAUSE_NONE) {
-					cause = SWITCH_CAUSE_NORMAL_CLEARING;
+			
+			if (!switch_channel_test_flag(caller_channel, CF_TRANSFER)) {
+				if (switch_true(switch_channel_get_variable(caller_channel, SWITCH_PARK_AFTER_BRIDGE_VARIABLE))) {
+					switch_ivr_park_session(session);
+				} else if ((var = switch_channel_get_variable(caller_channel, SWITCH_TRANSFER_AFTER_BRIDGE_VARIABLE))) {
+					transfer_after_bridge(session, var);
+				} else {
+					if ((switch_channel_test_flag(peer_channel, CF_ANSWERED) && switch_true(hup))) {
+						if (switch_channel_test_flag(peer_channel, CF_INTERCEPTED)) {
+							switch_channel_set_flag(peer_channel, CF_INTERCEPT);
+						}
+						switch_channel_hangup(caller_channel, cause);
+					}
 				}
-
-				if (switch_channel_test_flag(peer_channel, CF_INTERCEPTED)) {
-					switch_channel_set_flag(peer_channel, CF_INTERCEPT);
-				}
-				switch_channel_hangup(caller_channel, cause);
 			}
 		}
 	}
@@ -1899,5 +1960,5 @@ SWITCH_DECLARE(void) switch_ivr_intercept_session(switch_core_session_t *session
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */

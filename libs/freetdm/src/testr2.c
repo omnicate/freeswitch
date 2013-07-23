@@ -69,6 +69,7 @@ static FIO_SIGNAL_CB_FUNCTION(on_r2_signal)
 
 static void stop_test(int sig)
 {
+	ftdm_unused_arg(sig);
 	running = 0;
 }
 
@@ -164,5 +165,5 @@ done:
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */

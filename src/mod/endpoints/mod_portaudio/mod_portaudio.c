@@ -2453,10 +2453,6 @@ audio_stream_t *get_audio_stream(int indev, int outdev)
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error invalid output audio device\n");
 		return NULL;
 	}
-	if (indev == -1) {
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error invalid input audio device\n");
-		return NULL;
-	}
 	if (create_codecs(0) != SWITCH_STATUS_SUCCESS) {
 		return NULL;
 	}
@@ -3308,5 +3304,5 @@ SWITCH_STANDARD_API(pa_cmd)
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */

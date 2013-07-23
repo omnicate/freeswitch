@@ -603,12 +603,7 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_json_cdr_load)
 		}
 	}
 
-	if (globals.retries < 0) {
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Retries is negative, setting to 0\n");
-		globals.retries = 0;
-	}
-
-	if (globals.retries && globals.delay <= 0) {
+	if (globals.retries && globals.delay) {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Retries set but delay 0 setting to 5000ms\n");
 		globals.delay = 5000;
 	}
@@ -649,5 +644,5 @@ SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_json_cdr_shutdown)
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */

@@ -214,6 +214,10 @@ Module: applications/mod_stress
 Description: Voice stress detection
  This module attempts to detect voice stress on an audio channel.
 
+Module: applications/mod_translate
+Description: Number translation
+ This module implements number translation.
+
 Module: applications/mod_valet_parking
 Description: Valet parking
  This module implements the valet call parking strategy.
@@ -225,6 +229,7 @@ Description: Voicemail detection
 Module: applications/mod_voicemail
 Description: Voicemail
  This module provides a voicemail system.
+Depends: mail-transport-agent
 
 Module: applications/mod_voicemail_ivr
 Description: Voicemail IVR
@@ -485,6 +490,10 @@ Module: event_handlers/mod_radius_cdr
 Description: mod_radius_cdr
  Adds mod_radius_cdr.
 
+Module: event_handlers/mod_rayo
+Description: mod_rayo
+ Adds mod_rayo.
+
 Module: event_handlers/mod_snmp
 Description: mod_snmp
  Adds mod_snmp.
@@ -517,6 +526,10 @@ Module: formats/mod_sndfile
 Description: mod_sndfile
  Adds mod_sndfile.
 Build-Depends: libflac-dev, libogg-dev, libvorbis-dev
+
+Module: formats/mod_ssml
+Description: mod_ssml
+ Adds mod_ssml.
 
 Module: formats/mod_tone_stream
 Description: mod_tone_stream
@@ -623,6 +636,10 @@ Description: mod_say_ja
 Module: say/mod_say_nl
 Description: mod_say_nl
  Adds mod_say_nl.
+
+Module: say/mod_say_pl
+Description: mod_say_pl
+ Adds mod_say_pl.
 
 Module: say/mod_say_pt
 Description: mod_say_pt

@@ -67,47 +67,49 @@ typedef enum
     /*! T.42 + T.81 + T.30 Annex E colour JPEG coding */
     T4_COMPRESSION_T42_T81 = 8,
     /*! T.42 + T.81 + T.30 Annex K colour sYCC-JPEG coding */
-    T4_COMPRESSION_SYCC_T81 = 9
+    T4_COMPRESSION_SYCC_T81 = 9,
+    /*! T.88 monochrome JBIG2 compression */
+    T4_COMPRESSION_T88 = 10
 } t4_image_compression_t;
 
 enum
 {
     /*! No compression */
-    T30_SUPPORT_COMPRESSION_NONE = 0x01,
+    T4_SUPPORT_COMPRESSION_NONE = 0x01,
     /*! T.1 1D compression */
-    T30_SUPPORT_COMPRESSION_T4_1D = 0x02,
+    T4_SUPPORT_COMPRESSION_T4_1D = 0x02,
     /*! T.4 2D compression */
-    T30_SUPPORT_COMPRESSION_T4_2D = 0x04,
+    T4_SUPPORT_COMPRESSION_T4_2D = 0x04,
     /*! T.6 2D compression */
-    T30_SUPPORT_COMPRESSION_T6 = 0x08,
+    T4_SUPPORT_COMPRESSION_T6 = 0x08,
     /*! T.85 monochrome JBIG compression, with fixed L0 */
-    T30_SUPPORT_COMPRESSION_T85 = 0x10,
+    T4_SUPPORT_COMPRESSION_T85 = 0x10,
     /*! T.85 monochrome JBIG compression, with variable L0 */
-    T30_SUPPORT_COMPRESSION_T85_L0 = 0x20,
+    T4_SUPPORT_COMPRESSION_T85_L0 = 0x20,
     /*! T.43 colour JBIG compression */
-    T30_SUPPORT_COMPRESSION_T43 = 0x40,
+    T4_SUPPORT_COMPRESSION_T43 = 0x40,
     /*! T.45 run length colour compression */
-    T30_SUPPORT_COMPRESSION_T45 = 0x80,
+    T4_SUPPORT_COMPRESSION_T45 = 0x80,
     /*! T.81 + T.30 Annex E colour JPEG compression */
-    T30_SUPPORT_COMPRESSION_T42_T81 = 0x100,
+    T4_SUPPORT_COMPRESSION_T42_T81 = 0x100,
     /*! T.81 + T.30 Annex K colour sYCC-JPEG compression */
-    T30_SUPPORT_COMPRESSION_SYCC_T81 = 0x200,
+    T4_SUPPORT_COMPRESSION_SYCC_T81 = 0x200,
     /*! T.88 monochrome JBIG2 compression */
-    T30_SUPPORT_COMPRESSION_T88 = 0x400,
+    T4_SUPPORT_COMPRESSION_T88 = 0x400,
     /*! Gray-scale support by multi-level codecs */
-    T30_SUPPORT_COMPRESSION_GRAYSCALE = 0x1000000,
+    T4_SUPPORT_COMPRESSION_GRAYSCALE = 0x1000000,
     /*! Colour support by multi-level codecs */
-    T30_SUPPORT_COMPRESSION_COLOUR = 0x2000000,
-    /*! 12 bit mode for gray scale and colour */
-    T30_SUPPORT_COMPRESSION_12BIT = 0x4000000,
+    T4_SUPPORT_COMPRESSION_COLOUR = 0x2000000,
+    /*! 12 bit mode for gray-scale and colour */
+    T4_SUPPORT_COMPRESSION_12BIT = 0x4000000,
     /*! Convert a colour image to a gray-scale one */
-    T30_SUPPORT_COMPRESSION_COLOUR_TO_GRAY = 0x8000000,
-    /*! Dither a gray scale image down a simple bilevel image, with rescaling to fit a FAX page */
+    T4_SUPPORT_COMPRESSION_COLOUR_TO_GRAY = 0x8000000,
+    /*! Dither a gray-scale image down a simple bilevel image, with rescaling to fit a FAX page */
     T30_SUPPORT_GRAY_TO_BILEVEL = 0x10000000,
     /*! Dither a colour image down a simple bilevel image, with rescaling to fit a FAX page */
     T30_SUPPORT_COLOUR_TO_BILEVEL = 0x20000000,
     /*! Rescale an image (except a bi-level image) to fit a permitted FAX width when necessary */
-    T30_SUPPORT_COMPRESSION_RESCALING = 0x40000000
+    T4_SUPPORT_COMPRESSION_RESCALING = 0x40000000
 };
 
 /*! Image type */
@@ -137,14 +139,13 @@ typedef enum
 typedef enum
 {
     T4_X_RESOLUTION_100 = 3937,
-    T4_X_RESOLUTION_R4 = 4016,
+    T4_X_RESOLUTION_R4 = 4020,
     T4_X_RESOLUTION_200 = 7874,
-    T4_X_RESOLUTION_R8 = 8031,
+    T4_X_RESOLUTION_R8 = 8040,
     T4_X_RESOLUTION_300 = 11811,
-    T4_X_RESOLUTION_400 = 15784,
-    T4_X_RESOLUTION_R16 = 16063,
+    T4_X_RESOLUTION_400 = 15748,
+    T4_X_RESOLUTION_R16 = 16080,
     T4_X_RESOLUTION_600 = 23622,
-    T4_X_RESOLUTION_800 = 31496,
     T4_X_RESOLUTION_1200 = 47244
 } t4_image_x_resolution_t;
 
@@ -176,27 +177,27 @@ enum
     /*! Double FAX resolution 408dpi x 391dpi - bi-level only */
     T4_RESOLUTION_R16_SUPERFINE = 4,
 
-    /*! 100dpi x 100 dpi - gray-scale and colour only */
+    /*! 100dpi x 100dpi - gray-scale and colour only */
     T4_RESOLUTION_100_100 = 5,
-    /*! 200dpi x 100 dpi - bi-level only */
+    /*! 200dpi x 100dpi - bi-level only */
     T4_RESOLUTION_200_100 = 6,
-    /*! 200dpi x 200 dpi */
+    /*! 200dpi x 200dpi */
     T4_RESOLUTION_200_200 = 7,
-    /*! 200dpi x 400 dpi - bi-level only */
+    /*! 200dpi x 400dpi - bi-level only */
     T4_RESOLUTION_200_400 = 8,
-    /*! 300dpi x 300 dpi */
+    /*! 300dpi x 300dpi */
     T4_RESOLUTION_300_300 = 9,
-    /*! 300dpi x 600 dpi - bi-level only */
+    /*! 300dpi x 600dpi - bi-level only */
     T4_RESOLUTION_300_600 = 10,
-    /*! 400dpi x 400 dpi */
+    /*! 400dpi x 400dpi */
     T4_RESOLUTION_400_400 = 11,
-    /*! 400dpi x 800 dpi - bi-level only */
+    /*! 400dpi x 800dpi - bi-level only */
     T4_RESOLUTION_400_800 = 12,
-    /*! 600dpi x 600 dpi */
+    /*! 600dpi x 600dpi */
     T4_RESOLUTION_600_600 = 13,
-    /*! 600dpi x 1200 dpi - bi-level only */
+    /*! 600dpi x 1200dpi - bi-level only */
     T4_RESOLUTION_600_1200 = 14,
-    /*! 1200dpi x 1200 dpi */
+    /*! 1200dpi x 1200dpi */
     T4_RESOLUTION_1200_1200 = 15
 };
 
@@ -211,27 +212,27 @@ enum
     /*! Support double FAX resolution 408dpi x 391dpi - bi-level only */
     T4_SUPPORT_RESOLUTION_R16_SUPERFINE = 0x8,
 
-    /*! Support 100dpi x 100 dpi - gray scale and colour only */
+    /*! Support 100dpi x 100dpi - gray-scale and colour only */
     T4_SUPPORT_RESOLUTION_100_100 = 0x10,
-    /*! Support 200dpi x 100 dpi - bi-level only */
+    /*! Support 200dpi x 100dpi - bi-level only */
     T4_SUPPORT_RESOLUTION_200_100 = 0x20,
-    /*! Support 200dpi x 200 dpi */
+    /*! Support 200dpi x 200dpi */
     T4_SUPPORT_RESOLUTION_200_200 = 0x40,
-    /*! Support 200dpi x 400 dpi - bi-level only */
+    /*! Support 200dpi x 400dpi - bi-level only */
     T4_SUPPORT_RESOLUTION_200_400 = 0x80,
-    /*! Support 300dpi x 300 dpi */
+    /*! Support 300dpi x 300dpi */
     T4_SUPPORT_RESOLUTION_300_300 = 0x100,
-    /*! Support 300dpi x 600 dpi - bi-level only */
+    /*! Support 300dpi x 600dpi - bi-level only */
     T4_SUPPORT_RESOLUTION_300_600 = 0x200,
-    /*! Support 400dpi x 400 dpi */
+    /*! Support 400dpi x 400dpi */
     T4_SUPPORT_RESOLUTION_400_400 = 0x400,
-    /*! Support 400dpi x 800 dpi - bi-level only */
+    /*! Support 400dpi x 800dpi - bi-level only */
     T4_SUPPORT_RESOLUTION_400_800 = 0x800,
-    /*! Support 600dpi x 600 dpi */
+    /*! Support 600dpi x 600dpi */
     T4_SUPPORT_RESOLUTION_600_600 = 0x1000,
-    /*! Support 600dpi x 1200 dpi - bi-level only */
+    /*! Support 600dpi x 1200dpi - bi-level only */
     T4_SUPPORT_RESOLUTION_600_1200 = 0x2000,
-    /*! Support 1200dpi x 1200 dpi */
+    /*! Support 1200dpi x 1200dpi */
     T4_SUPPORT_RESOLUTION_1200_1200 = 0x4000
 };
 
@@ -443,7 +444,7 @@ typedef struct
     /*! \brief The number of vertical pixels in the exchanged page. */
     int length;
     /*! \brief The type of compression used between the FAX machines */
-    int encoding;
+    int compression;
     /*! \brief The size of the image on the line, in bytes */
     int line_image_size;
 } t4_stats_t;
@@ -534,17 +535,23 @@ SPAN_DECLARE(void) t4_rx_set_model(t4_rx_state_t *s, const char *model);
     \param t A pointer to a statistics structure. */
 SPAN_DECLARE(void) t4_rx_get_transfer_statistics(t4_rx_state_t *s, t4_stats_t *t);
 
-/*! Get the short text name of an encoding format.
+/*! Get the short text name of a compression format.
     \brief Get the short text name of an encoding format.
-    \param encoding The encoding type.
+    \param compression The compression type.
     \return A pointer to the string. */
-SPAN_DECLARE(const char *) t4_encoding_to_str(int encoding);
+SPAN_DECLARE(const char *) t4_compression_to_str(int compression);
 
 /*! Get the short text name of an image format.
     \brief Get the short text name of an image format.
-    \param encoding The image format.
+    \param type The image format.
     \return A pointer to the string. */
 SPAN_DECLARE(const char *) t4_image_type_to_str(int type);
+
+/*! Get the short text name of an image resolution.
+    \brief Get the short text name of an image resolution.
+    \param resolution_code The image resolution code.
+    \return A pointer to the string. */
+SPAN_DECLARE(const char *) t4_image_resolution_to_str(int resolution_code);
 
 /*! Get the logging context associated with a T.4 receive context.
     \brief Get the logging context associated with a T.4 receive context.
@@ -555,9 +562,9 @@ SPAN_DECLARE(logging_state_t *) t4_rx_get_logging_state(t4_rx_state_t *s);
 /*! \brief Prepare for reception of a document.
     \param s The T.4 context.
     \param file The name of the file to be received.
-    \param output_encoding The output encoding.
+    \param supported_output_compressions The compression schemes supported for output to a TIFF file.
     \return A pointer to the context, or NULL if there was a problem. */
-SPAN_DECLARE(t4_rx_state_t *) t4_rx_init(t4_rx_state_t *s, const char *file, int output_encoding);
+SPAN_DECLARE(t4_rx_state_t *) t4_rx_init(t4_rx_state_t *s, const char *file, int supported_output_compressions);
 
 /*! \brief End reception of a document. Tidy up and close the file.
            This should be used to end T.4 reception started with t4_rx_init.

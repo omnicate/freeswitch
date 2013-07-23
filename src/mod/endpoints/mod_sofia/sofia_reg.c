@@ -31,7 +31,8 @@
  * David Knell <>
  * Eliot Gable <egable AT.AT broadvox.com>
  * Leon de Rooij <leon@scarlet-internet.nl>
- *
+ * Emmanuel Schmidbauer <e.schmidbauer@gmail.com>
+ * William King <william.king@quentustech.com>
  *
  * sofia_reg.c -- SOFIA SIP Endpoint (registration code)
  *
@@ -643,9 +644,10 @@ void sofia_reg_check_socket(sofia_profile_t *profile, const char *call_id, const
 
 	switch_snprintf(key, sizeof(key), "%s%s%s", call_id, network_addr, network_ip);
 	switch_mutex_lock(profile->flag_mutex);
-	if ((hnh = switch_core_hash_find(profile->chat_hash, key))) {
-		switch_core_hash_delete(profile->chat_hash, key);
+	if ((hnh = switch_core_hash_find(profile->reg_nh_hash, key))) {
+		switch_core_hash_delete(profile->reg_nh_hash, key);
 		nua_handle_unref(hnh);
+		nua_handle_destroy(hnh);
 	}
 	switch_mutex_unlock(profile->flag_mutex);
 }
@@ -819,6 +821,14 @@ void sofia_reg_check_expire(sofia_profile_t *profile, time_t now, int reboot)
 							"expires,user_agent,server_user,server_host,profile_name"
  " from sip_registrations where hostname='%s' and " 
  "profile_name='%s'", mod_sofia_globals.hostname, profile->name); 
+			
+			sofia_glue_execute_sql_callback(profile, profile->dbh_mutex, sql, sofia_reg_nat_callback, profile);
+			switch_safe_free(sql);
+		} else if (sofia_test_pflag(profile, PFLAG_UDP_NAT_OPTIONS_PING)) {
+			sql = switch_mprintf("select call_id,sip_user,sip_host,contact,status,rpid,"
+							"expires,user_agent,server_user,server_host,profile_name"
+							" from sip_registrations where status like '%%UDP-NAT%%' "
+ "and hostname='%s' and profile_name='%s'", mod_sofia_globals.hostname, profile->name); 
 			
 			sofia_glue_execute_sql_callback(profile, profile->dbh_mutex, sql, sofia_reg_nat_callback, profile);
 			switch_safe_free(sql);
@@ -1007,7 +1017,7 @@ switch_console_callback_match_t *sofia_reg_find_reg_url_with_positive_expires_mu
 
 
 void sofia_reg_auth_challenge(sofia_profile_t *profile, nua_handle_t *nh, sofia_dispatch_event_t *de,
-							  sofia_regtype_t regtype, const char *realm, int stale)
+							  sofia_regtype_t regtype, const char *realm, int stale, long exptime)
 {
 	switch_uuid_t uuid;
 	char uuid_str[SWITCH_UUID_FORMATTED_LENGTH + 1];
@@ -1024,7 +1034,7 @@ void sofia_reg_auth_challenge(sofia_profile_t *profile, nua_handle_t *nh, sofia_
 
 	sql = switch_mprintf("insert into sip_authentication (nonce,expires,profile_name,hostname, last_nc) "
 						 "values('%q', %ld, '%q', '%q', 0)", uuid_str,
-						 (long) switch_epoch_time_now(NULL) + (profile->nonce_ttl ? profile->nonce_ttl : DEFAULT_NONCE_TTL),
+						 (long) switch_epoch_time_now(NULL) + (profile->nonce_ttl ? profile->nonce_ttl : DEFAULT_NONCE_TTL) + exptime,
 						 profile->name, mod_sofia_globals.hostname);
 	switch_assert(sql != NULL);
 	sofia_glue_execute_sql_now(profile, &sql, SWITCH_TRUE);
@@ -1080,11 +1090,38 @@ static int debounce_check(sofia_profile_t *profile, const char *user, const char
 
 	return r;
 }
-						
+
+void sofia_reg_close_handles(sofia_profile_t *profile)
+{
+	nua_handle_t *nh = NULL;
+	switch_hash_index_t *hi;
+	const void *var;
+	void *val;
+
+
+	switch_mutex_lock(profile->flag_mutex);
+	if (profile->reg_nh_hash) {
+	top:
+		for (hi = switch_hash_first(NULL, profile->reg_nh_hash); hi; hi = switch_hash_next(hi)) {
+			switch_hash_this(hi, &var, NULL, &val);
+			if ((nh = (nua_handle_t *) val)) {
+				nua_handle_unref(nh);
+				nua_handle_destroy(nh);
+				switch_core_hash_delete(profile->reg_nh_hash, (char *) var);
+				goto top;
+			}
+		}
+	}
+	switch_mutex_unlock(profile->flag_mutex);
+
+	return;
+
+}
+
 
 uint8_t sofia_reg_handle_register(nua_t *nua, sofia_profile_t *profile, nua_handle_t *nh, sip_t const *sip,
 								sofia_dispatch_event_t *de, sofia_regtype_t regtype, char *key,
-								  uint32_t keylen, switch_event_t **v_event, const char *is_nat, sofia_private_t **sofia_private_p)
+								  uint32_t keylen, switch_event_t **v_event, const char *is_nat, sofia_private_t **sofia_private_p, switch_xml_t *user_xml)
 {
 	sip_to_t const *to = NULL;
 	sip_from_t const *from = NULL;
@@ -1098,6 +1135,7 @@ uint8_t sofia_reg_handle_register(nua_t *nua, sofia_profile_t *profile, nua_hand
 	const char *to_host = NULL;
 	char *mwi_account = NULL;
 	char *dup_mwi_account = NULL;
+	char *display_m = NULL;
 	char *mwi_user = NULL;
 	char *mwi_host = NULL;
 	char *var = NULL;
@@ -1142,7 +1180,7 @@ uint8_t sofia_reg_handle_register(nua_t *nua, sofia_profile_t *profile, nua_hand
 		sofia_private = *sofia_private_p;
 	}
 
-	if (sip && sip->sip_contact->m_url->url_params) {
+	if (sip && sip->sip_contact && sip->sip_contact->m_url && sip->sip_contact->m_url->url_params) {
 		uparams = sip->sip_contact->m_url->url_params;
 	} else {
 		uparams = NULL;
@@ -1283,10 +1321,16 @@ uint8_t sofia_reg_handle_register(nua_t *nua, sofia_profile_t *profile, nua_hand
 			if (to) {
 				display = to->a_display;
 				if (zstr(display)) {
-					display = "\"user\"";
+					display = "\"\"";
 				}
 			}
 		}
+
+		if (display && !strchr(display, '"')) {
+			display_m = switch_mprintf("\"%q\"", display);
+			display = display_m;
+		}
+
 
 		if (sip->sip_path) {
 			path_val = sip_header_as_string(nua_handle_home(nh), (void *) sip->sip_path);
@@ -1355,7 +1399,7 @@ uint8_t sofia_reg_handle_register(nua_t *nua, sofia_profile_t *profile, nua_hand
 		const char *username = "unknown";
 		const char *realm = reg_host;
 		if ((auth_res = sofia_reg_parse_auth(profile, authorization, sip, de, sip->sip_request->rq_method_name,
-											 key, keylen, network_ip, v_event, exptime, regtype, to_user, &auth_params, &reg_count)) == AUTH_STALE) {
+											 key, keylen, network_ip, v_event, exptime, regtype, to_user, &auth_params, &reg_count, user_xml)) == AUTH_STALE) {
 			stale = 1;
 		}
 
@@ -1419,7 +1463,8 @@ uint8_t sofia_reg_handle_register(nua_t *nua, sofia_profile_t *profile, nua_hand
 			}
 
 			if (profile->server_rport_level == 3 && sip->sip_user_agent &&
-				sip->sip_user_agent->g_string && !strncasecmp(sip->sip_user_agent->g_string, "Polycom", 7)) {
+				sip->sip_user_agent->g_string &&
+				( !strncasecmp(sip->sip_user_agent->g_string, "Polycom", 7) || !strncasecmp(sip->sip_user_agent->g_string, "KIRK Wireless Server", 20) )) {
 				if (sip && sip->sip_via) {
 					const char *host = sip->sip_via->v_host;
 					const char *c_port = sip->sip_via->v_port;
@@ -1577,7 +1622,7 @@ uint8_t sofia_reg_handle_register(nua_t *nua, sofia_profile_t *profile, nua_hand
 			realm = from_host;
 		}
 
-		sofia_reg_auth_challenge(profile, nh, de, regtype, realm, stale);
+		sofia_reg_auth_challenge(profile, nh, de, regtype, realm, stale, exptime);
 
 		if (profile->debug) {
 			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Send challenge for [%s@%s]\n", to_user, to_host);
@@ -1698,7 +1743,7 @@ uint8_t sofia_reg_handle_register(nua_t *nua, sofia_profile_t *profile, nua_hand
 			switch_snprintf(key, sizeof(key), "%s%s%s", call_id, network_ip, network_port_c);
 
 			switch_mutex_lock(profile->flag_mutex);
-			hnh = switch_core_hash_find(profile->chat_hash, key);
+			hnh = switch_core_hash_find(profile->reg_nh_hash, key);
 			switch_mutex_unlock(profile->flag_mutex);
 
 			if (!hnh) {
@@ -1715,7 +1760,7 @@ uint8_t sofia_reg_handle_register(nua_t *nua, sofia_profile_t *profile, nua_hand
 				*sofia_private_p = sofia_private;
 				nua_handle_bind(nh, sofia_private);
 				nua_handle_ref(nh);
-				switch_core_hash_insert(profile->chat_hash, key, nh);
+				switch_core_hash_insert(profile->reg_nh_hash, key, nh);
 			}
 		}
 		
@@ -1985,6 +2030,7 @@ uint8_t sofia_reg_handle_register(nua_t *nua, sofia_profile_t *profile, nua_hand
 
 
   end:
+	switch_safe_free(display_m);
 	switch_safe_free(dup_mwi_account);
 	switch_safe_free(utmp);
 
@@ -2114,7 +2160,7 @@ void sofia_reg_handle_sip_i_register(nua_t *nua, sofia_profile_t *profile, nua_h
 		is_nat = NULL;
 	}
 
-	sofia_reg_handle_register(nua, profile, nh, sip, de, type, key, sizeof(key), &v_event, is_nat, sofia_private_p);
+	sofia_reg_handle_register(nua, profile, nh, sip, de, type, key, sizeof(key), &v_event, is_nat, sofia_private_p, NULL);
 
 	if (v_event) {
 		switch_event_destroy(&v_event);
@@ -2421,7 +2467,7 @@ auth_res_t sofia_reg_parse_auth(sofia_profile_t *profile,
 								size_t nplen,
 								char *ip,
 								switch_event_t **v_event,
-								long exptime, sofia_regtype_t regtype, const char *to_user, switch_event_t **auth_params, long *reg_count)
+								long exptime, sofia_regtype_t regtype, const char *to_user, switch_event_t **auth_params, long *reg_count, switch_xml_t *user_xml)
 {
 	int indexnum;
 	const char *cur;
@@ -2573,6 +2619,11 @@ auth_res_t sofia_reg_parse_auth(sofia_profile_t *profile,
 			switch_event_add_header_string(params, SWITCH_STACK_BOTTOM, "sip_from_port", sip->sip_from->a_url->url_port);
 		}
 	}
+
+	if (sip->sip_call_id && sip->sip_call_id->i_id) {
+		switch_event_add_header_string(params, SWITCH_STACK_BOTTOM, "sip_call_id", sip->sip_call_id->i_id);
+	}
+
 
 	if (sip->sip_request) {
 		switch_event_add_header_string(params, SWITCH_STACK_BOTTOM, "sip_request_user", sip->sip_request->rq_url->url_user);
@@ -2840,7 +2891,7 @@ auth_res_t sofia_reg_parse_auth(sofia_profile_t *profile,
 
   skip_auth:
 	if (first && (ret == AUTH_OK || ret == AUTH_RENEWED)) {
-		if (v_event) {
+		if (!v_event) {
 			switch_event_create_plain(v_event, SWITCH_EVENT_REQUEST_PARAMS);
 		}
 
@@ -2960,7 +3011,7 @@ auth_res_t sofia_reg_parse_auth(sofia_profile_t *profile,
 #define	LL_FMT "l"
 #endif
 		sql = switch_mprintf("update sip_authentication set expires='%" LL_FMT "u',last_nc=%lu where nonce='%s'",
-							 switch_epoch_time_now(NULL) + (profile->nonce_ttl ? profile->nonce_ttl : exptime + 10), ncl, nonce);
+							 switch_epoch_time_now(NULL) + (profile->nonce_ttl ? profile->nonce_ttl : DEFAULT_NONCE_TTL) + exptime, ncl, nonce);
 
 		switch_assert(sql != NULL);
 		sofia_glue_execute_sql_now(profile, &sql, SWITCH_TRUE);
@@ -2972,7 +3023,11 @@ auth_res_t sofia_reg_parse_auth(sofia_profile_t *profile,
 	switch_event_destroy(&params);
 
 	if (user) {
-		switch_xml_free(user);
+		if (user_xml) {
+			*user_xml = user;
+		} else {
+			switch_xml_free(user);
+		}
 	}
 
 	switch_safe_free(input);
@@ -3138,5 +3193,5 @@ switch_status_t sofia_reg_add_gateway(sofia_profile_t *profile, const char *key,
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */

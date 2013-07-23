@@ -821,7 +821,9 @@ STFU_DECLARE(int32_t) stfu_n_copy_next_frame(stfu_instance_t *jb, uint32_t times
 
 	uint32_t target_ts = 0;
 
-	seq = seq;
+#ifdef WIN32
+	UNREFERENCED_PARAMETER(seq);
+#endif
 	if (!next_frame) return 0;
 
 	target_ts = timestamp + (distance - 1) * jb->samples_per_packet;
@@ -981,5 +983,5 @@ static void default_logger(const char *file, const char *func, int line, int lev
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */

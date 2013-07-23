@@ -31,6 +31,7 @@
  * Luke Dashjr <luke@openmethods.com> (OpenMethods, LLC)
  * Cesar Cepeda <cesar@auronix.com>
  * Christopher M. Rienzo <chris@rienzo.com>
+ * Seven Du <dujinfang@gmail.com>
  *
  * mod_dptools.c -- Raw Audio File Streaming Application Module
  *
@@ -444,6 +445,8 @@ SWITCH_STANDARD_APP(detect_speech_function)
 			switch_ivr_detect_speech_disable_grammar(session, argv[1]);
 		} else if (!strcasecmp(argv[0], "grammarsalloff")) {
 			switch_ivr_detect_speech_disable_all_grammars(session);
+		} else if (!strcasecmp(argv[0], "init")) {
+			switch_ivr_detect_speech_init(session, argv[1], argv[2], NULL);
 		} else if (!strcasecmp(argv[0], "pause")) {
 			switch_ivr_pause_detect_speech(session);
 		} else if (!strcasecmp(argv[0], "resume")) {
@@ -1519,6 +1522,33 @@ SWITCH_STANDARD_APP(unset_function)
 	}
 }
 
+SWITCH_STANDARD_APP(multiunset_function)
+{
+	char delim = ' ';
+	char *arg = (char *) data;
+
+	if (!zstr(arg) && *arg == '^' && *(arg+1) == '^') {
+		arg += 2;
+		delim = *arg++;
+	}
+
+	if (arg) {
+		char *array[256] = {0};
+		int i, argc;
+
+		arg = switch_core_session_strdup(session, arg);
+		argc = switch_split(arg, delim, array);
+
+		for(i = 0; i < argc; i++) {
+			switch_channel_set_variable(switch_core_session_get_channel(session), array[i], NULL);
+		}
+
+	} else {
+		switch_channel_set_variable(switch_core_session_get_channel(session), arg, NULL);
+	}
+}
+
+
 SWITCH_STANDARD_APP(log_function)
 {
 	char *level, *log_str;
@@ -1920,6 +1950,14 @@ SWITCH_STANDARD_APP(system_session_function)
 	}
 }
 
+SWITCH_STANDARD_APP(bgsystem_session_function)
+{
+	switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_NOTICE, "Executing command: %s\n", data);
+	if (switch_system(data, SWITCH_FALSE) < 0) {
+		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_NOTICE, "Failed to execute command: %s\n", data);
+	}
+}
+
 SWITCH_STANDARD_APP(tone_detect_session_function)
 {
 	char *argv[7] = { 0 };
@@ -2267,16 +2305,19 @@ SWITCH_STANDARD_APP(att_xfer_function)
 {
 	switch_core_session_t *peer_session = NULL;
 	switch_call_cause_t cause = SWITCH_CAUSE_NORMAL_CLEARING;
-	switch_channel_t *channel, *peer_channel = NULL;
+	switch_channel_t *channel = switch_core_session_get_channel(session), *peer_channel = NULL;
 	const char *bond = NULL;
 	switch_core_session_t *b_session = NULL;
+	switch_bool_t follow_recording = switch_true(switch_channel_get_variable(channel, "recording_follow_attxfer"));
 	
-	channel = switch_core_session_get_channel(session);
-
 	bond = switch_channel_get_partner_uuid(channel);
 	switch_channel_set_variable(channel, SWITCH_SOFT_HOLDING_UUID_VARIABLE, bond);
 	switch_core_event_hook_add_state_change(session, tmp_hanguphook);
 
+	if (follow_recording && (b_session = switch_core_session_locate(bond))) {
+		switch_ivr_transfer_recordings(b_session, session);
+		switch_core_session_rwunlock(b_session);
+	}
 
 	if (switch_ivr_originate(session, &peer_session, &cause, data, 0, NULL, NULL, NULL, NULL, NULL, SOF_NONE, NULL)
 		!= SWITCH_STATUS_SUCCESS || !peer_session) {
@@ -2300,23 +2341,24 @@ SWITCH_STANDARD_APP(att_xfer_function)
 	}
 
 	if (bond) {
-		char buf[128] = "";
 		int br = 0;
 
 		switch_channel_set_variable(channel, SWITCH_SIGNAL_BOND_VARIABLE, bond);
 
 		if (!switch_channel_down(peer_channel)) {
 			if (!switch_channel_ready(channel)) {
-				switch_status_t status = switch_ivr_uuid_bridge(switch_core_session_get_uuid(peer_session), bond);
+				switch_status_t status;
+
+				if (follow_recording) {
+					switch_ivr_transfer_recordings(session, peer_session);
+				}
+				status = switch_ivr_uuid_bridge(switch_core_session_get_uuid(peer_session), bond);
 				att_xfer_set_result(peer_channel, status);
 				br++;
 			} else if ((b_session = switch_core_session_locate(bond))) {
 				switch_channel_t *b_channel = switch_core_session_get_channel(b_session);
-				switch_snprintf(buf, sizeof(buf), "%s %s", switch_core_session_get_uuid(peer_session), switch_core_session_get_uuid(session));
-				switch_channel_set_variable(b_channel, "xfer_uuids", buf);
-
-				switch_snprintf(buf, sizeof(buf), "%s %s", switch_core_session_get_uuid(peer_session), bond);
-				switch_channel_set_variable(channel, "xfer_uuids", buf);
+				switch_channel_set_variable_printf(b_channel, "xfer_uuids", "%s %s", switch_core_session_get_uuid(peer_session), switch_core_session_get_uuid(session));
+				switch_channel_set_variable_printf(channel, "xfer_uuids", "%s %s", switch_core_session_get_uuid(peer_session), bond);
 
 				switch_core_event_hook_add_state_change(session, hanguphook);
 				switch_core_event_hook_add_state_change(b_session, hanguphook);
@@ -2646,6 +2688,55 @@ SWITCH_STANDARD_APP(endless_playback_function)
 
 }
 
+SWITCH_STANDARD_APP(loop_playback_function)
+{
+	switch_channel_t *channel = switch_core_session_get_channel(session);
+	switch_status_t status = SWITCH_STATUS_SUCCESS;
+	const char *file = data;
+	int loop = 1;
+
+	if (*file == '+') {
+		const char *p = ++file;
+		while(*file && *file++ != ' ') { }
+
+		if (zstr(p)) {
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Missing loop in data [%s]\n", data);
+			switch_channel_hangup(channel, SWITCH_CAUSE_DESTINATION_OUT_OF_ORDER);
+			return;
+		}
+
+		loop = atoi(p);
+	}
+
+	if (zstr(file)) {
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Missing file arg in data [%s]\n", data);
+		switch_channel_hangup(channel, SWITCH_CAUSE_DESTINATION_OUT_OF_ORDER);
+		return;
+	}
+
+	while (switch_channel_ready(channel) && (loop < 0 || loop-- > 0)) {
+		status = switch_ivr_play_file(session, NULL, file, NULL);
+
+		if (status != SWITCH_STATUS_SUCCESS && status != SWITCH_STATUS_BREAK) {
+			break;
+		}
+	}
+
+	switch (status) {
+	case SWITCH_STATUS_SUCCESS:
+	case SWITCH_STATUS_BREAK:
+		switch_channel_set_variable(channel, SWITCH_CURRENT_APPLICATION_RESPONSE_VARIABLE, "FILE PLAYED");
+		break;
+	case SWITCH_STATUS_NOTFOUND:
+		switch_channel_set_variable(channel, SWITCH_CURRENT_APPLICATION_RESPONSE_VARIABLE, "FILE NOT FOUND");
+		break;
+	default:
+		switch_channel_set_variable(channel, SWITCH_CURRENT_APPLICATION_RESPONSE_VARIABLE, "PLAYBACK ERROR");
+		break;
+	}
+
+}
+
 SWITCH_STANDARD_APP(gentones_function)
 {
 	char *tone_script = NULL;
@@ -2787,6 +2878,16 @@ SWITCH_STANDARD_APP(preprocess_session_function)
 	switch_ivr_preprocess_session(session, (char *) data);
 }
 
+SWITCH_STANDARD_APP(record_session_mask_function)
+{
+	switch_ivr_record_session_mask(session, (char *) data, SWITCH_TRUE);
+}
+
+SWITCH_STANDARD_APP(record_session_unmask_function)
+{
+	switch_ivr_record_session_mask(session, (char *) data, SWITCH_FALSE);
+}
+
 SWITCH_STANDARD_APP(record_session_function)
 {
 	char *path = NULL;
@@ -2911,11 +3012,6 @@ SWITCH_STANDARD_APP(audio_bridge_function)
 {
 	switch_channel_t *caller_channel = switch_core_session_get_channel(session);
 	switch_core_session_t *peer_session = NULL;
-	
-	const char *transfer_on_fail = NULL;
-	char *tof_data = NULL;
-	char *tof_array[4] = { 0 };
-	//int tof_arrayc = 0;
 	const char *v_campon = NULL, *v_campon_retries, *v_campon_sleep, *v_campon_timeout, *v_campon_fallback_exten = NULL;
 	switch_call_cause_t cause = SWITCH_CAUSE_NORMAL_CLEARING;
 	int campon_retries = 100, campon_timeout = 10, campon_sleep = 10, tmp, camping = 0, fail = 0, thread_started = 0;
@@ -2931,11 +3027,6 @@ SWITCH_STANDARD_APP(audio_bridge_function)
 		return;
 	}
 
-	transfer_on_fail = switch_channel_get_variable(caller_channel, "transfer_on_fail");
-	tof_data = switch_core_session_strdup(session, transfer_on_fail);
-	switch_split(tof_data, ' ', tof_array);
-   	transfer_on_fail = tof_array[0];
-	
 	if ((v_campon = switch_channel_get_variable(caller_channel, "campon")) && switch_true(v_campon)) {
 		const char *cid_name = NULL;
 		const char *cid_number = NULL;
@@ -3083,140 +3174,20 @@ SWITCH_STANDARD_APP(audio_bridge_function)
 	if (fail) {
 		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, "Originate Failed.  Cause: %s\n", switch_channel_cause2str(cause));
 
-		/* 
-		   if the variable continue_on_fail is set it can be:
-		   'true' to continue on all failures.
-		   'false' to not continue.
-		   A list of codes either names or numbers eg "user_busy,normal_temporary_failure,603"
-		   failure_causes acts as the opposite version  
-		   EXCEPTION... ATTENDED_TRANSFER never is a reason to continue.......
-		 */
-		if (cause != SWITCH_CAUSE_ATTENDED_TRANSFER) {
-			const char *continue_on_fail = NULL, *failure_causes = NULL;
-
-			continue_on_fail = switch_channel_get_variable(caller_channel, "continue_on_fail");
-			failure_causes = switch_channel_get_variable(caller_channel, "failure_causes");
-
-			if (continue_on_fail || failure_causes) {
-				const char *cause_str;
-				char cause_num[35] = "";
-
-				cause_str = switch_channel_cause2str(cause);
-				switch_snprintf(cause_num, sizeof(cause_num), "%u", cause);
-
-				if (failure_causes) {
-					char *lbuf = switch_core_session_strdup(session, failure_causes);
-					char *argv[256] = { 0 };
-					int argc = switch_separate_string(lbuf, ',', argv, (sizeof(argv) / sizeof(argv[0])));
-					int i, x = 0;
-
-					for (i = 0; i < argc; i++) {
-						if (!strcasecmp(argv[i], cause_str) || !strcasecmp(argv[i], cause_num)) {
-							x++;
-							break;
-						}
-					}
-					if (!x) {
-						switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG,
-										  "Failure causes [%s]:  Cause: %s\n", failure_causes, cause_str);
-						return;
-					}
-				}
-
-				if (continue_on_fail) {
-					if (switch_true(continue_on_fail)) {
-						return;
-					} else {
-						char *lbuf = switch_core_session_strdup(session, continue_on_fail);
-						char *argv[256] = { 0 };
-						int argc = switch_separate_string(lbuf, ',', argv, (sizeof(argv) / sizeof(argv[0])));
-						int i;
-
-						for (i = 0; i < argc; i++) {
-							if (!strcasecmp(argv[i], cause_str) || !strcasecmp(argv[i], cause_num)) {
-								switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG,
-												  "Continue on fail [%s]:  Cause: %s\n", continue_on_fail, cause_str);
-								return;
-							}
-						}
-					}
-				}
-			} else {
-				/* no answer is *always* a reason to continue */
-				if (cause == SWITCH_CAUSE_NO_ANSWER || cause == SWITCH_CAUSE_NO_USER_RESPONSE || cause == SWITCH_CAUSE_ORIGINATOR_CANCEL) {
-					return;
-				}
-			}
-			
-			if (transfer_on_fail || failure_causes) {
-				const char *cause_str;
-				char cause_num[35] = "";
-
-				cause_str = switch_channel_cause2str(cause);
-				switch_snprintf(cause_num, sizeof(cause_num), "%u", cause);
-
-				if ((tof_array[1] == NULL ) || (!strcasecmp(tof_array[1], "auto_cause"))){
-					tof_array[1] = (char *) cause_str;
-				}
-
-				if (failure_causes) {
-					char *lbuf = switch_core_session_strdup(session, failure_causes);
-					char *argv[256] = { 0 };
-					int argc = switch_separate_string(lbuf, ',', argv, (sizeof(argv) / sizeof(argv[0])));
-					int i, x = 0;
-
-					for (i = 0; i < argc; i++) {
-						if (!strcasecmp(argv[i], cause_str) || !strcasecmp(argv[i], cause_num)) {
-							x++;
-							break;
-						}
-					}
-					if (!x) {
-						switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG,
-										  "Failure causes [%s]:  Cause: %s\n", failure_causes, cause_str);
-										  
-						switch_ivr_session_transfer(session, tof_array[1], tof_array[2], tof_array[3]);
-					}
-				}
-
-				if (transfer_on_fail) {
-					if (switch_true(transfer_on_fail)) {
-						return;
-					} else {
-						char *lbuf = switch_core_session_strdup(session, transfer_on_fail);
-						char *argv[256] = { 0 };
-						int argc = switch_separate_string(lbuf, ',', argv, (sizeof(argv) / sizeof(argv[0])));
-						int i;
-
-						for (i = 0; i < argc; i++) {
-							if (!strcasecmp(argv[i], cause_str) || !strcasecmp(argv[i], cause_num)) {
-								switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG,
-												  "Transfer on fail [%s]:  Cause: %s\n", transfer_on_fail, cause_str);
-								switch_ivr_session_transfer(session, tof_array[1], tof_array[2], tof_array[3]);
-							}
-						}
-					}
-				}
-			} 
-		}
-		if (!switch_channel_test_flag(caller_channel, CF_TRANSFER) && !switch_channel_test_flag(caller_channel, CF_CONFIRM_BLIND_TRANSFER) && 
-			switch_channel_get_state(caller_channel) != CS_ROUTING) {
-			switch_channel_hangup(caller_channel, cause);
-		}
+		switch_channel_handle_cause(caller_channel, cause);
 		return;
 	} else {
 
+		switch_channel_t *peer_channel = switch_core_session_get_channel(peer_session);
+		if (switch_true(switch_channel_get_variable(caller_channel, SWITCH_BYPASS_MEDIA_AFTER_BRIDGE_VARIABLE)) ||
+			switch_true(switch_channel_get_variable(peer_channel, SWITCH_BYPASS_MEDIA_AFTER_BRIDGE_VARIABLE))) {
+			switch_channel_set_flag(caller_channel, CF_BYPASS_MEDIA_AFTER_BRIDGE);
+		}
+
 		if (switch_channel_test_flag(caller_channel, CF_PROXY_MODE)) {
-			switch_channel_t *peer_channel = switch_core_session_get_channel(peer_session);
-			if (switch_true(switch_channel_get_variable(caller_channel, SWITCH_BYPASS_MEDIA_AFTER_BRIDGE_VARIABLE)) ||
-				switch_true(switch_channel_get_variable(peer_channel, SWITCH_BYPASS_MEDIA_AFTER_BRIDGE_VARIABLE))) {
-				switch_channel_set_flag(caller_channel, CF_BYPASS_MEDIA_AFTER_BRIDGE);
-			}
 			switch_ivr_signal_bridge(session, peer_session);
 		} else {
-			switch_channel_t *channel = switch_core_session_get_channel(session);
-			switch_channel_t *peer_channel = switch_core_session_get_channel(peer_session);
-			char *a_key = (char *) switch_channel_get_variable(channel, "bridge_terminate_key");
+			char *a_key = (char *) switch_channel_get_variable(caller_channel, "bridge_terminate_key");
 			char *b_key = (char *) switch_channel_get_variable(peer_channel, "bridge_terminate_key");
 			int ok = 0;
 			switch_input_callback_function_t func = NULL;
@@ -3234,11 +3205,6 @@ SWITCH_STANDARD_APP(audio_bridge_function)
 			} else {
 				a_key = NULL;
 				b_key = NULL;
-			}
-
-			if (switch_true(switch_channel_get_variable(caller_channel, SWITCH_BYPASS_MEDIA_AFTER_BRIDGE_VARIABLE)) ||
-				switch_true(switch_channel_get_variable(peer_channel, SWITCH_BYPASS_MEDIA_AFTER_BRIDGE_VARIABLE))) {
-				switch_channel_set_flag(caller_channel, CF_BYPASS_MEDIA_AFTER_BRIDGE);
 			}
 
 			switch_ivr_multi_threaded_bridge(session, peer_session, func, a_key, b_key);
@@ -3709,8 +3675,6 @@ SWITCH_STANDARD_APP(pickup_function)
 			caller_profile->callee_id_name = name;
 			caller_profile->callee_id_number = num;
 			
-			switch_channel_flip_cid(channel);
-
 			if (switch_event_create(&event, SWITCH_EVENT_CALL_UPDATE) == SWITCH_STATUS_SUCCESS) {
 				const char *uuid = switch_channel_get_partner_uuid(channel);
 				switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Direction", "RECV");
@@ -4110,6 +4074,11 @@ SWITCH_STANDARD_APP(hold_function)
 SWITCH_STANDARD_APP(unhold_function)
 {
 	switch_ivr_unhold_uuid(switch_core_session_get_uuid(session));
+}
+
+SWITCH_STANDARD_APP(novideo_function)
+{
+	switch_channel_set_flag(switch_core_session_get_channel(session), CF_NOVIDEO);
 }
 
 SWITCH_STANDARD_APP(verbose_events_function)
@@ -5455,6 +5424,10 @@ SWITCH_STANDARD_API(page_api_function)
 #define SPEAK_DESC "Speak text to a channel via the tts interface"
 #define DISPLACE_DESC "Displace audio from a file to the channels input"
 #define SESS_REC_DESC "Starts a background recording of the entire session"
+
+#define SESS_REC_MASK_DESC "Replace audio in a recording with blank data to mask critical voice sections"
+#define SESS_REC_UNMASK_DESC "Resume normal operation after calling mask"
+
 #define STOP_SESS_REC_DESC "Stops a background recording of the entire session"
 #define SCHED_TRANSF_DESCR "Schedule a transfer in the future"
 #define SCHED_BROADCAST_DESCR "Schedule a broadcast in the future"
@@ -5565,6 +5538,8 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_dptools_load)
 				   "<ip> <acl | cidr> [<hangup_cause>]", SAF_SUPPORT_NOMEDIA | SAF_ROUTING_EXEC);
 	SWITCH_ADD_APP(app_interface, "verbose_events", "Make ALL Events verbose.", "Make ALL Events verbose.", verbose_events_function, "",
 				   SAF_SUPPORT_NOMEDIA | SAF_ROUTING_EXEC);
+	SWITCH_ADD_APP(app_interface, "novideo", "Refuse Inbound Video", "Refuse Inbound Video", novideo_function, "",
+				   SAF_SUPPORT_NOMEDIA | SAF_ROUTING_EXEC);
 	SWITCH_ADD_APP(app_interface, "cng_plc", "Do PLC on CNG frames", "", cng_plc_function, "",
 				   SAF_SUPPORT_NOMEDIA | SAF_ROUTING_EXEC);
 	SWITCH_ADD_APP(app_interface, "early_hangup", "Enable early hangup", "", early_hangup_function, "", SAF_SUPPORT_NOMEDIA | SAF_ROUTING_EXEC);
@@ -5610,6 +5585,9 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_dptools_load)
 				   "<varname>=<value>", SAF_SUPPORT_NOMEDIA | SAF_ROUTING_EXEC | SAF_ZOMBIE_EXEC);
 	SWITCH_ADD_APP(app_interface, "unset", "Unset a channel variable", UNSET_LONG_DESC, unset_function, "<varname>",
 				   SAF_SUPPORT_NOMEDIA | SAF_ROUTING_EXEC | SAF_ZOMBIE_EXEC);
+	SWITCH_ADD_APP(app_interface, "multiunset", "Unset many channel variables", SET_LONG_DESC, multiunset_function, "[^^<delim>]<varname> <var2> <var3>",
+				   SAF_SUPPORT_NOMEDIA | SAF_ROUTING_EXEC | SAF_ZOMBIE_EXEC);
+
 	SWITCH_ADD_APP(app_interface, "ring_ready", "Indicate Ring_Ready", "Indicate Ring_Ready on a channel.", ring_ready_function, "", SAF_SUPPORT_NOMEDIA);
 	SWITCH_ADD_APP(app_interface, "remove_bugs", "Remove media bugs", "Remove all media bugs from a channel.", remove_bugs_function, "[<function>]", SAF_NONE);
 	SWITCH_ADD_APP(app_interface, "break", "Break", "Set the break flag.", break_function, "", SAF_SUPPORT_NOMEDIA);
@@ -5678,6 +5656,8 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_dptools_load)
 	SWITCH_ADD_APP(app_interface, "playback", "Playback File", "Playback a file to the channel", playback_function, "<path>", SAF_NONE);
 	SWITCH_ADD_APP(app_interface, "endless_playback", "Playback File Endlessly", "Endlessly Playback a file to the channel",
 				   endless_playback_function, "<path>", SAF_NONE);
+	SWITCH_ADD_APP(app_interface, "loop_playback", "Playback File looply", "Playback a file to the channel looply for limted times",
+				   loop_playback_function, "[+loops] <path>", SAF_NONE);
 	SWITCH_ADD_APP(app_interface, "att_xfer", "Attended Transfer", "Attended Transfer", att_xfer_function, "<channel_url>", SAF_NONE);
 	SWITCH_ADD_APP(app_interface, "read", "Read Digits", "Read Digits", read_function, 
 				   "<min> <max> <file> <var_name> <timeout> <terminators> <digit_timeout>", SAF_NONE);
@@ -5686,6 +5666,8 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_dptools_load)
 				   "\n\t<min> <max> <tries> <timeout> <terminators> <file> <invalid_file> <var_name> <regexp> [<digit_timeout>] ['<failure_ext> [failure_dp [failure_context]]']", SAF_NONE);
 	SWITCH_ADD_APP(app_interface, "stop_record_session", "Stop Record Session", STOP_SESS_REC_DESC, stop_record_session_function, "<path>", SAF_NONE);
 	SWITCH_ADD_APP(app_interface, "record_session", "Record Session", SESS_REC_DESC, record_session_function, "<path> [+<timeout>]", SAF_MEDIA_TAP);
+	SWITCH_ADD_APP(app_interface, "record_session_mask", "Mask audio in recording", SESS_REC_MASK_DESC, record_session_mask_function, "<path>", SAF_MEDIA_TAP);
+	SWITCH_ADD_APP(app_interface, "record_session_unmask", "Resume recording", SESS_REC_UNMASK_DESC, record_session_unmask_function, "<path>", SAF_MEDIA_TAP);
 	SWITCH_ADD_APP(app_interface, "record", "Record File", "Record a file from the channels input", record_function,
 				   "<path> [<time_limit_secs>] [<silence_thresh>] [<silence_hits>]", SAF_NONE);
 	SWITCH_ADD_APP(app_interface, "preprocess", "pre-process", "pre-process", preprocess_session_function, "", SAF_NONE);
@@ -5699,6 +5681,8 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_dptools_load)
 	SWITCH_ADD_APP(app_interface, "bridge", "Bridge Audio", "Bridge the audio between two sessions", audio_bridge_function, "<channel_url>",
 				   SAF_SUPPORT_NOMEDIA);
 	SWITCH_ADD_APP(app_interface, "system", "Execute a system command", "Execute a system command", system_session_function, "<command>",
+				   SAF_SUPPORT_NOMEDIA | SAF_ZOMBIE_EXEC);
+	SWITCH_ADD_APP(app_interface, "bgsystem", "Execute a system command in the background", "Execute a background system command", bgsystem_session_function, "<command>",
 				   SAF_SUPPORT_NOMEDIA | SAF_ZOMBIE_EXEC);
 	SWITCH_ADD_APP(app_interface, "say", "say", "say", say_function, SAY_SYNTAX, SAF_NONE);
 
@@ -5728,5 +5712,5 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_dptools_load)
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */

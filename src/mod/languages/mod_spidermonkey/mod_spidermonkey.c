@@ -24,7 +24,7 @@
  * Contributor(s):
  * 
  * Anthony Minessale II <anthm@freeswitch.org>
- *
+ * William King <william.king@quentustech.com>
  *
  * mod_spidermonkey.c -- Javascript Module
  *
@@ -247,6 +247,7 @@ static JSBool request_dump_env(JSContext * cx, JSObject * obj, uintN argc, jsval
 		if ((xml = switch_event_xmlize(ro->stream->param_event, SWITCH_VA_NONE))) {
 			xmlstr = switch_xml_toxml(xml, SWITCH_FALSE);
 			*rval = STRING_TO_JSVAL(JS_NewStringCopyZ(cx, xmlstr));
+			free(xmlstr);
 			return JS_TRUE;
 		}
 	} else {
@@ -1095,6 +1096,8 @@ JSObject *new_js_event(switch_event_t *event, char *name, JSContext * cx, JSObje
 		if ((Event = JS_DefineObject(cx, obj, name, &event_class, NULL, 0))) {
 			if ((JS_SetPrivate(cx, Event, eo) && JS_DefineProperties(cx, Event, event_props) && JS_DefineFunctions(cx, Event, event_methods))) {
 			}
+		} else {
+			free(eo);
 		}
 	}
 	return Event;
@@ -1111,6 +1114,8 @@ JSObject *new_js_dtmf(switch_dtmf_t *dtmf, char *name, JSContext * cx, JSObject 
 			JS_SetPrivate(cx, DTMF, ddtmf);
 			JS_DefineProperties(cx, DTMF, dtmf_props);
 			JS_DefineFunctions(cx, DTMF, dtmf_methods);
+		} else {
+			free(ddtmf);
 		}
 	}
 	return DTMF;
@@ -1299,14 +1304,14 @@ static switch_status_t js_stream_input_callback(switch_core_session_t *session, 
 						step = 1000;
 					}
 					if (step > 0) {
-						samps = step * (fh->samplerate / 1000);
+						samps = step * (fh->native_rate / 1000);
 						switch_core_file_seek(fh, &pos, samps, SEEK_CUR);
 					} else {
-						samps = abs(step) * (fh->samplerate / 1000);
+						samps = abs(step) * (fh->native_rate / 1000);
 						switch_core_file_seek(fh, &pos, fh->pos - samps, SEEK_SET);
 					}
 				} else {
-					samps = atoi(p) * (fh->samplerate / 1000);
+					samps = atoi(p) * (fh->native_rate / 1000);
 					switch_core_file_seek(fh, &pos, samps, SEEK_SET);
 				}
 			}
@@ -3929,5 +3934,5 @@ SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_spidermonkey_shutdown)
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */

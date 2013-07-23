@@ -275,6 +275,7 @@ SWITCH_DECLARE(const char *) switch_channel_get_hold_music(switch_channel_t *cha
 SWITCH_DECLARE(const char *) switch_channel_get_hold_music_partner(switch_channel_t *channel);
 
 SWITCH_DECLARE(uint32_t) switch_channel_del_variable_prefix(switch_channel_t *channel, const char *prefix);
+SWITCH_DECLARE(switch_status_t) switch_channel_transfer_variable_prefix(switch_channel_t *orig_channel, switch_channel_t *new_channel, const char *prefix);
 
 #define switch_channel_set_variable_safe(_channel, _var, _val) switch_channel_set_variable_var_check(_channel, _var, _val, SWITCH_FALSE)
 #define switch_channel_set_variable(_channel, _var, _val) switch_channel_set_variable_var_check(_channel, _var, _val, SWITCH_TRUE)
@@ -657,8 +658,17 @@ SWITCH_DECLARE(switch_hold_record_t *) switch_channel_get_hold_record(switch_cha
 SWITCH_DECLARE(void) switch_channel_state_thread_lock(switch_channel_t *channel);
 SWITCH_DECLARE(void) switch_channel_state_thread_unlock(switch_channel_t *channel);
 SWITCH_DECLARE(switch_status_t) switch_channel_state_thread_trylock(switch_channel_t *channel);
-
-
+SWITCH_DECLARE(void) switch_channel_handle_cause(switch_channel_t *channel, switch_call_cause_t cause);
+SWITCH_DECLARE(void) switch_channel_global_init(switch_memory_pool_t *pool);
+SWITCH_DECLARE(void) switch_channel_global_uninit(void);
+SWITCH_DECLARE(const char *) switch_channel_set_device_id(switch_channel_t *channel, const char *device_id);
+SWITCH_DECLARE(void) switch_channel_clear_device_record(switch_channel_t *channel);
+SWITCH_DECLARE(switch_device_record_t *) switch_channel_get_device_record(switch_channel_t *channel);
+SWITCH_DECLARE(void) switch_channel_release_device_record(switch_device_record_t **dcdrp);
+SWITCH_DECLARE(switch_status_t) switch_channel_bind_device_state_handler(switch_device_state_function_t function, void *user_data);
+SWITCH_DECLARE(switch_status_t) switch_channel_unbind_device_state_handler(switch_device_state_function_t function);
+SWITCH_DECLARE(const char *) switch_channel_device_state2str(switch_device_state_t device_state);
+								
 SWITCH_END_EXTERN_C
 #endif
 /* For Emacs:
@@ -669,5 +679,5 @@ SWITCH_END_EXTERN_C
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */

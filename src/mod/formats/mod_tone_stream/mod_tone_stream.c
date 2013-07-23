@@ -96,7 +96,7 @@ static switch_status_t silence_stream_file_read(switch_file_handle_t *handle, vo
 	if (sh->silence) {
 		switch_generate_sln_silence((int16_t *) data, *len, sh->silence);
 	} else {
-		memset(data, 0, *len);
+		memset(data, 0, *len * 2);
 	}
 
 	return SWITCH_STATUS_SUCCESS;
@@ -248,5 +248,5 @@ SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_tone_stream_shutdown)
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */

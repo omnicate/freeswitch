@@ -47,7 +47,6 @@
 #include <tif_dir.h>
 #endif
 
-//#define IN_FILE_NAME    "../test-data/itu/t24/F21_200.TIF"
 #define IN_FILE_NAME    "../test-data/itu/t24/F21B400.TIF"
 #define OUT_FILE_NAME   "t42_tests_receive.tif"
 
@@ -148,17 +147,22 @@ int main(int argc, char *argv[])
     uint16_t *map_b;
     uint16_t *map_z;
     uint32_t jpeg_table_len;
+#if 0
     logging_state_t *logging;
+#endif
 
     printf("Demo of ITU/Lab library.\n");
 
+#if 0
     logging = span_log_init(NULL, SPAN_LOG_FLOW, "T.42");
+#endif
 
 #if defined(SPANDSP_SUPPORT_TIFF_FX)
     TIFF_FX_init();
 #endif
 
-    set_lab_illuminant(&lab_param, 0.9638f, 1.0f, 0.8245f);
+    /* The default luminant is D50 */
+    set_lab_illuminant(&lab_param, 96.422f, 100.000f,  82.521f);
     set_lab_gamut(&lab_param, 0, 100, -85, 85, -75, 125, FALSE);
 
     source_file = (argc > 1)  ?  argv[1]  :  IN_FILE_NAME;
@@ -219,7 +223,8 @@ int main(int argc, char *argv[])
 #endif
         lab_params_t lab;
 
-        set_lab_illuminant(&lab, 0.9638f, 1.0f, 0.8245f);
+        /* The default luminant is D50 */
+        set_lab_illuminant(&lab, 96.422f, 100.000f,  82.521f);
         set_lab_gamut(&lab, 0, 100, -85, 85, -75, 125, FALSE);
         lab_to_srgb(&lab, colour_map, colour_map, 256);
         for (i = 0;  i < (1 << bits_per_pixel);  i++)
@@ -264,6 +269,7 @@ int main(int argc, char *argv[])
         break;
     }
 
+    outsize = 0;
     if (process_raw)
     {
         uint8_t *jpeg_table;
@@ -448,12 +454,13 @@ int main(int argc, char *argv[])
         if (photometric == PHOTOMETRIC_ITULAB)
         {
             printf("YYY ITULAB\n");
-
-            if (!t42_itulab_to_itulab(logging, (tdata_t) &outptr, &outsize, data, off, w, h))
+#if 0
+            if (!t42_itulab_to_itulab(logging, (tdata_t) &outptr, &outsize, data, off, w, h, 3))
             {
                 printf("Failed to convert to ITULAB\n");
                 return 1;
             }
+#endif
             free(data);
             data = (uint8_t *) outptr;
             off = outsize;
@@ -471,11 +478,12 @@ int main(int argc, char *argv[])
                 lab_to_srgb(&lab_param, data, data, w*h);
                 break;
             case PHOTOMETRIC_ITULAB:
-                set_lab_illuminant(&lab_param, 0.9638f, 1.0f, 0.8245f);
+                /* The default luminant is D50 */
+                set_lab_illuminant(&lab_param, 96.422f, 100.000f,  82.521f);
                 set_lab_gamut(&lab_param, 0, 100, -85, 85, -75, 125, FALSE);
                 break;
             }
-            if (!t42_srgb_to_itulab(logging, &lab_param, (tdata_t) &outptr, &outsize, data, off, w, h))
+            //if (!t42_srgb_to_itulab_jpeg(logging, &lab_param, (tdata_t) &outptr, &outsize, data, off, w, h, 3))
             {
                 printf("Failed to convert to ITULAB\n");
                 return 1;
@@ -533,7 +541,8 @@ int main(int argc, char *argv[])
         bytes_per_row = (bits_per_pixel + 7)/8;
         bytes_per_row *= w*samples_per_pixel;
         totdata = h*bytes_per_row;
-        set_lab_illuminant(&lab_param, 0.9638f, 1.0f, 0.8245f);
+        /* The default luminant is D50 */
+        set_lab_illuminant(&lab_param, 96.422f, 100.000f,  82.521f);
         set_lab_gamut(&lab_param, 0, 100, -85, 85, -75, 125, FALSE);
 #if 0
         start = rdtscll();
@@ -552,7 +561,7 @@ int main(int argc, char *argv[])
 #else
         data2 = malloc(totdata);
         start = rdtscll();
-        if (!t42_itulab_to_srgb(logging, &lab_param, data2, &off, data, off, &w, &h))
+        //if (!t42_itulab_jpeg_to_srgb(logging, &lab_param, data2, &off, data, off, &w, &h, &samples_per_pixel))
         {
             printf("Failed to convert from ITULAB\n");
             return 1;

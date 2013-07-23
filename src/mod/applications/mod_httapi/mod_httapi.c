@@ -154,6 +154,7 @@ static struct {
 	int debug;
 	int not_found_expires;
 	int cache_ttl;
+	int abs_cache_ttl;
 } globals;
 
 
@@ -872,6 +873,26 @@ static switch_status_t parse_hangup(const char *tag_name, client_t *client, swit
 	}
 
 	switch_channel_hangup(client->channel, cause);
+
+	return SWITCH_STATUS_FALSE;
+}
+
+static switch_status_t parse_answer(const char *tag_name, client_t *client, switch_xml_t tag, const char *body)
+{
+
+	if (!strcasecmp(tag_name, "answer")) {
+		const char *conf = switch_xml_attr(tag, "is-conference");
+
+		if (conf && switch_true(conf)) {
+			switch_channel_set_flag(client->channel, CF_CONFERENCE);
+		}
+
+		switch_channel_answer(client->channel);
+	} else if (!strcasecmp(tag_name, "preAnswer")) {
+		switch_channel_pre_answer(client->channel);
+	} else if (!strcasecmp(tag_name, "ringReady")) {
+		switch_channel_ring_ready(client->channel);
+	}
 
 	return SWITCH_STATUS_FALSE;
 }
@@ -1682,6 +1703,14 @@ static switch_status_t do_config(void)
 
 				if (tmp > -1) {
 					globals.cache_ttl = tmp;
+				} else {
+					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Invalid value [%s]for file-cache-ttl\n", val);
+				}
+			} else if (!strcasecmp(var, "abs-file-cache-ttl")) {
+				int tmp = atoi(val);
+
+				if (tmp > -1) {
+					globals.abs_cache_ttl = tmp;
 				} else {
 					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Invalid value [%s]for file-cache-ttl\n", val);
 				}
@@ -2502,17 +2531,39 @@ static switch_status_t write_meta_file(http_file_context_t *context, const char 
 	}
 
 	if (!zstr(data)) {
-		int ttl = globals.cache_ttl;
+		int ttl = globals.cache_ttl, abs_cache_ttl = globals.abs_cache_ttl;
 		const char *cc;
 		const char *p;
+		int x;
 
-		if (headers && (cc = switch_event_get_header(headers, "Cache-Control"))) {
+		if (context->url_params) {
+			if ((cc = switch_event_get_header(context->url_params, "abs_cache_control"))) {
+				x = atoi(cc);
+
+				if (x > 0) {
+					abs_cache_ttl = x;
+				}
+			} else if ((cc = switch_event_get_header(context->url_params, "cache_control"))) {
+				x = atoi(cc);
+
+				if (x > 0) {
+					ttl = x;
+				}
+			}
+		}
+
+		if (abs_cache_ttl) {
+			ttl = abs_cache_ttl;
+		} else if (headers && (cc = switch_event_get_header(headers, "Cache-Control"))) {
 			if ((p = switch_stristr("max-age=", cc))) {
 				p += 8;
 				
 				if (!zstr(p)) {
-					ttl = atoi(p);
-					if (ttl < 0) ttl = globals.cache_ttl;
+					x = atoi(p);
+
+					if (x < ttl) {
+						ttl = x;
+					}
 				}
 			}
 
@@ -2966,6 +3017,9 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_httapi_load)
 	bind_parser("sms", parse_sms);
 	bind_parser("dial", parse_dial);
 	bind_parser("pause", parse_playback);
+	bind_parser("answer", parse_answer);
+	bind_parser("preAnswer", parse_answer);
+	bind_parser("ringReady", parse_answer);
 	bind_parser("hangup", parse_hangup);
 	bind_parser("record", parse_record);
 	bind_parser("recordCall", parse_record_call);
@@ -3039,7 +3093,7 @@ SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_httapi_shutdown)
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */
 
 

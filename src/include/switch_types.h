@@ -139,6 +139,8 @@ SWITCH_BEGIN_EXTERN_C
 #define SWITCH_TRANSFER_HISTORY_VARIABLE "transfer_history"
 #define SWITCH_TRANSFER_SOURCE_VARIABLE "transfer_source"
 #define SWITCH_SENSITIVE_DTMF_VARIABLE "sensitive_dtmf"
+#define SWITCH_RECORD_POST_PROCESS_EXEC_APP_VARIABLE "record_post_process_exec_app"
+#define SWITCH_RECORD_POST_PROCESS_EXEC_API_VARIABLE "record_post_process_exec_api"
 
 #define SWITCH_CHANNEL_EXECUTE_ON_ANSWER_VARIABLE "execute_on_answer"
 #define SWITCH_CHANNEL_EXECUTE_ON_PRE_ANSWER_VARIABLE "execute_on_pre_answer"
@@ -491,6 +493,13 @@ struct switch_directories {
 
 typedef struct switch_directories switch_directories;
 SWITCH_DECLARE_DATA extern switch_directories SWITCH_GLOBAL_dirs;
+
+struct switch_filenames {
+    char *conf_name;
+};
+
+typedef struct switch_filenames switch_filenames;
+SWITCH_DECLARE_DATA extern switch_filenames SWITCH_GLOBAL_filenames;
 
 #define SWITCH_MAX_STACKS 16
 #define SWITCH_THREAD_STACKSIZE 240 * 1024
@@ -921,7 +930,7 @@ typedef enum {
 	SWITCH_MESSAGE_INDICATE_REQUEST_IMAGE_MEDIA,
 	SWITCH_MESSAGE_INDICATE_UUID_CHANGE,
 	SWITCH_MESSAGE_INDICATE_SIMPLIFY,
-	SWITCH_MESSAGE_INDICATE_DEBUG_AUDIO,
+	SWITCH_MESSAGE_INDICATE_DEBUG_MEDIA,
 	SWITCH_MESSAGE_INDICATE_PROXY_MEDIA,
 	SWITCH_MESSAGE_INDICATE_APPLICATION_EXEC,
 	SWITCH_MESSAGE_INDICATE_APPLICATION_EXEC_COMPLETE,
@@ -1102,8 +1111,19 @@ typedef enum {
 	CCS_EARLY,
 	CCS_ACTIVE,
 	CCS_HELD,
-	CCS_HANGUP
+	CCS_HANGUP,
+	CCS_UNHOLD
 } switch_channel_callstate_t;
+
+typedef enum {
+	SDS_DOWN,
+	SDS_RINGING,
+	SDS_ACTIVE,
+	SDS_ACTIVE_MULTI,
+	SDS_HELD,
+	SDS_HANGUP
+} switch_device_state_t;
+
 
 /*!
   \enum switch_channel_state_t
@@ -1270,6 +1290,8 @@ typedef enum {
 	CF_ZRTP_PASSTHRU,
 	CF_ZRTP_HASH,
 	CF_CHANNEL_SWAP,
+	CF_DEVICE_LEG,
+	CF_FINAL_DEVICE_LEG,
 	CF_PICKUP,
 	CF_CONFIRM_BLIND_TRANSFER,
 	CF_NO_PRESENCE,
@@ -1283,7 +1305,6 @@ typedef enum {
 	CF_MEDIA_TRANS,
 	CF_HOLD_ON_BRIDGE,
 	CF_SECURE,
-	CF_CRYPTO_RECOVER,
 	CF_LIBERAL_DTMF,
 	CF_SLA_BARGE,
 	CF_SLA_BARGING,
@@ -1303,6 +1324,9 @@ typedef enum {
 	CF_DTLS,
 	CF_VERBOSE_SDP,
 	CF_DTLS_OK,
+	CF_VIDEO_PASSIVE,
+	CF_NOVIDEO,
+	CF_VIDEO_ECHO,
 	/* WARNING: DO NOT ADD ANY FLAGS BELOW THIS LINE */
 	/* IF YOU ADD NEW ONES CHECK IF THEY SHOULD PERSIST OR ZERO THEM IN switch_core_session.c switch_core_session_request_xml() */
 	CF_FLAG_MAX
@@ -1537,7 +1561,8 @@ typedef enum {
 	SMBF_LOCK = (1 << 12),
 	SMBF_TAP_NATIVE_READ = (1 << 13),
 	SMBF_TAP_NATIVE_WRITE = (1 << 14),
-	SMBF_ONE_ONLY = (1 << 15)
+	SMBF_ONE_ONLY = (1 << 15),
+	SMBF_MASK = (1 << 16)
 } switch_media_bug_flag_enum_t;
 typedef uint32_t switch_media_bug_flag_t;
 
@@ -1742,6 +1767,8 @@ typedef enum {
 	SWITCH_EVENT_CONFERENCE_DATA,
 	SWITCH_EVENT_CALL_SETUP_REQ,
 	SWITCH_EVENT_CALL_SETUP_RESULT,
+	SWITCH_EVENT_CALL_DETAIL,
+	SWITCH_EVENT_DEVICE_STATE,
 	SWITCH_EVENT_ALL
 } switch_event_types_t;
 
@@ -1860,7 +1887,11 @@ typedef enum {
 	SCSC_DEBUG_SQL,
 	SCSC_SQL,
 	SCSC_API_EXPANSION,
-	SCSC_RECOVER
+	SCSC_RECOVER,
+	SCSC_SPS_PEAK,
+	SCSC_SPS_PEAK_FIVEMIN,
+	SCSC_SESSIONS_PEAK,
+	SCSC_SESSIONS_PEAK_FIVEMIN
 } switch_session_ctl_t;
 
 typedef enum {
@@ -2165,5 +2196,5 @@ SWITCH_END_EXTERN_C
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */

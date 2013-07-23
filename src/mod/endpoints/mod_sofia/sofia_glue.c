@@ -133,7 +133,9 @@ void sofia_glue_attach_private(switch_core_session_t *session, sofia_profile_t *
 		switch_channel_set_flag(tech_pvt->channel, CF_RTP_NOTIMER_DURING_BRIDGE);
 	}
 
-
+	if (sofia_test_pflag(tech_pvt->profile, PFLAG_T38_PASSTHRU)) {
+		switch_channel_set_flag(tech_pvt->channel, CF_T38_PASSTHRU);
+	}
 	
 	switch_core_media_check_dtmf_type(session);
 	switch_channel_set_cap(tech_pvt->channel, CC_MEDIA_ACK);
@@ -156,13 +158,15 @@ void sofia_glue_attach_private(switch_core_session_t *session, sofia_profile_t *
 	tech_pvt->mparams.extsipip = profile->extsipip;
 	tech_pvt->mparams.extrtpip = profile->extrtpip;
 	tech_pvt->mparams.local_network = profile->local_network;
-	tech_pvt->mparams.mutex = tech_pvt->sofia_mutex;
 	tech_pvt->mparams.sipip = profile->sipip;
 	tech_pvt->mparams.jb_msec = profile->jb_msec;
 	tech_pvt->mparams.rtcp_audio_interval_msec = profile->rtcp_audio_interval_msec;
 	tech_pvt->mparams.rtcp_video_interval_msec = profile->rtcp_video_interval_msec;
 	tech_pvt->mparams.sdp_username = profile->sdp_username;
 	tech_pvt->mparams.cng_pt = tech_pvt->cng_pt;
+	tech_pvt->mparams.rtp_timeout_sec = profile->rtp_timeout_sec;
+	tech_pvt->mparams.rtp_hold_timeout_sec = profile->rtp_hold_timeout_sec;
+	
 
 	switch_media_handle_create(&tech_pvt->media_handle, session, &tech_pvt->mparams);
 	switch_media_handle_set_media_flags(tech_pvt->media_handle, tech_pvt->profile->media_flags);
@@ -569,6 +573,10 @@ char *sofia_glue_get_extra_headers(switch_channel_t *channel, const char *prefix
 		for (; hi; hi = hi->next) {
 			const char *name = (char *) hi->name;
 			char *value = (char *) hi->value;
+			
+			if (!strcasecmp(name, "sip_geolocation")) {
+				stream.write_function(&stream, "Geolocation: %s\r\n", value);
+			}
 
 			if (!strncasecmp(name, prefix, strlen(prefix))) {
 				if ( !exclude_regex || !(proceed = switch_regex_perform(name, exclude_regex, &re, ovector, sizeof(ovector) / sizeof(ovector[0])))) {
@@ -978,7 +986,6 @@ switch_status_t sofia_glue_do_invite(switch_core_session_t *session)
 		switch_channel_set_variable(channel, "sip_to_host", sofia_glue_get_host(to_str, switch_core_session_get_pool(session)));
 		switch_channel_set_variable(channel, "sip_from_host", sofia_glue_get_host(from_str, switch_core_session_get_pool(session)));
 
-
 		if (!(tech_pvt->nh = nua_handle(tech_pvt->profile->nua, NULL,
 										NUTAG_URL(url_str),
 										TAG_IF(call_id, SIPTAG_CALL_ID_STR(call_id)),
@@ -1213,6 +1220,7 @@ switch_status_t sofia_glue_do_invite(switch_core_session_t *session)
 						  "Local SDP:\n%s\n", tech_pvt->mparams.local_sdp_str);
 	}
 
+
 	if (sofia_use_soa(tech_pvt)) {
 		nua_invite(tech_pvt->nh,
 				   NUTAG_AUTOANSWER(0),
@@ -1335,52 +1343,6 @@ void sofia_glue_do_xfer_invite(switch_core_session_t *session)
 }
 
 
-
-#define add_stat(_i, _s)												\
-	switch_snprintf(var_name, sizeof(var_name), "rtp_%s_%s", switch_str_nil(prefix), _s) ; \
-	switch_snprintf(var_val, sizeof(var_val), "%" SWITCH_SIZE_T_FMT, _i); \
-	switch_channel_set_variable(channel, var_name, var_val)
-
-static void set_stats(switch_core_session_t *session, switch_media_type_t type, const char *prefix)
-{
-	switch_rtp_stats_t *stats = switch_core_media_get_stats(session, type, NULL);
-	switch_channel_t *channel = switch_core_session_get_channel(session);
-
-	char var_name[256] = "", var_val[35] = "";
-
-	if (stats) {
-
-		add_stat(stats->inbound.raw_bytes, "in_raw_bytes");
-		add_stat(stats->inbound.media_bytes, "in_media_bytes");
-		add_stat(stats->inbound.packet_count, "in_packet_count");
-		add_stat(stats->inbound.media_packet_count, "in_media_packet_count");
-		add_stat(stats->inbound.skip_packet_count, "in_skip_packet_count");
-		add_stat(stats->inbound.jb_packet_count, "in_jb_packet_count");
-		add_stat(stats->inbound.dtmf_packet_count, "in_dtmf_packet_count");
-		add_stat(stats->inbound.cng_packet_count, "in_cng_packet_count");
-		add_stat(stats->inbound.flush_packet_count, "in_flush_packet_count");
-		add_stat(stats->inbound.largest_jb_size, "in_largest_jb_size");
-
-		add_stat(stats->outbound.raw_bytes, "out_raw_bytes");
-		add_stat(stats->outbound.media_bytes, "out_media_bytes");
-		add_stat(stats->outbound.packet_count, "out_packet_count");
-		add_stat(stats->outbound.media_packet_count, "out_media_packet_count");
-		add_stat(stats->outbound.skip_packet_count, "out_skip_packet_count");
-		add_stat(stats->outbound.dtmf_packet_count, "out_dtmf_packet_count");
-		add_stat(stats->outbound.cng_packet_count, "out_cng_packet_count");
-
-		add_stat(stats->rtcp.packet_count, "rtcp_packet_count");
-		add_stat(stats->rtcp.octet_count, "rtcp_octet_count");
-
-	}
-}
-
-void sofia_glue_set_rtp_stats(private_object_t *tech_pvt)
-{
-	set_stats(tech_pvt->session, SWITCH_MEDIA_TYPE_AUDIO, "audio");
-	set_stats(tech_pvt->session, SWITCH_MEDIA_TYPE_VIDEO, "video");
-}
-
 /* map sip responses to QSIG cause codes ala RFC4497 section 8.4.4 */
 switch_call_cause_t sofia_glue_sip_cause_to_freeswitch(int status)
 {
@@ -1455,13 +1417,16 @@ void sofia_glue_pass_sdp(private_object_t *tech_pvt, char *sdp)
 		&& (other_session = switch_core_session_locate(val))) {
 		other_channel = switch_core_session_get_channel(other_session);
 		switch_channel_set_variable(other_channel, SWITCH_B_SDP_VARIABLE, sdp);
-
+		
+#if 0
 		if (!sofia_test_flag(tech_pvt, TFLAG_CHANGE_MEDIA) && !switch_channel_test_flag(tech_pvt->channel, CF_RECOVERING) &&
 			(switch_channel_direction(other_channel) == SWITCH_CALL_DIRECTION_OUTBOUND &&
- switch_channel_direction(tech_pvt->channel) == SWITCH_CALL_DIRECTION_OUTBOUND && switch_channel_test_flag(tech_pvt->channel, CF_PROXY_MODE))) {
+			 switch_channel_direction(tech_pvt->channel) == SWITCH_CALL_DIRECTION_OUTBOUND && switch_channel_test_flag(tech_pvt->channel, CF_PROXY_MODE))) {
 			switch_ivr_nomedia(val, SMF_FORCE);
 			sofia_set_flag_locked(tech_pvt, TFLAG_CHANGE_MEDIA);
 		}
+#endif
+
 		switch_core_session_rwunlock(other_session);
 	}
 }
@@ -1885,10 +1850,13 @@ int sofia_recover_callback(switch_core_session_t *session)
 		tech_pvt->redirected = switch_core_session_sprintf(session, "sip:%s", switch_channel_get_variable(channel, "sip_contact_uri"));
 
 		if (zstr(rr)) {
-			switch_channel_set_variable_printf(channel, "sip_invite_route_uri", "<sip:%s@%s:%s;lr>",
+			switch_channel_set_variable_printf(channel, "sip_invite_route_uri", "<sip:%s@%s:%s;transport=%s>",
 											   switch_channel_get_variable(channel, "sip_from_user"),
-											   switch_channel_get_variable(channel, "sip_network_ip"), switch_channel_get_variable(channel, "sip_network_port")
+											   switch_channel_get_variable(channel, "sip_network_ip"), 
+											   switch_channel_get_variable(channel, "sip_network_port"),
+											   switch_channel_get_variable(channel,"sip_via_protocol")
 											   );
+
 		}
 
 		tech_pvt->dest = switch_core_session_sprintf(session, "sip:%s", switch_channel_get_variable(channel, "sip_from_uri"));
@@ -1912,17 +1880,6 @@ int sofia_recover_callback(switch_core_session_t *session)
 	switch_channel_set_name(tech_pvt->channel, switch_channel_get_variable(channel, "channel_name"));
 
 	
-	switch_core_session_get_recovery_crypto_key(session, SWITCH_MEDIA_TYPE_AUDIO, "srtp_remote_audio_crypto_key");
-	switch_core_session_get_recovery_crypto_key(session, SWITCH_MEDIA_TYPE_VIDEO, "srtp_remote_video_crypto_key");
-
-	if ((tmp = switch_channel_get_variable(channel, "rtp_local_sdp_str"))) {
-		tech_pvt->mparams.local_sdp_str = switch_core_session_strdup(session, tmp);
-	}
-
-	if ((tmp = switch_channel_get_variable(channel, SWITCH_R_SDP_VARIABLE))) {
-		tech_pvt->mparams.remote_sdp_str = switch_core_session_strdup(session, tmp);
-	}
-
 	switch_channel_set_variable(channel, "sip_invite_call_id", switch_channel_get_variable(channel, "sip_call_id"));
 
 	if (switch_true(switch_channel_get_variable(channel, "sip_nat_detected"))) {
@@ -1934,8 +1891,6 @@ int sofia_recover_callback(switch_core_session_t *session)
 
 	if (session) {
 		const char *use_uuid;
-
-		switch_channel_set_flag(channel, CF_RECOVERING);
 
 		if ((use_uuid = switch_channel_get_variable(channel, "origination_uuid"))) {
 			if (switch_core_session_set_uuid(session, use_uuid) == SWITCH_STATUS_SUCCESS) {
@@ -3059,5 +3014,5 @@ void sofia_event_fire(sofia_profile_t *profile, switch_event_t **event)
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */

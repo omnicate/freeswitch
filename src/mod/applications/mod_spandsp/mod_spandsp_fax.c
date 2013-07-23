@@ -346,6 +346,8 @@ static int phase_b_handler(t30_state_t *s, void *user_data, int result)
 	/* Fire event */
 
 	if (switch_event_create_subclass(&event, SWITCH_EVENT_CUSTOM, pvt->app_mode == FUNCTION_TX ? SPANDSP_EVENT_TXFAXNEGOCIATERESULT : SPANDSP_EVENT_RXFAXNEGOCIATERESULT) == SWITCH_STATUS_SUCCESS) {
+		switch_channel_event_set_data(channel, event);
+
 		switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "uuid", switch_core_session_get_uuid(session));
 		switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "fax-transfer-rate", fax_transfer_rate);
 		switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "fax-ecm-used", (t30_stats.error_correcting_mode) ? "on" : "off");
@@ -425,12 +427,12 @@ static int phase_d_handler(t30_state_t *s, void *user_data, int msg)
 		switch_channel_set_variable(channel, "fax_longest_bad_row_run", fax_longest_bad_row_run);
 	}
 
-	fax_encoding = switch_core_session_sprintf(session, "%d", t30_stats.encoding);
+	fax_encoding = switch_core_session_sprintf(session, "%d", t30_stats.compression);
 	if (fax_encoding) {
 		switch_channel_set_variable(channel, "fax_encoding", fax_encoding);
 	}
 
-	switch_channel_set_variable(channel, "fax_encoding_name", t4_encoding_to_str(t30_stats.encoding));
+	switch_channel_set_variable(channel, "fax_encoding_name", t4_compression_to_str(t30_stats.compression));
 
 	fax_document_transferred_pages = switch_core_session_sprintf(session, "%d", (pvt->app_mode == FUNCTION_TX)  ?  t30_stats.pages_tx  :  t30_stats.pages_rx);
 	if (fax_document_transferred_pages) {
@@ -443,7 +445,7 @@ static int phase_d_handler(t30_state_t *s, void *user_data, int msg)
     switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "Image type = %s (%s in the file)\n", t4_image_type_to_str(t30_stats.type), t4_image_type_to_str(t30_stats.image_type));
 	switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "Image size = %d x %d pixels (%d x %d pixels in the file)\n", t30_stats.width, t30_stats.length, t30_stats.image_width, t30_stats.image_length);
 	switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "Image resolution = %d/m x %d/m (%d/m x %d/m in the file)\n", t30_stats.x_resolution, t30_stats.y_resolution, t30_stats.image_x_resolution, t30_stats.image_y_resolution);
-	switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "Compression = %s (%d)\n", t4_encoding_to_str(t30_stats.encoding), t30_stats.encoding);
+	switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "Compression = %s (%d)\n", t4_compression_to_str(t30_stats.compression), t30_stats.compression);
 	switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "Compressed image size = %d bytes\n", t30_stats.image_size);
 	switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "Bad rows = %d\n", t30_stats.bad_rows);
 	switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "Longest bad row run = %d\n", t30_stats.longest_bad_row_run);
@@ -452,6 +454,8 @@ static int phase_d_handler(t30_state_t *s, void *user_data, int msg)
 	switch_channel_execute_on(channel, "execute_on_fax_phase_d");
 
 	if (switch_event_create_subclass(&event, SWITCH_EVENT_CUSTOM, pvt->app_mode == FUNCTION_TX ? SPANDSP_EVENT_TXFAXPAGERESULT : SPANDSP_EVENT_RXFAXPAGERESULT) == SWITCH_STATUS_SUCCESS) {
+		switch_channel_event_set_data(channel, event);
+
 		switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "uuid", switch_core_session_get_uuid(session));
 		switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "fax-document-transferred-pages", fax_document_transferred_pages);
 		switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "fax-image-resolution", fax_line_image_resolution);
@@ -462,7 +466,7 @@ static int phase_d_handler(t30_state_t *s, void *user_data, int msg)
 		switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "fax-bad-rows", fax_bad_rows);
 		switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "fax-longest-bad-row-run", fax_longest_bad_row_run);
 		switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "fax-encoding", fax_encoding);
-		switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "fax-encoding-name", t4_encoding_to_str(t30_stats.encoding));
+		switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "fax-encoding-name", t4_compression_to_str(t30_stats.compression));
 		switch_event_fire(&event);
 	}
 
@@ -878,7 +882,11 @@ static switch_status_t spanfax_init(pvt_t *pvt, transport_mode_t trans_mode)
 										  T4_SUPPORT_RESOLUTION_R8_STANDARD
 										| T4_SUPPORT_RESOLUTION_R8_FINE
 										| T4_SUPPORT_RESOLUTION_R8_SUPERFINE
-										| T4_SUPPORT_RESOLUTION_R16_SUPERFINE);
+										| T4_SUPPORT_RESOLUTION_R16_SUPERFINE
+                                        | T4_SUPPORT_RESOLUTION_200_100
+                                        | T4_SUPPORT_RESOLUTION_200_200
+                                        | T4_SUPPORT_RESOLUTION_200_400
+                                        | T4_SUPPORT_RESOLUTION_400_400);
 	t30_set_supported_colour_resolutions(t30, 0);
 
 	if (pvt->disable_v17) {
@@ -890,11 +898,11 @@ static switch_status_t spanfax_init(pvt_t *pvt, transport_mode_t trans_mode)
 	}
 
 	if (pvt->use_ecm) {
-		t30_set_supported_compressions(t30, T30_SUPPORT_COMPRESSION_T4_1D | T30_SUPPORT_COMPRESSION_T4_2D | T30_SUPPORT_COMPRESSION_T6 | T30_SUPPORT_COMPRESSION_T85 | T30_SUPPORT_COMPRESSION_T85_L0);
+		t30_set_supported_compressions(t30, T4_SUPPORT_COMPRESSION_T4_1D | T4_SUPPORT_COMPRESSION_T4_2D | T4_SUPPORT_COMPRESSION_T6 | T4_SUPPORT_COMPRESSION_T85 | T4_SUPPORT_COMPRESSION_T85_L0);
 		t30_set_ecm_capability(t30, TRUE);
 		switch_channel_set_variable(channel, "fax_ecm_requested", "1");
 	} else {
-		t30_set_supported_compressions(t30, T30_SUPPORT_COMPRESSION_T4_1D | T30_SUPPORT_COMPRESSION_T4_2D);
+		t30_set_supported_compressions(t30, T4_SUPPORT_COMPRESSION_T4_1D | T4_SUPPORT_COMPRESSION_T4_2D);
 		switch_channel_set_variable(channel, "fax_ecm_requested", "0");
 	}
 
@@ -1486,7 +1494,7 @@ void mod_spandsp_fax_process_fax(switch_core_session_t *session, const char *dat
 					continue;
 				}
 	
-				if (switch_test_flag(read_frame, SFF_UDPTL_PACKET)) {
+				if (switch_test_flag(read_frame, SFF_UDPTL_PACKET) && read_frame->packet && read_frame->packetlen) {
 					/* now we know we can cast frame->packet to a udptl structure */
 					//switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "READ %d udptl bytes\n", read_frame->packetlen);
 	
@@ -2283,5 +2291,5 @@ switch_status_t spandsp_fax_detect_session(switch_core_session_t *session,
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */

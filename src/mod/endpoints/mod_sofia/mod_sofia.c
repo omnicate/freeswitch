@@ -28,6 +28,7 @@
  * Paul D. Tinsley <pdt at jackhammer.org>
  * Bret McDanel <trixter AT 0xdecafbad.com>
  * Raymond Chandler <intralanman@freeswitch.org>
+ * Emmanuel Schmidbauer <e.schmidbauer@gmail.com>
  *
  *
  * mod_sofia.c -- SOFIA SIP Endpoint
@@ -503,6 +504,10 @@ switch_status_t sofia_on_hangup(switch_core_session_t *session)
 			}
 		}
 
+		if (switch_channel_test_flag(channel, CF_INTERCEPT) || cause == SWITCH_CAUSE_PICKED_OFF || cause == SWITCH_CAUSE_LOSE_RACE) {
+			switch_channel_set_variable(channel, "call_completed_elsewhere", "true");
+		}
+
 		if (switch_channel_test_flag(channel, CF_ANSWERED) || sofia_test_flag(tech_pvt, TFLAG_ANS)) {
 			if (!tech_pvt->got_bye) {
 				switch_channel_set_variable(channel, "sip_hangup_disposition", "send_bye");
@@ -552,7 +557,7 @@ switch_status_t sofia_on_hangup(switch_core_session_t *session)
 							}
 							
 							switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "Challenging call\n");
-							sofia_reg_auth_challenge(tech_pvt->profile, tech_pvt->nh, NULL, REG_INVITE, to_host, 0);						
+							sofia_reg_auth_challenge(tech_pvt->profile, tech_pvt->nh, NULL, REG_INVITE, to_host, 0, 0);						
 							*reason = '\0';
 						}
 						break;
@@ -626,9 +631,6 @@ switch_status_t sofia_on_hangup(switch_core_session_t *session)
 	if (tech_pvt->sofia_private) {
 		*tech_pvt->sofia_private->uuid = '\0';
 	}
-
-
-	sofia_glue_set_rtp_stats(tech_pvt);
 
 	switch_mutex_unlock(tech_pvt->sofia_mutex);
 
@@ -966,7 +968,7 @@ static switch_status_t sofia_write_video_frame(switch_core_session_t *session, s
 		return SWITCH_STATUS_SUCCESS;
 	}
 
-	if (switch_core_media_write_frame(session, frame, flags, stream_id, SWITCH_MEDIA_TYPE_VIDEO)) {
+	if (SWITCH_STATUS_SUCCESS == switch_core_media_write_frame(session, frame, flags, stream_id, SWITCH_MEDIA_TYPE_VIDEO)) {
 		return SWITCH_STATUS_SUCCESS;
 	}
 
@@ -1103,10 +1105,6 @@ static switch_status_t sofia_send_dtmf(switch_core_session_t *session, const swi
 	tech_pvt = (private_object_t *) switch_core_session_get_private(session);
 	switch_assert(tech_pvt != NULL);
 
-	if (switch_channel_test_flag(tech_pvt->channel, CF_DROP_DTMF)) {
-		return SWITCH_STATUS_SUCCESS;
-	}
-
 	dtmf_type = tech_pvt->mparams.dtmf_type;
 
 	/* We only can send INFO when we have no media */
@@ -1178,7 +1176,7 @@ static switch_status_t sofia_receive_message(switch_core_session_t *session, swi
 	case SWITCH_MESSAGE_INDICATE_MEDIA_RENEG:
 		{
 			if (msg->string_arg) {
-				sofia_set_pflag(tech_pvt->profile, PFLAG_RENEG_ON_REINVITE);
+				sofia_set_media_flag(tech_pvt->profile, SCMF_RENEG_ON_REINVITE);
 				sofia_clear_flag(tech_pvt, TFLAG_ENABLE_SOA);
 			}
 
@@ -1281,7 +1279,7 @@ static switch_status_t sofia_receive_message(switch_core_session_t *session, swi
 			}
 
 			nua_info(tech_pvt->nh, SIPTAG_CONTENT_TYPE_STR("application/media_control+xml"), SIPTAG_PAYLOAD_STR(pl), TAG_END());
-
+			
 		}
 		break;
 	case SWITCH_MESSAGE_INDICATE_BROADCAST:
@@ -1537,6 +1535,8 @@ static switch_status_t sofia_receive_message(switch_core_session_t *session, swi
 						 TAG_IF(!zstr(tech_pvt->user_via), SIPTAG_VIA_STR(tech_pvt->user_via)), 
 						 TAG_IF(pl, SIPTAG_PAYLOAD_STR(pl)),
 						 TAG_END());
+
+				switch_safe_free(headers);
 			} else {
 				switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "%s send_info is not supported.\n", switch_channel_get_name(channel));
 			}
@@ -1664,7 +1664,11 @@ static switch_status_t sofia_receive_message(switch_core_session_t *session, swi
 							nua_info(tech_pvt->nh, SIPTAG_CONTENT_TYPE_STR("message/sipfrag"),
 									 TAG_IF(!zstr(tech_pvt->user_via), SIPTAG_VIA_STR(tech_pvt->user_via)), SIPTAG_PAYLOAD_STR(message), TAG_END());
 						} else if ((ua && (switch_stristr("polycom", ua)))) {
-							snprintf(message, sizeof(message), "P-Asserted-Identity: \"%s\" <%s>", name, number);
+							if ( switch_stristr("UA/4", ua) ) {
+								snprintf(message, sizeof(message), "P-Asserted-Identity: \"%s\" <sip:%s@%s>", name, number, tech_pvt->profile->sipip);
+							} else {
+								snprintf(message, sizeof(message), "P-Asserted-Identity: \"%s\" <%s>", name, number);
+							}
 							sofia_set_flag_locked(tech_pvt, TFLAG_UPDATING_DISPLAY);
 							nua_update(tech_pvt->nh,
 									   NUTAG_SESSION_TIMER(tech_pvt->session_timeout),
@@ -1862,6 +1866,7 @@ static switch_status_t sofia_receive_message(switch_core_session_t *session, swi
 				msg->string_reply = "no reply";
 			}
 			switch_channel_hangup(tech_pvt->channel, SWITCH_CAUSE_BLIND_TRANSFER);
+			switch_safe_free(extra_headers);
 		}
 		break;
 
@@ -3575,6 +3580,180 @@ SWITCH_STANDARD_API(sofia_contact_function)
 	return SWITCH_STATUS_SUCCESS;
 }
 
+struct list_result {
+	int row_process;
+	int single_col;
+	switch_stream_handle_t *stream;
+
+};
+static int list_result_callback(void *pArg, int argc, char **argv, char **columnNames)
+{
+	struct list_result *cbt = (struct list_result *) pArg;
+	int i = 0;
+
+	cbt->row_process++;
+
+	if (cbt->row_process == 1) {
+		for ( i = 0; i < argc; i++) {
+			cbt->stream->write_function(cbt->stream,"%s", columnNames[i]);
+			if (i < argc - 1) {
+				cbt->stream->write_function(cbt->stream,"|");
+			}
+		}
+		cbt->stream->write_function(cbt->stream,"\n");
+
+	}
+	for ( i = 0; i < argc; i++) {
+		cbt->stream->write_function(cbt->stream,"%s", zstr(argv[i]) ? "unknown" : argv[i]);
+		if (i < argc - 1) {
+			cbt->stream->write_function(cbt->stream,"|");
+		}
+	}
+	if (!cbt->single_col)
+		cbt->stream->write_function(cbt->stream,"\n");
+	return 0;
+}
+
+
+static void get_presence_data(sofia_profile_t *profile, const char *user, const char *domain, const char *search, switch_stream_handle_t *stream)
+{
+	struct list_result cb;
+	char *sql;
+	char *select;
+
+	cb.row_process = 1;
+	cb.single_col = 1;
+	cb.stream = stream;
+
+	if (!strcasecmp(search, "status")) {
+		select = switch_mprintf(" p.status ");
+	} else if (!strcasecmp(search, "rpid")) {
+		select = switch_mprintf(" p.rpid ");
+	} else if (!strcasecmp(search, "user_agent")) {
+		select = switch_mprintf(" r.user_agent ");
+	}  else {
+		cb.row_process = 0;
+		cb.single_col = 0;
+		select = switch_mprintf(" p.status, p.rpid, r.user_agent,  r.network_ip, r.network_port ");
+	}
+
+	sql = switch_mprintf(" select %q from sip_registrations as r left join sip_presence as p "
+		" on p.sip_host = r.sip_host and p.profile_name = r.profile_name and p.hostname = r.orig_hostname "
+		" and p.sip_user = r.sip_user "
+		" where r.sip_realm = '%q' and r.sip_user = '%q' and r.profile_name = '%q' ", select, domain, user, profile->name);
+
+	switch_assert(sql);
+	sofia_glue_execute_sql_callback(profile, profile->dbh_mutex, sql, list_result_callback, &cb);
+	switch_safe_free(sql);
+	switch_safe_free(select);
+}
+
+/* [list|status|rpid|user_agent] [profile/]<user>@domain */
+SWITCH_STANDARD_API(sofia_presence_data_function)
+{
+	char *argv[6] = { 0 };
+	int argc;
+	char *data;
+	char *user = NULL;
+	char *domain = NULL, *dup_domain = NULL;
+	char *concat = NULL;
+	char *search = NULL;
+	char *profile_name = NULL;
+	char *p;
+	sofia_profile_t *profile = NULL;
+
+	if (!cmd) {
+		stream->write_function(stream, "%s", "");
+		return SWITCH_STATUS_SUCCESS;
+	}
+
+	data = strdup(cmd);
+	switch_assert(data);
+
+
+	argc = switch_separate_string(data, ' ', argv, (sizeof(argv) / sizeof(argv[0])));
+	if (argc < 2) {
+		stream->write_function(stream, "%s", "");
+		return SWITCH_STATUS_SUCCESS;
+	}
+	search = argv[0];
+
+	if ((p = strchr(argv[1], '/'))) {
+		profile_name = argv[1];
+		*p++ = '\0';
+		user = p;
+	} else {
+		user = argv[1];
+	}
+
+	if ((domain = strchr(user, '@'))) {
+		*domain++ = '\0';
+		if ((concat = strchr(domain, '/'))) {
+			*concat++ = '\0';
+		}
+	} else {
+		if ((concat = strchr(user, '/'))) {
+			*concat++ = '\0';
+		}
+	}
+
+	if (zstr(domain)) {
+		dup_domain = switch_core_get_variable_dup("domain");
+		domain = dup_domain;
+	}
+
+	if (!user) goto end;
+
+	if (zstr(profile_name) || strcmp(profile_name, "*") || zstr(domain)) {
+		if (!zstr(profile_name)) {
+			profile = sofia_glue_find_profile(profile_name);
+		}
+
+		if (!profile && !zstr(domain)) {
+			profile = sofia_glue_find_profile(domain);
+		}
+	}
+
+	if (profile) {
+		if (zstr(domain)) {
+			domain = profile->name;
+		}
+
+		if (!zstr(profile->domain_name) && !zstr(profile_name) && !strcmp(profile_name, profile->name)) {
+			domain = profile->domain_name;
+		}
+
+		get_presence_data(profile, user, domain, search, stream);
+		sofia_glue_release_profile(profile);
+
+	} else if (!zstr(domain)) {
+		switch_mutex_lock(mod_sofia_globals.hash_mutex);
+		if (mod_sofia_globals.profile_hash) {
+			switch_hash_index_t *hi;
+			const void *var;
+			void *val;
+
+			for (hi = switch_hash_first(NULL, mod_sofia_globals.profile_hash); hi; hi = switch_hash_next(hi)) {
+				switch_hash_this(hi, &var, NULL, &val);
+				if ((profile = (sofia_profile_t *) val) && !strcmp((char *)var, profile->name)) {
+					get_presence_data(profile, user, domain, search, stream);
+					profile = NULL;
+				}
+			}
+		}
+		switch_mutex_unlock(mod_sofia_globals.hash_mutex);
+	}
+
+	if (!strcasecmp(search, "list"))
+		stream->write_function(stream, "+OK\n");
+
+ end:
+	switch_safe_free(data);
+	switch_safe_free(dup_domain);
+
+	return SWITCH_STATUS_SUCCESS;
+}
+
 /* <gateway_name> [ivar|ovar|var] <name> */
 SWITCH_STANDARD_API(sofia_gateway_data_function)
 {
@@ -4096,6 +4275,24 @@ static switch_call_cause_t sofia_outgoing_channel(switch_core_session_t *session
 			}
 		} else {
 			host++;
+			
+			if (!strchr(host, '.') || switch_true(switch_event_get_header(var_event, "sip_gethostbyname"))) {
+				struct sockaddr_in sa;
+				struct hostent *he = gethostbyname(host);
+				char *ip, *tmp;
+
+				if (he) {
+					memcpy(&sa.sin_addr, he->h_addr, sizeof(struct in_addr));
+					ip = inet_ntoa(sa.sin_addr);
+					
+					tmp = switch_string_replace(dest, host, ip);
+					//host = switch_core_session_strdup(nsession, ip);
+					//dest = switch_core_session_strdup(nsession, tmp);
+					switch_channel_set_variable_printf(nchannel, "sip_route_uri", "sip:%s", tmp);
+					free(tmp);
+				}
+			}
+
 			tech_pvt->dest = switch_core_session_alloc(nsession, strlen(dest) + 5);
 			tech_pvt->e_dest = switch_core_session_strdup(nsession, dest);
 			switch_snprintf(tech_pvt->dest, strlen(dest) + 5, "sip:%s", dest);
@@ -4912,7 +5109,7 @@ SWITCH_STANDARD_APP(sofia_sla_function)
 {
 	private_object_t *tech_pvt;
 	switch_core_session_t *bargee_session;
-
+	switch_channel_t *channel = switch_core_session_get_channel(session);
 	if (zstr(data)) {
 		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Usage: <uuid>\n");
 		return;
@@ -4922,8 +5119,7 @@ SWITCH_STANDARD_APP(sofia_sla_function)
 		if (bargee_session == session) {
 			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "BARGE: %s (cannot barge on myself)\n", (char *) data);
 		} else {
-			switch_channel_t *channel;
-			
+
 			if (switch_core_session_check_interface(bargee_session, sofia_endpoint_interface)) {
 				tech_pvt = switch_core_session_get_private(bargee_session);
 				switch_channel_clear_flag(tech_pvt->channel, CF_SLA_BARGING);
@@ -4936,13 +5132,13 @@ SWITCH_STANDARD_APP(sofia_sla_function)
 				switch_channel_set_flag(tech_pvt->channel, CF_SLA_BARGING);
 			}
 			
-			channel = switch_core_session_get_channel(session);
 			switch_channel_set_variable(channel, "sip_barging_uuid", (char *)data);
-
 		}
 
 		switch_core_session_rwunlock(bargee_session);
 	}
+
+	switch_channel_execute_on(channel, "execute_on_sip_barge");
 	
 	switch_ivr_eavesdrop_session(session, data, NULL, ED_MUX_READ | ED_MUX_WRITE | ED_COPY_DISPLAY);
 }
@@ -5144,6 +5340,7 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_sofia_load)
 	SWITCH_ADD_API(api_interface, "sofia_contact", "Sofia Contacts", sofia_contact_function, "[profile/]<user>@<domain>");
 	SWITCH_ADD_API(api_interface, "sofia_count_reg", "Count Sofia registration", sofia_count_reg_function, "[profile/]<user>@<domain>");
 	SWITCH_ADD_API(api_interface, "sofia_dig", "SIP DIG", sip_dig_function, "<url>");
+	SWITCH_ADD_API(api_interface, "sofia_presence_data", "Sofia Presence Data", sofia_presence_data_function, "[list|status|rpid|user_agent] [profile/]<user>@domain");
 	SWITCH_ADD_CHAT(chat_interface, SOFIA_CHAT_PROTO, sofia_presence_chat_send);
 
 	crtp_init(*module_interface);
@@ -5216,6 +5413,6 @@ SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_sofia_shutdown)
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */
 

@@ -700,6 +700,14 @@ Requires:       %{name} = %{version}-%{release}
 %description codec-isac
 iSAC Codec support for FreeSWITCH open source telephony platform
 
+%package codec-vp8
+Summary:        vp8 Codec support for FreeSWITCH open source telephony platform
+Group:          System/Libraries
+Requires:       %{name} = %{version}-%{release}
+
+%description codec-vp8
+iSAC Codec support for FreeSWITCH open source telephony platform
+
 %package codec-mp4v
 Summary:        MP4V Video Codec support for FreeSWITCH open source telephony platform
 Group:          System/Libraries
@@ -1329,7 +1337,7 @@ ASR_TTS_MODULES="asr_tts/mod_flite asr_tts/mod_pocketsphinx asr_tts/mod_tts_comm
 ######################################################################################################################
 CODECS_MODULES="codecs/mod_amr codecs/mod_amrwb codecs/mod_bv codecs/mod_celt codecs/mod_codec2 codecs/mod_g723_1 \
 		codecs/mod_g729 codecs/mod_h26x codecs/mod_ilbc codecs/mod_isac codecs/mod_mp4v codecs/mod_opus codecs/mod_silk \
-		codecs/mod_siren codecs/mod_speex codecs/mod_theora "
+		codecs/mod_siren codecs/mod_speex codecs/mod_theora codecs/mod_vp8"
 #
 %if %{build_sng_tc}
 CODECS_MODULES+="codecs/mod_sangoma_codec"
@@ -1766,6 +1774,7 @@ fi
 %config(noreplace) %attr(0640, freeswitch, daemon) %{sysconfdir}/autoload_configs/switch.conf.xml
 %config(noreplace) %attr(0640, freeswitch, daemon) %{sysconfdir}/autoload_configs/syslog.conf.xml
 %config(noreplace) %attr(0640, freeswitch, daemon) %{sysconfdir}/autoload_configs/timezones.conf.xml
+%config(noreplace) %attr(0640, freeswitch, daemon) %{sysconfdir}/autoload_configs/translate.conf.xml
 %config(noreplace) %attr(0640, freeswitch, daemon) %{sysconfdir}/autoload_configs/tts_commandline.conf.xml
 %config(noreplace) %attr(0640, freeswitch, daemon) %{sysconfdir}/autoload_configs/unicall.conf.xml
 %config(noreplace) %attr(0640, freeswitch, daemon) %{sysconfdir}/autoload_configs/unimrcp.conf.xml
@@ -2038,6 +2047,10 @@ fi
 %files codec-mp4v
 %defattr(-,freeswitch,daemon)
 %{MODINSTDIR}/mod_mp4v.so*
+
+%files codec-vp8
+%defattr(-,freeswitch,daemon)
+%{MODINSTDIR}/mod_vp8.so*
 
 %files codec-opus
 %defattr(-,freeswitch,daemon)
@@ -2373,6 +2386,10 @@ fi
 #
 ######################################################################################################################
 %changelog
+* Thu Jun 28 2013 - krice@freeswitch.org
+- Add module for VP8
+* Thu Jun 19 2013 - krice@freeswitch.org
+- tweak files included for vanilla configs
 * Thu Sep 19 2012 - krice@freeswitch.org
 - Add support for Spanish and Portugese say language modules
 * Thu Jan 26 2012 - krice@freeswitch.org

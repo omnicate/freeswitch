@@ -705,7 +705,7 @@ static const char *message_names[] = {
 	"REQUEST_IMAGE_MEDIA",
 	"UUID_CHANGE",
 	"SIMPLIFY",
-	"DEBUG_AUDIO",
+	"DEBUG_MEDIA",
 	"PROXY_MEDIA",
 	"APPLICATION_EXEC",
 	"APPLICATION_EXEC_COMPLETE",
@@ -716,6 +716,7 @@ static const char *message_names[] = {
 	"JITTER_BUFFER",
 	"RECOVERY_REFRESH",
 	"SIGNAL_DATA",
+	"MESSAGE",
 	"INFO",
 	"AUDIO_DATA",
 	"BLIND_TRANSFER_RESPONSE",
@@ -796,7 +797,7 @@ SWITCH_DECLARE(switch_status_t) switch_core_session_perform_receive_message(swit
 		if (session->media_handle) {
 			status = switch_core_media_receive_message(session, message);
 		}
-		if (status == SWITCH_STATUS_SUCCESS) {
+		if (status == SWITCH_STATUS_SUCCESS || message->message_id == SWITCH_MESSAGE_INDICATE_SIGNAL_DATA) {
 			if (session->endpoint_interface->io_routines->receive_message) {
 				status = session->endpoint_interface->io_routines->receive_message(session, message);
 			}
@@ -2032,7 +2033,6 @@ SWITCH_DECLARE(switch_core_session_t *) switch_core_session_request_xml(switch_e
 	flags[CF_LAZY_ATTENDED_TRANSFER] = 0;
 	flags[CF_SIGNAL_DATA] = 0;
 	flags[CF_SIMPLIFY] = 0;
-	flags[CF_SECURE] = 0;
 
 
 	if (!(session = switch_core_session_request_uuid(endpoint_interface, direction, SOF_NO_LIMITS, pool, uuid))) {
@@ -2300,6 +2300,14 @@ SWITCH_DECLARE(switch_core_session_t *) switch_core_session_request_uuid(switch_
 	switch_core_hash_insert(session_manager.session_table, session->uuid_str, session);
 	session->id = session_manager.session_id++;
 	session_manager.session_count++;
+
+	if (session_manager.session_count > (uint32_t)runtime.sessions_peak) {
+		runtime.sessions_peak = session_manager.session_count;
+	}
+	if (session_manager.session_count > (uint32_t)runtime.sessions_peak_fivemin) {
+		runtime.sessions_peak_fivemin = session_manager.session_count;
+	}
+
 	switch_mutex_unlock(runtime.session_hash_mutex);
 
 	switch_channel_set_variable_printf(session->channel, "session_id", "%u", session->id);
@@ -2567,6 +2575,10 @@ SWITCH_DECLARE(switch_status_t) switch_core_session_execute_application_get_flag
 		*flags = application_interface->flags;
 	}
 
+	if (!switch_test_flag(application_interface, SAF_SUPPORT_NOMEDIA) && (switch_channel_test_flag(session->channel, CF_VIDEO))) {
+		switch_core_session_refresh_video(session);
+	}
+
 	if (switch_channel_test_flag(session->channel, CF_PROXY_MODE) && !switch_test_flag(application_interface, SAF_SUPPORT_NOMEDIA)) {
 		switch_ivr_media(session->uuid_str, SMF_NONE);
 		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "Application %s Requires media on channel %s!\n",
@@ -2621,7 +2633,7 @@ SWITCH_DECLARE(switch_status_t) switch_core_session_exec(switch_core_session_t *
 	int scope = 0;
 	char uuid_str[SWITCH_UUID_FORMATTED_LENGTH + 1];
 	char *app_uuid = uuid_str;
-	
+
 	if ((app_uuid_var = switch_channel_get_variable(channel, "app_uuid"))) {
 		app_uuid = (char *)app_uuid_var;
 		switch_channel_set_variable(channel, "app_uuid", NULL);
@@ -2723,8 +2735,19 @@ SWITCH_DECLARE(switch_status_t) switch_core_session_exec(switch_core_session_t *
 	msg.string_array_arg[1] = expanded;
 	switch_core_session_receive_message(session, &msg);
 
+	if (switch_channel_test_flag(channel, CF_VIDEO)) {
+		switch_channel_set_flag(channel, CF_VIDEO_ECHO);
+		switch_channel_clear_flag(channel, CF_VIDEO_PASSIVE);
+		switch_core_session_refresh_video(session);
+	}
+
 	application_interface->application_function(session, expanded);
 
+	if (switch_channel_test_flag(channel, CF_VIDEO)) {
+		switch_channel_set_flag(channel, CF_VIDEO_ECHO);
+		switch_channel_clear_flag(channel, CF_VIDEO_PASSIVE);
+		switch_core_session_refresh_video(session);
+	}
 	if (switch_event_create(&event, SWITCH_EVENT_CHANNEL_EXECUTE_COMPLETE) == SWITCH_STATUS_SUCCESS) {
 		const char *resp = switch_channel_get_variable(session->channel, SWITCH_CURRENT_APPLICATION_RESPONSE_VARIABLE);
 		switch_channel_event_set_data(session->channel, event);
@@ -2867,6 +2890,22 @@ SWITCH_DECLARE(switch_log_level_t) switch_core_session_get_loglevel(switch_core_
 	return session->loglevel;
 }
 
+SWITCH_DECLARE(switch_status_t) switch_core_session_refresh_video(switch_core_session_t *session)
+{
+	switch_channel_t *channel = switch_core_session_get_channel(session);
+
+	if (switch_channel_test_flag(channel, CF_VIDEO)) {
+		switch_core_session_message_t msg = { 0 };
+		msg.from = __FILE__;
+		msg.message_id = SWITCH_MESSAGE_INDICATE_VIDEO_REFRESH_REQ;
+		switch_core_session_receive_message(session, &msg);
+		return SWITCH_STATUS_SUCCESS;
+	}
+
+	return SWITCH_STATUS_FALSE;
+}
+
+
 /* For Emacs:
  * Local Variables:
  * mode:c
@@ -2875,5 +2914,5 @@ SWITCH_DECLARE(switch_log_level_t) switch_core_session_get_loglevel(switch_core_
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */

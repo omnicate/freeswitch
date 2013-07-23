@@ -599,6 +599,7 @@ static struct {
 	char *inner_pre_trans_execute;
 	char *inner_post_trans_execute;	
 	switch_sql_queue_manager_t *qm;
+	int allow_transcoding;
 } globals;
 
 
@@ -1415,7 +1416,8 @@ static void *SWITCH_THREAD_FUNC ringall_thread_run(switch_thread_t *thread, void
 
 	if (!total) goto end;
 
-	if ((codec = switch_event_get_header(pop, "variable_rtp_use_codec_name"))) {
+	if (!globals.allow_transcoding && !switch_true(switch_event_get_header(pop, "variable_fifo_allow_transcoding")) && 
+		(codec = switch_event_get_header(pop, "variable_rtp_use_codec_name"))) {
 		const char *rate = switch_event_get_header(pop, "variable_rtp_use_codec_rate");
 		const char *ptime = switch_event_get_header(pop, "variable_rtp_use_codec_ptime");
 		char nstr[256] = "";
@@ -1852,7 +1854,6 @@ static void *SWITCH_THREAD_FUNC node_thread_run(switch_thread_t *thread, void *o
 			node = node->next;
 
 			if (this_node->ready == 0) {
-				
 				for (x = 0; x < MAX_PRI; x++) {
 					while (fifo_queue_pop(this_node->fifo_list[x], &pop, 2) == SWITCH_STATUS_SUCCESS) {
 						const char *caller_uuid = switch_event_get_header(pop, "unique-id");
@@ -2981,12 +2982,7 @@ SWITCH_STANDARD_APP(fifo_function)
 
 				switch_channel_answer(channel);
 
-				originator_cp = switch_channel_get_caller_profile(channel);
-				originatee_cp = switch_channel_get_caller_profile(other_channel);
-
 				if (switch_channel_inbound_display(other_channel)) {
-					switch_channel_invert_cid(other_channel);
-
 					if (switch_channel_direction(other_channel) == SWITCH_CALL_DIRECTION_INBOUND) {
 						switch_channel_set_flag(other_channel, CF_BLEG);
 					}
@@ -3005,9 +3001,14 @@ SWITCH_STANDARD_APP(fifo_function)
 				
 				originator_cp->callee_id_name = switch_core_strdup(originator_cp->pool, originatee_cp->callee_id_name);
 				originator_cp->callee_id_number = switch_core_strdup(originator_cp->pool, originatee_cp->callee_id_number);
+
+
+				originatee_cp->callee_id_name = switch_core_strdup(originatee_cp->pool, originatee_cp->caller_id_name);
+				originatee_cp->callee_id_number = switch_core_strdup(originatee_cp->pool, originatee_cp->caller_id_number);
 				
 				originatee_cp->caller_id_name = switch_core_strdup(originatee_cp->pool, originator_cp->caller_id_name);
 				originatee_cp->caller_id_number = switch_core_strdup(originatee_cp->pool, originator_cp->caller_id_number);
+
 
 
 
@@ -3086,16 +3087,21 @@ SWITCH_STANDARD_APP(fifo_function)
 				switch_channel_set_variable(channel, SWITCH_SIGNAL_BOND_VARIABLE, switch_core_session_get_uuid(other_session));
 				switch_channel_set_variable(other_channel, SWITCH_SIGNAL_BOND_VARIABLE, switch_core_session_get_uuid(session));
 
+				switch_channel_set_variable(switch_core_session_get_channel(other_session), "fifo_initiated_bridge", "true");
+				switch_channel_set_variable(switch_core_session_get_channel(other_session), "fifo_bridge_role", "caller");
+				switch_channel_set_variable(switch_core_session_get_channel(session), "fifo_initiated_bridge", "true");
+				switch_channel_set_variable(switch_core_session_get_channel(session), "fifo_bridge_role", "consumer");
+
 				switch_ivr_multi_threaded_bridge(session, other_session, on_dtmf, other_session, session);
 
-				if (!switch_channel_test_flag(other_channel, CF_TRANSFER) || !switch_channel_up(other_channel)) {
-					switch_channel_set_variable(other_channel, "fifo_initiated_bridge", "true");
-					switch_channel_set_variable(other_channel, "fifo_bridge_role", "caller");
+				if (switch_channel_test_flag(other_channel, CF_TRANSFER) && switch_channel_up(other_channel)) {
+					switch_channel_set_variable(switch_core_session_get_channel(other_session), "fifo_initiated_bridge", NULL);
+					switch_channel_set_variable(switch_core_session_get_channel(other_session), "fifo_bridge_role", NULL);
 				}
-
-				if (!switch_channel_test_flag(channel, CF_TRANSFER) || !switch_channel_up(channel)) {
-					switch_channel_set_variable(channel, "fifo_initiated_bridge", "true");
-					switch_channel_set_variable(channel, "fifo_bridge_role", "consumer");
+				
+				if (switch_channel_test_flag(channel, CF_TRANSFER) && switch_channel_up(channel)) {
+					switch_channel_set_variable(switch_core_session_get_channel(other_session), "fifo_initiated_bridge", NULL);
+					switch_channel_set_variable(switch_core_session_get_channel(other_session), "fifo_bridge_role", NULL);
 				}
 
 				if (outbound_id) {
@@ -3287,7 +3293,9 @@ SWITCH_STANDARD_APP(fifo_function)
 			continue;
 		}
 		switch_thread_rwlock_unlock(node->rwlock);
-		if (node->ready == 1 && do_destroy) {
+		
+		if (node->ready == 1 && do_destroy && node_caller_count(node) == 0 && node->consumer_count == 0) {
+			switch_core_hash_delete(globals.fifo_hash, node->name);
 			node->ready = 0;
 		}
 	}
@@ -4061,6 +4069,10 @@ static switch_status_t load_config(int reload, int del_all)
 				} else {
 					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "ODBC IS NOT AVAILABLE!\n");
 				}
+			} else if (!strcasecmp(var, "dbname") && !zstr(val)) {
+				globals.dbname = switch_core_strdup(globals.pool, val);
+			} else if (!strcasecmp(var, "allow-transcoding") && !zstr(val)) {
+				globals.allow_transcoding = switch_true(val);
 			} else if (!strcasecmp(var, "db-pre-trans-execute") && !zstr(val)) {
 				globals.pre_trans_execute = switch_core_strdup(globals.pool, val);
 			} else if (!strcasecmp(var, "db-post-trans-execute") && !zstr(val)) {
@@ -4173,7 +4185,7 @@ static switch_status_t load_config(int reload, int del_all)
 				node = create_node(name, imp, globals.sql_mutex);
 			}
 
-			if ((val = switch_xml_attr(fifo, "outbound_name")) && !zstr(val)) {
+			if ((val = switch_xml_attr(fifo, "outbound_name"))) {
 				node->outbound_name = switch_core_strdup(node->pool, val);
 			}
 
@@ -4626,5 +4638,5 @@ SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_fifo_shutdown)
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */

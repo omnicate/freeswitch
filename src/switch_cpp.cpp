@@ -57,12 +57,11 @@ SWITCH_DECLARE_CONSTRUCTOR EventConsumer::EventConsumer(const char *event_name, 
 	switch_core_new_memory_pool(&pool);	
 	switch_queue_create(&events, len, pool);
 	node_index = 0;
+	ready = 1;
 	
 	if (!zstr(event_name)) {
 		bind(event_name, subclass_name);
 	}
-
-	ready = 1;
 }
 
 SWITCH_DECLARE(int) EventConsumer::bind(const char *event_name, const char *subclass_name)
@@ -252,11 +251,13 @@ SWITCH_DECLARE(const char *) API::executeString(const char *cmd)
 {
 	char *arg;
 	switch_stream_handle_t stream = { 0 };
-	char *mycmd = strdup(cmd);
-
-	switch_assert(mycmd);
+	char *mycmd = NULL;
 
 	this_check("");
+
+	mycmd = strdup(cmd);
+
+	switch_assert(mycmd);
 
 	if ((arg = strchr(mycmd, ' '))) {
 		*arg++ = '\0';
@@ -1220,6 +1221,18 @@ SWITCH_DECLARE(void) CoreSession::setHangupHook(void *hangup_func) {
     switch_core_event_hook_add_state_change(session, hanguphook);
 }
 
+SWITCH_DECLARE(void) CoreSession::consoleLog(char *level_str, char *msg)
+{
+	switch_log_level_t level = SWITCH_LOG_DEBUG;
+	if (level_str) {
+		level = switch_log_str2level(level_str);
+		if (level == SWITCH_LOG_INVALID) {
+			level = SWITCH_LOG_DEBUG;
+		}
+	}
+	switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), level, "%s", switch_str_nil(msg));
+}
+
 /* ---- methods not bound to CoreSession instance ---- */
 
 
@@ -1381,5 +1394,5 @@ SWITCH_DECLARE(switch_status_t) CoreSession::process_callback_result(char *resul
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */

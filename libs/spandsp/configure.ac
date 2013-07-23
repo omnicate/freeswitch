@@ -135,6 +135,7 @@ AC_ARG_ENABLE(sse4_2,       [  --enable-sse4-2      Enable SSE4.2 support])
 AC_ARG_ENABLE(sse4a,        [  --enable-sse4a       Enable SSE4A support])
 AC_ARG_ENABLE(sse5,         [  --enable-sse5        Enable SSE5 support])
 AC_ARG_ENABLE(avx,          [  --enable-avx         Enable AVX support])
+AC_ARG_ENABLE(avx2,         [  --enable-avx2        Enable AVX2 support])
 AC_ARG_ENABLE(neon,         [  --enable-neon        Enable NEON support])
 AC_ARG_ENABLE(fixed_point,  [  --enable-fixed-point Enable fixed point support])
 # The following is for MSVC, where we may be using a local copy of libtiff, built alongside spandsp
@@ -162,6 +163,7 @@ fi
 
 AX_C99_FLEXIBLE_ARRAY
 
+AC_CHECK_FUNCS([aligned_alloc])
 AC_CHECK_FUNCS([memmove])
 AC_CHECK_FUNCS([memset])
 AC_CHECK_FUNCS([select])
@@ -257,10 +259,12 @@ then
     esac
 fi
 
-#AC_DEFINE([SPANDSP_SUPPORT_T42], [1], [Support T.42 JPEG compression])
-SPANDSP_SUPPORT_T42="#undef SPANDSP_SUPPORT_T42"
-#AC_DEFINE([SPANDSP_SUPPORT_T43], [1], [Support T.43 JBIG gray and colour compression])
-SPANDSP_SUPPORT_T43="#undef SPANDSP_SUPPORT_T43"
+AC_DEFINE([SPANDSP_SUPPORT_T42], [1], [Support T.42 JPEG compression])
+SPANDSP_SUPPORT_T42="#define SPANDSP_SUPPORT_T42 1"
+AC_DEFINE([SPANDSP_SUPPORT_T43], [1], [Support T.43 JBIG gray and colour compression])
+SPANDSP_SUPPORT_T43="#define SPANDSP_SUPPORT_T43 1"
+#AC_DEFINE([SPANDSP_SUPPORT_V32BIS], [1], [Support the V.32bis modem])
+SPANDSP_SUPPORT_V32BIS="#undef SPANDSP_SUPPORT_V32BIS"
 #AC_DEFINE([SPANDSP_SUPPORT_V34], [1], [Support the V.34 FAX modem])
 SPANDSP_SUPPORT_V34="#undef SPANDSP_SUPPORT_V34"
 
@@ -337,6 +341,9 @@ gnu)
     if test "$enable_neon" = "yes" ; then
         COMP_VENDOR_CFLAGS="-mfpu=neon $COMP_VENDOR_CFLAGS"
     fi
+    if test "$enable_avx2" = "yes" ; then
+        COMP_VENDOR_CFLAGS="-mavx2 $COMP_VENDOR_CFLAGS"
+    fi
     if test "$enable_avx" = "yes" ; then
         COMP_VENDOR_CFLAGS="-mavx $COMP_VENDOR_CFLAGS"
     fi
@@ -401,6 +408,9 @@ intel)
     if test x"$ac_cv_gcc_unused_but_set_variable" = xyes ; then
         COMP_VENDOR_CFLAGS="-Wunused-but-set-variable $COMP_VENDOR_CFLAGS"
     fi
+    if test "$enable_avx2" = "yes" ; then
+        COMP_VENDOR_CFLAGS="-mavx2 $COMP_VENDOR_CFLAGS"
+    fi
     if test "$enable_avx" = "yes" ; then
         COMP_VENDOR_CFLAGS="-mavx $COMP_VENDOR_CFLAGS"
     fi
@@ -462,6 +472,10 @@ armv7[bl] | armv7-*)
     fi
     ;;
 x86_64-* | i386-* | i686-*)
+    if test "$enable_avx2" = "yes" ; then
+        AC_DEFINE([SPANDSP_USE_AVX2], [1], [Use the AVX2 instruction set (i386 and x86_64 only).])
+        enable_avx="yes"
+    fi
     if test "$enable_avx" = "yes" ; then
         AC_DEFINE([SPANDSP_USE_AVX], [1], [Use the AVX instruction set (i386 and x86_64 only).])
         enable_sse5="yes"
@@ -516,6 +530,7 @@ AM_CONDITIONAL([COND_SSE4_2], [test "$enable_sse4_2" = yes])
 AM_CONDITIONAL([COND_SSE4A], [test "$enable_sse4a" = yes])
 AM_CONDITIONAL([COND_SSE5], [test "$enable_sse5" = yes])
 AM_CONDITIONAL([COND_AVX], [test "$enable_avx" = yes])
+AM_CONDITIONAL([COND_AVX2], [test "$enable_avx2" = yes])
 AM_CONDITIONAL([COND_NEON], [test "$enable_neon" = yes])
 
 if test "$enable_builtin_tiff" = "yes" ; then
@@ -567,6 +582,7 @@ AC_SUBST(SPANDSP_MISALIGNED_ACCESS_FAILS)
 AC_SUBST(SPANDSP_USE_EXPORT_CAPABILITY)
 AC_SUBST(SPANDSP_SUPPORT_T42)
 AC_SUBST(SPANDSP_SUPPORT_T43)
+AC_SUBST(SPANDSP_SUPPORT_V32BIS)
 AC_SUBST(SPANDSP_SUPPORT_V34)
 AC_SUBST(SPANDSP_SUPPORT_TIFF_FX)
 AC_SUBST(INSERT_INTTYPES_HEADER)

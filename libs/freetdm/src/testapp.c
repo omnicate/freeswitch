@@ -10,6 +10,8 @@ int main(int argc, char *argv[])
 	unsigned runs = 1;
 	int spanid, chanid;
 
+	ftdm_unused_arg(argc);
+	ftdm_unused_arg(argv);
 
 	if (ftdm_global_init() != FTDM_SUCCESS) {
 		fprintf(stderr, "Error loading FreeTDM\n");
@@ -83,5 +85,5 @@ int main(int argc, char *argv[])
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */

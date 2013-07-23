@@ -91,9 +91,9 @@ typedef struct
 extern TIFFFieldArray tiff_fx_field_array;
 #endif
 
-SPAN_DECLARE(const char *) t4_encoding_to_str(int encoding)
+SPAN_DECLARE(const char *) t4_compression_to_str(int compression)
 {
-    switch (encoding)
+    switch (compression)
     {
     case T4_COMPRESSION_NONE:
         return "None";
@@ -107,10 +107,12 @@ SPAN_DECLARE(const char *) t4_encoding_to_str(int encoding)
         return "T.85";
     case T4_COMPRESSION_T85_L0:
         return "T.85(L0)";
+    case T4_COMPRESSION_T88:
+        return "T.88";
     case T4_COMPRESSION_T42_T81:
-        return "T.81";
+        return "T.81+T.42";
     case T4_COMPRESSION_SYCC_T81:
-        return "sYCC T.81";
+        return "T.81+sYCC";
     case T4_COMPRESSION_T43:
         return "T.43";
     case T4_COMPRESSION_T45:
@@ -128,14 +130,59 @@ SPAN_DECLARE(const char *) t4_image_type_to_str(int type)
         return "bi-level";
     case T4_IMAGE_TYPE_COLOUR_BILEVEL:
         return "bi-level colour";
+    case T4_IMAGE_TYPE_4COLOUR_BILEVEL:
+        return "CMYK bi-level colour";
     case T4_IMAGE_TYPE_GRAY_8BIT:
         return "8-bit gray scale";
     case T4_IMAGE_TYPE_GRAY_12BIT:
         return "12-bit gray scale";
     case T4_IMAGE_TYPE_COLOUR_8BIT:
         return "8-bit colour";
+    case T4_IMAGE_TYPE_4COLOUR_8BIT:
+        return "CMYK 8-bit colour";
     case T4_IMAGE_TYPE_COLOUR_12BIT:
         return "12-bit colour";
+    case T4_IMAGE_TYPE_4COLOUR_12BIT:
+        return "CMYK 12-bit colour";
+    }
+    return "???";
+}
+/*- End of function --------------------------------------------------------*/
+
+SPAN_DECLARE(const char *) t4_image_resolution_to_str(int resolution_code)
+{
+    switch (resolution_code)
+    {
+    case T4_RESOLUTION_R8_STANDARD:
+        return "204dpi x 98dpi";
+    case T4_RESOLUTION_R8_FINE:
+        return "204dpi x 196dpi";
+    case T4_RESOLUTION_R8_SUPERFINE:
+        return "204dpi x 391dpi";
+    case T4_RESOLUTION_R16_SUPERFINE:
+        return "408dpi x 391dpi";
+    case T4_RESOLUTION_100_100:
+        return "100dpi x 100dpi";
+    case T4_RESOLUTION_200_100:
+        return "200dpi x 100dpi";
+    case T4_RESOLUTION_200_200:
+        return "200dpi x 200dpi";
+    case T4_RESOLUTION_200_400:
+        return "200dpi x 400dpi";
+    case T4_RESOLUTION_300_300:
+        return "300dpi x 300dpi";
+    case T4_RESOLUTION_300_600:
+        return "300dpi x 600dpi";
+    case T4_RESOLUTION_400_400:
+        return "400dpi x 400dpi";
+    case T4_RESOLUTION_400_800:
+        return "400dpi x 800dpi";
+    case T4_RESOLUTION_600_600:
+        return "600dpi x 600dpi";
+    case T4_RESOLUTION_600_1200:
+        return "600dpi x 1200dpi";
+    case T4_RESOLUTION_1200_1200:
+        return "1200dpi x 1200dpi";
     }
     return "???";
 }
@@ -161,7 +208,7 @@ static int set_tiff_directory_info(t4_rx_state_t *s)
     bits_per_sample = 1;
     samples_per_pixel = 1;
     photometric = PHOTOMETRIC_MINISWHITE;
-    switch (t->output_encoding)
+    switch (t->compression)
     {
     case T4_COMPRESSION_T4_1D:
     default:
@@ -175,8 +222,18 @@ static int set_tiff_directory_info(t4_rx_state_t *s)
     case T4_COMPRESSION_T6:
         output_compression = COMPRESSION_CCITT_T6;
         break;
+    case T4_COMPRESSION_T85:
+    case T4_COMPRESSION_T85_L0:
+        output_compression = COMPRESSION_T85;
+        break;
+#if defined(SPANDSP_SUPPORT_T88)
+    case T4_COMPRESSION_T88:
+        output_compression = COMPRESSION_T88;
+        break;
+#endif
 #if defined(SPANDSP_SUPPORT_T42)
     case T4_COMPRESSION_T42_T81:
+    case T4_COMPRESSION_SYCC_T81:
         output_compression = COMPRESSION_JPEG;
         bits_per_sample = 8;
         samples_per_pixel = 3;
@@ -191,10 +248,14 @@ static int set_tiff_directory_info(t4_rx_state_t *s)
         photometric = PHOTOMETRIC_ITULAB;
         break;
 #endif
-    case T4_COMPRESSION_T85:
-    case T4_COMPRESSION_T85_L0:
-        output_compression = COMPRESSION_T85;
+#if defined(SPANDSP_SUPPORT_T45)
+    case T4_COMPRESSION_T45:
+        output_compression = COMPRESSION_T45;
+        bits_per_sample = 8;
+        samples_per_pixel = 3;
+        photometric = PHOTOMETRIC_ITULAB;
         break;
+#endif
     }
 
     TIFFSetField(t->tiff_file, TIFFTAG_COMPRESSION, output_compression);
@@ -208,6 +269,9 @@ static int set_tiff_directory_info(t4_rx_state_t *s)
         TIFFSetField(t->tiff_file, TIFFTAG_T6OPTIONS, 0);
         TIFFSetField(t->tiff_file, TIFFTAG_FAXMODE, FAXMODE_CLASSF);
         break;
+    case COMPRESSION_T85:
+        TIFFSetField(t->tiff_file, TIFFTAG_FAXMODE, FAXMODE_CLASSF);
+        break;
     case COMPRESSION_JPEG:
         TIFFSetField(t->tiff_file, TIFFTAG_FAXMODE, FAXMODE_CLASSF);
         break;
@@ -216,9 +280,6 @@ static int set_tiff_directory_info(t4_rx_state_t *s)
         TIFFSetField(t->tiff_file, TIFFTAG_FAXMODE, FAXMODE_CLASSF);
         break;
 #endif
-    case COMPRESSION_T85:
-        TIFFSetField(t->tiff_file, TIFFTAG_FAXMODE, FAXMODE_CLASSF);
-        break;
     }
     TIFFSetField(t->tiff_file, TIFFTAG_ORIENTATION, ORIENTATION_TOPLEFT);
     TIFFSetField(t->tiff_file, TIFFTAG_BITSPERSAMPLE, bits_per_sample);
@@ -273,7 +334,7 @@ static int set_tiff_directory_info(t4_rx_state_t *s)
     TIFFSetField(t->tiff_file, TIFFTAG_DATETIME, buf);
     TIFFSetField(t->tiff_file, TIFFTAG_FAXRECVTIME, now - s->tiff.page_start_time);
 
-    TIFFSetField(t->tiff_file, TIFFTAG_IMAGEWIDTH, s->image_width);
+    TIFFSetField(t->tiff_file, TIFFTAG_IMAGEWIDTH, s->metadata.image_width);
     /* Set the total pages to 1. For any one page document we will get this
        right. For multi-page documents we will need to come back and fill in
        the right answer when we know it. */
@@ -281,8 +342,8 @@ static int set_tiff_directory_info(t4_rx_state_t *s)
     /* TIFF page numbers start from zero, so the number of pages in the file
        is always one greater than the highest page number in the file. */
     s->tiff.pages_in_file = s->current_page + 1;
-    s->image_length = 0;
-    switch (s->line_encoding)
+    s->metadata.image_length = 0;
+    switch (s->metadata.compression)
     {
     case T4_COMPRESSION_T4_1D:
     case T4_COMPRESSION_T4_2D:
@@ -302,23 +363,33 @@ static int set_tiff_directory_info(t4_rx_state_t *s)
         }
         /* Fall through */
     case T4_COMPRESSION_T6:
-        s->image_length = t4_t6_decode_get_image_length(&s->decoder.t4_t6);
+        s->metadata.image_length = t4_t6_decode_get_image_length(&s->decoder.t4_t6);
         break;
+    case T4_COMPRESSION_T85:
+    case T4_COMPRESSION_T85_L0:
+        s->metadata.image_length = t85_decode_get_image_length(&s->decoder.t85);
+        break;
+#if defined(SPANDSP_SUPPORT_T88)
+    case T4_COMPRESSION_T88:
+        s->metadata.image_length = t88_decode_get_image_length(&s->decoder.t88);
+        break;
+#endif
     case T4_COMPRESSION_T42_T81:
-        s->image_length = t42_decode_get_image_length(&s->decoder.t42);
+        s->metadata.image_length = t42_decode_get_image_length(&s->decoder.t42);
         break;
 #if defined(SPANDSP_SUPPORT_T43)
     case T4_COMPRESSION_T43:
-        s->image_length = t43_decode_get_image_length(&s->decoder.t43);
+        s->metadata.image_length = t43_decode_get_image_length(&s->decoder.t43);
         break;
 #endif
-    case T4_COMPRESSION_T85:
-    case T4_COMPRESSION_T85_L0:
-        s->image_length = t85_decode_get_image_length(&s->decoder.t85);
+#if defined(SPANDSP_SUPPORT_T45)
+    case T4_COMPRESSION_T45:
+        s->metadata.image_length = t45_decode_get_image_length(&s->decoder.t45);
         break;
+#endif
     }
-    TIFFSetField(t->tiff_file, TIFFTAG_IMAGELENGTH, s->image_length);
-    TIFFSetField(t->tiff_file, TIFFTAG_ROWSPERSTRIP, s->image_length);
+    TIFFSetField(t->tiff_file, TIFFTAG_IMAGELENGTH, s->metadata.image_length);
+    TIFFSetField(t->tiff_file, TIFFTAG_ROWSPERSTRIP, s->metadata.image_length);
 #if defined(SPANDSP_SUPPORT_TIFF_FX)
     TIFFSetField(t->tiff_file, TIFFTAG_PROFILETYPE, PROFILETYPE_G3_FAX);
     TIFFSetField(t->tiff_file, TIFFTAG_FAXPROFILE, FAXPROFILE_S);
@@ -353,19 +424,101 @@ static int row_read_handler(void *user_data, uint8_t row[], size_t len)
 }
 /*- End of function --------------------------------------------------------*/
 
-static int write_tiff_image(t4_rx_state_t *s)
+static int write_tiff_t85_image(t4_rx_state_t *s)
 {
-    t4_rx_tiff_state_t *t;
     uint8_t *buf;
     uint8_t *buf2;
     int buf_len;
     int len;
-    int len2;
+    int image_len;
     t85_encode_state_t t85;
-#if defined(SPANDSP_SUPPORT_T43)
-    t43_encode_state_t t43;
-#endif
     packer_t packer;
+
+    /* We need to perform this compression here, as libtiff does not understand it. */
+    packer.buf = s->tiff.image_buffer;
+    packer.ptr = 0;
+    if (t85_encode_init(&t85, s->metadata.image_width, s->metadata.image_length, row_read_handler, &packer) == NULL)
+        return -1;
+    //if (t->compression == T4_COMPRESSION_T85_L0)
+    //    t85_encode_set_options(&t85, 256, -1, -1);
+    buf = NULL;
+    buf_len = 0;
+    image_len = 0;
+    do
+    {
+        if (buf_len < image_len + 65536)
+        {
+            buf_len += 65536;
+            if ((buf2 = realloc(buf, buf_len)) == NULL)
+            {
+                if (buf)
+                    free(buf);
+                return -1;
+            }
+            buf = buf2;
+        }
+        len = t85_encode_get(&t85, &buf[image_len], buf_len - image_len);
+        image_len += len;
+    }
+    while (len > 0);
+    if (TIFFWriteRawStrip(s->tiff.tiff_file, 0, buf, image_len) < 0)
+    {
+        span_log(&s->logging, SPAN_LOG_WARNING, "%s: Error writing TIFF strip.\n", s->tiff.file);
+        return -1;
+    }
+    t85_encode_release(&t85);
+    free(buf);
+    return 0;
+}
+/*- End of function --------------------------------------------------------*/
+
+#if defined(SPANDSP_SUPPORT_T43)
+static int write_tiff_t43_image(t4_rx_state_t *s)
+{
+    uint8_t *buf;
+    uint8_t *buf2;
+    int buf_len;
+    int len;
+    int image_len;
+    t43_encode_state_t t43;
+    packer_t packer;
+
+    packer.buf = s->tiff.image_buffer;
+    packer.ptr = 0;
+    if (t43_encode_init(&t43, s->metadata.image_width, s->metadata.image_length, row_read_handler, &packer) == NULL)
+        return -1;
+    buf = NULL;
+    buf_len = 0;
+    image_len = 0;
+    do
+    {
+        if (buf_len < image_len + 65536)
+        {
+            buf_len += 65536;
+            if ((buf2 = realloc(buf, buf_len)) == NULL)
+            {
+                if (buf)
+                    free(buf);
+                return -1;
+            }
+            buf = buf2;
+        }
+        len = t43_encode_get(&t43, &buf[image_len], buf_len - image_len);
+        image_len += len;
+    }
+    while (len > 0);
+    if (TIFFWriteRawStrip(s->tiff.tiff_file, 0, buf, image_len) < 0)
+        span_log(&s->logging, SPAN_LOG_WARNING, "%s: Error writing TIFF strip.\n", s->tiff.file);
+    t43_encode_release(&t43);
+    free(buf);
+    return 0;
+}
+/*- End of function --------------------------------------------------------*/
+#endif
+
+static int write_tiff_image(t4_rx_state_t *s)
+{
+    t4_rx_tiff_state_t *t;
 #if defined(SPANDSP_SUPPORT_TIFF_FX)
     uint64_t offset;
 #endif
@@ -380,71 +533,33 @@ static int write_tiff_image(t4_rx_state_t *s)
     if (!TIFFCheckpointDirectory(t->tiff_file))
         span_log(&s->logging, SPAN_LOG_WARNING, "%s: Failed to checkpoint directory for page %d.\n", t->file, s->current_page);
     /* ...and write out the image... */
-    switch (t->output_encoding)
+    switch (t->compression)
     {
     case T4_COMPRESSION_T85:
     case T4_COMPRESSION_T85_L0:
-        span_log(&s->logging, SPAN_LOG_WARNING, "%s: TODO need T.85 compression.\n", t->file);
-        buf_len = 0;
-        buf = NULL;
-        packer.buf = t->image_buffer;
-        packer.ptr = 0;
-        t85_encode_init(&t85, s->image_width, s->image_length, row_read_handler, &packer);
-        //if (t->output_encoding == T4_COMPRESSION_T85_L0)
-        //    t85_encode_set_options(&t85, 256, -1, -1);
-        len2 = 0;
-        do
-        {
-            if (buf_len < len2 + 50000)
-            {
-                buf_len += 50000;
-                if ((buf2 = realloc(buf, buf_len)) == NULL)
-                {
-                    if (buf)
-                        free(buf);
-                    return -1;
-                }
-                buf = buf2;
-            }
-            len = t85_encode_get(&t85, &buf[len2], 50000);
-            len2 += len;
-        }
-        while (len > 0);
-        if (TIFFWriteRawStrip(t->tiff_file, 0, buf, len2) < 0)
-            span_log(&s->logging, SPAN_LOG_WARNING, "%s: Error writing TIFF strip.\n", t->file);
-        t85_encode_release(&t85);
-        free(buf);
+        /* We need to perform this compression here, as libtiff does not understand it. */
+        if (write_tiff_t85_image(s) < 0)
+            return -1;
         break;
+#if defined(SPANDSP_SUPPORT_T88)
+    case T4_COMPRESSION_T88:
+        /* We need to perform this compression here, as libtiff does not understand it. */
+        if (write_tiff_t88_image(s) < 0)
+            return -1;
+        break;
+#endif
 #if defined(SPANDSP_SUPPORT_T43)
     case T4_COMPRESSION_T43:
-        span_log(&s->logging, SPAN_LOG_WARNING, "%s: TODO need T.43 compression.\n", t->file);
-        buf_len = 0;
-        buf = NULL;
-        packer.buf = t->image_buffer;
-        packer.ptr = 0;
-        t43_encode_init(&t43, s->image_width, s->image_length, row_read_handler, &packer);
-        len2 = 0;
-        do
-        {
-            if (buf_len < len2 + 50000)
-            {
-                buf_len += 50000;
-                if ((buf2 = realloc(buf, buf_len)) == NULL)
-                {
-                    if (buf)
-                        free(buf);
-                    return -1;
-                }
-                buf = buf2;
-            }
-            len = t43_encode_get(&t43, &buf[len2], 50000);
-            len2 += len;
-        }
-        while (len > 0);
-        if (TIFFWriteRawStrip(t->tiff_file, 0, buf, len2) < 0)
-            span_log(&s->logging, SPAN_LOG_WARNING, "%s: Error writing TIFF strip.\n", t->file);
-        t43_encode_release(&t43);
-        free(buf);
+        /* We need to perform this compression here, as libtiff does not understand it. */
+        if (write_tiff_t43_image(s) < 0)
+            return -1;
+        break;
+#endif
+#if defined(SPANDSP_SUPPORT_T45)
+    case T4_COMPRESSION_T45:
+        /* We need to perform this compression here, as libtiff does not understand it. */
+        if (write_tiff_t45_image(s) < 0)
+            return -1;
         break;
 #endif
     default:
@@ -457,6 +572,8 @@ static int write_tiff_image(t4_rx_state_t *s)
     if (!TIFFWriteDirectory(t->tiff_file))
         span_log(&s->logging, SPAN_LOG_WARNING, "%s: Failed to write directory for page %d.\n", t->file, s->current_page);
 #if defined(SPANDSP_SUPPORT_TIFF_FX)
+    /* According to the TIFF/FX spec, a global parameters IFD should only be inserted into
+       the first page in the file */
     if (s->current_page == 0)
     {
         if (!TIFFCreateCustomDirectory(t->tiff_file, &tiff_fx_field_array))
@@ -469,13 +586,13 @@ static int write_tiff_image(t4_rx_state_t *s)
 
             offset = 0;
             if (!TIFFWriteCustomDirectory(t->tiff_file, &offset))
-                printf("Failed to write custom directory.\n");
+                span_log(&s->logging, SPAN_LOG_WARNING, "Failed to write custom directory.\n");
 
             /* Now go back and patch in the pointer to the new IFD */
             if (!TIFFSetDirectory(t->tiff_file, s->current_page))
-                printf("Failed to set directory.\n");
+                span_log(&s->logging, SPAN_LOG_WARNING, "Failed to set directory.\n");
             if (!TIFFSetField(t->tiff_file, TIFFTAG_GLOBALPARAMETERSIFD, offset))
-                printf("Failed to set field.\n");
+                span_log(&s->logging, SPAN_LOG_WARNING, "Failed to set field.\n");
             if (!TIFFWriteDirectory(t->tiff_file))
                 span_log(&s->logging, SPAN_LOG_WARNING, "%s: Failed to write directory for page %d.\n", t->file, s->current_page);
         }
@@ -546,23 +663,31 @@ SPAN_DECLARE(int) t4_rx_put_bit(t4_rx_state_t *s, int bit)
 
 SPAN_DECLARE(int) t4_rx_put(t4_rx_state_t *s, const uint8_t buf[], size_t len)
 {
+    uint8_t *buf2;
+
     s->line_image_size += 8*len;
-    switch (s->line_encoding)
+
+    if (s->pre_encoded_len > 0)
     {
-    case T4_COMPRESSION_T4_1D:
-    case T4_COMPRESSION_T4_2D:
-    case T4_COMPRESSION_T6:
-        return t4_t6_decode_put(&s->decoder.t4_t6, buf, len);
-    case T4_COMPRESSION_T42_T81:
-        return t42_decode_put(&s->decoder.t42, buf, len);
-#if defined(SPANDSP_SUPPORT_T43)
-    case T4_COMPRESSION_T43:
-        return t43_decode_put(&s->decoder.t43, buf, len);
-#endif
-    case T4_COMPRESSION_T85:
-    case T4_COMPRESSION_T85_L0:
-        return t85_decode_put(&s->decoder.t85, buf, len);
+        if (s->pre_encoded_len < s->pre_encoded_ptr + 65536)
+        {
+            s->pre_encoded_len += 65536;
+            if ((buf2 = realloc(s->pre_encoded_buf, s->pre_encoded_len)) == NULL)
+            {
+                if (s->pre_encoded_buf)
+                    free(s->pre_encoded_buf);
+                return -1;
+            }
+            s->pre_encoded_buf = buf2;
+        }
+        memcpy(&s->pre_encoded_buf[s->pre_encoded_ptr], buf, len);
+        s->pre_encoded_ptr += len;
+        return T4_DECODE_MORE_DATA;
     }
+
+    if (s->image_put_handler)
+        return s->image_put_handler((void *) &s->decoder, buf, len);
+
     return T4_DECODE_OK;
 }
 /*- End of function --------------------------------------------------------*/
@@ -609,60 +734,54 @@ SPAN_DECLARE(void) t4_rx_set_model(t4_rx_state_t *s, const char *model)
 }
 /*- End of function --------------------------------------------------------*/
 
-SPAN_DECLARE(int) t4_rx_set_rx_encoding(t4_rx_state_t *s, int encoding)
+static void select_tiff_compression(t4_rx_state_t *s, int output_image_type)
 {
-    switch (encoding)
+    if (output_image_type == T4_IMAGE_TYPE_BILEVEL)
+    {
+        /* Only provide for one form of coding throughout the file, even though the
+           coding on the wire could change between pages. */
+        if ((s->supported_tiff_compressions & T4_SUPPORT_COMPRESSION_T85))
+            s->tiff.compression = T4_COMPRESSION_T85;
+        else if ((s->supported_tiff_compressions & T4_SUPPORT_COMPRESSION_T6))
+            s->tiff.compression = T4_COMPRESSION_T6;
+        else if ((s->supported_tiff_compressions & T4_SUPPORT_COMPRESSION_T4_2D))
+            s->tiff.compression = T4_COMPRESSION_T4_2D;
+        else if ((s->supported_tiff_compressions & T4_SUPPORT_COMPRESSION_T4_1D))
+            s->tiff.compression = T4_COMPRESSION_T4_1D;
+    }
+    else
+    {
+        if ((s->supported_tiff_compressions & T4_SUPPORT_COMPRESSION_T42_T81))
+            s->tiff.compression = T4_COMPRESSION_T42_T81;
+        else if ((s->supported_tiff_compressions & T4_SUPPORT_COMPRESSION_T43))
+            s->tiff.compression = T4_COMPRESSION_T43;
+    }
+}
+/*- End of function --------------------------------------------------------*/
+
+SPAN_DECLARE(int) t4_rx_set_rx_encoding(t4_rx_state_t *s, int compression)
+{
+    switch (compression)
     {
     case T4_COMPRESSION_T4_1D:
     case T4_COMPRESSION_T4_2D:
     case T4_COMPRESSION_T6:
-        switch (s->line_encoding)
+        switch (s->metadata.compression)
         {
         case T4_COMPRESSION_T4_1D:
         case T4_COMPRESSION_T4_2D:
         case T4_COMPRESSION_T6:
             break;
         default:
-            t4_t6_decode_init(&s->decoder.t4_t6, encoding, s->image_width, s->row_handler, s->row_handler_user_data);
+            t4_t6_decode_init(&s->decoder.t4_t6, compression, s->metadata.image_width, s->row_handler, s->row_handler_user_data);
             break;
         }
-        s->line_encoding = encoding;
-        return t4_t6_decode_set_encoding(&s->decoder.t4_t6, encoding);
-    case T4_COMPRESSION_T42_T81:
-        switch (s->line_encoding)
-        {
-        case T4_COMPRESSION_T42_T81:
-            break;
-        default:
-            t42_decode_init(&s->decoder.t42, s->row_handler, s->row_handler_user_data);
-            /* Constrain received images to the maximum width of any FAX. This will
-               avoid one potential cause of trouble, where a bad received image has
-               a gigantic dimension that sucks our memory dry. */
-            t42_decode_set_image_size_constraints(&s->decoder.t42, T4_WIDTH_1200_A3, 0);
-            break;
-        }
-        s->line_encoding = encoding;
-        return 0;
-#if defined(SPANDSP_SUPPORT_T43)
-    case T4_COMPRESSION_T43:
-        switch (s->line_encoding)
-        {
-        case T4_COMPRESSION_T43:
-            break;
-        default:
-            t43_decode_init(&s->decoder.t43, s->row_handler, s->row_handler_user_data);
-            /* Constrain received images to the maximum width of any FAX. This will
-               avoid one potential cause of trouble, where a bad received image has
-               a gigantic dimension that sucks our memory dry. */
-            t43_decode_set_image_size_constraints(&s->decoder.t43, T4_WIDTH_1200_A3, 0);
-            break;
-        }
-        s->line_encoding = encoding;
-        return 0;
-#endif
+        s->metadata.compression = compression;
+        select_tiff_compression(s, T4_IMAGE_TYPE_BILEVEL);
+        return t4_t6_decode_set_encoding(&s->decoder.t4_t6, compression);
     case T4_COMPRESSION_T85:
     case T4_COMPRESSION_T85_L0:
-        switch (s->line_encoding)
+        switch (s->metadata.compression)
         {
         case T4_COMPRESSION_T85:
         case T4_COMPRESSION_T85_L0:
@@ -675,16 +794,80 @@ SPAN_DECLARE(int) t4_rx_set_rx_encoding(t4_rx_state_t *s, int encoding)
             t85_decode_set_image_size_constraints(&s->decoder.t85, T4_WIDTH_1200_A3, 0);
             break;
         }
-        s->line_encoding = encoding;
+        select_tiff_compression(s, T4_IMAGE_TYPE_BILEVEL);
+        s->metadata.compression = compression;
         return 0;
+#if defined(SPANDSP_SUPPORT_T88)
+    case T4_COMPRESSION_T88:
+        switch (s->metadata.compression)
+        {
+        case T4_COMPRESSION_T88:
+            break;
+        default:
+            break;
+        }
+        select_tiff_compression(s, T4_IMAGE_TYPE_BILEVEL);
+        s->metadata.compression = compression;
+        return 0;
+#endif
+    case T4_COMPRESSION_T42_T81:
+    case T4_COMPRESSION_SYCC_T81:
+        switch (s->metadata.compression)
+        {
+        case T4_COMPRESSION_T42_T81:
+        case T4_COMPRESSION_SYCC_T81:
+            break;
+        default:
+            t42_decode_init(&s->decoder.t42, s->row_handler, s->row_handler_user_data);
+            /* Constrain received images to the maximum width of any FAX. This will
+               avoid one potential cause of trouble, where a bad received image has
+               a gigantic dimension that sucks our memory dry. */
+            t42_decode_set_image_size_constraints(&s->decoder.t42, T4_WIDTH_1200_A3, 0);
+            break;
+        }
+        s->metadata.compression = compression;
+        select_tiff_compression(s, T4_IMAGE_TYPE_COLOUR_8BIT);
+        return 0;
+#if defined(SPANDSP_SUPPORT_T43)
+    case T4_COMPRESSION_T43:
+        switch (s->metadata.compression)
+        {
+        case T4_COMPRESSION_T43:
+            break;
+        default:
+            t43_decode_init(&s->decoder.t43, s->row_handler, s->row_handler_user_data);
+            /* Constrain received images to the maximum width of any FAX. This will
+               avoid one potential cause of trouble, where a bad received image has
+               a gigantic dimension that sucks our memory dry. */
+            t43_decode_set_image_size_constraints(&s->decoder.t43, T4_WIDTH_1200_A3, 0);
+            break;
+        }
+        s->metadata.compression = compression;
+        select_tiff_compression(s, T4_IMAGE_TYPE_COLOUR_8BIT);
+        return 0;
+#endif
+#if defined(SPANDSP_SUPPORT_T45)
+    case T4_COMPRESSION_T45:
+        switch (s->metadata.compression)
+        {
+        case T4_COMPRESSION_T45:
+            break;
+        default:
+            break;
+        }
+        s->metadata.compression = compression;
+        select_tiff_compression(s, T4_IMAGE_TYPE_COLOUR_8BIT);
+        return 0;
+#endif
     }
+
     return -1;
 }
 /*- End of function --------------------------------------------------------*/
 
 SPAN_DECLARE(void) t4_rx_set_image_width(t4_rx_state_t *s, int width)
 {
-    s->image_width = width;
+    s->metadata.image_width = width;
 }
 /*- End of function --------------------------------------------------------*/
 
@@ -692,21 +875,29 @@ SPAN_DECLARE(int) t4_rx_set_row_write_handler(t4_rx_state_t *s, t4_row_write_han
 {
     s->row_handler = handler;
     s->row_handler_user_data = user_data;
-    switch (s->line_encoding)
+    switch (s->metadata.compression)
     {
     case T4_COMPRESSION_T4_1D:
     case T4_COMPRESSION_T4_2D:
     case T4_COMPRESSION_T6:
         return t4_t6_decode_set_row_write_handler(&s->decoder.t4_t6, handler, user_data);
+    case T4_COMPRESSION_T85:
+    case T4_COMPRESSION_T85_L0:
+        return t85_decode_set_row_write_handler(&s->decoder.t85, handler, user_data);
+#if defined(SPANDSP_SUPPORT_T88)
+    case T4_COMPRESSION_T88:
+        return t88_decode_set_row_write_handler(&s->decoder.t88, handler, user_data);
+#endif
     case T4_COMPRESSION_T42_T81:
         return t42_decode_set_row_write_handler(&s->decoder.t42, handler, user_data);
 #if defined(SPANDSP_SUPPORT_T43)
     case T4_COMPRESSION_T43:
         return t43_decode_set_row_write_handler(&s->decoder.t43, handler, user_data);
 #endif
-    case T4_COMPRESSION_T85:
-    case T4_COMPRESSION_T85_L0:
-        return t85_decode_set_row_write_handler(&s->decoder.t85, handler, user_data);
+#if defined(SPANDSP_SUPPORT_T45)
+    case T4_COMPRESSION_T45:
+        return t45_decode_set_row_write_handler(&s->decoder.t45, handler, user_data);
+#endif
     }
     return -1;
 }
@@ -717,12 +908,13 @@ SPAN_DECLARE(void) t4_rx_get_transfer_statistics(t4_rx_state_t *s, t4_stats_t *t
     memset(t, 0, sizeof(*t));
     t->pages_transferred = s->current_page;
     t->pages_in_file = s->tiff.pages_in_file;
+
     t->image_x_resolution = s->metadata.x_resolution;
     t->image_y_resolution = s->metadata.y_resolution;
     t->x_resolution = s->metadata.x_resolution;
     t->y_resolution = s->metadata.y_resolution;
-    t->encoding = s->line_encoding;
-    switch (s->line_encoding)
+    t->compression = s->metadata.compression;
+    switch (s->metadata.compression)
     {
     case T4_COMPRESSION_T4_1D:
     case T4_COMPRESSION_T4_2D:
@@ -737,26 +929,6 @@ SPAN_DECLARE(void) t4_rx_get_transfer_statistics(t4_rx_state_t *s, t4_stats_t *t
         t->bad_rows = s->decoder.t4_t6.bad_rows;
         t->longest_bad_row_run = s->decoder.t4_t6.longest_bad_row_run;
         break;
-    case T4_COMPRESSION_T42_T81:
-        t->type = 0;
-        t->width = t42_decode_get_image_width(&s->decoder.t42);
-        t->length = t42_decode_get_image_length(&s->decoder.t42);
-        t->image_type = t->type;
-        t->image_width = t->width;
-        t->image_length = t->length;
-        t->line_image_size = t42_decode_get_compressed_image_size(&s->decoder.t42)/8;
-        break;
-#if defined(SPANDSP_SUPPORT_T43)
-    case T4_COMPRESSION_T43:
-        t->type = 0;
-        t->width = t43_decode_get_image_width(&s->decoder.t43);
-        t->length = t43_decode_get_image_length(&s->decoder.t43);
-        t->image_type = t->type;
-        t->image_width = t->width;
-        t->image_length = t->length;
-        t->line_image_size = t43_decode_get_compressed_image_size(&s->decoder.t43)/8;
-        break;
-#endif
     case T4_COMPRESSION_T85:
     case T4_COMPRESSION_T85_L0:
         t->type = T4_IMAGE_TYPE_BILEVEL;
@@ -767,33 +939,82 @@ SPAN_DECLARE(void) t4_rx_get_transfer_statistics(t4_rx_state_t *s, t4_stats_t *t
         t->image_length = t->length;
         t->line_image_size = t85_decode_get_compressed_image_size(&s->decoder.t85)/8;
         break;
+#if defined(SPANDSP_SUPPORT_T88)
+    case T4_COMPRESSION_T88:
+        break;
+#endif
+    case T4_COMPRESSION_T42_T81:
+        t->type = T4_IMAGE_TYPE_COLOUR_8BIT; //T4_IMAGE_TYPE_GRAY_8BIT;
+        t->width = t42_decode_get_image_width(&s->decoder.t42);
+        t->length = t42_decode_get_image_length(&s->decoder.t42);
+        t->image_type = t->type;
+        t->image_width = t->width;
+        t->image_length = t->length;
+        t->line_image_size = t42_decode_get_compressed_image_size(&s->decoder.t42)/8;
+        break;
+#if defined(SPANDSP_SUPPORT_T43)
+    case T4_COMPRESSION_T43:
+        t->type = T4_IMAGE_TYPE_COLOUR_8BIT;
+        t->width = t43_decode_get_image_width(&s->decoder.t43);
+        t->length = t43_decode_get_image_length(&s->decoder.t43);
+        t->image_type = t->type;
+        t->image_width = t->width;
+        t->image_length = t->length;
+        t->line_image_size = t43_decode_get_compressed_image_size(&s->decoder.t43)/8;
+        break;
+#endif
+#if defined(SPANDSP_SUPPORT_T45)
+    case T4_COMPRESSION_T45:
+        break;
+#endif
     }
 }
 /*- End of function --------------------------------------------------------*/
 
 SPAN_DECLARE(int) t4_rx_start_page(t4_rx_state_t *s)
 {
-    span_log(&s->logging, SPAN_LOG_FLOW, "Start rx page %d - compression %s\n", s->current_page, t4_encoding_to_str(s->line_encoding));
+    span_log(&s->logging, SPAN_LOG_FLOW, "Start rx page %d - compression %s\n", s->current_page, t4_compression_to_str(s->metadata.compression));
 
-    switch (s->line_encoding)
+    switch (s->metadata.compression)
     {
+    case 0:
+        s->pre_encoded_ptr = 0;
+        s->pre_encoded_len = 0;
+        s->image_put_handler = NULL;
+        break;
     case T4_COMPRESSION_T4_1D:
     case T4_COMPRESSION_T4_2D:
     case T4_COMPRESSION_T6:
-        t4_t6_decode_restart(&s->decoder.t4_t6, s->image_width);
+        t4_t6_decode_restart(&s->decoder.t4_t6, s->metadata.image_width);
+        s->image_put_handler = (t4_image_put_handler_t) t4_t6_decode_put;
         break;
+    case T4_COMPRESSION_T85:
+    case T4_COMPRESSION_T85_L0:
+        t85_decode_restart(&s->decoder.t85);
+        s->image_put_handler = (t4_image_put_handler_t) t85_decode_put;
+        break;
+#if defined(SPANDSP_SUPPORT_T88)
+    case T4_COMPRESSION_T88:
+        t88_decode_restart(&s->decoder.t88);
+        s->image_put_handler = (t4_image_put_handler_t) t88_decode_put;
+        break;
+#endif
     case T4_COMPRESSION_T42_T81:
         t42_decode_restart(&s->decoder.t42);
+        s->image_put_handler = (t4_image_put_handler_t) t42_decode_put;
         break;
 #if defined(SPANDSP_SUPPORT_T43)
     case T4_COMPRESSION_T43:
         t43_decode_restart(&s->decoder.t43);
+        s->image_put_handler = (t4_image_put_handler_t) t43_decode_put;
         break;
 #endif
-    case T4_COMPRESSION_T85:
-    case T4_COMPRESSION_T85_L0:
-        t85_decode_restart(&s->decoder.t85);
+#if defined(SPANDSP_SUPPORT_T45)
+    case T4_COMPRESSION_T45:
+        t45_decode_restart(&s->decoder.t45);
+        s->image_put_handler = (t4_image_put_handler_t) t45_decode_put;
         break;
+#endif
     }
     s->line_image_size = 0;
     s->tiff.image_size = 0;
@@ -831,29 +1052,43 @@ SPAN_DECLARE(int) t4_rx_end_page(t4_rx_state_t *s)
     int length;
 
     length = 0;
-    switch (s->line_encoding)
+
+    if (s->image_put_handler)
+        s->image_put_handler((void *) &s->decoder, NULL, 0);
+
+    switch (s->metadata.compression)
     {
     case T4_COMPRESSION_T4_1D:
     case T4_COMPRESSION_T4_2D:
     case T4_COMPRESSION_T6:
-        t4_t6_decode_put(&s->decoder.t4_t6, NULL, 0);
         length = t4_t6_decode_get_image_length(&s->decoder.t4_t6);
         break;
+    case T4_COMPRESSION_T85:
+    case T4_COMPRESSION_T85_L0:
+        length = t85_decode_get_image_length(&s->decoder.t85);
+        break;
+#if defined(SPANDSP_SUPPORT_T88)
+    case T4_COMPRESSION_T88:
+        length = t88_decode_get_image_length(&s->decoder.t88);
+        break;
+#endif
     case T4_COMPRESSION_T42_T81:
-        t42_decode_put(&s->decoder.t42, NULL, 0);
         length = t42_decode_get_image_length(&s->decoder.t42);
+        if (s->decoder.t42.samples_per_pixel == 3)
+            select_tiff_compression(s, T4_IMAGE_TYPE_COLOUR_8BIT);
+        else
+            select_tiff_compression(s, T4_IMAGE_TYPE_GRAY_8BIT);
         break;
 #if defined(SPANDSP_SUPPORT_T43)
     case T4_COMPRESSION_T43:
-        t43_decode_put(&s->decoder.t43, NULL, 0);
         length = t43_decode_get_image_length(&s->decoder.t43);
         break;
 #endif
-    case T4_COMPRESSION_T85:
-    case T4_COMPRESSION_T85_L0:
-        t85_decode_put(&s->decoder.t85, NULL, 0);
-        length = t85_decode_get_image_length(&s->decoder.t85);
+#if defined(SPANDSP_SUPPORT_T45)
+    case T4_COMPRESSION_T45:
+        length = t45_decode_get_image_length(&s->decoder.t45);
         break;
+#endif
     }
 
     if (length == 0)
@@ -879,7 +1114,7 @@ SPAN_DECLARE(logging_state_t *) t4_rx_get_logging_state(t4_rx_state_t *s)
 }
 /*- End of function --------------------------------------------------------*/
 
-SPAN_DECLARE(t4_rx_state_t *) t4_rx_init(t4_rx_state_t *s, const char *file, int output_encoding)
+SPAN_DECLARE(t4_rx_state_t *) t4_rx_init(t4_rx_state_t *s, const char *file, int supported_output_compressions)
 {
     int allocated;
 
@@ -899,9 +1134,7 @@ SPAN_DECLARE(t4_rx_state_t *) t4_rx_init(t4_rx_state_t *s, const char *file, int
 
     span_log(&s->logging, SPAN_LOG_FLOW, "Start rx document\n");
 
-    /* Only provide for one form of coding throughout the file, even though the
-       coding on the wire could change between pages. */
-    s->tiff.output_encoding = output_encoding;
+    s->supported_tiff_compressions = supported_output_compressions;
 
     /* Set some default values */
     s->metadata.x_resolution = T4_X_RESOLUTION_R8;
@@ -933,21 +1166,29 @@ SPAN_DECLARE(int) t4_rx_release(t4_rx_state_t *s)
 {
     if (s->tiff.file)
         tiff_rx_release(s);
-    switch (s->line_encoding)
+    switch (s->metadata.compression)
     {
     case T4_COMPRESSION_T4_1D:
     case T4_COMPRESSION_T4_2D:
     case T4_COMPRESSION_T6:
         return t4_t6_decode_release(&s->decoder.t4_t6);
+    case T4_COMPRESSION_T85:
+    case T4_COMPRESSION_T85_L0:
+        return t85_decode_release(&s->decoder.t85);
+#if defined(SPANDSP_SUPPORT_T88)
+    case T4_COMPRESSION_T88:
+        return t88_decode_release(&s->decoder.t88);
+#endif
     case T4_COMPRESSION_T42_T81:
         return t42_decode_release(&s->decoder.t42);
 #if defined(SPANDSP_SUPPORT_T43)
     case T4_COMPRESSION_T43:
         return t43_decode_release(&s->decoder.t43);
 #endif
-    case T4_COMPRESSION_T85:
-    case T4_COMPRESSION_T85_L0:
-        return t85_decode_release(&s->decoder.t85);
+#if defined(SPANDSP_SUPPORT_T45)
+    case T4_COMPRESSION_T45:
+        return t45_decode_release(&s->decoder.t45);
+#endif
     }
     return -1;
 }

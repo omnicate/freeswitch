@@ -102,8 +102,13 @@ static const EVP_MD *get_evp_by_name(const char *name)
 
 	return NULL;
 }
-#ifdef _MSC_VER
-/* Visual C do not have strsep? */
+#if defined(_MSC_VER) || (defined(__SunOS_5_10) && defined(__SUNPRO_C))
+/*
+ * Visual C do not have strsep?
+ *
+ * Solaris 10 with the Sun Studio compilers doesn't have strsep in the
+ * C library either.
+ */
 char
     *strsep(char **stringp, const char *delim)
 {
@@ -267,7 +272,7 @@ SWITCH_DECLARE(int) switch_core_gen_certs(const char *prefix)
 		
 	//bio_err=BIO_new_fp(stderr, BIO_NOCLOSE);
 		
-	mkcert(&x509, &pkey, 512, 0, 365);
+	mkcert(&x509, &pkey, 2048, 0, 365);
 
 	//RSA_print_fp(stdout, pkey->pkey.rsa, 0);
 	//X509_print_fp(stdout, x509);
@@ -390,7 +395,7 @@ static int mkcert(X509 **x509p, EVP_PKEY **pkeyp, int bits, int serial, int days
 	add_ext(x, NID_netscape_comment, "Self-Signed CERT for DTLS");
 
 
-	if (!X509_sign(x, pk, EVP_md5()))
+	if (!X509_sign(x, pk, EVP_sha1()))
 		goto err;
 
 	*x509p=x;

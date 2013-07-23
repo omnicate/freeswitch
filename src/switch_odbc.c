@@ -412,7 +412,7 @@ SWITCH_DECLARE(switch_odbc_status_t) switch_odbc_handle_exec_string(switch_odbc_
 		SQLRowCount(stmt, &m);
 		handle->affected_rows = (int) m;
 
-		if (m <= 0) {
+		if (m == 0) {
 			goto done;
 		}
 
@@ -771,5 +771,5 @@ SWITCH_DECLARE(switch_odbc_status_t) switch_odbc_SQLEndTran(switch_odbc_handle_t
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */

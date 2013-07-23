@@ -142,6 +142,27 @@ typedef struct {
 } switch_stun_ip_t;
 
 
+#if SWITCH_BYTE_ORDER == __BIG_ENDIAN
+
+typedef struct {
+	unsigned padding:21;
+	unsigned code:3;
+	unsigned number:8;
+	char reason[764];
+} switch_stun_error_code_t;
+
+#else
+
+typedef struct {
+	unsigned number:8;
+	unsigned code:3;
+	unsigned padding:21;
+	char reason[764];
+} switch_stun_error_code_t;
+
+#endif
+
+
 /*!
   \brief Writes random characters into a buffer
   \param buf the buffer
@@ -285,5 +306,5 @@ SWITCH_END_EXTERN_C
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */

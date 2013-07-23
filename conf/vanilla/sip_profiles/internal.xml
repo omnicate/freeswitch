@@ -178,6 +178,10 @@
     <!-- if you want to send any special bind params of your own -->
     <!--<param name="bind-params" value="transport=udp"/>-->
     <!--<param name="unregister-on-options-fail" value="true"/>-->
+    <!-- Send an OPTIONS packet to all registered endpoints -->
+    <!--<param name="all-reg-options-ping" value="true"/>-->
+    <!-- Send an OPTIONS packet to NATed registered endpoints. Can be 'true' or 'udp-only'. -->
+    <!--<param name="nat-options-ping" value="true"/>-->
 
     <!-- TLS: disabled by default, set to "true" to enable -->
     <param name="tls" value="$${internal_ssl_enable}"/>
@@ -291,6 +295,15 @@
     <!--all inbound reg will stored in the db using this domain -->
     <param name="force-register-db-domain" value="$${domain}"/>
 
+
+    <!-- uncomment for sip over websocket support -->
+    <!--<param name="ws-binding"  value=":5066"/>-->
+
+    <!-- uncomment for sip over secure websocket support -->
+    <!-- You need wss.pem in /usr/local/freeswitch/certs for wss -->
+    <!--<param name="wss-binding" value=":7443"/>-->
+    
+
     <!--<param name="delete-subs-on-register" value="false"/>-->
 
     <!-- launch a new thread to process each new inbound register when using heavier backends -->
@@ -302,6 +315,10 @@
 
     <!--force suscription expires to a lower value than requested-->
     <!--<param name="force-subscription-expires" value="60"/>-->
+
+    <!-- add a random deviation to the expires value of the 202 Accepted -->
+    <!--<param name="sip-subscription-max-deviation" value="120"/>-->
+
     <!-- disable register and transfer which may be undesirable in a public switch -->
     <!--<param name="disable-transfer" value="true"/>-->
     <!--<param name="disable-register" value="true"/>-->

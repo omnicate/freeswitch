@@ -388,6 +388,7 @@ SWITCH_DECLARE(bool) email(char *to, char *from, char *headers = NULL, char *bod
 
 		 virtual switch_status_t run_dtmf_callback(void *input, switch_input_type_t itype) = 0;
 
+		 SWITCH_DECLARE(void) consoleLog(char *level_str, char *msg);
 	 };
 
 
@@ -429,5 +430,5 @@ SWITCH_DECLARE_NONSTD(switch_status_t) dtmf_callback(switch_core_session_t *sess
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */

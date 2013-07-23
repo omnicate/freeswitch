@@ -26,7 +26,7 @@
  * Anthony Minessale II <anthm@freeswitch.org>
  * Michael Jerris <mike@jerris.com>
  * Paul D. Tinsley <pdt at jackhammer.org>
- *
+ * William King <william.king@quentustech.com>
  *
  * switch_event.c -- Event System
  *
@@ -198,6 +198,8 @@ static char *EVENT_NAMES[] = {
 	"CONFERENCE_DATA",
 	"CALL_SETUP_REQ",
 	"CALL_SETUP_RESULT",
+	"CALL_DETAIL",
+	"DEVICE_STATE",
 	"ALL"
 };
 
@@ -252,6 +254,11 @@ static void *SWITCH_THREAD_FUNC switch_event_dispatch_thread(switch_thread_t *th
 		if (EVENT_DISPATCH_QUEUE_THREADS[my_id] == thread) {
 			break;
 		}
+	}
+
+	if ( my_id >= MAX_DISPATCH_VAL ) {
+		switch_mutex_unlock(EVENT_QUEUE_MUTEX);
+		return NULL;
 	}
 
 	EVENT_DISPATCH_QUEUE_RUNNING[my_id] = 1;
@@ -909,9 +916,9 @@ static switch_status_t switch_event_base_add_header(switch_event_t *event, switc
 	if (index_ptr || (stack & SWITCH_STACK_PUSH) || (stack & SWITCH_STACK_UNSHIFT)) {
 		
 		if (!(header = switch_event_get_header_ptr(event, header_name)) && index_ptr) {
-
+			
 			header = new_header(header_name);
-
+			
 			if (switch_test_flag(event, EF_UNIQ_HEADERS)) {
 				switch_event_del_header(event, header_name);
 			}
@@ -1766,8 +1773,10 @@ SWITCH_DECLARE(switch_xml_t) switch_event_xmlize(switch_event_t *event, const ch
 		ret = vasprintf(&data, fmt, ap);
 #else
 		data = (char *) malloc(2048);
-		if (!data)
+		if (!data) {
+			va_end(ap);
 			return NULL;
+		}
 		ret = vsnprintf(data, 2048, fmt, ap);
 #endif
 		va_end(ap);
@@ -2509,5 +2518,5 @@ SWITCH_DECLARE(void) switch_event_add_presence_data_cols(switch_channel_t *chann
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */

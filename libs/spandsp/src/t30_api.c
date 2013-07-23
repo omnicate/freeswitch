@@ -646,19 +646,10 @@ SPAN_DECLARE(int) t30_set_ecm_capability(t30_state_t *s, int enabled)
 }
 /*- End of function --------------------------------------------------------*/
 
-SPAN_DECLARE(int) t30_set_rx_encoding(t30_state_t *s, int encoding)
+SPAN_DECLARE(int) t30_set_supported_output_compressions(t30_state_t *s, int supported_compressions)
 {
-    switch (encoding)
-    {
-    case T4_COMPRESSION_T4_1D:
-    case T4_COMPRESSION_T4_2D:
-    case T4_COMPRESSION_T6:
-    //case T4_COMPRESSION_T85:
-    //case T4_COMPRESSION_T85_L0:
-        s->output_encoding = encoding;
-        return 0;
-    }
-    return -1;
+    s->supported_output_compressions = supported_compressions;
+    return 0;
 }
 /*- End of function --------------------------------------------------------*/
 
@@ -694,14 +685,29 @@ SPAN_DECLARE(int) t30_set_supported_modems(t30_state_t *s, int supported_modems)
 SPAN_DECLARE(int) t30_set_supported_compressions(t30_state_t *s, int supported_compressions)
 {
     /* Mask out the ones we actually support today. */
-    supported_compressions &= T30_SUPPORT_COMPRESSION_T4_1D
-                            | T30_SUPPORT_COMPRESSION_T4_2D
-                            | T30_SUPPORT_COMPRESSION_T6
-                            | T30_SUPPORT_COMPRESSION_T85
-                            | T30_SUPPORT_COMPRESSION_T85_L0
-                            //| T30_SUPPORT_COMPRESSION_T81
+    supported_compressions &= T4_SUPPORT_COMPRESSION_T4_1D
+                            | T4_SUPPORT_COMPRESSION_T4_2D
+                            | T4_SUPPORT_COMPRESSION_T6
+                            | T4_SUPPORT_COMPRESSION_T85
+                            | T4_SUPPORT_COMPRESSION_T85_L0
+#if defined(SPANDSP_SUPPORT_T88)
+                            | T4_SUPPORT_COMPRESSION_T88
+#endif
+                            //| T4_SUPPORT_COMPRESSION_T81
 #if defined(SPANDSP_SUPPORT_T43)
-                            | T30_SUPPORT_COMPRESSION_T43
+                            | T4_SUPPORT_COMPRESSION_T43
+#endif
+#if defined(SPANDSP_SUPPORT_T45)
+                            | T4_SUPPORT_COMPRESSION_T45
+#endif
+#if 0
+                            | T4_SUPPORT_COMPRESSION_GRAYSCALE
+                            | T4_SUPPORT_COMPRESSION_COLOUR
+                            | T4_SUPPORT_COMPRESSION_12BIT
+                            | T4_SUPPORT_COMPRESSION_COLOUR_TO_GRAY
+                            | T4_SUPPORT_COMPRESSION_GRAY_TO_BILEVEL
+                            | T4_SUPPORT_COMPRESSION_COLOUR_TO_BILEVEL
+                            | T4_SUPPORT_COMPRESSION_RESCALING
 #endif
                             | 0;
     s->supported_compressions = supported_compressions;
@@ -754,6 +760,13 @@ SPAN_DECLARE(int) t30_set_supported_colour_resolutions(t30_state_t *s, int suppo
 
 SPAN_DECLARE(int) t30_set_supported_image_sizes(t30_state_t *s, int supported_image_sizes)
 {
+    /* Force the sizes which are always available */
+    supported_image_sizes |= (T4_SUPPORT_WIDTH_215MM | T4_SUPPORT_LENGTH_A4);
+    /* Force the sizes which depend on sizes which are supported */
+    if ((supported_image_sizes & T4_SUPPORT_LENGTH_UNLIMITED))
+        supported_image_sizes |= T4_SUPPORT_LENGTH_B4;
+    if ((supported_image_sizes & T4_SUPPORT_WIDTH_303MM))
+        supported_image_sizes |= T4_SUPPORT_WIDTH_255MM;
     s->supported_image_sizes = supported_image_sizes;
     t30_build_dis_or_dtc(s);
     return 0;
