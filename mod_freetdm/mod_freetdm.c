@@ -2798,6 +2798,7 @@ static FIO_SIGNAL_CB_FUNCTION(on_clear_channel_signal)
 					switch_core_session_queue_message(partner_session, msg);
 					switch_core_session_rwunlock(partner_session);
 				}
+				switch_core_session_rwunlock(session);
 			}
 		}
 
