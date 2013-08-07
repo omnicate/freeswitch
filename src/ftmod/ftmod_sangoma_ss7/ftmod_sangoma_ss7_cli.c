@@ -146,6 +146,7 @@ ftdm_status_t ftdm_sngss7_handle_cli_cmd(ftdm_stream_handle_t *stream, const cha
 	int		trace_level = 7;
 	int		verbose = 1;
 	int		c = 0;
+	int		action = 0;
 
 	if (data) {
 		mycmd = ftdm_strdup(data);
@@ -889,7 +890,35 @@ ftdm_status_t ftdm_sngss7_handle_cli_cmd(ftdm_stream_handle_t *stream, const cha
 			stream->write_function(stream, "Unknown \"m2ua  %s option\", supported values \"logging\"\n",argv[c]);
 			goto handle_cli_error_argc;
 		}
-	/**************************************************************************/	
+	/**************************************************************************/
+	} else if (!strcasecmp(argv[c], "logging")) {
+	/**************************************************************************/
+		if (argc != 3) {
+			stream->write_function(stream, "Unknown \"logging option\", supported values are [isup|mtp2|mtp3] [enable|disable] \n");
+			goto handle_cli_error_argc;
+		}
+		c = c+2; /* need to point to logging enable/disable action argument */
+
+		if (!strcasecmp(argv[c],"enable")) {
+			action = AENA;
+		} else if (!strcasecmp(argv[c],"disable")) {
+			action = ADISIMM;
+		} else {
+			stream->write_function(stream, "Unknown \"logging option\", supported values are enable/disable \n");
+			goto handle_cli_error_argc;
+		}
+		c--; /* need to point to logging module argument */
+
+		if (!strcasecmp(argv[c],"isup")) {
+			ftmod_ss7_isup_debug(action);
+		} else if (!strcasecmp(argv[c],"mtp3")) {
+			ftmod_ss7_mtp3_debug(action);
+		} else if (!strcasecmp(argv[c],"mtp2")) {
+			ftmod_ss7_mtp2_debug(action);
+		} else {
+			stream->write_function(stream, "Unknown \"logging %s option\", supported values are \"isup/mtp3/mtp2\"\n",argv[c]);
+			goto handle_cli_error_argc;
+		}
 	} else {
 	/**************************************************************************/
 		goto handle_cli_error;
@@ -973,6 +1002,8 @@ static ftdm_status_t handle_print_usage(ftdm_stream_handle_t *stream)
 	stream->write_function(stream, "ftdm ss7 show relay\n");
 	stream->write_function(stream, "\n");
 
+	stream->write_function(stream, "ftmod_sangoma_ss7 logging:\n");
+	stream->write_function(stream, "ftdm ss7 logging [ISUP|MTP3|MTP2] [enable|disable] \n");
     } /* (SNG_SS7_OPR_MODE_M2UA_SG != g_ftdm_operating_mode) */
 
 	if ((SNG_SS7_OPR_MODE_M2UA_ASP == g_ftdm_operating_mode) ||
