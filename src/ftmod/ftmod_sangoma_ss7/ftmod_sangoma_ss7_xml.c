@@ -2662,7 +2662,8 @@ static int ftmod_ss7_fill_in_self_route(int spc, int linkType, int switchType, i
 	int i = 1;
 
 	while (i < (MAX_MTP_ROUTES)) {
-		if (g_ftdm_sngss7_data.cfg.mtpRoute[i].dpc == spc) {
+		if ((g_ftdm_sngss7_data.cfg.mtpRoute[i].dpc == spc) &&
+				(g_ftdm_sngss7_data.cfg.mtpRoute[i].switchType == switchType)) {
 			/* we have a match so break out of this loop */
 			break;
 		}
@@ -2721,7 +2722,8 @@ static int ftmod_ss7_fill_in_nsap(sng_route_t *mtp3_route)
 	i = 1;
 	while (g_ftdm_sngss7_data.cfg.nsap[i].id != 0) {
 		if ((g_ftdm_sngss7_data.cfg.nsap[i].linkType == mtp3_route->linkType) &&
-			(g_ftdm_sngss7_data.cfg.nsap[i].switchType == mtp3_route->switchType)) {
+			(g_ftdm_sngss7_data.cfg.nsap[i].switchType == mtp3_route->switchType) &&
+			(g_ftdm_sngss7_data.cfg.nsap[i].ssf == mtp3_route->ssf)) {
 
 			/* we have a match so break out of this loop */
 			break;
@@ -2892,7 +2894,8 @@ static int ftmod_ss7_fill_in_isap(sng_isap_t *sng_isap)
 	/* go through all the existing interfaces and see if we find a match */
 	i = 1;
 	while (g_ftdm_sngss7_data.cfg.isap[i].id != 0) {
-		if (g_ftdm_sngss7_data.cfg.isap[i].switchType == sng_isap->switchType) {
+		if ((g_ftdm_sngss7_data.cfg.isap[i].switchType == sng_isap->switchType) &&
+			       (g_ftdm_sngss7_data.cfg.isap[i].ssf == sng_isap->ssf)) {
 
 			/* we have a match so break out of this loop */
 			break;
