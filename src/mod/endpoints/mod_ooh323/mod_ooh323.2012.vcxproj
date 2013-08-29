@@ -1,0 +1,213 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectName>mod_ooh323</ProjectName>
+    <ProjectGuid>{669150E1-576E-4D65-A371-6554B437D718}</ProjectGuid>
+    <RootNamespace>mod_ooh323</RootNamespace>
+    <Keyword>Win32Proj</Keyword>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v110</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v110</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v110</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v110</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\..\..\..\w32\module_release.props" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\..\..\..\w32\module_debug.props" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\..\..\..\w32\module_release.props" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+    <Import Project="..\..\..\..\w32\module_debug.props" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup>
+    <_ProjectFileVersion>10.0.30319.1</_ProjectFileVersion>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;_USRDLL;MOD_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <AdditionalIncludeDirectories>ooh323c\src\h323;ooh323c\src\h323_v6;ooh323c\src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+      <DataExecutionPrevention>
+      </DataExecutionPrevention>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Midl>
+      <TargetEnvironment>X64</TargetEnvironment>
+    </Midl>
+    <ClCompile>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;_USRDLL;MOD_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <AdditionalIncludeDirectories>ooh323c\src\h323;ooh323c\src\h323_v6;ooh323c\src;$(SolutionDir)\src\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+      <DataExecutionPrevention>
+      </DataExecutionPrevention>
+      <TargetMachine>MachineX64</TargetMachine>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <AdditionalIncludeDirectories>ooh323c\src\h323;ooh323c\src\h323_v6;ooh323c\src;$(SolutionDir)\src\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+      <DataExecutionPrevention>
+      </DataExecutionPrevention>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Midl>
+      <TargetEnvironment>X64</TargetEnvironment>
+    </Midl>
+    <ClCompile>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <AdditionalIncludeDirectories>ooh323c\src\h323;ooh323c\src\h323_v6;ooh323c\src;$(SolutionDir)\src\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+      <DataExecutionPrevention>
+      </DataExecutionPrevention>
+      <TargetMachine>MachineX64</TargetMachine>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="h323_glue.c" />
+    <ClCompile Include="mod_ooh323.c" />
+    <ClCompile Include="ooh323c\src\context.c" />
+    <ClCompile Include="ooh323c\src\decode.c" />
+    <ClCompile Include="ooh323c\src\dlist.c" />
+    <ClCompile Include="ooh323c\src\encode.c" />
+    <ClCompile Include="ooh323c\src\errmgmt.c" />
+    <ClCompile Include="ooh323c\src\eventHandler.c" />
+    <ClCompile Include="ooh323c\src\h323\H235-SECURITY-MESSAGES.c" />
+    <ClCompile Include="ooh323c\src\h323\H235-SECURITY-MESSAGESDec.c" />
+    <ClCompile Include="ooh323c\src\h323\H235-SECURITY-MESSAGESEnc.c" />
+    <ClCompile Include="ooh323c\src\h323_v6\H323-MESSAGES.c" />
+    <ClCompile Include="ooh323c\src\h323_v6\H323-MESSAGESDec.c" />
+    <ClCompile Include="ooh323c\src\h323_v6\H323-MESSAGESEnc.c" />
+    <ClCompile Include="ooh323c\src\h323_v6\MULTIMEDIA-SYSTEM-CONTROL.c" />
+    <ClCompile Include="ooh323c\src\h323_v6\MULTIMEDIA-SYSTEM-CONTROLDec.c" />
+    <ClCompile Include="ooh323c\src\h323_v6\MULTIMEDIA-SYSTEM-CONTROLEnc.c" />
+    <ClCompile Include="ooh323c\src\memheap.c" />
+    <ClCompile Include="ooh323c\src\ooCalls.c" />
+    <ClCompile Include="ooh323c\src\ooCapability.c" />
+    <ClCompile Include="ooh323c\src\oochannels.c" />
+    <ClCompile Include="ooh323c\src\ooCmdChannel.c" />
+    <ClCompile Include="ooh323c\src\ooConfig.c" />
+    <ClCompile Include="ooh323c\src\ooDateTime.c" />
+    <ClCompile Include="ooh323c\src\ooGkClient.c" />
+    <ClCompile Include="ooh323c\src\ooh245.c" />
+    <ClCompile Include="ooh323c\src\ooh323.c" />
+    <ClCompile Include="ooh323c\src\ooh323ep.c" />
+    <ClCompile Include="ooh323c\src\ooLogChan.c" />
+    <ClCompile Include="ooh323c\src\ooports.c" />
+    <ClCompile Include="ooh323c\src\ooq931.c" />
+    <ClCompile Include="ooh323c\src\ooSocket.c" />
+    <ClCompile Include="ooh323c\src\ooStackCmds.c" />
+    <ClCompile Include="ooh323c\src\ooTimer.c" />
+    <ClCompile Include="ooh323c\src\ootrace.c" />
+    <ClCompile Include="ooh323c\src\ooUtils.c" />
+    <ClCompile Include="ooh323c\src\perutil.c" />
+    <ClCompile Include="ooh323c\src\printHandler.c" />
+    <ClCompile Include="ooh323c\src\rtctype.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\w32\Library\FreeSwitchCore.2012.vcxproj">
+      <Project>{202d7a4e-760d-4d0e-afa1-d7459ced30ff}</Project>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="mod_ooh323.h" />
+    <ClInclude Include="ooh323c\src\dlist.h" />
+    <ClInclude Include="ooh323c\src\eventHandler.h" />
+    <ClInclude Include="ooh323c\src\h323\H235-SECURITY-MESSAGES.h" />
+    <ClInclude Include="ooh323c\src\h323_v6\H323-MESSAGES.h" />
+    <ClInclude Include="ooh323c\src\h323_v6\MULTIMEDIA-SYSTEM-CONTROL.h" />
+    <ClInclude Include="ooh323c\src\memheap.h" />
+    <ClInclude Include="ooh323c\src\ooasn1.h" />
+    <ClInclude Include="ooh323c\src\ooCalls.h" />
+    <ClInclude Include="ooh323c\src\ooCapability.h" />
+    <ClInclude Include="ooh323c\src\oochannels.h" />
+    <ClInclude Include="ooh323c\src\ooCmdChannel.h" />
+    <ClInclude Include="ooh323c\src\ooCommon.h" />
+    <ClInclude Include="ooh323c\src\ooConfig.h" />
+    <ClInclude Include="ooh323c\src\ooDateTime.h" />
+    <ClInclude Include="ooh323c\src\ooGkClient.h" />
+    <ClInclude Include="ooh323c\src\ooh245.h" />
+    <ClInclude Include="ooh323c\src\ooh323.h" />
+    <ClInclude Include="ooh323c\src\ooh323ep.h" />
+    <ClInclude Include="ooh323c\src\oohdr.h" />
+    <ClInclude Include="ooh323c\src\ooLogChan.h" />
+    <ClInclude Include="ooh323c\src\ooper.h" />
+    <ClInclude Include="ooh323c\src\ooports.h" />
+    <ClInclude Include="ooh323c\src\ooq931.h" />
+    <ClInclude Include="ooh323c\src\ooSocket.h" />
+    <ClInclude Include="ooh323c\src\ooStackCmds.h" />
+    <ClInclude Include="ooh323c\src\ooTimer.h" />
+    <ClInclude Include="ooh323c\src\ootrace.h" />
+    <ClInclude Include="ooh323c\src\ootypes.h" />
+    <ClInclude Include="ooh323c\src\ooUtils.h" />
+    <ClInclude Include="ooh323c\src\printHandler.h" />
+    <ClInclude Include="ooh323c\src\rtctype.h" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

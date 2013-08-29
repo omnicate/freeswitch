@@ -1,0 +1,44 @@
+<configuration name="ooh323.conf" description="mod_ooh323 Configuration">
+  <settings>
+	<!-- Gatekeeper: "discover" for auto descovery or use a specific ip -->
+    <!-- <param name="gk-ip" value="discover"/> -->
+    <!-- <param name="gk-port" value="1719"/> -->
+    <!-- <param name="gk-id" value="FreeSWITCH"/> -->
+
+	<!-- <param name="listen-ip" value="$${local_ip_v4}"/> -->
+	<param name="listen-port" value="1720"/>
+	<param name="faststart" value="true"/>
+	<param name="h245tunneling" value="true"/>
+	<param name="h323-id" value="FreeSWITCH"/>
+	<param name="h323-user" value="FreeSWITCH"/>
+	<param name="h323-usernum" value="0000000000"/>
+	<!-- <param name="trace-level" value="3"/> -->
+	<!-- <param name="log-file" value="/tmp/mod_ooh323.log"/> -->
+	<!--<param name="disable-rtp-auto-adjust" value="true"/>-->
+	<param name="rtp-timer-name" value="soft"/>
+	<!-- <param name="dialplan" value="XML"/> -->
+	<!-- <param name="context" value="default"/> -->
+	<param name="extn" value="h323"/>
+	<param name="inbound-codec-prefs" value="PCMU,PCMA,H263"/>
+	<param name="outbound-codec-prefs" value="PCMU,PCMA,H263"/>
+	<!-- <param name="apply-inbound-acl" value="domains"/> -->
+
+	<!-- H323 DTMF TYPE
+		RFC2833
+		Q931
+		H245ALPHANUMERIC
+		H245SIGNAL
+		INBAND
+	-->
+	<!-- <param name="dtmf-type" value="RFC2833"/> -->
+	<!-- <param name="rfc2833-pt" value="101"/> -->
+
+	<!-- Port ranges -->
+	<!-- <param name="tcp-min-port" value="12030"/> -->
+	<!-- <param name="tcp-max-port" value="12230"/> -->
+	<!-- <param name="udp-min-port" value="13030"/> -->
+	<!-- <param name="udp-max-port" value="13230"/> -->
+	<!-- <param name="rtp-min-port" value="14030"/> -->
+	<!-- <param name="rtp-max-port" value="14230"/> -->
+  </settings>
+</configuration>
