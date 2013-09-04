@@ -210,7 +210,7 @@ ftdm_status_t copy_cdPtyNum_from_sngss7(ftdm_channel_t *ftdmchan, SiCdPtyNum *cd
 }
 
 
-ftdm_status_t copy_cdPtyNum_to_sngss7(ftdm_channel_t *ftdmchan, SiCdPtyNum *cdPtyNum)
+ftdm_status_t copy_cdPtyNum_to_sngss7(ftdm_channel_t *ftdmchan, SiCdPtyNum *cdPtyNum, char *digits)
 {
 	const char	*val = NULL;
 	ftdm_caller_data_t *caller_data = &ftdmchan->caller_data;
@@ -241,7 +241,11 @@ ftdm_status_t copy_cdPtyNum_to_sngss7(ftdm_channel_t *ftdmchan, SiCdPtyNum *cdPt
 		ftdm_log_chan_msg(ftdmchan, FTDM_LOG_DEBUG, "No user supplied Called INN value, set to default value 0x01\n");
 	}
 	
-	return copy_tknStr_to_sngss7(caller_data->dnis.digits, &cdPtyNum->addrSig, &cdPtyNum->oddEven);
+	if (digits) {
+		return copy_tknStr_to_sngss7(digits, &cdPtyNum->addrSig, &cdPtyNum->oddEven);
+	} else {
+		return copy_tknStr_to_sngss7(caller_data->dnis.digits, &cdPtyNum->addrSig, &cdPtyNum->oddEven);
+	}
 }
 
 ftdm_status_t copy_locPtyNum_from_sngss7(ftdm_channel_t *ftdmchan, SiCgPtyNum *locPtyNum)

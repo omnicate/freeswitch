@@ -156,7 +156,7 @@ void ft_to_sngss7_iam (ftdm_channel_t * ftdmchan)
 		SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Tx IAM (Transparent)\n", sngss7_info->circuit->cic);
 
 		/* Called Number information */
-		copy_cdPtyNum_to_sngss7(ftdmchan, &iam.cdPtyNum);
+		copy_cdPtyNum_to_sngss7(ftdmchan, &iam.cdPtyNum, NULL);
 
 		/* Redirecting Number */
 		copy_redirgNum_to_sngss7(ftdmchan, &iam.redirgNum);
@@ -192,7 +192,7 @@ void ft_to_sngss7_iam (ftdm_channel_t * ftdmchan)
 		}
 		
 		/* Called Number information */
-		copy_cdPtyNum_to_sngss7(ftdmchan, &iam.cdPtyNum);
+		copy_cdPtyNum_to_sngss7(ftdmchan, &iam.cdPtyNum, NULL);
 		
 		/* Calling Number information */
 		copy_cgPtyNum_to_sngss7(ftdmchan, &iam.cgPtyNum);
@@ -495,6 +495,9 @@ void ft_to_sngss7_anm (ftdm_channel_t * ftdmchan)
 void ft_to_sngss7_rel (ftdm_channel_t * ftdmchan)
 {
 	const char *loc_ind = NULL;
+	const char *rel_cause    = NULL;
+	const char *redirect_num = NULL;
+
 	SS7_FUNC_TRACE_ENTER (__FUNCTION__);
 	
 	sngss7_chan_data_t *sngss7_info = ftdmchan->call_data;
@@ -513,11 +516,27 @@ void ft_to_sngss7_rel (ftdm_channel_t * ftdmchan)
 		rel.causeDgn.location.val = 0x01;
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "No user supplied location indicator in REL, using 0x01\"%s\"\n", "");
 	}
+	rel_cause = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_rel_cause");
+	if (!ftdm_strlen_zero(rel_cause)) {
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found user supplied release cause in REL, value \"%s\"\n", rel_cause);
+		rel.causeDgn.causeVal.val = atoi(rel_cause);
+	} else {
+		rel.causeDgn.causeVal.val = (uint8_t) ftdmchan->caller_data.hangup_cause;
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "No user supplied release cause in REL, using \"%d\"\n", ftdmchan->caller_data.hangup_cause);
+	}
+
+	redirect_num = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_redirect_number");
+	if (!ftdm_strlen_zero(redirect_num)) {
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found user supplied re-direct number in REL, value \"%s\"\n", redirect_num);
+		copy_cdPtyNum_to_sngss7(ftdmchan, &rel.redirNum, (char*)redirect_num);
+	} else {
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "No user supplied re-direct number in REL, using 0x01\"%s\"\n", "");
+	}
+
 	rel.causeDgn.cdeStand.pres = PRSNT_NODEF;
 	rel.causeDgn.cdeStand.val = 0x00;
 	rel.causeDgn.recommend.pres = NOTPRSNT;
 	rel.causeDgn.causeVal.pres = PRSNT_NODEF;
-	rel.causeDgn.causeVal.val = (uint8_t) ftdmchan->caller_data.hangup_cause;
 	rel.causeDgn.dgnVal.pres = NOTPRSNT;
 	
 	/* send the REL request to LibSngSS7 */
@@ -529,7 +548,7 @@ void ft_to_sngss7_rel (ftdm_channel_t * ftdmchan)
 	
 	SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Tx REL cause=%d \n",
 							sngss7_info->circuit->cic,
-							ftdmchan->caller_data.hangup_cause );
+							rel.causeDgn.causeVal.val );
 
 	SS7_FUNC_TRACE_EXIT (__FUNCTION__);
 	return;

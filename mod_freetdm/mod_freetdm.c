@@ -637,15 +637,26 @@ static switch_status_t channel_on_hangup(switch_core_session_t *session)
 	case FTDM_CHAN_TYPE_B:
 		{
 			const char *var = NULL;
+			ftdm_usrmsg_t usrmsg;
 			ftdm_call_cause_t hcause = switch_channel_get_cause_q850(channel);
+			memset(&usrmsg, 0, sizeof(ftdm_usrmsg_t));
 			if (hcause  < 1 || hcause > 127) {
 				hcause = FTDM_CAUSE_DESTINATION_OUT_OF_ORDER;
 			}
 			var = switch_channel_get_variable(channel, "ss7_rel_loc");
 			if (var) {
-				ftdm_usrmsg_t usrmsg;
-				memset(&usrmsg, 0, sizeof(ftdm_usrmsg_t));
 				ftdm_usrmsg_add_var(&usrmsg, "ss7_rel_loc", var);
+			}
+			var   = switch_channel_get_variable(channel, "ss7_rel_cause");
+			if (var) {
+				ftdm_usrmsg_add_var(&usrmsg, "ss7_rel_cause", var);
+			}
+			var = switch_channel_get_variable(channel, "ss7_redirect_number");
+			if (var ) {
+				ftdm_usrmsg_add_var(&usrmsg, "ss7_redirect_number", var);
+			}
+
+			if (usrmsg.variables) {
 				ftdm_channel_call_hangup_with_cause_ex(tech_pvt->ftdmchan, hcause, &usrmsg);
 			} else {
 				ftdm_channel_call_hangup_with_cause(tech_pvt->ftdmchan, hcause);
