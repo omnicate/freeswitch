@@ -2117,6 +2117,21 @@ ftdm_status_t ftdm_channel_from_event(ftdm_sigmsg_t *sigmsg, switch_core_session
 		if (!ftdm_strlen_zero(var_value)) {
 			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-OCN-Presentation", "%s", var_value);
 		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_num_port_fwd_info_status_ind");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-NmbPortFwdInfo_Ind", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_num_port_fwd_info_status_ext");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-NmbPortFwdInfo_Ext", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_hopCounter_val");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-hopCounter", "%s", var_value);
+		}
 	}
 
 	/* Add any call variable to the dial plan */

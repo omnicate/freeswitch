@@ -1097,6 +1097,15 @@ ftdm_status_t copy_usrServInfoA_to_sngss7(ftdm_channel_t *ftdmchan, SiUsrServInf
 ftdm_status_t copy_NatureOfConnection_from_sngss7(ftdm_channel_t *ftdmchan, SiNatConInd *natConInd );
 ftdm_status_t copy_NatureOfConnection_to_sngss7(ftdm_channel_t *ftdmchan, SiNatConInd *natConInd);
 
+ftdm_status_t copy_numPortFwdInfo_to_sngss7(ftdm_channel_t *ftdmchan, SiNumPortFwdInfo *numPortFwdInfo);
+ftdm_status_t copy_numPortFwdInfo_from_sngss7(ftdm_channel_t *ftdmchan, SiNumPortFwdInfo *numPortFwdInfo);
+ftdm_status_t copy_optBckCallInd_to_sngss7(ftdm_channel_t *ftdmchan, SiOptBckCalInd *optBckCalInd);
+ftdm_status_t copy_redirectionNumber_to_sngss7(ftdm_channel_t *ftdmchan, SiCdPtyNum *redirNum);
+
+ftdm_status_t copy_hopCounter_to_sngss7(ftdm_channel_t *ftdmchan, SiHopCounter *hopCounter);
+ftdm_status_t copy_hopCounter_from_sngss7(ftdm_channel_t *ftdmchan, SiHopCounter *hopCounter);
+
+
 ftdm_status_t copy_tknStr_from_sngss7(TknStr str, char *ftdm, TknU8 oddEven);
 ftdm_status_t append_tknStr_from_sngss7(TknStr str, char *ftdm, TknU8 oddEven);
 ftdm_status_t copy_tknStr_to_sngss7(char* str, TknStr *tknStr, TknU8 *oddEven);

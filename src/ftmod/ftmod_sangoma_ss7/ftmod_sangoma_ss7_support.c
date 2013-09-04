@@ -149,6 +149,7 @@ ftdm_status_t copy_cgPtyNum_to_sngss7(ftdm_channel_t *ftdmchan, SiCgPtyNum *cgPt
 {
 	const char *val = NULL;
 	const char *clg_nadi = NULL;
+	char *clg_numb= NULL;
 
 	sngss7_chan_data_t *sngss7_info = ftdmchan->call_data;
 	ftdm_caller_data_t *caller_data = &ftdmchan->caller_data;
@@ -190,7 +191,11 @@ ftdm_status_t copy_cgPtyNum_to_sngss7(ftdm_channel_t *ftdmchan, SiCgPtyNum *cgPt
 		cgPtyNum->natAddrInd.val = atoi(clg_nadi);
 	}
 	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Calling Party Number NADI value %d\n", cgPtyNum->natAddrInd.val);
-
+	clg_numb = (char*)ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_clg_num");
+	if (!ftdm_strlen_zero(clg_numb)) {
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found user supplied Calling Number value \"%s\"\n", clg_numb);
+		ftdm_set_string(caller_data->cid_num.digits, clg_numb);
+	}
 	return copy_tknStr_to_sngss7(caller_data->cid_num.digits, &cgPtyNum->addrSig, &cgPtyNum->oddEven);
 }
 
@@ -1130,6 +1135,245 @@ ftdm_status_t copy_NatureOfConnection_from_sngss7(ftdm_channel_t *ftdmchan, SiNa
 	sngss7_add_var(sngss7_info, "ss7_iam_nature_connection_hex", val);
 	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Nature of connection indicator Hex: 0x%s\n", val);
 	
+	return FTDM_SUCCESS;
+}
+
+ftdm_status_t copy_optBckCallInd_to_sngss7(ftdm_channel_t *ftdmchan, SiOptBckCalInd *optBckCalInd)
+{
+	const char *val = NULL;
+	uint8_t b_pres = 0;
+
+	if(!optBckCalInd) {
+		SS7_ERROR ("Wrong Optional Backward Call Indicator pointer \n");
+		return FTDM_FAIL;
+	}
+
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_opt_bk_call_ind_inband");
+	if (!ftdm_strlen_zero(val)) {
+		optBckCalInd->inbndInfoInd.val = (int)atoi(val);
+		if (optBckCalInd->inbndInfoInd.val) {
+			b_pres=1;
+			ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "ss7_opt_bk_call_ind_inband = %s\n", val);
+			optBckCalInd->inbndInfoInd.pres = PRSNT_NODEF;
+		} else {
+			optBckCalInd->inbndInfoInd.pres	= NOTPRSNT;
+		}
+	}
+
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_opt_bk_call_ind_fwdOcc");
+	if (!ftdm_strlen_zero(val)) {
+		optBckCalInd->caFwdMayOcc.val 	= (int)atoi(val);
+		if (optBckCalInd->caFwdMayOcc.val) {
+			b_pres=1;
+			ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "ss7_opt_bk_call_ind_fwdOcc = %s\n", val);
+			optBckCalInd->caFwdMayOcc.pres 	= PRSNT_NODEF;
+		} else {
+			optBckCalInd->caFwdMayOcc.pres 	= NOTPRSNT;
+		}
+	}
+
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_opt_bk_call_ind_smpSeg");
+	if (!ftdm_strlen_zero(val)) {
+		optBckCalInd->simpleSegmInd.val = (int)atoi(val);
+		if (optBckCalInd->simpleSegmInd.val) {
+			b_pres=1;
+			ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "ss7_opt_bk_call_ind_smpSeg = %s\n", val);
+			optBckCalInd->simpleSegmInd.pres = PRSNT_NODEF;
+		} else {
+			optBckCalInd->simpleSegmInd.pres = NOTPRSNT;
+		}
+	}
+
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_opt_bk_call_ind_mlpp");
+	if (!ftdm_strlen_zero(val)) {
+		optBckCalInd->mlppUserInd.val = (int)atoi(val);
+		if (optBckCalInd->mlppUserInd.val) {
+			b_pres=1;
+			ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "ss7_opt_bk_call_ind_mlpp = %s\n", val);
+			optBckCalInd->mlppUserInd.pres = PRSNT_NODEF;
+		} else {
+			optBckCalInd->mlppUserInd.pres = NOTPRSNT;
+		}
+	}
+
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_opt_bk_call_ind_netExDelay");
+	if (!ftdm_strlen_zero(val)) {
+		optBckCalInd->netExcDelInd.val = (int)atoi(val);
+		if (optBckCalInd->netExcDelInd.val) {
+			b_pres=1;
+			ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "ss7_opt_bk_call_ind_netExDelay = %s\n", val);
+			optBckCalInd->netExcDelInd.pres = PRSNT_NODEF;
+		} else {
+			optBckCalInd->netExcDelInd.pres = NOTPRSNT;
+		}
+	}
+
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_opt_bk_call_ind_interact");
+	if (!ftdm_strlen_zero(val)) {
+		optBckCalInd->usrNetIneractInd.val = (int)atoi(val);
+		if (optBckCalInd->usrNetIneractInd.val) {
+			b_pres=1;
+			ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "ss7_opt_bk_call_ind_interact = %s\n", val);
+			optBckCalInd->usrNetIneractInd.pres = PRSNT_NODEF;
+		} else {
+			optBckCalInd->usrNetIneractInd.pres = NOTPRSNT;
+		}
+	}
+
+	if (b_pres) {
+		optBckCalInd->eh.pres = PRSNT_NODEF;
+	} else {
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "No user supplied Optional Backward Call Indicator parameters %s\n", " ");
+	}
+	return FTDM_SUCCESS;
+}
+
+ftdm_status_t copy_redirectionNumber_to_sngss7(ftdm_channel_t *ftdmchan, SiCdPtyNum *redirNum)
+{
+	const char *val = NULL;
+	char *pval = NULL;
+	uint8_t b_pres = 0;
+
+	if(!redirNum) {
+		SS7_ERROR ("Wrong Number Portability Forward Info pointer \n");
+		return FTDM_FAIL;
+	}
+
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_rdn_nmb_nadi");
+	if (!ftdm_strlen_zero(val)) {
+		b_pres = 1;
+		redirNum->natAddrInd.val  = atoi(val);
+		redirNum->natAddrInd.pres = PRSNT_NODEF;
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "User supplied Redirection Number NADI %d\n", redirNum->natAddrInd.val);
+	}
+
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_rdn_nmb_numPlan");
+	if (!ftdm_strlen_zero(val)) {
+		b_pres = 1;
+		redirNum->numPlan.val  = atoi(val);
+		redirNum->numPlan.pres = PRSNT_NODEF;
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "User supplied Redirection Number Numbering Plan %d\n", redirNum->numPlan.val);
+	}
+
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_rdn_nmb_inn");
+	if (!ftdm_strlen_zero(val)) {
+		b_pres = 1;
+		redirNum->innInd.val  = atoi(val);
+		redirNum->innInd.pres = PRSNT_NODEF;
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "User supplied Redirection Number INN %d\n", redirNum->innInd.val);
+	}
+
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_rdn_nmb_digits");
+	if (!ftdm_strlen_zero(val)) {
+		pval = (char*)val;
+		copy_tknStr_to_sngss7(pval, &redirNum->addrSig, &redirNum->oddEven);
+		b_pres = 1;
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "User supplied Redirection Number Digits %s\n", val);
+	}
+
+	if (b_pres) {
+		redirNum->eh.pres		   = PRSNT_NODEF;
+	} else {
+		redirNum->eh.pres		   = NOTPRSNT;
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "No user supplied Optional Backward Call Indicator parameters %s\n", " ");
+	}
+	return FTDM_SUCCESS;
+}
+
+ftdm_status_t copy_hopCounter_from_sngss7(ftdm_channel_t *ftdmchan, SiHopCounter *hopCounter)
+{
+	char var[FTDM_DIGITS_LIMIT];
+	sngss7_chan_data_t *sngss7_info = ftdmchan->call_data;
+
+	if (hopCounter->eh.pres == PRSNT_NODEF &&
+	    hopCounter->hopCounter.pres == PRSNT_NODEF) {
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Hop Counter = %d\n", hopCounter->hopCounter.val);
+		sprintf(var, "%d",  hopCounter->hopCounter.val);
+		sngss7_add_var(sngss7_info, "ss7_hopCounter_val", var);
+	}
+
+	return FTDM_SUCCESS;
+}
+
+ftdm_status_t copy_hopCounter_to_sngss7(ftdm_channel_t *ftdmchan, SiHopCounter *hopCounter)
+{
+        const char *val = NULL;
+        if(!hopCounter) {
+		SS7_ERROR ("Wrong Hop Counter pointer \n");
+                return FTDM_FAIL;
+        }
+
+        val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_hopCounter_val");
+        if (!ftdm_strlen_zero(val)) {
+		hopCounter->eh.pres = PRSNT_NODEF;
+		hopCounter->hopCounter.pres = PRSNT_NODEF;
+		hopCounter->hopCounter.val = (int)atoi(val);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "ss7_hopCounter_val = %s\n", val);
+        } else {
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "No user supplied Hop Counter parameters %s\n", " ");
+        }
+	return FTDM_SUCCESS;
+}
+
+ftdm_status_t copy_numPortFwdInfo_from_sngss7(ftdm_channel_t *ftdmchan, SiNumPortFwdInfo *numPortFwdInfo)
+{
+
+	char var[FTDM_DIGITS_LIMIT];
+	sngss7_chan_data_t *sngss7_info = ftdmchan->call_data;
+
+	if (numPortFwdInfo->eh.pres == PRSNT_NODEF) {
+		if(numPortFwdInfo->numPortStatus.pres == PRSNT_NODEF) {
+			ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Number Portabilities Status = %d\n", numPortFwdInfo->numPortStatus.val);
+			sprintf(var, "%d", numPortFwdInfo->numPortStatus.val);
+			sngss7_add_var(sngss7_info, "ss7_num_port_fwd_info_status_ind", var);
+		}
+
+		if(numPortFwdInfo->extInfo.pres == PRSNT_NODEF) {
+			snprintf(var, numPortFwdInfo->extInfo.len, "%s", numPortFwdInfo->extInfo.val);
+			sngss7_add_var(sngss7_info, "ss7_num_port_fwd_info_status_ext", var);
+			ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Number Portabilities Extension Indicator = %s\n", var);
+		}
+	} else {
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "No Number Portabilities Forward Information set. \n%s", " ");
+	}
+
+	return FTDM_SUCCESS;
+}
+
+ftdm_status_t copy_numPortFwdInfo_to_sngss7(ftdm_channel_t *ftdmchan, SiNumPortFwdInfo *numPortFwdInfo)
+{
+	const char *val = NULL;
+	uint8_t b_pres = 0;
+	if(!numPortFwdInfo) {
+		SS7_ERROR ("Wrong Number Portability Forward Info pointer \n");
+		return FTDM_FAIL;
+	}
+
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_num_port_fwd_info_status_ind");
+	if (!ftdm_strlen_zero(val)) {
+		b_pres=1;
+		uint16_t val_hex = 0;
+		if (char_to_hex (val, &val_hex, 1) == FTDM_FAIL) {
+			SS7_ERROR ("Wrong value set in ss7_num_port_fwd_info_hex variable. Please correct the error. Setting to default values.\n" );
+		} else {
+			ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "ss7_num_port_fwd_info_status_ind hex =  0x%x\n", val_hex);
+			numPortFwdInfo->numPortStatus.pres  	= PRSNT_NODEF;
+			numPortFwdInfo->numPortStatus.val 	= (val_hex & 0xf);
+		}
+	}
+
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_num_port_fwd_info_status_ext");
+	if (!ftdm_strlen_zero(val)) {
+		b_pres=1;
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found user supplied ss7_num_port_fwd_info_status_ext = \"%c\"\n", val[0]);
+		numPortFwdInfo->extInfo.pres	= PRSNT_NODEF;
+		numPortFwdInfo->extInfo.len 	= 1;
+		numPortFwdInfo->extInfo.val[0] 	= val[0];
+	}
+
+	if (b_pres) {
+		numPortFwdInfo->eh.pres 	= PRSNT_NODEF;
+	}
 	return FTDM_SUCCESS;
 }
 
