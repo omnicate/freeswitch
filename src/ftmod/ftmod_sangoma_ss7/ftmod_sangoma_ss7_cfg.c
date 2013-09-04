@@ -139,12 +139,6 @@ int  ft_to_sngss7_cfg_all(void)
 			} else {
 				SS7_INFO("CC General configuration DONE\n");
 			}
-			if (ftmod_ss7_cc_isap_config(1)) {
-				SS7_CRITICAL("CC ISAP configuration FAILED!\n");
-				return 1;
-			} else {
-				SS7_INFO("CC ISAP configuration DONE!\n");
-			}
 		} /* if (sngss7_test_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_CC)) */
 
 		if (sngss7_test_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_ISUP_PRESENT)) {
@@ -380,6 +374,12 @@ int  ft_to_sngss7_cfg_all(void)
 					return 1;
 				} else {
 					SS7_INFO("ISUP ISAP %d configuration DONE!\n", x);
+				}
+				if (ftmod_ss7_cc_isap_config(x)) {
+					SS7_CRITICAL("CC ISAP %d configuration FAILED!\n", x);
+					return 1;
+				} else {
+					SS7_INFO("CC ISAP %d configuration DONE!\n", x);
 				}
 
 				/* set the SNGSS7_CONFIGURED flag */
@@ -1656,7 +1656,7 @@ int ftmod_ss7_isup_isap_config(int id)
 }
 
 /******************************************************************************/
-int ftmod_ss7_cc_isap_config(int dstProcId)
+int ftmod_ss7_cc_isap_config(int id)
 {
 	CcMngmt	 cfg;
 	Pst		 pst;
@@ -1680,11 +1680,11 @@ int ftmod_ss7_cc_isap_config(int dstProcId)
 	cfg.hdr.entId.inst					= S_INST;
 	cfg.hdr.elmId.elmnt					= STISAP;
 
-	cfg.hdr.elmId.elmntInst1 			= 1;
+	cfg.hdr.elmId.elmntInst1 			= id;
 
-	cfg.t.cfg.s.ccISAP.suId			 	= 1;
-	cfg.t.cfg.s.ccISAP.spId			 	= 1;
-	cfg.t.cfg.s.ccISAP.pst.dstProcId	= dstProcId;
+	cfg.t.cfg.s.ccISAP.suId			 	= id;
+	cfg.t.cfg.s.ccISAP.spId			 	= id;
+	cfg.t.cfg.s.ccISAP.pst.dstProcId	= 1;
 	cfg.t.cfg.s.ccISAP.pst.dstEnt		= ENTSI;
 	cfg.t.cfg.s.ccISAP.pst.dstInst		= S_INST;
 	cfg.t.cfg.s.ccISAP.pst.srcProcId	= SFndProcId();

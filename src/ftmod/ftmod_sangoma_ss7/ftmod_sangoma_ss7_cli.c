@@ -100,7 +100,7 @@ static ftdm_status_t handle_status_isup_ckt(ftdm_stream_handle_t *stream, char *
 static ftdm_status_t extract_span_chan(char *argv[10], int pos, int *span, int *chan);
 static ftdm_status_t check_arg_count(int args, int min);
 
-
+static ftdm_status_t ftdm_isup_snd_itx(ftdm_stream_handle_t *stream, char *argv[10], int pos);
 
 static ftdm_status_t cli_ss7_show_general(ftdm_stream_handle_t *stream);
 
@@ -888,6 +888,25 @@ ftdm_status_t ftdm_sngss7_handle_cli_cmd(ftdm_stream_handle_t *stream, const cha
 			}
 		}else{
 			stream->write_function(stream, "Unknown \"m2ua  %s option\", supported values \"logging\"\n",argv[c]);
+			goto handle_cli_error_argc;
+		}
+	/**************************************************************************/
+	} else if (!strcasecmp(argv[c], "isup")) {
+	/**************************************************************************/
+		if (argc != 4) {
+			stream->write_function(stream, "Invalid \"isup  option for send_itx\", please use \"isup send_itx span_id channel_id \n");
+			goto handle_cli_error_argc;
+		}
+		c++;
+
+		if(!strcasecmp(argv[c],"send_itx")) {
+			if (ftdm_isup_snd_itx(stream, argv, c)) {
+				stream->write_function(stream, "Invalid argument. \nITX sending fail. \n");
+				goto handle_cli_error_argc;
+			}
+			stream->write_function(stream, "ITX sent successfully. \n");
+		} else {
+			stream->write_function(stream, "Unknown \"isup  option\", supported value is send_itx span_id channel_id \n");
 			goto handle_cli_error_argc;
 		}
 	/**************************************************************************/
@@ -4100,6 +4119,68 @@ static ftdm_status_t handle_show_m2ua_cluster_status(ftdm_stream_handle_t *strea
 	stream->write_function(stream,"\n%s\n",buf); 
 
 	return FTDM_SUCCESS;
+}
+
+/******************************************************************************
+ * * Fun :  ftdm_isup_snd_itx()
+ * * Desc:  to sent itx messages from one NSG to another
+ * * Ret :  FTDM_SUCCESS | FTDM_FAIL
+ * * Note:
+ * * Author: Pushkar Singh
+ * *******************************************************************************/
+
+static ftdm_status_t ftdm_isup_snd_itx(ftdm_stream_handle_t *stream, char *argv[10], int pos)
+{
+	char *span_id;
+	char *chan_id;
+	int  span;
+	int  chan;
+	int  x;
+	sngss7_chan_data_t  *ss7_info;
+	ftdm_channel_t      *ftdmchan;
+	sng_isup_ckt_t       *ckt;
+
+	span_id = argv[pos + 1];
+	chan_id = argv[pos + 2];
+
+	span = atoi(span_id);
+	chan = atoi(chan_id);
+
+	if (!span) {
+		stream->write_function(stream, "Span \'%s\' does not exist. \n", span_id);
+		return FTDM_FAIL;
+	}
+
+	if (!chan) {
+		stream->write_function(stream, "Channel \'%s\' does not exist. \n", chan_id);
+		return FTDM_FAIL;
+	}
+
+	x = (g_ftdm_sngss7_data.cfg.procId * 1000) + 1;
+	while (g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0) {
+		/* extract the circuit to make it easier to work with */
+		ckt = &g_ftdm_sngss7_data.cfg.isupCkt[x];
+
+		/* check if this circuit is one of the circuits we're interested in */
+		if ((ckt->span == span) && (ckt->chan == chan)) {
+			ss7_info = (sngss7_chan_data_t *)g_ftdm_sngss7_data.cfg.isupCkt[x].obj;
+			ftdmchan = ss7_info->ftdmchan;
+
+			if (ftdmchan == NULL) {
+				/* this should never happen!!! */
+				stream->write_function(stream, "span=%2d|chan=%2d|cic=%4d|FTDMCHAN DOES NOT EXISTS",
+						ckt->span,
+						ckt->chan,
+						ckt->cic);
+			} else {
+				ft_to_sngss7_itx(ftdmchan);
+				return FTDM_SUCCESS;
+			}
+		}
+		x++;
+	}
+
+	return FTDM_FAIL;
 }
 
 /******************************************************************************/
