@@ -1690,6 +1690,9 @@ static switch_call_cause_t channel_outgoing_channel(switch_core_session_t *sessi
 
 	if ((var = channel_get_variable(session, var_event, "freetdm_calling_party_category"))) {
 		ftdm_set_calling_party_category(var, (uint8_t *)&caller_data.cpc);
+	} else {
+		/* If not specified by user then default to ORDINARY */
+		caller_data.cpc = FTDM_CPC_ORDINARY;
 	}
 
 	if (!zstr(dest)) {
