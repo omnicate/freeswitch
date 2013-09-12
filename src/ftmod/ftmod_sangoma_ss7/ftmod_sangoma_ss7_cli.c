@@ -928,15 +928,25 @@ ftdm_status_t ftdm_sngss7_handle_cli_cmd(ftdm_stream_handle_t *stream, const cha
 		}
 		c--; /* need to point to logging module argument */
 
+		int ret = 0;
 		if (!strcasecmp(argv[c],"isup")) {
-			ftmod_ss7_isup_debug(action);
+			ret = ftmod_ss7_isup_debug(action);
 		} else if (!strcasecmp(argv[c],"mtp3")) {
-			ftmod_ss7_mtp3_debug(action);
+			ret = ftmod_ss7_mtp3_debug(action);
 		} else if (!strcasecmp(argv[c],"mtp2")) {
-			ftmod_ss7_mtp2_debug(action);
+			ret = ftmod_ss7_mtp2_debug(action);
 		} else {
 			stream->write_function(stream, "Unknown \"logging %s option\", supported values are \"isup/mtp3/mtp2\"\n",argv[c]);
 			goto handle_cli_error_argc;
+		}
+
+		if (ret == FTDM_SUCCESS)
+		{
+			stream->write_function(stream, "%s logging %s SUCCESS\n", argv[c], argv[c+1]);
+		}
+		else
+		{
+			stream->write_function(stream, "%s logging %s FAILED\n", argv[c], argv[c+1]);
 		}
 	} else {
 	/**************************************************************************/
