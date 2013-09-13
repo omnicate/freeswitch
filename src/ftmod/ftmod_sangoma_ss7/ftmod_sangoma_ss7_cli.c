@@ -146,6 +146,8 @@ ftdm_status_t ftdm_sngss7_handle_cli_cmd(ftdm_stream_handle_t *stream, const cha
 	int		trace_level = 7;
 	int		verbose = 1;
 	int		c = 0;
+	int 		ret = 0;
+	int 		action = 0;
 
 	if (data) {
 		mycmd = ftdm_strdup(data);
@@ -890,6 +892,40 @@ ftdm_status_t ftdm_sngss7_handle_cli_cmd(ftdm_stream_handle_t *stream, const cha
 			goto handle_cli_error_argc;
 		}
 	/**************************************************************************/	
+	} else if (!strcasecmp(argv[c], "logging")) {
+	/**************************************************************************/
+		if (argc != 3) {
+			stream->write_function(stream, "Unknown \"logging option\", supported values are [mtp2] [enable|disable] \n");
+			goto handle_cli_error_argc;
+		}
+		c = c+2; /* need to point to logging enable/disable action argument */
+
+		if (!strcasecmp(argv[c],"enable")) {
+			action = AENA;
+		} else if (!strcasecmp(argv[c],"disable")) {
+			action = ADISIMM;
+		} else {
+			stream->write_function(stream, "Unknown \"logging option\", supported values are enable/disable \n");
+			goto handle_cli_error_argc;
+		}
+		c--; /* need to point to logging module argument */
+
+		if (!strcasecmp(argv[c],"mtp2")) {
+			ret = ftmod_ss7_mtp2_debug(action);
+		} else {
+			stream->write_function(stream, "Unknown \"logging %s option\", supported values are \"mtp2\"\n",argv[c]);
+			goto handle_cli_error_argc;
+		}
+
+		if (ret == FTDM_SUCCESS)
+		{
+			stream->write_function(stream, "%s logging %s SUCCESS\n", argv[c], argv[c+1]);
+		}
+		else
+		{
+			stream->write_function(stream, "%s logging %s FAILED\n", argv[c], argv[c+1]);
+		}
+	/**************************************************************************/
 	} else {
 	/**************************************************************************/
 		goto handle_cli_error;
