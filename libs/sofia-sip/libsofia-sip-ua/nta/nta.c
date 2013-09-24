@@ -149,9 +149,10 @@ struct nta_agent_s
   nta_update_magic_t   *sa_update_magic;
   nta_update_tport_f   *sa_update_tport;
 
-  su_time_t             sa_now;	 /**< Timestamp in microsecond resolution. */
+  nta_error_magic_t   *sa_error_magic;
+  nta_error_tport_f   *sa_error_tport;
+
   uint32_t              sa_next; /**< Timestamp for next agent_timer. */
-  uint32_t              sa_millisec; /**< Timestamp in milliseconds. */
 
   msg_mclass_t const   *sa_mclass;
   uint32_t sa_flags;		/**< SIP message flags */
@@ -234,6 +235,8 @@ struct nta_agent_s
   unsigned sa_tport_tcp : 1;	/**< Transports support TCP. */
   unsigned sa_tport_sctp : 1;	/**< Transports support SCTP. */
   unsigned sa_tport_tls : 1;	/**< Transports support TLS. */
+  unsigned sa_tport_ws : 1;	    /**< Transports support WS. */
+  unsigned sa_tport_wss : 1;	    /**< Transports support WSS. */
 
   unsigned sa_use_naptr : 1;	/**< Use NAPTR lookup */
   unsigned sa_use_srv : 1;	/**< Use SRV lookup */
@@ -1237,15 +1240,12 @@ void agent_timer(su_root_magic_t *rm, su_timer_t *timer, nta_agent_t *agent)
 
   agent->sa_next = 0;
 
-  agent->sa_now = stamp;
-  agent->sa_millisec = now;
   agent->sa_in_timer = 1;
+
 
   _nta_outgoing_timer(agent);
   _nta_incoming_timer(agent);
 
-  /* agent->sa_now is used only if sa_millisec != 0 */
-  agent->sa_millisec = 0;
   agent->sa_in_timer = 0;
 
   /* Calculate next timeout */
@@ -1330,12 +1330,12 @@ uint32_t set_timeout(nta_agent_t *agent, uint32_t offset)
   if (offset == 0)
     return 0;
 
-  if (agent->sa_millisec) /* Avoid expensive call to su_now() */
-    now = agent->sa_now, ms = agent->sa_millisec;
-  else
-    now = su_now(), ms = su_time_ms(now);
+  now = su_now();
+  ms = su_time_ms(now);
 
-  next = ms + offset; if (next == 0) next = 1;
+  next = ms + offset;
+
+  if (next == 0) next = 1;
 
   if (agent->sa_in_timer)	/* Currently executing timer */
     return next;
@@ -1360,9 +1360,6 @@ uint32_t set_timeout(nta_agent_t *agent, uint32_t offset)
 static
 su_time_t agent_now(nta_agent_t const *agent)
 {
-  if (agent && agent->sa_millisec != 0)
-    return agent->sa_now;
-  else
     return su_now();
 }
 
@@ -2045,22 +2042,24 @@ struct sipdns_tport {
   char prefix[14];		/**< Prefix for SRV domains */
   char service[10];		/**< NAPTR service */
 }
-#define SIPDNS_TRANSPORTS (4)
+#define SIPDNS_TRANSPORTS (6)
 const sipdns_tports[SIPDNS_TRANSPORTS] = {
   { "udp",  "5060", "_sip._udp.",  "SIP+D2U"  },
   { "tcp",  "5060", "_sip._tcp.",  "SIP+D2T"  },
-  { "sctp", "5060", "_sip._sctp.", "SIP+D2S" },
-  { "tls",  "5061", "_sips._tcp.", "SIPS+D2T"  },
+  { "sctp", "5060", "_sip._sctp.", "SIP+D2S"  },
+  { "tls",  "5061", "_sips._tcp.", "SIPS+D2T" },
+  { "ws",   "5080",   "_sips._ws.",  "SIP+D2W"  },
+  { "wss",  "5081",  "_sips._wss.", "SIPS+D2W" },
 };
 
 static char const * const tports_sip[] =
   {
-    "udp", "tcp", "sctp", NULL
+	"udp", "tcp", "sctp", "ws", NULL
   };
 
 static char const * const tports_sips[] =
   {
-    "tls", NULL
+	  "tls", "wss", "ws", NULL
   };
 
 static tport_stack_class_t nta_agent_class[1] =
@@ -2188,7 +2187,7 @@ int nta_agent_add_tport(nta_agent_t *self,
   if (url->url_params) {
     if (url_param(url->url_params, "transport", tp, sizeof(tp)) > 0) {
       if (strchr(tp, ',')) {
-	int i; char *t, *tps[9];
+		  int i; char *t, *tps[9] = {0};
 
 	/* Split tp into transports */
 	for (i = 0, t = tp; t && i < 8; i++) {
@@ -2279,7 +2278,6 @@ int agent_create_master_transport(nta_agent_t *self, tagi_t *tags)
 {
   self->sa_tports =
     tport_tcreate(self, nta_agent_class, self->sa_root,
-		  TPTAG_SDWN_ERROR(0),
 		  TPTAG_IDLE(1800000),
 		  TAG_NEXT(tags));
 
@@ -2311,6 +2309,8 @@ int agent_init_via(nta_agent_t *self, tport_t *primaries, int use_maddr)
   self->sa_tport_tcp = 0;
   self->sa_tport_sctp = 0;
   self->sa_tport_tls = 0;
+  self->sa_tport_ws = 0;
+  self->sa_tport_wss = 0;
 
   /* Set via fields for the tports */
   for (tp = primaries; tp; tp = tport_next(tp)) {
@@ -2343,6 +2343,10 @@ int agent_init_via(nta_agent_t *self, tport_t *primaries, int use_maddr)
       self->sa_tport_tcp = 1;
     else if (su_casematch(tpn->tpn_proto, "sctp"))
       self->sa_tport_sctp = 1;
+    else if (su_casematch(tpn->tpn_proto, "ws"))
+      self->sa_tport_ws = 1;
+    else if (su_casematch(tpn->tpn_proto, "wss"))
+      self->sa_tport_wss = 1;
 
     if (tport_has_tls(tp)) self->sa_tport_tls = 1;
 
@@ -2684,8 +2688,12 @@ nta_tpn_by_url(su_home_t *home,
 
   tpn->tpn_ident = NULL;
 
-  if (tpn->tpn_proto)
+  if (tpn->tpn_proto) {
+	  if (su_casematch(url->url_scheme, "sips") && su_casematch(tpn->tpn_proto, "ws")) {
+		  tpn->tpn_proto = "wss";
+	  }
     return 1;
+  }
 
   if (su_casematch(url->url_scheme, "sips"))
     tpn->tpn_proto = "tls";
@@ -2706,6 +2714,10 @@ void agent_tp_error(nta_agent_t *agent,
 	  "nta_agent: tport: %s%s%s\n",
 	  remote ? remote : "", remote ? ": " : "",
 	  su_strerror(errcode));
+
+  if (agent->sa_error_tport) {
+    agent->sa_error_tport(agent->sa_error_magic, agent, tport);
+  }
 }
 
 /** Handle updated transport addresses */
@@ -2764,8 +2776,6 @@ void agent_recv_message(nta_agent_t *agent,
 {
   sip_t *sip = sip_object(msg);
 
-  agent->sa_millisec = su_time_ms(agent->sa_now = now);
-
   if (sip && sip->sip_request) {
     agent_recv_request(agent, msg, sip, tport);
   }
@@ -2775,8 +2785,6 @@ void agent_recv_message(nta_agent_t *agent,
   else {
     agent_recv_garbage(agent, msg, tport);
   }
-
-  agent->sa_millisec = 0;
 }
 
 /** @internal Handle incoming requests. */
@@ -2969,7 +2977,7 @@ void agent_recv_request(nta_agent_t *agent,
   url->url_params = NULL;
   agent_aliases(agent, url, tport); /* canonize urls */
 
-  if ((leg = leg_find(agent,
+  if (method != sip_method_subscribe && (leg = leg_find(agent,
 		      method_name, url,
 		      sip->sip_call_id,
 		      sip->sip_from->a_tag,
@@ -3103,7 +3111,8 @@ int agent_check_request_via(nta_agent_t *agent,
   }
   else if (agent->sa_server_rport == 2 ||
 		   (agent->sa_server_rport == 3 && sip && sip->sip_user_agent &&
-			sip->sip_user_agent->g_string && !strncasecmp(sip->sip_user_agent->g_string, "Polycom", 7))) {
+			sip->sip_user_agent->g_string &&
+			(!strncasecmp(sip->sip_user_agent->g_string, "Polycom", 7) || !strncasecmp(sip->sip_user_agent->g_string, "KIRK Wireless Server", 20)))) {
     rport = su_sprintf(msg_home(msg), "rport=%u", ntohs(from->su_port));
     msg_header_replace_param(msg_home(msg), v->v_common, rport);
   }
@@ -3829,8 +3838,10 @@ int nta_msg_ackbye(nta_agent_t *agent, msg_t *msg)
   return 0;
 
  err:
-  msg_destroy(amsg);
+
   msg_destroy(bmsg);
+  msg_destroy(amsg);
+
   return -1;
 }
 
@@ -6848,7 +6859,7 @@ enum {
 static void
 _nta_incoming_timer(nta_agent_t *sa)
 {
-  uint32_t now = sa->sa_millisec;
+  uint32_t now = su_time_ms(su_now());
   nta_incoming_t *irq, *irq_next;
   size_t retransmitted = 0, timeout = 0, terminated = 0, destroyed = 0;
   size_t unconfirmed =
@@ -6865,6 +6876,9 @@ _nta_incoming_timer(nta_agent_t *sa)
 
   /* Handle retry queue */
   while ((irq = sa->sa_in.re_list)) {
+
+	  now = su_time_ms(su_now());
+
     if ((int32_t)(irq->irq_retry - now) > 0)
       break;
     if (retransmitted >= timer_max_retransmit)
@@ -6922,6 +6936,8 @@ _nta_incoming_timer(nta_agent_t *sa)
   }
 
   while ((irq = sa->sa_in.final_failed->q_head)) {
+	  
+
     incoming_remove(irq);
     irq->irq_final_failed = 0;
 
@@ -6953,6 +6969,8 @@ _nta_incoming_timer(nta_agent_t *sa)
     assert(irq->irq_status < 200);
     assert(irq->irq_timeout);
 
+	now = su_time_ms(su_now());
+
     if ((int32_t)(irq->irq_timeout - now) > 0)
       break;
     if (timeout >= timer_max_timeout)
@@ -6972,6 +6990,8 @@ _nta_incoming_timer(nta_agent_t *sa)
     assert(irq->irq_status >= 200);
     assert(irq->irq_timeout);
     assert(irq->irq_method == sip_method_invite);
+
+	now = su_time_ms(su_now());
 
     if ((int32_t)(irq->irq_timeout - now) > 0 ||
 	timeout >= timer_max_timeout ||
@@ -7001,6 +7021,8 @@ _nta_incoming_timer(nta_agent_t *sa)
     assert(irq->irq_status >= 200);
     assert(irq->irq_method == sip_method_invite);
 
+	now = su_time_ms(su_now());
+
     if ((int32_t)(irq->irq_timeout - now) > 0 ||
 	terminated >= timer_max_terminate)
       break;
@@ -7023,6 +7045,8 @@ _nta_incoming_timer(nta_agent_t *sa)
     assert(irq->irq_timeout);
     assert(irq->irq_method != sip_method_invite);
 
+	now = su_time_ms(su_now());	
+
     if ((int32_t)(irq->irq_timeout - now) > 0 ||
 	terminated >= timer_max_terminate)
       break;
@@ -7042,6 +7066,7 @@ _nta_incoming_timer(nta_agent_t *sa)
   }
 
   for (irq = sa->sa_in.terminated->q_head; irq; irq = irq_next) {
+	  
     irq_next = irq->irq_next;
     if (irq->irq_destroyed)
       incoming_free_queue(rq, irq);
@@ -7858,7 +7883,7 @@ nta_outgoing_t *outgoing_create(nta_agent_t *agent,
     else
       branch = su_sprintf(home, "branch=%s", branch);
   }
-  else if (orq->orq_user_via && sip->sip_via->v_branch)
+  else if (orq->orq_user_via && sip->sip_via->v_branch && orq->orq_method != sip_method_invite )
     branch = su_sprintf(home, "branch=%s", sip->sip_via->v_branch);
   else if (stateless)
     branch = stateless_branch(agent, msg, sip, orq->orq_tpn);
@@ -8318,6 +8343,14 @@ outgoing_tport_error(nta_agent_t *agent, nta_outgoing_t *orq,
       return;
     }
   }
+  else if (error == 0) {
+    /*
+     * Server closed connection. RFC3261:
+     * "there is no coupling between TCP connection state and SIP
+     * processing."
+     */
+    return;
+  }
 
   if (outgoing_other_destinations(orq)) {
     outgoing_print_tport_error(orq, 5, "trying alternative server after ",
@@ -8698,7 +8731,7 @@ void outgoing_destroy(nta_outgoing_t *orq)
 static void
 _nta_outgoing_timer(nta_agent_t *sa)
 {
-  uint32_t now = sa->sa_millisec;
+  uint32_t now = su_time_ms(su_now());
   nta_outgoing_t *orq;
   outgoing_queue_t rq[1];
   size_t retransmitted = 0, terminated = 0, timeout = 0, destroyed;
@@ -8712,6 +8745,9 @@ _nta_outgoing_timer(nta_agent_t *sa)
   outgoing_queue_init(sa->sa_out.free = rq, 0);
 
   while ((orq = sa->sa_out.re_list)) {
+
+	  now = su_time_ms(su_now());
+
     if ((int32_t)(orq->orq_retry - now) > 0)
       break;
     if (retransmitted >= timer_max_retransmit)
@@ -11766,6 +11802,18 @@ int nta_agent_bind_tport_update(nta_agent_t *agent,
     return su_seterrno(EFAULT), -1;
   agent->sa_update_magic = magic;
   agent->sa_update_tport = callback;
+  return 0;
+}
+
+/** Bind transport error callback */
+int nta_agent_bind_tport_error(nta_agent_t *agent,
+				nta_error_magic_t *magic,
+				nta_error_tport_f *callback)
+{
+  if (!agent)
+    return su_seterrno(EFAULT), -1;
+  agent->sa_error_magic = magic;
+  agent->sa_error_tport = callback;
   return 0;
 }
 

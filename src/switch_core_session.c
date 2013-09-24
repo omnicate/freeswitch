@@ -381,6 +381,29 @@ SWITCH_DECLARE(void) switch_core_session_hupall(switch_call_cause_t cause)
 }
 
 
+SWITCH_DECLARE(switch_console_callback_match_t *) switch_core_session_findall(void)
+{
+	switch_hash_index_t *hi;
+	void *val;
+	switch_core_session_t *session;
+	switch_console_callback_match_t *my_matches = NULL;
+
+	switch_mutex_lock(runtime.session_hash_mutex);
+	for (hi = switch_hash_first(NULL, session_manager.session_table); hi; hi = switch_hash_next(hi)) {
+		switch_hash_this(hi, NULL, NULL, &val);
+		if (val) {
+			session = (switch_core_session_t *) val;
+			if (switch_core_session_read_lock(session) == SWITCH_STATUS_SUCCESS) {
+				switch_console_push_match(&my_matches, session->uuid_str);
+				switch_core_session_rwunlock(session);
+			}
+		}
+	}
+	switch_mutex_unlock(runtime.session_hash_mutex);
+
+	return my_matches;
+}
+
 SWITCH_DECLARE(switch_status_t) switch_core_session_message_send(const char *uuid_str, switch_core_session_message_t *message)
 {
 	switch_core_session_t *session = NULL;
@@ -682,7 +705,7 @@ static const char *message_names[] = {
 	"REQUEST_IMAGE_MEDIA",
 	"UUID_CHANGE",
 	"SIMPLIFY",
-	"DEBUG_AUDIO",
+	"DEBUG_MEDIA",
 	"PROXY_MEDIA",
 	"APPLICATION_EXEC",
 	"APPLICATION_EXEC_COMPLETE",
@@ -693,10 +716,15 @@ static const char *message_names[] = {
 	"JITTER_BUFFER",
 	"RECOVERY_REFRESH",
 	"SIGNAL_DATA",
+	"MESSAGE",
 	"INFO",
 	"AUDIO_DATA",
 	"BLIND_TRANSFER_RESPONSE",
 	"STUN_ERROR",
+	"MEDIA_RENEG",
+	"ANSWER_EVENT",
+	"PROGRESS_EVENT",
+	"RING_EVENT",
 	"INVALID"
 };
 
@@ -769,8 +797,15 @@ SWITCH_DECLARE(switch_status_t) switch_core_session_perform_receive_message(swit
 						  switch_core_session_get_uuid(session), SWITCH_LOG_DEBUG, "%s skip receive message [%s] (channel is hungup already)\n",
 						  switch_channel_get_name(session->channel), message_names[message->message_id]);
 	
-	} else if (session->endpoint_interface->io_routines->receive_message) {
-		status = session->endpoint_interface->io_routines->receive_message(session, message);
+	} else {
+		if (session->media_handle) {
+			status = switch_core_media_receive_message(session, message);
+		}
+		if (status == SWITCH_STATUS_SUCCESS || message->message_id == SWITCH_MESSAGE_INDICATE_SIGNAL_DATA) {
+			if (session->endpoint_interface->io_routines->receive_message) {
+				status = session->endpoint_interface->io_routines->receive_message(session, message);
+			}
+		}
 	}
 
 	if (status == SWITCH_STATUS_SUCCESS) {
@@ -1555,9 +1590,9 @@ static void *SWITCH_THREAD_FUNC switch_core_session_thread_pool_worker(switch_th
 	switch_mutex_lock(session_manager.mutex);
 	session_manager.running++;
 	switch_mutex_unlock(session_manager.mutex);
-
+#ifdef DEBUG_THREAD_POOL
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG10, "Worker Thread %ld Started\n", (long) thread);
-
+#endif
 	while(session_manager.ready) {
 		switch_status_t check_status;
 
@@ -1585,18 +1620,22 @@ static void *SWITCH_THREAD_FUNC switch_core_session_thread_pool_worker(switch_th
 			switch_mutex_lock(session_manager.mutex);
 			session_manager.busy++;
 			switch_mutex_unlock(session_manager.mutex);
-			
+#ifdef DEBUG_THREAD_POOL			
 			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG10, "Worker Thread %ld Processing\n", (long) thread);
-
+#endif
 
 			td->func(thread, td->obj);
 
-			if (td->alloc) {
+			if (td->pool) {
+				switch_memory_pool_t *pool = td->pool;
+				td = NULL;
+				switch_core_destroy_memory_pool(&pool);
+			} else if (td->alloc) {
 				free(td);
 			}
-			
+#ifdef DEBUG_THREAD_POOL
 			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG10, "Worker Thread %ld Done Processing\n", (long) thread);
-			
+#endif
 			switch_mutex_lock(session_manager.mutex);
 			session_manager.busy--;
 			switch_mutex_unlock(session_manager.mutex);
@@ -1608,9 +1647,9 @@ static void *SWITCH_THREAD_FUNC switch_core_session_thread_pool_worker(switch_th
 			check++;
 		}
 	}
-
+#ifdef DEBUG_THREAD_POOL
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG10, "Worker Thread %ld Ended\n", (long) thread);
-
+#endif
 	switch_mutex_lock(session_manager.mutex);
 	session_manager.running--;
 	switch_mutex_unlock(session_manager.mutex);
@@ -1694,9 +1733,10 @@ static void *SWITCH_THREAD_FUNC switch_core_session_thread_pool_manager(switch_t
 
 		if (++x == 300) {
 			if (session_manager.popping) {
+#ifdef DEBUG_THREAD_POOL
 				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG10, 
 								  "Thread pool: running:%d busy:%d popping:%d\n", session_manager.running, session_manager.busy, session_manager.popping);
-
+#endif
 				switch_queue_interrupt_all(session_manager.thread_queue);
 
 				x--;
@@ -2269,6 +2309,14 @@ SWITCH_DECLARE(switch_core_session_t *) switch_core_session_request_uuid(switch_
 	switch_core_hash_insert(session_manager.session_table, session->uuid_str, session);
 	session->id = session_manager.session_id++;
 	session_manager.session_count++;
+
+	if (session_manager.session_count > (uint32_t)runtime.sessions_peak) {
+		runtime.sessions_peak = session_manager.session_count;
+	}
+	if (session_manager.session_count > (uint32_t)runtime.sessions_peak_fivemin) {
+		runtime.sessions_peak_fivemin = session_manager.session_count;
+	}
+
 	switch_mutex_unlock(runtime.session_hash_mutex);
 
 	switch_channel_set_variable_printf(session->channel, "session_id", "%u", session->id);
@@ -2340,6 +2388,7 @@ SWITCH_DECLARE(uint8_t) switch_core_session_check_interface(switch_core_session_
 
 SWITCH_DECLARE(char *) switch_core_session_get_uuid(switch_core_session_t *session)
 {
+	if (!session) return NULL;
 	return session->uuid_str;
 }
 
@@ -2481,6 +2530,12 @@ SWITCH_DECLARE(switch_status_t) switch_core_session_execute_application_async(sw
 	return SWITCH_STATUS_FALSE;
 }
 
+SWITCH_DECLARE(void) switch_core_session_video_reset(switch_core_session_t *session)
+{
+	switch_channel_set_flag(session->channel, CF_VIDEO_ECHO);
+	switch_channel_clear_flag(session->channel, CF_VIDEO_PASSIVE);
+	switch_core_session_refresh_video(session);
+}
 
 SWITCH_DECLARE(switch_status_t) switch_core_session_execute_application_get_flags(switch_core_session_t *session, const char *app,
 																				  const char *arg, int32_t *flags)
@@ -2534,6 +2589,10 @@ SWITCH_DECLARE(switch_status_t) switch_core_session_execute_application_get_flag
 
 	if (flags && application_interface->flags) {
 		*flags = application_interface->flags;
+	}
+
+	if (!switch_test_flag(application_interface, SAF_SUPPORT_NOMEDIA) && (switch_channel_test_flag(session->channel, CF_VIDEO))) {
+		switch_core_session_refresh_video(session);
 	}
 
 	if (switch_channel_test_flag(session->channel, CF_PROXY_MODE) && !switch_test_flag(application_interface, SAF_SUPPORT_NOMEDIA)) {
@@ -2590,7 +2649,7 @@ SWITCH_DECLARE(switch_status_t) switch_core_session_exec(switch_core_session_t *
 	int scope = 0;
 	char uuid_str[SWITCH_UUID_FORMATTED_LENGTH + 1];
 	char *app_uuid = uuid_str;
-	
+
 	if ((app_uuid_var = switch_channel_get_variable(channel, "app_uuid"))) {
 		app_uuid = (char *)app_uuid_var;
 		switch_channel_set_variable(channel, "app_uuid", NULL);
@@ -2836,6 +2895,22 @@ SWITCH_DECLARE(switch_log_level_t) switch_core_session_get_loglevel(switch_core_
 	return session->loglevel;
 }
 
+SWITCH_DECLARE(switch_status_t) switch_core_session_refresh_video(switch_core_session_t *session)
+{
+	switch_channel_t *channel = switch_core_session_get_channel(session);
+
+	if (switch_channel_test_flag(channel, CF_VIDEO)) {
+		switch_core_session_message_t msg = { 0 };
+		msg.from = __FILE__;
+		msg.message_id = SWITCH_MESSAGE_INDICATE_VIDEO_REFRESH_REQ;
+		switch_core_session_receive_message(session, &msg);
+		return SWITCH_STATUS_SUCCESS;
+	}
+
+	return SWITCH_STATUS_FALSE;
+}
+
+
 /* For Emacs:
  * Local Variables:
  * mode:c
@@ -2844,5 +2919,5 @@ SWITCH_DECLARE(switch_log_level_t) switch_core_session_get_loglevel(switch_core_
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */

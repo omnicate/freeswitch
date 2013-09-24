@@ -590,7 +590,7 @@ static void print_media(sdp_printer_t *p,
     case sdp_proto_udp:   proto = "udp"; break;
     case sdp_proto_rtp:   proto = "RTP/AVP"; break;
     case sdp_proto_srtp:  proto = "RTP/SAVP"; break;
-    case sdp_proto_extended_srtp:  proto = "RTP/SAVPF"; break;
+		//case sdp_proto_extended_srtp:  proto = "RTP/SAVPF"; break;
     case sdp_proto_udptl: proto = "udptl"; break;
     case sdp_proto_msrp:  proto = "TCP/MSRP"; break;
     case sdp_proto_msrps:  proto = "TCP/TLS/MSRP"; break;
@@ -618,8 +618,10 @@ static void print_media(sdp_printer_t *p,
 	sdp_printf(p, " %s", l->l_text);
     }
     else {
-      sdp_printf(p, " 19");      /* SDP syntax requires at least one format.
-				    19 is used by nobody, right?. */
+		/* SDP syntax requires at least one format. */
+		/* defaults to "19", or "t38" for image */
+		if (m->m_type == sdp_media_image) sdp_printf(p, " t38");
+		else sdp_printf(p, " 19");
     }
 
 

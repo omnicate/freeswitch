@@ -39,7 +39,7 @@
 SWITCH_DECLARE(switch_status_t) switch_core_perform_file_open(const char *file, const char *func, int line,
 															  switch_file_handle_t *fh,
 															  const char *file_path,
-															  uint8_t channels, uint32_t rate, unsigned int flags, switch_memory_pool_t *pool)
+															  uint32_t channels, uint32_t rate, unsigned int flags, switch_memory_pool_t *pool)
 {
 	char *ext;
 	switch_status_t status = SWITCH_STATUS_FALSE;
@@ -271,7 +271,7 @@ SWITCH_DECLARE(switch_status_t) switch_core_file_read(switch_file_handle_t *fh, 
 
 	if (fh->buffer && switch_buffer_inuse(fh->buffer) >= *len * 2) {
 		*len = switch_buffer_read(fh->buffer, data, orig_len * 2) / 2;
-		return SWITCH_STATUS_SUCCESS;
+		return *len == 0 ? SWITCH_STATUS_FALSE : SWITCH_STATUS_SUCCESS;
 	}
 
 	if (switch_test_flag(fh, SWITCH_FILE_DONE)) {
@@ -292,7 +292,12 @@ SWITCH_DECLARE(switch_status_t) switch_core_file_read(switch_file_handle_t *fh, 
 			rlen = asis ? fh->pre_buffer_datalen : fh->pre_buffer_datalen / 2;
 
 			if (switch_buffer_inuse(fh->pre_buffer) < rlen * 2) {
-				if ((status = fh->file_interface->file_read(fh, fh->pre_buffer_data, &rlen)) != SWITCH_STATUS_SUCCESS || !rlen) {
+				if ((status = fh->file_interface->file_read(fh, fh->pre_buffer_data, &rlen)) == SWITCH_STATUS_BREAK) {
+					return SWITCH_STATUS_BREAK;
+				}
+				
+
+				if (status != SWITCH_STATUS_SUCCESS || !rlen) {
 					switch_set_flag(fh, SWITCH_FILE_BUFFER_DONE);
 				} else {
 					fh->samples_in += rlen;
@@ -316,7 +321,11 @@ SWITCH_DECLARE(switch_status_t) switch_core_file_read(switch_file_handle_t *fh, 
 
 	} else {
 
-		if ((status = fh->file_interface->file_read(fh, data, len)) != SWITCH_STATUS_SUCCESS || !*len) {
+		if ((status = fh->file_interface->file_read(fh, data, len)) == SWITCH_STATUS_BREAK) {
+			return SWITCH_STATUS_BREAK;
+		}
+
+		if (status != SWITCH_STATUS_SUCCESS || !*len) {
 			switch_set_flag(fh, SWITCH_FILE_DONE);
 			goto top;
 		}
@@ -673,5 +682,5 @@ SWITCH_DECLARE(switch_status_t) switch_core_file_close(switch_file_handle_t *fh)
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */

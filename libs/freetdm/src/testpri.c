@@ -21,6 +21,8 @@ static void *channel_run(ftdm_thread_t *me, void *obj)
 	int spanid = ftdm_channel_get_span_id(ftdmchan);
 	int chanid = ftdm_channel_get_id(ftdmchan);
 
+	ftdm_unused_arg(me);
+
 	ftdm_mutex_lock(mutex);
 	T++;
 	ftdm_mutex_unlock(mutex);
@@ -92,7 +94,7 @@ static FIO_SIGNAL_CB_FUNCTION(on_signal)
 
 static void handle_SIGINT(int sig)
 {
-	if (sig);
+	ftdm_unused_arg(sig);
 
 	ftdm_mutex_lock(mutex);
 	R = 0;
@@ -168,5 +170,5 @@ int main(int argc, char *argv[])
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */

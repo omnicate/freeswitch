@@ -178,6 +178,10 @@
     <!-- if you want to send any special bind params of your own -->
     <!--<param name="bind-params" value="transport=udp"/>-->
     <!--<param name="unregister-on-options-fail" value="true"/>-->
+    <!-- Send an OPTIONS packet to all registered endpoints -->
+    <!--<param name="all-reg-options-ping" value="true"/>-->
+    <!-- Send an OPTIONS packet to NATed registered endpoints. Can be 'true' or 'udp-only'. -->
+    <!--<param name="nat-options-ping" value="true"/>-->
 
     <!-- TLS: disabled by default, set to "true" to enable -->
     <param name="tls" value="$${internal_ssl_enable}"/>
@@ -188,7 +192,7 @@
     <!-- Port to listen on for TLS requests. (5061 will be used if unspecified) -->
     <param name="tls-sip-port" value="$${internal_tls_port}"/>
     <!-- Location of the agent.pem and cafile.pem ssl certificates (needed for TLS server) -->
-    <param name="tls-cert-dir" value="$${internal_ssl_dir}"/>
+    <!--<param name="tls-cert-dir" value=""/>-->
     <!-- Optionally set the passphrase password used by openSSL to encrypt/decrypt TLS private key files -->
     <param name="tls-passphrase" value=""/>
     <!-- Verify the date on TLS certificates -->
@@ -291,7 +295,19 @@
     <!--all inbound reg will stored in the db using this domain -->
     <param name="force-register-db-domain" value="$${domain}"/>
 
+
+    <!-- uncomment for sip over websocket support -->
+    <!--<param name="ws-binding"  value=":5066"/>-->
+
+    <!-- uncomment for sip over secure websocket support -->
+    <!-- You need wss.pem in /usr/local/freeswitch/certs for wss -->
+    <!--<param name="wss-binding" value=":7443"/>-->
+    
+
     <!--<param name="delete-subs-on-register" value="false"/>-->
+
+    <!-- launch a new thread to process each new inbound register when using heavier backends -->
+    <!-- <param name="inbound-reg-in-new-thread" value="true"/> -->
 
     <!-- enable rtcp on every channel also can be done per leg basis with rtcp_audio_interval_msec variable set to passthru to pass it across a call-->
     <!--<param name="rtcp-audio-interval-msec" value="5000"/>-->
@@ -299,6 +315,10 @@
 
     <!--force suscription expires to a lower value than requested-->
     <!--<param name="force-subscription-expires" value="60"/>-->
+
+    <!-- add a random deviation to the expires value of the 202 Accepted -->
+    <!--<param name="sip-subscription-max-deviation" value="120"/>-->
+
     <!-- disable register and transfer which may be undesirable in a public switch -->
     <!--<param name="disable-transfer" value="true"/>-->
     <!--<param name="disable-register" value="true"/>-->

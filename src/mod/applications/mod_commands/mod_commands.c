@@ -467,7 +467,7 @@ SWITCH_STANDARD_API(reg_url_function)
 	}
 
 	if (zstr(domain)) {
-		dup_domain = switch_core_get_variable_dup("domain");
+		dup_domain = switch_core_get_domain(SWITCH_TRUE);
 		domain = dup_domain;
 	}
 
@@ -886,7 +886,7 @@ SWITCH_STANDARD_API(group_call_function)
 	if (domain) {
 		*domain++ = '\0';
 	} else {
-		if ((dup_domain = switch_core_get_variable_dup("domain"))) {
+		if ((dup_domain = switch_core_get_domain(SWITCH_TRUE))) {
 			domain = dup_domain;
 		}
 	}
@@ -1076,7 +1076,7 @@ SWITCH_STANDARD_API(in_group_function)
 	if ((domain = strchr(user, '@'))) {
 		*domain++ = '\0';
 	} else {
-		if ((dup_domain = switch_core_get_variable_dup("domain"))) {
+		if ((dup_domain = switch_core_get_domain(SWITCH_TRUE))) {
 			domain = dup_domain;
 		}
 	}
@@ -1131,7 +1131,7 @@ SWITCH_STANDARD_API(user_data_function)
 	if ((domain = strchr(user, '@'))) {
 		*domain++ = '\0';
 	} else {
-		if ((dup_domain = switch_core_get_variable_dup("domain"))) {
+		if ((dup_domain = switch_core_get_domain(SWITCH_TRUE))) {
 			domain = dup_domain;
 		} else {
 			domain = "cluecon.com";
@@ -1329,6 +1329,8 @@ SWITCH_STANDARD_API(stun_function)
 	switch_port_t port = 0;
 	switch_memory_pool_t *pool = NULL;
 	char *error = "";
+	char *argv[3] = { 0 };
+	char *mycmd = NULL;
 
 	ip = ip_buf;
 
@@ -1337,8 +1339,14 @@ SWITCH_STANDARD_API(stun_function)
 		return SWITCH_STATUS_SUCCESS;
 	}
 
-	stun_ip = strdup(cmd);
+	mycmd = strdup(cmd);
+	switch_split(mycmd, ' ', argv);
+
+	stun_ip = argv[0];
+
 	switch_assert(stun_ip);
+
+	port = argv[1] ? atoi(argv[1]) : 0;
 
 	if ((p = strchr(stun_ip, ':'))) {
 		int iport;
@@ -1374,7 +1382,7 @@ SWITCH_STANDARD_API(stun_function)
 	}
 
 	switch_core_destroy_memory_pool(&pool);
-	free(stun_ip);
+	switch_safe_free(mycmd);
 	return SWITCH_STATUS_SUCCESS;
 }
 
@@ -1793,7 +1801,7 @@ SWITCH_STANDARD_API(regex_function)
 	switch_regex_t *re = NULL;
 	int ovector[30];
 	int argc;
-	char *mydata = NULL, *argv[3];
+	char *mydata = NULL, *argv[4];
 	size_t len = 0;
 	char *substituted = NULL;
 	int proceed = 0;
@@ -1834,6 +1842,12 @@ SWITCH_STANDARD_API(regex_function)
 	proceed = switch_regex_perform(argv[0], argv[1], &re, ovector, sizeof(ovector) / sizeof(ovector[0]));
 
 	if (argc > 2) {
+		char *flags = "";
+
+		if (argc > 3) {
+			flags = argv[3];
+		}
+
 		if (proceed) {
 			len = (strlen(argv[0]) + strlen(argv[2]) + 10) * proceed;
 			substituted = malloc(len);
@@ -1845,7 +1859,13 @@ SWITCH_STANDARD_API(regex_function)
 			stream->write_function(stream, "%s", substituted);
 			free(substituted);
 		} else {
-			stream->write_function(stream, "%s", argv[0]);
+			if (strchr(flags, 'n')) {
+				stream->write_function(stream, "%s", "");
+			} else if (strchr(flags, 'b')) {
+				stream->write_function(stream, "%s", "false");
+			} else {
+				stream->write_function(stream, "%s", argv[0]);
+			}
 		}
 	} else {
 		stream->write_function(stream, proceed ? "true" : "false");
@@ -2000,7 +2020,8 @@ SWITCH_STANDARD_API(lan_addr_function)
 SWITCH_STANDARD_API(status_function)
 {
 	switch_core_time_duration_t duration = { 0 };
-	int sps = 0, last_sps = 0;
+	int sps = 0, last_sps = 0, max_sps = 0, max_sps_fivemin = 0;
+	int sessions_peak = 0, sessions_peak_fivemin = 0; /* Max Concurrent Sessions buffers */
 	switch_bool_t html = SWITCH_FALSE;	/* shortcut to format.html	*/
 	char * nl = "\n";					/* shortcut to format.nl	*/
 	stream_format format = { 0 };
@@ -2042,11 +2063,16 @@ SWITCH_STANDARD_API(status_function)
 
 	stream->write_function(stream, "FreeSWITCH (Version %s) is %s%s", SWITCH_VERSION_FULL_HUMAN,
 						   switch_core_ready() ? "ready" : "not ready", nl);
-	
+
 	stream->write_function(stream, "%" SWITCH_SIZE_T_FMT " session(s) since startup%s", switch_core_session_id() - 1, nl);
+	switch_core_session_ctl(SCSC_SESSIONS_PEAK, &sessions_peak);
+	switch_core_session_ctl(SCSC_SESSIONS_PEAK_FIVEMIN, &sessions_peak_fivemin);
+	stream->write_function(stream, "%d session(s) - peak %d, last 5min %d %s", switch_core_session_count(), sessions_peak, sessions_peak_fivemin, nl);
 	switch_core_session_ctl(SCSC_LAST_SPS, &last_sps);
 	switch_core_session_ctl(SCSC_SPS, &sps);
-	stream->write_function(stream, "%d session(s) - %d out of max %d per sec %s", switch_core_session_count(), last_sps, sps, nl);
+	switch_core_session_ctl(SCSC_SPS_PEAK, &max_sps);
+	switch_core_session_ctl(SCSC_SPS_PEAK_FIVEMIN, &max_sps_fivemin);
+	stream->write_function(stream, "%d session(s) per Sec out of max %d, peak %d, last 5min %d %s", last_sps, sps, max_sps, max_sps_fivemin, nl);
 	stream->write_function(stream, "%d session(s) max%s", switch_core_session_limit(0), nl);
 	stream->write_function(stream, "min idle cpu %0.2f/%0.2f%s", switch_core_min_idle_cpu(-1.0), switch_core_idle_cpu(), nl);
 
@@ -2055,7 +2081,7 @@ SWITCH_STANDARD_API(status_function)
 	return SWITCH_STATUS_SUCCESS;
 }
 
-#define CTL_SYNTAX "[recover|send_sighup|hupall|pause [inbound|outbound]|resume [inbound|outbound]|shutdown [cancel|elegant|asap|now|restart]|sps|sync_clock|sync_clock_when_idle|reclaim_mem|max_sessions|min_dtmf_duration [num]|max_dtmf_duration [num]|default_dtmf_duration [num]|min_idle_cpu|loglevel [level]|debug_level [level]]"
+#define CTL_SYNTAX "[recover|send_sighup|hupall|pause [inbound|outbound]|resume [inbound|outbound]|shutdown [cancel|elegant|asap|now|restart]|sps|sps_peak_reset|sync_clock|sync_clock_when_idle|reclaim_mem|max_sessions|min_dtmf_duration [num]|max_dtmf_duration [num]|default_dtmf_duration [num]|min_idle_cpu|loglevel [level]|debug_level [level]]"
 SWITCH_STANDARD_API(ctl_function)
 {
 	int argc;
@@ -2195,7 +2221,7 @@ SWITCH_STANDARD_API(ctl_function)
 		} else if (!strcasecmp(argv[0], "debug_sql")) {
 			int x = 0;
 			switch_core_session_ctl(SCSC_DEBUG_SQL, &x);
-			stream->write_function(stream, "+OK SQL DEBUG [%s]\n", x ? "on" : "off");			
+			stream->write_function(stream, "+OK SQL DEBUG [%s]\n", x ? "on" : "off");
 
 		} else if (!strcasecmp(argv[0], "sql")) {
 			if (argv[1]) {
@@ -2204,7 +2230,7 @@ SWITCH_STANDARD_API(ctl_function)
 					x = 1;
 				}
 				switch_core_session_ctl(SCSC_SQL, &x);
-				stream->write_function(stream, "+OK\n");			
+				stream->write_function(stream, "+OK\n");
 			}
 
 		} else if (!strcasecmp(argv[0], "reclaim_mem")) {
@@ -2277,6 +2303,10 @@ SWITCH_STANDARD_API(ctl_function)
 			switch_core_session_ctl(SCSC_DEBUG_LEVEL, &arg);
 			stream->write_function(stream, "+OK DEBUG level: %d\n", arg);
 
+		} else if (!strcasecmp(argv[0], "sps_peak_reset")) {
+			arg = -1;
+			switch_core_session_ctl(SCSC_SPS_PEAK, &arg);
+			stream->write_function(stream, "+OK max sessions per second counter reset\n");
 		} else if (!strcasecmp(argv[0], "last_sps")) {
 			switch_core_session_ctl(SCSC_LAST_SPS, &arg);
 			stream->write_function(stream, "+OK last sessions per second: %d\n", arg);
@@ -3030,7 +3060,7 @@ SWITCH_STANDARD_API(uuid_media_neg_function)
 			msg.numeric_arg++;
 			uuid++;
 		}
-		
+
 		if ((lsession = switch_core_session_locate(uuid))) {
 			status = switch_core_session_receive_message(lsession, &msg);
 			switch_core_session_rwunlock(lsession);
@@ -3142,7 +3172,7 @@ SWITCH_STANDARD_API(uuid_broadcast_function)
 	return SWITCH_STATUS_SUCCESS;
 }
 
-#define SCHED_BROADCAST_SYNTAX "[+]<time> <uuid> <path> [aleg|bleg|both]"
+#define SCHED_BROADCAST_SYNTAX "[[+]<time>|@time] <uuid> <path> [aleg|bleg|both]"
 SWITCH_STANDARD_API(sched_broadcast_function)
 {
 	char *mycmd = NULL, *argv[4] = { 0 };
@@ -3158,7 +3188,9 @@ SWITCH_STANDARD_API(sched_broadcast_function)
 		switch_media_flag_t flags = SMF_NONE;
 		time_t when;
 
-		if (*argv[0] == '+') {
+		if (*argv[0] == '@') {
+			when = atol(argv[0] + 1);
+		} else if (*argv[0] == '+') {
 			when = switch_epoch_time_now(NULL) + atol(argv[0] + 1);
 		} else {
 			when = atol(argv[0]);
@@ -3184,7 +3216,7 @@ SWITCH_STANDARD_API(sched_broadcast_function)
 	return SWITCH_STATUS_SUCCESS;
 }
 
-#define HOLD_SYNTAX "[off] <uuid> [<display>]"
+#define HOLD_SYNTAX "[off|toggle] <uuid> [<display>]"
 SWITCH_STANDARD_API(uuid_hold_function)
 {
 	char *mycmd = NULL, *argv[4] = { 0 };
@@ -3200,6 +3232,8 @@ SWITCH_STANDARD_API(uuid_hold_function)
 	} else {
 		if (!strcasecmp(argv[0], "off")) {
 			status = switch_ivr_unhold_uuid(argv[1]);
+		} else if (!strcasecmp(argv[0], "toggle")) {
+			status = switch_ivr_hold_toggle_uuid(argv[1], argv[2], 1);
 		} else {
 			status = switch_ivr_hold_uuid(argv[0], argv[1], 1);
 		}
@@ -3561,8 +3595,8 @@ SWITCH_STANDARD_API(uuid_video_refresh_function)
 }
 
 
-#define DEBUG_AUDIO_SYNTAX "<uuid> <read|write|both> <on|off>"
-SWITCH_STANDARD_API(uuid_debug_audio_function)
+#define DEBUG_MEDIA_SYNTAX "<uuid> <read|write|both|vread|vwrite|vboth> <on|off>"
+SWITCH_STANDARD_API(uuid_debug_media_function)
 {
 	char *mycmd = NULL, *argv[3] = { 0 };
 	int argc = 0;
@@ -3573,13 +3607,13 @@ SWITCH_STANDARD_API(uuid_debug_audio_function)
 	}
 
 	if (zstr(cmd) || argc < 3 || zstr(argv[0]) || zstr(argv[1]) || zstr(argv[2])) {
-		stream->write_function(stream, "-USAGE: %s\n", DEBUG_AUDIO_SYNTAX);
+		stream->write_function(stream, "-USAGE: %s\n", DEBUG_MEDIA_SYNTAX);
 		goto done;
 	} else {
 		switch_core_session_message_t msg = { 0 };
 		switch_core_session_t *lsession = NULL;
 
-		msg.message_id = SWITCH_MESSAGE_INDICATE_DEBUG_AUDIO;
+		msg.message_id = SWITCH_MESSAGE_INDICATE_DEBUG_MEDIA;
 		msg.string_array_arg[0] = argv[1];
 		msg.string_array_arg[1] = argv[2];
 		msg.from = __FILE__;
@@ -3639,7 +3673,7 @@ SWITCH_STANDARD_API(uuid_bridge_function)
 	return SWITCH_STATUS_SUCCESS;
 }
 
-#define SESS_REC_SYNTAX "<uuid> [start|stop] <path> [<limit>]"
+#define SESS_REC_SYNTAX "<uuid> [start|stop|mask|unmask] <path> [<limit>]"
 SWITCH_STANDARD_API(session_record_function)
 {
 	switch_core_session_t *rsession = NULL;
@@ -3683,6 +3717,18 @@ SWITCH_STANDARD_API(session_record_function)
 	} else if (!strcasecmp(action, "stop")) {
 		if (switch_ivr_stop_record_session(rsession, path) != SWITCH_STATUS_SUCCESS) {
 			stream->write_function(stream, "-ERR Cannot stop record session!\n");
+		} else {
+			stream->write_function(stream, "+OK Success\n");
+		}
+	} else if (!strcasecmp(action, "mask")) {
+		if (switch_ivr_record_session_mask(rsession, path, SWITCH_TRUE) != SWITCH_STATUS_SUCCESS) {
+			stream->write_function(stream, "-ERR Cannot mask recording session!\n");
+		} else {
+			stream->write_function(stream, "+OK Success\n");
+		}
+	} else if (!strcasecmp(action, "unmask")) {
+		if (switch_ivr_record_session_mask(rsession, path, SWITCH_FALSE) != SWITCH_STATUS_SUCCESS) {
+			stream->write_function(stream, "-ERR Cannot unmask recording session!\n");
 		} else {
 			stream->write_function(stream, "+OK Success\n");
 		}
@@ -3774,6 +3820,7 @@ SWITCH_STANDARD_API(session_audio_function)
 	switch_core_session_t *u_session = NULL;
 	char *mycmd = NULL;
 	int fail = 0;
+	int nochannel = 0;
 	int argc = 0;
 	char *argv[5] = { 0 };
 	int level;
@@ -3792,7 +3839,7 @@ SWITCH_STANDARD_API(session_audio_function)
 	}
 
 	if (!(u_session = switch_core_session_locate(argv[0]))) {
-		stream->write_function(stream, "-ERR No such channel!\n");
+		nochannel++;
 		goto done;
 	}
 
@@ -3824,7 +3871,9 @@ SWITCH_STANDARD_API(session_audio_function)
 
 	switch_safe_free(mycmd);
 
-	if (fail) {
+	if (nochannel) {
+		stream->write_function(stream, "-ERR No such channel!\n");
+	} else if (fail) {
 		stream->write_function(stream, "-USAGE: %s\n", AUDIO_SYNTAX);
 	} else {
 		stream->write_function(stream, "+OK\n");
@@ -4361,7 +4410,11 @@ static int show_as_json_callback(void *pArg, int argc, char **argv, char **colum
 	}
 
 	if (holder->justcount) {
-		holder->count++;
+		if (zstr(argv[0])) {
+			holder->count = 0;
+		} else {
+			holder->count = (uint32_t) atoi(argv[0]);
+		}
 		return 0;
 	}
 
@@ -4401,7 +4454,11 @@ static int show_as_xml_callback(void *pArg, int argc, char **argv, char **column
 	}
 
 	if (holder->justcount) {
-		holder->count++;
+		if (zstr(argv[0])) {
+			holder->count = 0;
+		} else {
+			holder->count = (uint32_t) atoi(argv[0]);
+		}
 		return 0;
 	}
 
@@ -4439,7 +4496,11 @@ static int show_callback(void *pArg, int argc, char **argv, char **columnNames)
 	int x;
 
 	if (holder->justcount) {
-		holder->count++;
+		if (zstr(argv[0])) {
+			holder->count = 0;
+		} else {
+			holder->count = (uint32_t) atoi(argv[0]);
+		}
 		return 0;
 	}
 
@@ -4514,6 +4575,35 @@ SWITCH_STANDARD_API(alias_function)
 	return SWITCH_STATUS_SUCCESS;
 }
 
+#define COALESCE_SYNTAX "[^^<delim>]<value1>,<value2>,..."
+SWITCH_STANDARD_API(coalesce_function)
+{
+	switch_status_t status = SWITCH_STATUS_FALSE;
+	char *data = (char *) cmd;
+	char *mydata = NULL, *argv[256] = { 0 };
+	int argc = -1;
+
+	if (data && *data && (mydata = strdup(data))) {
+		argc = switch_separate_string(mydata, ',', argv,
+				(sizeof(argv) / sizeof(argv[0])));
+	}
+
+	if (argc > 0) {
+		int i;
+		for (i = 0; i < argc; i++) {
+			if (argv[i] && *argv[i]) {
+				stream->write_function(stream, argv[i]);
+				status = SWITCH_STATUS_SUCCESS;
+				break;
+			}
+		}
+	} else if (argc <= 0){
+		stream->write_function(stream, "-USAGE: %s\n", COALESCE_SYNTAX);
+	}
+
+	return status;
+}
+
 #define SHOW_SYNTAX "codec|endpoint|application|api|dialplan|file|timer|calls [count]|channels [count|like <match string>]|calls|detailed_calls|bridged_calls|detailed_bridged_calls|aliases|complete|chat|management|modules|nat_map|say|interfaces|interface_types|tasks|limits|status"
 SWITCH_STANDARD_API(show_function)
 {
@@ -4581,7 +4671,7 @@ SWITCH_STANDARD_API(show_function)
 		}
 		sprintf(sql, "select type, name, ikey from interfaces where hostname='%s' and type = '%s' order by type,name", hostname, command);
 	} else if (!strncasecmp(command, "module", 6)) {
-		if (argv[1]) {
+		if (argv[1] && strcasecmp(argv[1], "as")) {
 			sprintf(sql, "select distinct type, name, ikey, filename from interfaces where hostname='%s' and ikey = '%s' order by type,name",
 					hostname, argv[1]);
 		} else {
@@ -4646,6 +4736,7 @@ SWITCH_STANDARD_API(show_function)
 		if (!strcasecmp(command, "calls")) {
 			sprintf(sql, "select * from basic_calls where hostname='%s' order by call_created_epoch", hostname);
 			if (argv[1] && !strcasecmp(argv[1], "count")) {
+				sprintf(sql, "select count(*) from basic_calls where hostname='%s'", hostname);
 				holder.justcount = 1;
 				if (argv[3] && !strcasecmp(argv[2], "as")) {
 					as = argv[3];
@@ -4654,6 +4745,7 @@ SWITCH_STANDARD_API(show_function)
 		} else if (!strcasecmp(command, "registrations")) {
 			sprintf(sql, "select * from registrations where hostname='%s'", hostname);
 			if (argv[1] && !strcasecmp(argv[1], "count")) {
+				sprintf(sql, "select count(*) from registrations where hostname='%s'", hostname);
 				holder.justcount = 1;
 				if (argv[3] && !strcasecmp(argv[2], "as")) {
 					as = argv[3];
@@ -4685,6 +4777,7 @@ SWITCH_STANDARD_API(show_function)
 		} else if (!strcasecmp(command, "channels")) {
 			sprintf(sql, "select * from channels where hostname='%s' order by created_epoch", hostname);
 			if (argv[1] && !strcasecmp(argv[1], "count")) {
+				sprintf(sql, "select count(*) from channels where hostname='%s'", hostname);
 				holder.justcount = 1;
 				if (argv[3] && !strcasecmp(argv[2], "as")) {
 					as = argv[3];
@@ -4809,7 +4902,7 @@ SWITCH_STANDARD_API(show_function)
 					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "Memory Error!\n");
 					holder.stream->write_function(holder.stream, "-ERR Memory Error!\n");
 				} else {
-					holder.stream->write_function(holder.stream, json_text);
+					holder.stream->write_function(holder.stream, "%s", json_text);
 				}
 				cJSON_Delete(result);
 				switch_safe_free(json_text);
@@ -5144,7 +5237,7 @@ SWITCH_STANDARD_API(uuid_fileman_function)
 		}
 	}
 
-	stream->write_function(stream, "-USAGE: %s\n", GETVAR_SYNTAX);
+	stream->write_function(stream, "-USAGE: %s\n", FILEMAN_SYNTAX);
 
   done:
 	switch_safe_free(mycmd);
@@ -5504,12 +5597,28 @@ SWITCH_STANDARD_API(escape_function)
 		return SWITCH_STATUS_SUCCESS;
 	}
 
-	len = (int)strlen(cmd) * 2;
+	len = (int)strlen(cmd) * 2 + 1;
 	mycmd = malloc(len);
 
 	stream->write_function(stream, "%s", switch_escape_string(cmd, mycmd, len));
 
 	switch_safe_free(mycmd);
+	return SWITCH_STATUS_SUCCESS;
+}
+
+SWITCH_STANDARD_API(quote_shell_arg_function)
+{
+	switch_memory_pool_t *pool;
+
+	if (zstr(cmd)) {
+		return SWITCH_STATUS_SUCCESS;
+	}
+
+	switch_core_new_memory_pool(&pool);
+
+	stream->write_function(stream, "%s", switch_util_quote_shell_arg_pool(cmd, pool));
+
+	switch_core_destroy_memory_pool(&pool);
 	return SWITCH_STATUS_SUCCESS;
 }
 
@@ -5523,7 +5632,7 @@ SWITCH_STANDARD_API(uuid_loglevel)
 	if (!zstr(cmd) && (uuid = strdup(cmd))) {
 		if ((text = strchr(uuid, ' '))) {
 			*text++ = '\0';
-			
+
 			if (!strncasecmp(text, "-b", 2)) {
 				b++;
 				if ((text = strchr(text, ' '))) {
@@ -5927,6 +6036,49 @@ SWITCH_STANDARD_API(file_exists_function)
 	return SWITCH_STATUS_SUCCESS;
 }
 
+#define INTERFACE_IP_SYNTAX "[auto|ipv4|ipv6] <ifname>"
+SWITCH_STANDARD_API(interface_ip_function)
+{
+	char *mydata = NULL, *argv[3] = { 0 };
+	int argc = 0;
+	char addr[INET6_ADDRSTRLEN];
+
+	if (!zstr(cmd)) {
+		mydata = strdup(cmd);
+		switch_assert(mydata);
+		argc = switch_separate_string(mydata, ' ', argv, (sizeof(argv) / sizeof(argv[0])));
+	}
+
+	if (argc < 2) {
+		stream->write_function(stream, "USAGE: interface_ip %s\n", INTERFACE_IP_SYNTAX);
+		goto end;
+	}
+
+	if (!strcasecmp(argv[0], "ipv4")) {
+		if (switch_find_interface_ip(addr, sizeof(addr), NULL, argv[1], AF_INET) == SWITCH_STATUS_SUCCESS) {
+			stream->write_function(stream, "%s", addr);
+		}
+	}
+	else if (!strcasecmp(argv[0], "ipv6")) {
+		if (switch_find_interface_ip(addr, sizeof(addr), NULL, argv[1], AF_INET6) == SWITCH_STATUS_SUCCESS) {
+			stream->write_function(stream, "%s", addr);
+		}
+	}
+	else if (!strcasecmp(argv[0], "auto")) {
+		if (switch_find_interface_ip(addr, sizeof(addr), NULL, argv[1], AF_UNSPEC) == SWITCH_STATUS_SUCCESS) {
+			stream->write_function(stream, "%s", addr);
+		}
+	}
+	else {
+		stream->write_function(stream, "USAGE: interface_ip %s\n", INTERFACE_IP_SYNTAX);
+	}
+
+end:
+	switch_safe_free(mydata);
+
+	return SWITCH_STATUS_SUCCESS;
+}
+
 SWITCH_MODULE_LOAD_FUNCTION(mod_commands_load)
 {
 	switch_api_interface_t *commands_api_interface;
@@ -5937,7 +6089,7 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_commands_load)
 
 
 	SWITCH_ADD_API(commands_api_interface, "acl", "Compare an ip to an acl list", acl_function, "<ip> <list_name>");
-	SWITCH_ADD_API(commands_api_interface, "alias", "Alias", alias_function, ALIAS_SYNTAX);
+	SWITCH_ADD_API(commands_api_interface, "alias", "Alias", alias_function, ALIAS_SYNTAX);	SWITCH_ADD_API(commands_api_interface, "coalesce", "Return first nonempty parameter", coalesce_function, COALESCE_SYNTAX);
 	SWITCH_ADD_API(commands_api_interface, "banner", "Return the system banner", banner_function, "");
 	SWITCH_ADD_API(commands_api_interface, "bgapi", "Execute an api command in a thread", bgapi_function, "<command>[ <arg>]");
 	SWITCH_ADD_API(commands_api_interface, "bg_system", "Execute a system command in the background", bg_system_function, SYSTEM_SYNTAX);
@@ -5964,6 +6116,7 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_commands_load)
 	SWITCH_ADD_API(commands_api_interface, "help", "Show help for all the api commands", help_function, "");
 	SWITCH_ADD_API(commands_api_interface, "host_lookup", "Lookup host", host_lookup_function, "<hostname>");
 	SWITCH_ADD_API(commands_api_interface, "hostname", "Return the system hostname", hostname_api_function, "");
+	SWITCH_ADD_API(commands_api_interface, "interface_ip", "Return the primary IP of an interface", interface_ip_function, INTERFACE_IP_SYNTAX);
 	SWITCH_ADD_API(commands_api_interface, "switchname", "Return the switch name", switchname_api_function, "");
 	SWITCH_ADD_API(commands_api_interface, "hupall", "hupall", hupall_api_function, "<cause> [<var> <value>]");
 	SWITCH_ADD_API(commands_api_interface, "in_group", "Determine if a user is in a group", in_group_function, "<user>[@<domain>] <group_name>");
@@ -5982,7 +6135,8 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_commands_load)
 	SWITCH_ADD_API(commands_api_interface, "nat_map", "Manage NAT", nat_map_function, "[status|republish|reinit] | [add|del] <port> [tcp|udp] [static]");
 	SWITCH_ADD_API(commands_api_interface, "originate", "Originate a call", originate_function, ORIGINATE_SYNTAX);
 	SWITCH_ADD_API(commands_api_interface, "pause", "Pause media on a channel", pause_function, PAUSE_SYNTAX);
-	SWITCH_ADD_API(commands_api_interface, "regex", "Evaluate a regex", regex_function, "<data>|<pattern>[|<subst string>]");
+	SWITCH_ADD_API(commands_api_interface, "quote_shell_arg", "Quote/escape a string for use on shell command line", quote_shell_arg_function, "<data>");
+	SWITCH_ADD_API(commands_api_interface, "regex", "Evaluate a regex", regex_function, "<data>|<pattern>[|<subst string>][n|b]");
 	SWITCH_ADD_API(commands_api_interface, "reloadacl", "Reload XML", reload_acl_function, "");
 	SWITCH_ADD_API(commands_api_interface, "reload", "Reload module", reload_function, UNLOAD_SYNTAX);
 	SWITCH_ADD_API(commands_api_interface, "reloadxml", "Reload XML", reload_xml_function, "");
@@ -6017,7 +6171,7 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_commands_load)
 	SWITCH_ADD_API(commands_api_interface, "uuid_broadcast", "Execute dialplan application", uuid_broadcast_function, BROADCAST_SYNTAX);
 	SWITCH_ADD_API(commands_api_interface, "uuid_buglist", "List media bugs on a session", uuid_buglist_function, BUGLIST_SYNTAX);
 	SWITCH_ADD_API(commands_api_interface, "uuid_chat", "Send a chat message", uuid_chat, UUID_CHAT_SYNTAX);
-	SWITCH_ADD_API(commands_api_interface, "uuid_debug_audio", "Debug audio", uuid_debug_audio_function, DEBUG_AUDIO_SYNTAX);
+	SWITCH_ADD_API(commands_api_interface, "uuid_debug_media", "Debug media", uuid_debug_media_function, DEBUG_MEDIA_SYNTAX);
 	SWITCH_ADD_API(commands_api_interface, "uuid_deflect", "Send a deflect", uuid_deflect, UUID_DEFLECT_SYNTAX);
 	SWITCH_ADD_API(commands_api_interface, "uuid_displace", "Displace audio", session_displace_function, "<uuid> [start|stop] <path> [<limit>] [mux]");
 	SWITCH_ADD_API(commands_api_interface, "uuid_display", "Update phone display", uuid_display_function, DISPLAY_SYNTAX);
@@ -6032,7 +6186,7 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_commands_load)
 	SWITCH_ADD_API(commands_api_interface, "uuid_send_info", "Send info to the endpoint", uuid_send_info_function, INFO_SYNTAX);
 	SWITCH_ADD_API(commands_api_interface, "uuid_video_refresh", "Send video refresh.", uuid_video_refresh_function, VIDEO_REFRESH_SYNTAX);
 	SWITCH_ADD_API(commands_api_interface, "uuid_outgoing_answer", "Answer outgoing channel", outgoing_answer_function, OUTGOING_ANSWER_SYNTAX);
-	SWITCH_ADD_API(commands_api_interface, "uuid_limit", "Increase limit resource", uuid_limit_function, LIMIT_SYNTAX);	
+	SWITCH_ADD_API(commands_api_interface, "uuid_limit", "Increase limit resource", uuid_limit_function, LIMIT_SYNTAX);
 	SWITCH_ADD_API(commands_api_interface, "uuid_limit_release", "Release limit resource", uuid_limit_release_function, LIMIT_RELEASE_SYNTAX);
 	SWITCH_ADD_API(commands_api_interface, "uuid_limit_release", "Release limit resource", uuid_limit_release_function, LIMIT_RELEASE_SYNTAX);
 	SWITCH_ADD_API(commands_api_interface, "uuid_loglevel", "Set loglevel on session", uuid_loglevel, UUID_LOGLEVEL_SYNTAX);
@@ -6062,6 +6216,7 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_commands_load)
 
 	switch_console_set_complete("add alias add");
 	switch_console_set_complete("add alias del");
+	switch_console_set_complete("add coalesce");
 	switch_console_set_complete("add complete add");
 	switch_console_set_complete("add complete del");
 	switch_console_set_complete("add db_cache status");
@@ -6114,6 +6269,9 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_commands_load)
 	switch_console_set_complete("add fsctl flush_db_handles");
 	switch_console_set_complete("add fsctl min_idle_cpu");
 	switch_console_set_complete("add fsctl send_sighup");
+	switch_console_set_complete("add interface_ip auto ::console::list_interfaces");
+	switch_console_set_complete("add interface_ip ipv4 ::console::list_interfaces");
+	switch_console_set_complete("add interface_ip ipv6 ::console::list_interfaces");
 	switch_console_set_complete("add load ::console::list_available_modules");
 	switch_console_set_complete("add nat_map reinit");
 	switch_console_set_complete("add nat_map republish");
@@ -6159,7 +6317,7 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_commands_load)
 	switch_console_set_complete("add uuid_broadcast ::console::list_uuid");
 	switch_console_set_complete("add uuid_buglist ::console::list_uuid");
 	switch_console_set_complete("add uuid_chat ::console::list_uuid");
-	switch_console_set_complete("add uuid_debug_audio ::console::list_uuid");
+	switch_console_set_complete("add uuid_debug_media ::console::list_uuid");
 	switch_console_set_complete("add uuid_deflect ::console::list_uuid");
 	switch_console_set_complete("add uuid_displace ::console::list_uuid");
 	switch_console_set_complete("add uuid_display ::console::list_uuid");
@@ -6221,5 +6379,5 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_commands_load)
 * c-basic-offset:4
 * End:
 * For VIM:
-* vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+* vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
 */

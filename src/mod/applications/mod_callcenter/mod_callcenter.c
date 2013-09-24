@@ -562,26 +562,27 @@ char *cc_execute_sql2str(cc_queue_t *queue, switch_mutex_t *mutex, char *sql, ch
 
 	switch_cache_db_handle_t *dbh = NULL;
 
-	if (!(dbh = cc_get_db_handle())) {
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error Opening DB\n");
-		return NULL;
-	}
-
 	if (mutex) {
 		switch_mutex_lock(mutex);
 	} else {
 		switch_mutex_lock(globals.mutex);
 	}
 
+	if (!(dbh = cc_get_db_handle())) {
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error Opening DB\n");
+		goto end;
+	}
+
 	ret = switch_cache_db_execute_sql2str(dbh, sql, resbuf, len, NULL);
+
+end:
+	switch_cache_db_release_db_handle(&dbh);
 
 	if (mutex) {
 		switch_mutex_unlock(mutex);
 	} else {
 		switch_mutex_unlock(globals.mutex);
 	}
-
-	switch_cache_db_release_db_handle(&dbh);
 
 	return ret;
 }
@@ -1524,7 +1525,15 @@ static void *SWITCH_THREAD_FUNC outbound_agent_thread_run(switch_thread_t *threa
 				/* Switch the agent session */
 				if (real_uuid) {
 					switch_core_session_rwunlock(agent_session);
-					agent_session = switch_core_session_locate(real_uuid);
+					if (!(agent_session = switch_core_session_locate(real_uuid))) {
+						switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(member_session), SWITCH_LOG_DEBUG, "Real session is already gone (agent '%s')\n", h->agent_name);
+						sql = switch_mprintf("UPDATE members SET state = '%q', serving_agent = '', serving_system = ''"
+											 " WHERE serving_agent = '%q' AND serving_system = '%q' AND uuid = '%q' AND system = 'single_box'",
+											 cc_member_state2str(CC_MEMBER_STATE_WAITING), h->agent_name, h->agent_system, h->member_uuid);
+						cc_execute_sql(NULL, sql, NULL);
+						switch_safe_free(sql);
+						goto done;
+					}
 					agent_uuid = switch_core_session_get_uuid(agent_session);
 					agent_channel = switch_core_session_get_channel(agent_session);
 
@@ -1724,7 +1733,7 @@ static void *SWITCH_THREAD_FUNC outbound_agent_thread_run(switch_thread_t *threa
 				break;
 			/* Protection againts super fast loop due to unregistrer */			
 			case SWITCH_CAUSE_USER_NOT_REGISTERED:
-				delay_next_agent_call = (5 > delay_next_agent_call? 5 : delay_next_agent_call);
+				delay_next_agent_call = 5;
 				break;
 			/* No answer: Destination does not answer for some other reason */
 			default:
@@ -3271,5 +3280,5 @@ SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_callcenter_shutdown)
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet
  */

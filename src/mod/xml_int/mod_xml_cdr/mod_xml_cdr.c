@@ -481,7 +481,7 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_xml_cdr_load)
 	/* parse the config */
 	if (!(xml = switch_xml_open_cfg(cf, &cfg, NULL))) {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Open of %s failed\n", cf);
-		return SWITCH_STATUS_TERM;
+		return SWITCH_STATUS_FALSE;
 	}
 
 	if ((settings = switch_xml_child(cfg, "settings"))) {
@@ -629,5 +629,5 @@ SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_xml_cdr_shutdown)
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */

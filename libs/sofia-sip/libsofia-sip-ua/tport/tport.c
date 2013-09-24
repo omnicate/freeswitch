@@ -202,7 +202,7 @@ int tport_is_registered(tport_t const *self)
 /** Test if transport is stream. */
 int tport_is_stream(tport_t const *self)
 {
-  return self && self->tp_addrinfo->ai_socktype == SOCK_STREAM;
+	return self && !self->tp_pre_framed && self->tp_addrinfo->ai_socktype == SOCK_STREAM;
 }
 
 /** Test if transport is dgram. */
@@ -885,12 +885,16 @@ tport_t *tport_alloc_secondary(tport_primary_t *pri,
     self->tp_stime = self->tp_ktime = self->tp_rtime = su_now();
 
     if (pri->pri_vtable->vtp_init_secondary &&
-	pri->pri_vtable->vtp_init_secondary(self, socket, accepted,
-					    return_reason) < 0) {
-      if (pri->pri_vtable->vtp_deinit_secondary)
-	pri->pri_vtable->vtp_deinit_secondary(self);
-      su_home_zap(self->tp_home);
-      return NULL;
+
+		pri->pri_vtable->vtp_init_secondary(self, socket, accepted, return_reason) < 0) {
+
+		if (pri->pri_vtable->vtp_deinit_secondary) {
+			pri->pri_vtable->vtp_deinit_secondary(self);
+		}
+		su_timer_destroy(self->tp_timer);
+		su_home_zap(self->tp_home);
+
+		return NULL;
     }
 
     /* Set IP TOS if it is set in primary */
@@ -1345,10 +1349,14 @@ int tport_set_params(tport_t *self,
 extern tport_vtable_t const tport_udp_vtable;
 extern tport_vtable_t const tport_tcp_vtable;
 extern tport_vtable_t const tport_tls_vtable;
+extern tport_vtable_t const tport_ws_vtable;
+extern tport_vtable_t const tport_wss_vtable;
 extern tport_vtable_t const tport_sctp_vtable;
 extern tport_vtable_t const tport_udp_client_vtable;
 extern tport_vtable_t const tport_tcp_client_vtable;
 extern tport_vtable_t const tport_sctp_client_vtable;
+extern tport_vtable_t const tport_ws_client_vtable;
+extern tport_vtable_t const tport_wss_client_vtable;
 extern tport_vtable_t const tport_tls_client_vtable;
 extern tport_vtable_t const tport_http_connect_vtable;
 extern tport_vtable_t const tport_threadpool_vtable;
@@ -1359,6 +1367,10 @@ tport_vtable_t const *tport_vtables[TPORT_NUMBER_OF_TYPES + 1] =
 {
 #if HAVE_SOFIA_NTH
   &tport_http_connect_vtable,
+  &tport_ws_client_vtable,
+  &tport_ws_vtable,
+  &tport_wss_client_vtable,
+  &tport_wss_vtable,
 #endif
 #if HAVE_TLS
   &tport_tls_client_vtable,
@@ -2426,6 +2438,13 @@ int getprotohints(su_addrinfo_t *hints,
     proto = "tcp";
 #endif
 
+#if HAVE_SOFIA_NTH
+  if (su_casematch(proto, "ws"))
+    proto = "tcp";
+  if (su_casematch(proto, "wss"))
+    proto = "tcp";
+#endif
+
 #if HAVE_SCTP
   if (su_casematch(proto, "sctp")) {
     hints->ai_protocol = IPPROTO_SCTP;
@@ -2869,7 +2888,7 @@ void tport_recv_event(tport_t *self)
     }
 
     if (again >= 0)
-      tport_parse(self, !again, self->tp_rtime);
+      tport_parse(self, self->tp_pre_framed ? 1 : !again, self->tp_rtime);
   }
   while (again > 1);
 

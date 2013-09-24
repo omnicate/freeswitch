@@ -24,7 +24,7 @@
  * Contributor(s):
  * 
  * Anthony Minessale II <anthm@freeswitch.org>
- *
+ * Seven Du <dujinfang@gmail.com>
  *
  * switch_loadable_module.c -- Loadable Modules
  *
@@ -131,6 +131,7 @@ static void switch_loadable_module_runtime(void)
 static switch_status_t switch_loadable_module_process(char *key, switch_loadable_module_t *new_module)
 {
 	switch_event_t *event;
+	int added = 0;
 
 	new_module->key = switch_core_strdup(new_module->pool, key);
 
@@ -151,6 +152,7 @@ static switch_status_t switch_loadable_module_process(char *key, switch_loadable
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "key", new_module->key);
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "filename", new_module->filename);
 					switch_event_fire(&event);
+					added++;
 				}
 			}
 		}
@@ -198,6 +200,7 @@ static switch_status_t switch_loadable_module_process(char *key, switch_loadable
 						switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "key", new_module->key);
 						switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "filename", new_module->filename);
 						switch_event_fire(&event);
+						added++;
 					}
 				}
 			}
@@ -218,6 +221,7 @@ static switch_status_t switch_loadable_module_process(char *key, switch_loadable
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "key", new_module->key);
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "filename", new_module->filename);
 					switch_event_fire(&event);
+					added++;
 				}
 				switch_core_hash_insert(loadable_modules.dialplan_hash, ptr->interface_name, (const void *) ptr);
 			}
@@ -238,6 +242,7 @@ static switch_status_t switch_loadable_module_process(char *key, switch_loadable
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "key", new_module->key);
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "filename", new_module->filename);
 					switch_event_fire(&event);
+					added++;
 				}
 				switch_core_hash_insert(loadable_modules.timer_hash, ptr->interface_name, (const void *) ptr);
 			}
@@ -260,6 +265,7 @@ static switch_status_t switch_loadable_module_process(char *key, switch_loadable
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "key", new_module->key);
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "filename", new_module->filename);
 					switch_event_fire(&event);
+					added++;
 				}
 				switch_core_hash_insert(loadable_modules.application_hash, ptr->interface_name, (const void *) ptr);
 			}
@@ -282,6 +288,7 @@ static switch_status_t switch_loadable_module_process(char *key, switch_loadable
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "key", new_module->key);
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "filename", new_module->filename);
 					switch_event_fire(&event);
+					added++;
 				}
 				switch_core_hash_insert(loadable_modules.chat_application_hash, ptr->interface_name, (const void *) ptr);
 			}
@@ -304,6 +311,7 @@ static switch_status_t switch_loadable_module_process(char *key, switch_loadable
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "key", new_module->key);
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "filename", new_module->filename);
 					switch_event_fire(&event);
+					added++;
 				}
 				switch_core_hash_insert(loadable_modules.api_hash, ptr->interface_name, (const void *) ptr);
 			}
@@ -328,6 +336,7 @@ static switch_status_t switch_loadable_module_process(char *key, switch_loadable
 						switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "key", new_module->key);
 						switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "filename", new_module->filename);
 						switch_event_fire(&event);
+						added++;
 					}
 					switch_core_hash_insert(loadable_modules.file_hash, ptr->extens[i], (const void *) ptr);
 				}
@@ -349,6 +358,7 @@ static switch_status_t switch_loadable_module_process(char *key, switch_loadable
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "key", new_module->key);
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "filename", new_module->filename);
 					switch_event_fire(&event);
+					added++;
 				}
 				switch_core_hash_insert(loadable_modules.speech_hash, ptr->interface_name, (const void *) ptr);
 			}
@@ -369,6 +379,7 @@ static switch_status_t switch_loadable_module_process(char *key, switch_loadable
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "key", new_module->key);
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "filename", new_module->filename);
 					switch_event_fire(&event);
+					added++;
 				}
 				switch_core_hash_insert(loadable_modules.asr_hash, ptr->interface_name, (const void *) ptr);
 			}
@@ -389,6 +400,7 @@ static switch_status_t switch_loadable_module_process(char *key, switch_loadable
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "key", new_module->key);
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "filename", new_module->filename);
 					switch_event_fire(&event);
+					added++;
 				}
 				switch_core_hash_insert(loadable_modules.directory_hash, ptr->interface_name, (const void *) ptr);
 			}
@@ -409,6 +421,7 @@ static switch_status_t switch_loadable_module_process(char *key, switch_loadable
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "key", new_module->key);
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "filename", new_module->filename);
 					switch_event_fire(&event);
+					added++;
 				}
 				switch_core_hash_insert(loadable_modules.chat_hash, ptr->interface_name, (const void *) ptr);
 			}
@@ -429,6 +442,7 @@ static switch_status_t switch_loadable_module_process(char *key, switch_loadable
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "key", new_module->key);
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "filename", new_module->filename);
 					switch_event_fire(&event);
+					added++;
 				}
 				switch_core_hash_insert(loadable_modules.say_hash, ptr->interface_name, (const void *) ptr);
 			}
@@ -455,6 +469,7 @@ static switch_status_t switch_loadable_module_process(char *key, switch_loadable
 						switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "key", new_module->key);
 						switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "filename", new_module->filename);
 						switch_event_fire(&event);
+						added++;
 					}
 				}
 
@@ -481,10 +496,22 @@ static switch_status_t switch_loadable_module_process(char *key, switch_loadable
 						switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "key", new_module->key);
 						switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "filename", new_module->filename);
 						switch_event_fire(&event);
+						added++;
 					}
 				}
 
 			}
+		}
+	}
+
+	if (!added) {
+		if (switch_event_create(&event, SWITCH_EVENT_MODULE_LOAD) == SWITCH_STATUS_SUCCESS) {
+			switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "type", "generic");
+			switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "name", new_module->key);
+			switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "key", new_module->key);
+			switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "filename", new_module->filename);
+			switch_event_fire(&event);
+			added++;
 		}
 	}
 
@@ -835,6 +862,7 @@ SWITCH_DECLARE(switch_status_t) switch_core_chat_deliver(const char *dest_proto,
 static switch_status_t switch_loadable_module_unprocess(switch_loadable_module_t *old_module)
 {
 	switch_event_t *event;
+	int removed = 0;
 
 	switch_mutex_lock(loadable_modules.mutex);
 
@@ -858,6 +886,7 @@ static switch_status_t switch_loadable_module_unprocess(switch_loadable_module_t
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "type", "endpoint");
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "name", ptr->interface_name);
 					switch_event_fire(&event);
+					removed++;
 				}
 				switch_core_hash_delete(loadable_modules.endpoint_hash, ptr->interface_name);
 			}
@@ -893,6 +922,7 @@ static switch_status_t switch_loadable_module_unprocess(switch_loadable_module_t
 						switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "type", "codec");
 						switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "name", ptr->interface_name);
 						switch_event_fire(&event);
+						removed++;
 					}
 				}
 			}
@@ -909,6 +939,7 @@ static switch_status_t switch_loadable_module_unprocess(switch_loadable_module_t
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "type", "dialplan");
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "name", ptr->interface_name);
 					switch_event_fire(&event);
+					removed++;
 				}
 				switch_core_hash_delete(loadable_modules.dialplan_hash, ptr->interface_name);
 			}
@@ -925,6 +956,7 @@ static switch_status_t switch_loadable_module_unprocess(switch_loadable_module_t
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "type", "timer");
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "name", ptr->interface_name);
 					switch_event_fire(&event);
+					removed++;
 				}
 				switch_core_hash_delete(loadable_modules.timer_hash, ptr->interface_name);
 			}
@@ -951,6 +983,7 @@ static switch_status_t switch_loadable_module_unprocess(switch_loadable_module_t
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "description", switch_str_nil(ptr->short_desc));
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "syntax", switch_str_nil(ptr->syntax));
 					switch_event_fire(&event);
+					removed++;
 				}
 				switch_core_hash_delete(loadable_modules.application_hash, ptr->interface_name);
 			}
@@ -977,6 +1010,7 @@ static switch_status_t switch_loadable_module_unprocess(switch_loadable_module_t
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "description", switch_str_nil(ptr->short_desc));
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "syntax", switch_str_nil(ptr->syntax));
 					switch_event_fire(&event);
+					removed++;
 				}
 				switch_core_hash_delete(loadable_modules.chat_application_hash, ptr->interface_name);
 			}
@@ -1006,6 +1040,7 @@ static switch_status_t switch_loadable_module_unprocess(switch_loadable_module_t
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "description", switch_str_nil(ptr->desc));
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "syntax", switch_str_nil(ptr->syntax));
 					switch_event_fire(&event);
+					removed++;
 				}
 				switch_core_hash_delete(loadable_modules.api_hash, ptr->interface_name);
 			}
@@ -1034,6 +1069,7 @@ static switch_status_t switch_loadable_module_unprocess(switch_loadable_module_t
 						switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "type", "file");
 						switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "name", ptr->extens[i]);
 						switch_event_fire(&event);
+						removed++;
 					}
 					switch_core_hash_delete(loadable_modules.file_hash, ptr->extens[i]);
 				}
@@ -1062,6 +1098,7 @@ static switch_status_t switch_loadable_module_unprocess(switch_loadable_module_t
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "type", "speech");
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "name", ptr->interface_name);
 					switch_event_fire(&event);
+					removed++;
 				}
 				switch_core_hash_delete(loadable_modules.speech_hash, ptr->interface_name);
 			}
@@ -1088,6 +1125,7 @@ static switch_status_t switch_loadable_module_unprocess(switch_loadable_module_t
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "type", "asr");
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "name", ptr->interface_name);
 					switch_event_fire(&event);
+					removed++;
 				}
 				switch_core_hash_delete(loadable_modules.asr_hash, ptr->interface_name);
 			}
@@ -1114,6 +1152,7 @@ static switch_status_t switch_loadable_module_unprocess(switch_loadable_module_t
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "type", "directory");
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "name", ptr->interface_name);
 					switch_event_fire(&event);
+					removed++;
 				}
 				switch_core_hash_delete(loadable_modules.directory_hash, ptr->interface_name);
 			}
@@ -1140,6 +1179,7 @@ static switch_status_t switch_loadable_module_unprocess(switch_loadable_module_t
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "type", "chat");
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "name", ptr->interface_name);
 					switch_event_fire(&event);
+					removed++;
 				}
 				switch_core_hash_delete(loadable_modules.chat_hash, ptr->interface_name);
 			}
@@ -1164,6 +1204,7 @@ static switch_status_t switch_loadable_module_unprocess(switch_loadable_module_t
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "type", "say");
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "name", ptr->interface_name);
 					switch_event_fire(&event);
+					removed++;
 				}
 				switch_core_hash_delete(loadable_modules.say_hash, ptr->interface_name);
 			}
@@ -1182,6 +1223,7 @@ static switch_status_t switch_loadable_module_unprocess(switch_loadable_module_t
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "type", "management");
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "name", ptr->relative_oid);
 					switch_event_fire(&event);
+					removed++;
 				}
 			}
 		}
@@ -1199,11 +1241,20 @@ static switch_status_t switch_loadable_module_unprocess(switch_loadable_module_t
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "type", "limit");
 					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "name", ptr->interface_name);
 					switch_event_fire(&event);
+					removed++;
 				}
 			}
 		}
 	}
 
+	if (!removed) {
+		if (switch_event_create(&event, SWITCH_EVENT_MODULE_UNLOAD) == SWITCH_STATUS_SUCCESS) {
+			switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "type", "generic");
+			switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "name", old_module->key);
+			switch_event_fire(&event);
+			removed++;
+		}
+	}
 	switch_mutex_unlock(loadable_modules.mutex);
 
 	return SWITCH_STATUS_SUCCESS;
@@ -1681,10 +1732,11 @@ SWITCH_DECLARE(switch_status_t) switch_loadable_module_init(switch_bool_t autolo
 	switch_core_hash_init_nocase(&loadable_modules.dialplan_hash, loadable_modules.pool);
 	switch_mutex_init(&loadable_modules.mutex, SWITCH_MUTEX_NESTED, loadable_modules.pool);
 
+	if (!autoload) return SWITCH_STATUS_SUCCESS;
+
 	switch_loadable_module_load_module("", "CORE_SOFTTIMER_MODULE", SWITCH_FALSE, &err);
 	switch_loadable_module_load_module("", "CORE_PCM_MODULE", SWITCH_FALSE, &err);
 
-	if (!autoload) return SWITCH_STATUS_SUCCESS;
 
 	if ((xml = switch_xml_open_cfg(cf, &cfg, NULL))) {
 		switch_xml_t mods, ld;
@@ -2025,7 +2077,7 @@ static void switch_loadable_module_sort_codecs(const switch_codec_implementation
 #endif
 		}
 
-		if (this_ptime != sorted_ptime) {
+		if (i > 0 && strcasecmp(array[i]->iananame, array[i-1]->iananame) && this_ptime != sorted_ptime) {
 			int j;
 			int swapped = 0;
 
@@ -2165,7 +2217,7 @@ SWITCH_DECLARE(int) switch_loadable_module_get_codecs_sorted(const switch_codec_
 			}
 			
 			if (orate == 0) {
-				orate = 8000;
+				orate = switch_default_rate(name, 0);
 			}
 
 			switch_copy_string(jbuf, prefs[j], sizeof(jbuf));
@@ -2176,7 +2228,7 @@ SWITCH_DECLARE(int) switch_loadable_module_get_codecs_sorted(const switch_codec_
 			}
 
 			if (jrate == 0) {
-				jrate = 8000;
+				jrate = switch_default_rate(jname, 0);
 			}
 
 			if (!strcasecmp(name, jname) && ointerval == jinterval && orate == jrate) {
@@ -2188,6 +2240,7 @@ SWITCH_DECLARE(int) switch_loadable_module_get_codecs_sorted(const switch_codec_
 			/* If no specific codec interval is requested opt for the default above all else because lots of stuff assumes it */
 			for (imp = codec_interface->implementations; imp; imp = imp->next) {
 				uint32_t default_ptime = switch_default_ptime(imp->iananame, imp->ianacode);
+				uint32_t default_rate = switch_default_rate(imp->iananame, imp->ianacode);
 				
 				if (imp->codec_type != SWITCH_CODEC_TYPE_VIDEO) {
 					
@@ -2196,7 +2249,7 @@ SWITCH_DECLARE(int) switch_loadable_module_get_codecs_sorted(const switch_codec_
 						continue;
 					}
 
-					if (((!rate && (uint32_t) imp->samples_per_second != 8000) || (rate && (uint32_t) imp->samples_per_second != rate))) {
+					if (((!rate && (uint32_t) imp->samples_per_second != default_rate) || (rate && (uint32_t) imp->samples_per_second != rate))) {
 						continue;
 					}
 
@@ -2485,6 +2538,8 @@ SWITCH_DECLARE(void) switch_say_file(switch_say_file_handle_t *sh, const char *f
 	if ((ret = switch_vsnprintf(buf, sizeof(buf), fmt, ap)) > 0) {
 		if (!sh->cnt++) {
 			sh->stream.write_function(&sh->stream, "file_string://%s.%s", buf, sh->ext);
+		} else if (strstr(buf, "://")) {
+			sh->stream.write_function(&sh->stream, "!%s", buf);
 		} else {
 			sh->stream.write_function(&sh->stream, "!%s.%s", buf, sh->ext);
 		}
@@ -2505,5 +2560,5 @@ SWITCH_DECLARE(void) switch_say_file(switch_say_file_handle_t *sh, const char *f
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */

@@ -463,7 +463,7 @@ static switch_status_t load_config(switch_bool_t reload)
 			char *val = (char *) switch_xml_attr_soft(param, "value");
 
 			if (!strcasecmp(var, "odbc-dsn") && !zstr(val)) {
-				if (switch_odbc_available()) {
+				if (switch_odbc_available() || switch_pgsql_available()) {
 					switch_set_string(globals.odbc_dsn, val);
 				} else {
 					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "ODBC IS NOT AVAILABLE!\n");
@@ -1087,5 +1087,5 @@ SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_directory_shutdown)
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet
  */

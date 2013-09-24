@@ -47,7 +47,6 @@
 #define DEFAULT_FEC_SPAN            3
 
 static struct {
-	int NEXT_ID;
 	int REF_COUNT;
 	int THREADCOUNT;
 	switch_memory_pool_t *pool;
@@ -223,8 +222,6 @@ switch_status_t modem_init(modem_t *modem, modem_control_handler_t control_handl
 #endif
 	logging_state_t *logging;
 
-	memset(modem, 0, sizeof(*modem));
-
 	modem->master = -1;
 	modem->slave = -1;
 
@@ -242,7 +239,6 @@ switch_status_t modem_init(modem_t *modem, modem_control_handler_t control_handl
 	modem->stty = ttyname(modem->slave);
 #else
 #ifdef WIN32
-	modem->slot = 4 + globals.NEXT_ID++; /* need work here we start at COM4 for now*/
 	snprintf(modem->devlink, sizeof(modem->devlink), "COM%d", modem->slot);
 
 	modem->master = CreateFile(modem->devlink,
@@ -298,8 +294,6 @@ switch_status_t modem_init(modem_t *modem, modem_control_handler_t control_handl
 #endif
 
 #ifndef WIN32
-	modem->slot = globals.NEXT_ID++;
-    
 	snprintf(modem->devlink, sizeof(modem->devlink), "%s/FS%d", spandsp_globals.modem_directory, modem->slot);
 	
 	unlink(modem->devlink);
@@ -346,23 +340,23 @@ switch_status_t modem_init(modem_t *modem, modem_control_handler_t control_handl
 
 	if (spandsp_globals.modem_verbose) {
 		logging = t31_get_logging_state(modem->t31_state);
-		span_log_set_message_handler(logging, spanfax_log_message, NULL);
+		span_log_set_message_handler(logging, mod_spandsp_log_message, NULL);
 		span_log_set_level(logging, SPAN_LOG_SHOW_SEVERITY | SPAN_LOG_SHOW_PROTOCOL | SPAN_LOG_FLOW);
 
 		logging = v17_rx_get_logging_state(&modem->t31_state->audio.modems.fast_modems.v17_rx);
-		span_log_set_message_handler(logging, spanfax_log_message, NULL);
+		span_log_set_message_handler(logging, mod_spandsp_log_message, NULL);
 		span_log_set_level(logging, SPAN_LOG_SHOW_SEVERITY | SPAN_LOG_SHOW_PROTOCOL | SPAN_LOG_FLOW);
 
 		logging = v29_rx_get_logging_state(&modem->t31_state->audio.modems.fast_modems.v29_rx);
-		span_log_set_message_handler(logging, spanfax_log_message, NULL);
+		span_log_set_message_handler(logging, mod_spandsp_log_message, NULL);
 		span_log_set_level(logging, SPAN_LOG_SHOW_SEVERITY | SPAN_LOG_SHOW_PROTOCOL | SPAN_LOG_FLOW);
 
 		logging = v27ter_rx_get_logging_state(&modem->t31_state->audio.modems.fast_modems.v27ter_rx);
-		span_log_set_message_handler(logging, spanfax_log_message, NULL);
+		span_log_set_message_handler(logging, mod_spandsp_log_message, NULL);
 		span_log_set_level(logging, SPAN_LOG_SHOW_SEVERITY | SPAN_LOG_SHOW_PROTOCOL | SPAN_LOG_FLOW);
 
 		logging = t38_core_get_logging_state(modem->t38_core);
-		span_log_set_message_handler(logging, spanfax_log_message, NULL);
+		span_log_set_message_handler(logging, mod_spandsp_log_message, NULL);
 		span_log_set_level(logging, SPAN_LOG_SHOW_SEVERITY | SPAN_LOG_SHOW_PROTOCOL | SPAN_LOG_FLOW);
 	}
 
@@ -889,6 +883,7 @@ static switch_call_cause_t channel_outgoing_channel(switch_core_session_t *sessi
 		if (outbound_profile) {
 			caller_profile = switch_caller_profile_clone(*new_session, outbound_profile);
 			caller_profile->source = switch_core_strdup(caller_profile->pool, "mod_spandsp");
+			caller_profile->destination_number = switch_core_strdup(caller_profile->pool, number);
 			switch_channel_set_caller_profile(channel, caller_profile);
 			tech_pvt->caller_profile = caller_profile;
 		} else {
@@ -1351,11 +1346,12 @@ static void activate_modems(void)
 	int x;
 
 	switch_mutex_lock(globals.mutex);
-	memset(globals.MODEM_POOL, 0, MAX_MODEMS);
+	memset(globals.MODEM_POOL, 0, sizeof(globals.MODEM_POOL));
 	for (x = 0; x < max; x++) {
 
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Starting Modem SLOT %d\n", x);
 
+		globals.MODEM_POOL[x].slot = x;
 		launch_modem_thread(&globals.MODEM_POOL[x]);
 	}
 	switch_mutex_unlock(globals.mutex);
@@ -1464,5 +1460,5 @@ void modem_global_shutdown(void)
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */

@@ -23,6 +23,7 @@ show_vars= \
 	echo "CC='$(CC)'"; \
 	echo "CXX='$(CXX)'"; \
 	echo "CFLAGS='$(CFLAGS)'"; \
+	echo "CPPFLAGS='$(CPPFLAGS)'"; \
 	echo "CXXFLAGS='$(CXXFLAGS)'"; \
 	echo "CCACHE_DIR='$(CCACHE_DIR)'"; \
 	echo;
@@ -73,7 +74,9 @@ override_dh_auto_clean:
 		--with-dbdir=/var/lib/freeswitch/db \
 		--with-htdocsdir=/usr/share/freeswitch/htdocs \
 		--with-soundsdir=/usr/share/freeswitch/sounds \
+		--with-storagedir=/var/lib/freeswitch/storage \
 		--with-grammardir=/usr/share/freeswitch/grammar \
+		--with-certsdir=/etc/freeswitch/tls \
 		--with-scriptdir=/usr/share/freeswitch/scripts \
 		--with-recordingsdir=/var/lib/freeswitch/recordings
 	touch $@

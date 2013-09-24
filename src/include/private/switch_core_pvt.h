@@ -99,7 +99,8 @@ typedef enum {
 	SSF_WRITE_TRANSCODE = (1 << 6),
 	SSF_READ_CODEC_RESET = (1 << 7),
 	SSF_WRITE_CODEC_RESET = (1 << 8),
-	SSF_DESTROYABLE = (1 << 9)
+	SSF_DESTROYABLE = (1 << 9),
+	SSF_MEDIA_BUG_TAP_ONLY = (1 << 10)
 } switch_session_flag_t;
 
 
@@ -175,6 +176,8 @@ struct switch_core_session {
 	plc_state_t *plc;
 	uint8_t recur_buffer[SWITCH_RECOMMENDED_BUFFER_SIZE];
 	switch_size_t recur_buffer_len;
+
+	switch_media_handle_t *media_handle;
 };
 
 struct switch_media_bug {
@@ -237,6 +240,10 @@ struct switch_runtime {
 	uint32_t sps_total;
 	int32_t sps;
 	int32_t sps_last;
+	int32_t sps_peak;
+	int32_t sps_peak_fivemin;
+	int32_t sessions_peak;
+	int32_t sessions_peak_fivemin;
 	switch_log_level_t hard_log_level;
 	char *mailer_app;
 	char *mailer_app_args;
@@ -268,6 +275,7 @@ struct switch_runtime {
 	char *core_db_post_trans_execute;
 	char *core_db_inner_pre_trans_execute;
 	char *core_db_inner_post_trans_execute;
+	int events_use_dispatch;
 };
 
 extern struct switch_runtime runtime;

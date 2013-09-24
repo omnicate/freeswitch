@@ -645,11 +645,6 @@ SWITCH_DECLARE(switch_status_t) switch_core_codec_init_with_bitrate(switch_codec
 
 	memset(codec, 0, sizeof(*codec));
 
-	if (channels == 2) {
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Stereo is currently unsupported. please downsample audio source to mono.\n");
-		return SWITCH_STATUS_GENERR;
-	}
-
 	if ((codec_interface = switch_loadable_module_get_codec_interface(codec_name)) == 0) {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Invalid codec %s!\n", codec_name);
 		return SWITCH_STATUS_GENERR;
@@ -830,5 +825,5 @@ SWITCH_DECLARE(switch_status_t) switch_core_codec_destroy(switch_codec_t *codec)
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */

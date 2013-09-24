@@ -57,12 +57,11 @@ SWITCH_DECLARE_CONSTRUCTOR EventConsumer::EventConsumer(const char *event_name, 
 	switch_core_new_memory_pool(&pool);	
 	switch_queue_create(&events, len, pool);
 	node_index = 0;
+	ready = 1;
 	
 	if (!zstr(event_name)) {
 		bind(event_name, subclass_name);
 	}
-
-	ready = 1;
 }
 
 SWITCH_DECLARE(int) EventConsumer::bind(const char *event_name, const char *subclass_name)
@@ -162,6 +161,7 @@ SWITCH_DECLARE_CONSTRUCTOR IVRMenu::IVRMenu(IVRMenu *main,
 											const char *short_greeting_sound,
 											const char *invalid_sound,
 											const char *exit_sound,
+											const char *transfer_sound,
 											const char *confirm_macro,
 											const char *confirm_key,
 											const char *tts_engine,
@@ -181,7 +181,7 @@ SWITCH_DECLARE_CONSTRUCTOR IVRMenu::IVRMenu(IVRMenu *main,
 	}
 
 	switch_ivr_menu_init(&menu, main ? main->menu : NULL, name, greeting_sound, short_greeting_sound, invalid_sound, 
-						 exit_sound, confirm_macro, confirm_key, tts_engine, tts_voice, confirm_attempts, inter_timeout,
+						 exit_sound, transfer_sound, confirm_macro, confirm_key, tts_engine, tts_voice, confirm_attempts, inter_timeout,
 						 digit_len, timeout, max_failures, max_timeouts, pool);
 	
 
@@ -215,8 +215,13 @@ SWITCH_DECLARE(void) IVRMenu::execute(CoreSession *session, const char *name)
 	switch_ivr_menu_execute(session->session, menu, (char *)name, NULL);
 }
 
-SWITCH_DECLARE_CONSTRUCTOR API::API()
+SWITCH_DECLARE_CONSTRUCTOR API::API(CoreSession *s)
 {
+	if (s) {
+		session = s->session;
+	} else {
+		session = NULL;
+	}
 	last_data = NULL;
 }
 
@@ -231,7 +236,7 @@ SWITCH_DECLARE(const char *) API::execute(const char *cmd, const char *arg)
 	switch_stream_handle_t stream = { 0 };
 	this_check("");
 	SWITCH_STANDARD_STREAM(stream);
-	switch_api_execute(cmd, arg, NULL, &stream);
+	switch_api_execute(cmd, arg, session, &stream);
 	switch_safe_free(last_data);
 	last_data = (char *) stream.data;
 	return last_data;
@@ -252,11 +257,13 @@ SWITCH_DECLARE(const char *) API::executeString(const char *cmd)
 {
 	char *arg;
 	switch_stream_handle_t stream = { 0 };
-	char *mycmd = strdup(cmd);
-
-	switch_assert(mycmd);
+	char *mycmd = NULL;
 
 	this_check("");
+
+	mycmd = strdup(cmd);
+
+	switch_assert(mycmd);
 
 	if ((arg = strchr(mycmd, ' '))) {
 		*arg++ = '\0';
@@ -265,7 +272,7 @@ SWITCH_DECLARE(const char *) API::executeString(const char *cmd)
 	switch_safe_free(last_data);
 	
 	SWITCH_STANDARD_STREAM(stream);
-	switch_api_execute(mycmd, arg, NULL, &stream);
+	switch_api_execute(mycmd, arg, session, &stream);
 	last_data = (char *) stream.data;
 	switch_safe_free(mycmd);
 	return last_data;
@@ -1220,6 +1227,18 @@ SWITCH_DECLARE(void) CoreSession::setHangupHook(void *hangup_func) {
     switch_core_event_hook_add_state_change(session, hanguphook);
 }
 
+SWITCH_DECLARE(void) CoreSession::consoleLog(char *level_str, char *msg)
+{
+	switch_log_level_t level = SWITCH_LOG_DEBUG;
+	if (level_str) {
+		level = switch_log_str2level(level_str);
+		if (level == SWITCH_LOG_INVALID) {
+			level = SWITCH_LOG_DEBUG;
+		}
+	}
+	switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), level, "%s", switch_str_nil(msg));
+}
+
 /* ---- methods not bound to CoreSession instance ---- */
 
 
@@ -1381,5 +1400,5 @@ SWITCH_DECLARE(switch_status_t) CoreSession::process_callback_result(char *resul
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */

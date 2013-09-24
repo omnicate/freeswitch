@@ -90,6 +90,7 @@ SWITCH_DECLARE(bool) email(char *to, char *from, char *headers = NULL, char *bod
 											const char *short_greeting_sound,
 											const char *invalid_sound,
 											const char *exit_sound,
+											const char *transfer_sound,
 											const char *confirm_macro,
 											const char *confirm_key,
 											const char *tts_engine,
@@ -106,8 +107,9 @@ SWITCH_DECLARE(bool) email(char *to, char *from, char *headers = NULL, char *bod
 	   protected:
 		 char *last_data;
 		 char time_buf[64];
+		 switch_core_session_t *session;
 	   public:
-		 SWITCH_DECLARE_CONSTRUCTOR API(void);
+		 SWITCH_DECLARE_CONSTRUCTOR API(CoreSession *s = NULL);
 		 virtual SWITCH_DECLARE_CONSTRUCTOR ~ API();
 		 SWITCH_DECLARE(const char *) execute(const char *command, const char *data = NULL);
 		 SWITCH_DECLARE(const char *) executeString(const char *command);
@@ -388,6 +390,7 @@ SWITCH_DECLARE(bool) email(char *to, char *from, char *headers = NULL, char *bod
 
 		 virtual switch_status_t run_dtmf_callback(void *input, switch_input_type_t itype) = 0;
 
+		 SWITCH_DECLARE(void) consoleLog(char *level_str, char *msg);
 	 };
 
 
@@ -429,5 +432,5 @@ SWITCH_DECLARE_NONSTD(switch_status_t) dtmf_callback(switch_core_session_t *sess
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */

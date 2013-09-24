@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2007-2012, Anthony Minessale II
  * Copyright (c) 2010, Stefan Knoblich <s.knoblich@axsentis.de>
+ * Copyright (c) 2012-2013, Stefan Knoblich <stkn@openisdn.net>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -102,6 +103,7 @@ static FIO_SPAN_GET_SIG_STATUS_FUNCTION(isdn_get_span_sig_status)
  */
 static FIO_CHANNEL_OUTGOING_CALL_FUNCTION(isdn_outgoing_call)
 {
+	ftdm_unused_arg(ftdmchan);
 	return FTDM_SUCCESS;
 }
 
@@ -116,6 +118,11 @@ static FIO_CHANNEL_OUTGOING_CALL_FUNCTION(isdn_outgoing_call)
  */
 static FIO_CHANNEL_REQUEST_FUNCTION(isdn_channel_request)
 {
+	ftdm_unused_arg(span);
+	ftdm_unused_arg(chan_id);
+	ftdm_unused_arg(direction);
+	ftdm_unused_arg(caller_data);
+	ftdm_unused_arg(ftdmchan);
 	return FTDM_FAIL;
 }
 
@@ -1006,7 +1013,7 @@ static ftdm_status_t state_advance(ftdm_channel_t *chan)
 				}
 			} else if (call) {
 //				pri_progress(isdn_data->spri.pri, call, ftdm_channel_get_id(chan), 1);
-				pri_acknowledge(isdn_data->spri.pri, call, ftdm_channel_get_id(chan), 1);
+				pri_acknowledge(isdn_data->spri.pri, call, ftdm_channel_get_id(chan), 0);
 			} else {
 				ftdm_set_state_locked(chan, FTDM_CHANNEL_STATE_RESTART);
 			}
@@ -1148,7 +1155,8 @@ static ftdm_status_t state_advance(ftdm_channel_t *chan)
 		if (isdn_data) {
 			ftdm_caller_data_t *caller_data = ftdm_channel_get_caller_data(chan);
 			struct pri_sr *sr;
-			int ton;
+			int caller_ton;
+			int called_ton;
 
 			if (!(call = pri_new_call(isdn_data->spri.pri))) {
 				ftdm_log(FTDM_LOG_ERROR, "Failed to create new call on channel %d:%d\n",
@@ -1158,19 +1166,34 @@ static ftdm_status_t state_advance(ftdm_channel_t *chan)
 				return FTDM_SUCCESS;
 			}
 
-			ton = caller_data->dnis.type;
-			switch (ton) {
+			caller_ton = caller_data->ani.type;
+			switch (caller_ton) {
 			case FTDM_TON_NATIONAL:
-				ton = PRI_NATIONAL_ISDN;
+				caller_ton = PRI_NATIONAL_ISDN;
 				break;
 			case FTDM_TON_INTERNATIONAL:
-				ton = PRI_INTERNATIONAL_ISDN;
+				caller_ton = PRI_INTERNATIONAL_ISDN;
 				break;
 			case FTDM_TON_SUBSCRIBER_NUMBER:
-				ton = PRI_LOCAL_ISDN;
+				caller_ton = PRI_LOCAL_ISDN;
 				break;
 			default:
-				ton = isdn_data->ton;
+				caller_ton = isdn_data->ton;
+			}
+
+			called_ton = caller_data->dnis.type;
+			switch (called_ton) {
+			case FTDM_TON_NATIONAL:
+				called_ton = PRI_NATIONAL_ISDN;
+				break;
+			case FTDM_TON_INTERNATIONAL:
+				called_ton = PRI_INTERNATIONAL_ISDN;
+				break;
+			case FTDM_TON_SUBSCRIBER_NUMBER:
+				called_ton = PRI_LOCAL_ISDN;
+				break;
+			default:
+				called_ton = isdn_data->ton;
 			}
 
 			chan_priv->call = call;
@@ -1186,14 +1209,14 @@ static ftdm_status_t state_advance(ftdm_channel_t *chan)
 			pri_sr_set_channel(sr, ftdm_channel_get_id(chan), 1, 0);
 			pri_sr_set_bearer(sr, PRI_TRANS_CAP_SPEECH, isdn_data->layer1);
 
-			pri_sr_set_called(sr, caller_data->dnis.digits, ton, 1);
+			pri_sr_set_called(sr, caller_data->dnis.digits, called_ton, 1);
 			pri_sr_set_caller(sr, caller_data->cid_num.digits,
 					((isdn_data->opts & FTMOD_LIBPRI_OPT_OMIT_DISPLAY_IE) ? NULL : caller_data->cid_name),
-					ton,
+					caller_ton,
 					((caller_data->pres != 1) ? PRES_ALLOWED_USER_NUMBER_PASSED_SCREEN : PRES_PROHIB_USER_NUMBER_NOT_SCREENED));
 
 			if (!(isdn_data->opts & FTMOD_LIBPRI_OPT_OMIT_REDIRECTING_NUMBER_IE)) {
-				pri_sr_set_redirecting(sr, caller_data->cid_num.digits, ton,
+				pri_sr_set_redirecting(sr, caller_data->cid_num.digits, caller_ton,
 					PRES_ALLOWED_USER_NUMBER_PASSED_SCREEN, PRI_REDIR_UNCONDITIONAL);
 			}
 #ifdef HAVE_LIBPRI_AOC
@@ -1289,6 +1312,8 @@ static int on_keypad_digit(lpwrap_pri_t *spri, lpwrap_pri_event_t event_type, pr
 	ftdm_span_t *span = spri->span;
 	ftdm_channel_t *chan = ftdm_span_get_channel(span, pevent->ring.channel);
 
+	ftdm_unused_arg(event_type);
+
 	if (!chan) {
 		ftdm_log(FTDM_LOG_ERROR, "-- Keypad event on invalid channel %d:%d\n",
 			ftdm_span_get_id(span), pevent->ring.channel);
@@ -1318,6 +1343,8 @@ static int on_information(lpwrap_pri_t *spri, lpwrap_pri_event_t event_type, pri
 	ftdm_libpri_b_chan_t *chan_priv = NULL;
 	ftdm_caller_data_t *caller_data = NULL;
 	ftdm_libpri_data_t *isdn_data = span->signal_data;
+
+	ftdm_unused_arg(event_type);
 
 	if (!chan) {
 		ftdm_log(FTDM_LOG_CRIT, "-- Info on channel %d:%d but it's not in use?\n", ftdm_span_get_id(span), pevent->ring.channel);
@@ -1492,6 +1519,8 @@ static int on_answer(lpwrap_pri_t *spri, lpwrap_pri_event_t event_type, pri_even
 	ftdm_span_t *span = spri->span;
 	ftdm_channel_t *chan = ftdm_span_get_channel(span, pevent->answer.channel);
 
+	ftdm_unused_arg(event_type);
+
 	if (chan) {
 		if (!ftdm_test_flag(chan, FTDM_CHANNEL_OPEN)) {
 			ftdm_log(FTDM_LOG_DEBUG, "-- Call answered, opening B-Channel %d:%d\n",
@@ -1531,6 +1560,8 @@ static int on_proceeding(lpwrap_pri_t *spri, lpwrap_pri_event_t event_type, pri_
 {
 	ftdm_span_t *span = spri->span;
 	ftdm_channel_t *chan = ftdm_span_get_channel(span, pevent->proceeding.channel);
+
+	ftdm_unused_arg(event_type);
 
 	if (chan) {
 		/* Open channel if inband information is available */
@@ -1573,6 +1604,8 @@ static int on_progress(lpwrap_pri_t *spri, lpwrap_pri_event_t event_type, pri_ev
 {
 	ftdm_span_t *span = spri->span;
 	ftdm_channel_t *chan = ftdm_span_get_channel(span, pevent->proceeding.channel);
+
+	ftdm_unused_arg(event_type);
 
 	if (chan) {
 		/* Open channel if inband information is available */
@@ -1617,6 +1650,8 @@ static int on_ringing(lpwrap_pri_t *spri, lpwrap_pri_event_t event_type, pri_eve
 {
 	ftdm_span_t *span = spri->span;
 	ftdm_channel_t *chan = ftdm_span_get_channel(span, pevent->ringing.channel);
+
+	ftdm_unused_arg(event_type);
 
 	if (chan) {
 		/* we may get on_ringing even when we're already in FTDM_CHANNEL_STATE_PROGRESS_MEDIA */
@@ -1666,7 +1701,7 @@ out:
  */
 static ftdm_channel_t *find_channel_by_cref(ftdm_span_t *span, const int cref)
 {
-	ftdm_iterator_t *iter = NULL;
+	ftdm_iterator_t *c_iter, *c_cur;
 	ftdm_channel_t *chan = NULL;
 
 	if (!span || cref <= 0)
@@ -1674,9 +1709,11 @@ static ftdm_channel_t *find_channel_by_cref(ftdm_span_t *span, const int cref)
 
 	ftdm_mutex_lock(span->mutex);
 
+	c_iter = ftdm_span_get_chan_iterator(span, NULL);
+
 	/* Iterate over all channels on this span */
-	for (iter = ftdm_span_get_chan_iterator(span, NULL); iter; iter = ftdm_iterator_next(iter)) {
-		ftdm_channel_t *cur = ftdm_iterator_current(iter);
+	for (c_cur = c_iter; c_cur; c_cur = ftdm_iterator_next(c_cur)) {
+		ftdm_channel_t *cur = ftdm_iterator_current(c_cur);
 		ftdm_caller_data_t *caller_data = NULL;
 
 		if (ftdm_channel_get_type(cur) != FTDM_CHAN_TYPE_B)
@@ -1690,7 +1727,7 @@ static ftdm_channel_t *find_channel_by_cref(ftdm_span_t *span, const int cref)
 		}
 	}
 
-	ftdm_iterator_free(iter);
+	ftdm_iterator_free(c_iter);
 	ftdm_mutex_unlock(span->mutex);
 	return chan;
 }
@@ -1708,8 +1745,8 @@ static ftdm_channel_t *find_channel_by_cref(ftdm_span_t *span, const int cref)
  */
 static ftdm_status_t hunt_channel(ftdm_span_t *span, const int hint, const ftdm_bool_t excl, ftdm_channel_t **chan)
 {
-	ftdm_iterator_t *iter = NULL;
-	ftdm_channel_t  *tmp  = NULL;
+	ftdm_iterator_t *c_iter, *c_cur;
+	ftdm_channel_t *tmp = NULL;
 	int ret = FTDM_FAIL;
 
 	/* lock span */
@@ -1736,9 +1773,11 @@ static ftdm_status_t hunt_channel(ftdm_span_t *span, const int hint, const ftdm_
 		}
 	}
 
+	c_iter = ftdm_span_get_chan_iterator(span, NULL);
+
 	/* Iterate over all channels on this span */
-	for (iter = ftdm_span_get_chan_iterator(span, NULL); iter; iter = ftdm_iterator_next(iter)) {
-		tmp = ftdm_iterator_current(iter);
+	for (c_cur = c_iter; c_cur; c_cur = ftdm_iterator_next(c_cur)) {
+		tmp = ftdm_iterator_current(c_cur);
 
 		if (ftdm_channel_get_type(tmp) != FTDM_CHAN_TYPE_B)
 			continue;
@@ -1751,7 +1790,7 @@ static ftdm_status_t hunt_channel(ftdm_span_t *span, const int hint, const ftdm_
 		}
 	}
 
-	ftdm_iterator_free(iter);
+	ftdm_iterator_free(c_iter);
 out:
 	ftdm_mutex_unlock(span->mutex);
 	return ret;
@@ -1773,6 +1812,8 @@ static int on_ring(lpwrap_pri_t *spri, lpwrap_pri_event_t event_type, pri_event 
 	ftdm_channel_t *chan = NULL;
 	ftdm_caller_data_t *caller_data = NULL;
 	int ret = 0;
+
+	ftdm_unused_arg(event_type);
 
 	/*
 	 * Check if call has an associated channel (duplicate ring event)
@@ -1931,6 +1972,8 @@ static int on_timeout_t302(struct lpwrap_pri *spri, struct lpwrap_timer *timer)
 	ftdm_libpri_b_chan_t *chan_priv = ftdm_container_of(timer, ftdm_libpri_b_chan_t, t302);
 	ftdm_channel_t *chan = chan_priv->channel;
 
+	ftdm_unused_arg(spri);
+
 	ftdm_log_chan_msg(chan, FTDM_LOG_INFO, "-- T302 timed out, going to state RING\n");
 	ftdm_set_state_locked(chan, FTDM_CHANNEL_STATE_RING);
 	return 0;
@@ -1968,14 +2011,16 @@ static int on_timeout_t3xx(struct lpwrap_pri *spri, struct lpwrap_timer *timer)
 {
 	ftdm_span_t *span = spri->span;
 	ftdm_libpri_data_t *isdn_data = span->signal_data;
-	ftdm_iterator_t *iter = NULL;
+	ftdm_iterator_t *c_iter, *c_cur;
 
 	ftdm_log_chan_msg(isdn_data->dchan, FTDM_LOG_INFO, "-- T3xx timed out, restarting idle b-channels\n");
 	ftdm_mutex_lock(span->mutex);
 
+	c_iter = ftdm_span_get_chan_iterator(span, NULL);
+
 	/* Iterate b-channels */
-	for (iter = ftdm_span_get_chan_iterator(span, NULL); iter; iter = ftdm_iterator_next(iter)) {
-		ftdm_channel_t *cur = ftdm_iterator_current(iter);
+	for (c_cur = c_iter; c_cur; c_cur = ftdm_iterator_next(c_cur)) {
+		ftdm_channel_t *cur = ftdm_iterator_current(c_cur);
 		/* Skip non-b-channels */
 		if (ftdm_channel_get_type(cur) != FTDM_CHAN_TYPE_B)
 			continue;
@@ -1984,7 +2029,7 @@ static int on_timeout_t3xx(struct lpwrap_pri *spri, struct lpwrap_timer *timer)
 			ftdm_set_state_locked(cur, FTDM_CHANNEL_STATE_RESTART);
 		}
 	}
-	ftdm_iterator_free(iter);
+	ftdm_iterator_free(c_iter);
 	ftdm_mutex_unlock(span->mutex);
 
 	/* Start timer again */
@@ -2002,6 +2047,8 @@ static int on_timeout_t3xx(struct lpwrap_pri *spri, struct lpwrap_timer *timer)
 static __inline__ ftdm_status_t process_event(ftdm_span_t *span, ftdm_event_t *event)
 {
 	ftdm_alarm_flag_t alarmbits;
+
+	ftdm_unused_arg(span);
 
 	ftdm_log(FTDM_LOG_DEBUG, "EVENT [%s][%d][%d:%d] STATE [%s]\n",
 			ftdm_oob_event2str(event->enum_id),
@@ -2097,8 +2144,10 @@ static int on_restart(lpwrap_pri_t *spri, lpwrap_pri_event_t event_type, pri_eve
 	ftdm_span_t *span = spri->span;
 	int i;
 
+	ftdm_unused_arg(event_type);
+
 	if (pevent->restart.channel < 1) {
-		ftdm_log_chan_msg(spri->dchan, FTDM_LOG_NOTICE, "-- Restarting interface\n");
+		ftdm_log_chan_msg(spri->dchan, FTDM_LOG_DEBUG, "-- Restarting interface\n");
 
 		for (i = 1; i <= ftdm_span_get_chan_count(span); i++) {
 			chan = ftdm_span_get_channel(span, i);
@@ -2112,11 +2161,15 @@ static int on_restart(lpwrap_pri_t *spri, lpwrap_pri_event_t event_type, pri_eve
 		}
 	}
 	else if ((chan = ftdm_span_get_channel(span, pevent->restart.channel))) {
-		ftdm_libpri_b_chan_t *chan_priv = chan->call_data;
+		if (ftdm_channel_get_type(chan) == FTDM_CHAN_TYPE_B) {
+			ftdm_libpri_b_chan_t *chan_priv = chan->call_data;
 
-		ftdm_log_chan_msg(chan, FTDM_LOG_NOTICE, "-- Restarting single channel\n");
-		chan_priv->flags |= FTDM_LIBPRI_B_REMOTE_RESTART;
-		ftdm_set_state_locked(chan, FTDM_CHANNEL_STATE_RESTART);
+			ftdm_log_chan_msg(chan, FTDM_LOG_DEBUG, "-- Restarting single channel\n");
+			chan_priv->flags |= FTDM_LIBPRI_B_REMOTE_RESTART;
+			ftdm_set_state_locked(chan, FTDM_CHANNEL_STATE_RESTART);
+		} else {
+			ftdm_log_chan_msg(chan, FTDM_LOG_NOTICE, "Ignoring RESTART on D-Channel\n");
+		}
 	}
 	else {
 		ftdm_log(FTDM_LOG_ERROR, "Invalid restart indicator / channel id '%d' received\n",
@@ -2140,8 +2193,10 @@ static int on_restart_ack(lpwrap_pri_t *spri, lpwrap_pri_event_t event_type, pri
 	ftdm_span_t *span = spri->span;
 	int i;
 
+	ftdm_unused_arg(event_type);
+
 	if (pevent->restartack.channel < 1) {
-		ftdm_log_chan_msg(spri->dchan, FTDM_LOG_NOTICE, "-- Restart of interface completed\n");
+		ftdm_log_chan_msg(spri->dchan, FTDM_LOG_DEBUG, "-- Restart of interface completed\n");
 
 		for (i = 1; i <= ftdm_span_get_chan_count(span); i++) {
 			chan = ftdm_span_get_channel(span, i);
@@ -2156,8 +2211,12 @@ static int on_restart_ack(lpwrap_pri_t *spri, lpwrap_pri_event_t event_type, pri
 		}
 	}
 	else if ((chan = ftdm_span_get_channel(span, pevent->restart.channel))) {
-		ftdm_log_chan_msg(chan, FTDM_LOG_NOTICE, "-- Restart of channel completed\n");
-		ftdm_set_state_locked(chan, FTDM_CHANNEL_STATE_DOWN);
+		if (ftdm_channel_get_type(chan) == FTDM_CHAN_TYPE_B) {
+			ftdm_log_chan_msg(chan, FTDM_LOG_DEBUG, "-- Restart of channel completed\n");
+			ftdm_set_state_locked(chan, FTDM_CHANNEL_STATE_DOWN);
+		} else {
+			ftdm_log_chan_msg(chan, FTDM_LOG_NOTICE, "Ignoring RESTART ACK on D-Channel\n");
+		}
 	}
 	else {
 		ftdm_log(FTDM_LOG_ERROR, "Invalid restart indicator / channel id '%d' received\n",
@@ -2224,12 +2283,14 @@ static float aoc_money_amount(const struct pri_aoc_amount *amount)
 static int handle_facility_aoc_s(const struct pri_subcmd_aoc_s *aoc_s)
 {
 	/* Left as an excercise to the reader */
+	ftdm_unused_arg(aoc_s);
 	return 0;
 }
 
 static int handle_facility_aoc_d(const struct pri_subcmd_aoc_d *aoc_d)
 {
 	/* Left as an excercise to the reader */
+	ftdm_unused_arg(aoc_d);
 	return 0;
 }
 
@@ -2360,6 +2421,9 @@ static int on_facility(lpwrap_pri_t *spri, lpwrap_pri_event_t event_type, pri_ev
  */
 static int on_dchan_up(lpwrap_pri_t *spri, lpwrap_pri_event_t event_type, pri_event *pevent)
 {
+	ftdm_unused_arg(event_type);
+	ftdm_unused_arg(pevent);
+
 	if (!ftdm_test_flag(spri, LPWRAP_PRI_READY)) {
 		ftdm_signaling_status_t status = FTDM_SIG_STATE_UP;
 		ftdm_span_t *span = spri->span;
@@ -2406,6 +2470,9 @@ static int on_dchan_up(lpwrap_pri_t *spri, lpwrap_pri_event_t event_type, pri_ev
  */
 static int on_dchan_down(lpwrap_pri_t *spri, lpwrap_pri_event_t event_type, pri_event *pevent)
 {
+	ftdm_unused_arg(event_type);
+	ftdm_unused_arg(pevent);
+
 	if (ftdm_test_flag(spri, LPWRAP_PRI_READY)) {
 		ftdm_signaling_status_t status = FTDM_SIG_STATE_DOWN;
 		ftdm_span_t *span = spri->span;
@@ -2475,6 +2542,8 @@ static int on_anything(lpwrap_pri_t *spri, lpwrap_pri_event_t event_type, pri_ev
  */
 static int on_io_fail(lpwrap_pri_t *spri, lpwrap_pri_event_t event_type, pri_event *pevent)
 {
+	ftdm_unused_arg(pevent);
+
 	ftdm_log(FTDM_LOG_DEBUG, "-- Caught Event span %d %u (%s)\n", ftdm_span_get_id(spri->span), event_type, lpwrap_pri_event_str(event_type));
 	return 0;
 }
@@ -2493,6 +2562,8 @@ static void *ftdm_libpri_run(ftdm_thread_t *me, void *obj)
 	int down = 0;
 	int res = 0;
 	int i;
+
+	ftdm_unused_arg(me);
 
 	ftdm_set_flag(span, FTDM_SPAN_IN_THREAD);
 	isdn_data->dchan = NULL;
@@ -3132,5 +3203,5 @@ ftdm_module_t ftdm_module = {
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */

@@ -116,6 +116,8 @@ static const char *EVENT_NAMES[] = {
 	"RE_SCHEDULE",
 	"RELOADXML",
 	"NOTIFY",
+	"PHONE_FEATURE",
+	"PHONE_FEATURE_SUBSCRIBE",
 	"SEND_MESSAGE",
 	"RECV_MESSAGE",
 	"REQUEST_PARAMS",
@@ -143,6 +145,8 @@ static const char *EVENT_NAMES[] = {
 	"CONFERENCE_DATA",
 	"CALL_SETUP_REQ",
 	"CALL_SETUP_RESULT",
+	"CALL_DETAIL",
+	"DEVICE_STATE",
 	"ALL"
 };
 
@@ -275,7 +279,7 @@ ESL_DECLARE(char *) esl_event_get_header_idx(esl_event_t *event, const char *hea
 		}
 
 		return hp->value;
-	} else if (!strcmp(header_name, "_body")) {
+	} else if (header_name && !strcmp(header_name, "_body")) {
 		return event->body;
 	}		
 
@@ -388,10 +392,6 @@ ESL_DECLARE(int) esl_event_add_array(esl_event_t *event, const char *var, const 
 		p += 2;
 	}
 
-	if (!max) {
-		return -2;
-	}
-
 	data = strdup(val + 7);
 	
 	len = (sizeof(char *) * max) + 1;
@@ -447,7 +447,7 @@ static esl_status_t esl_event_base_add_header(esl_event_t *event, esl_stack_t st
 			fly++;
 		}
 		
-		if ((header = esl_event_get_header_ptr(event, header_name))) {
+		if (header || (header = esl_event_get_header_ptr(event, header_name))) {
 			
 			if (index_ptr) {
 				if (index > -1 && index <= 4000) {
@@ -978,5 +978,5 @@ ESL_DECLARE(esl_status_t) esl_event_serialize_json(esl_event_t *event, char **st
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */

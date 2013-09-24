@@ -415,7 +415,7 @@ SWITCH_STANDARD_APP(play_mp4_function)
 		}
 		*/
 
-		switch_channel_set_variable(channel, "sip_force_video_fmtp", vc.videoTrack().fmtp.c_str());
+		switch_channel_set_variable(channel, "rtp_force_video_fmtp", vc.videoTrack().fmtp.c_str());
 		switch_channel_answer(channel);
 
 		if ((read_vid_codec = switch_core_session_get_video_read_codec(session))) {
@@ -543,5 +543,5 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_mp4_load)
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */

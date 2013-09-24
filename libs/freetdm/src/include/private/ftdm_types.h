@@ -360,6 +360,7 @@ typedef ftdm_status_t (*ftdm_channel_sig_dtmf_t)(ftdm_channel_t *ftdmchan, const
 typedef enum {
 	FTDM_ITERATOR_VARS = 1,
 	FTDM_ITERATOR_CHANS,
+	FTDM_ITERATOR_SPANS,
 } ftdm_iterator_type_t;
 
 struct ftdm_iterator {
@@ -388,6 +389,6 @@ struct ftdm_iterator {
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */
 

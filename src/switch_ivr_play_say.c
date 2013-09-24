@@ -687,9 +687,13 @@ SWITCH_DECLARE(switch_status_t) switch_ivr_record_file(switch_core_session_t *se
 
 			if (args->input_callback) {
 				switch_event_t *event = NULL;
+				switch_status_t ostatus;
 
 				if (switch_core_session_dequeue_event(session, &event, SWITCH_FALSE) == SWITCH_STATUS_SUCCESS) {
-					status = args->input_callback(session, event, SWITCH_INPUT_TYPE_EVENT, args->buf, args->buflen);
+					if ((ostatus = args->input_callback(session, event, SWITCH_INPUT_TYPE_EVENT, args->buf, args->buflen)) != SWITCH_STATUS_SUCCESS) {
+						status = ostatus;
+					}
+					
 					switch_event_destroy(&event);
 				}
 			}
@@ -797,8 +801,8 @@ SWITCH_DECLARE(switch_status_t) switch_ivr_record_file(switch_core_session_t *se
 	}
 
 	if (read_impl.actual_samples_per_second) {
-		switch_channel_set_variable_printf(channel, "record_seconds", "%d", fh->samples_out / read_impl.actual_samples_per_second);
-		switch_channel_set_variable_printf(channel, "record_ms", "%d", fh->samples_out / (read_impl.actual_samples_per_second / 1000));
+		switch_channel_set_variable_printf(channel, "record_seconds", "%d", fh->samples_out / fh->native_rate);
+		switch_channel_set_variable_printf(channel, "record_ms", "%d", fh->samples_out / (fh->native_rate/ 1000));
 
 	}
 
@@ -941,7 +945,10 @@ SWITCH_DECLARE(switch_status_t) switch_ivr_gentones(switch_core_session_t *sessi
 				switch_event_t *event;
 				
 				if (switch_core_session_dequeue_event(session, &event, SWITCH_FALSE) == SWITCH_STATUS_SUCCESS) {
-					status = args->input_callback(session, event, SWITCH_INPUT_TYPE_EVENT, args->buf, args->buflen);
+					switch_status_t ostatus = args->input_callback(session, event, SWITCH_INPUT_TYPE_EVENT, args->buf, args->buflen);
+					if (ostatus != SWITCH_STATUS_SUCCESS) {
+						status = ostatus;
+					}
 					switch_event_destroy(&event);
 				}
 			}
@@ -1042,6 +1049,7 @@ SWITCH_DECLARE(switch_status_t) switch_ivr_play_file(switch_core_session_t *sess
 	int more_data = 0;
 	switch_event_t *event;
 	uint32_t test_native = 0, last_native = 0;
+	uint32_t buflen = 0;
 
 	if (switch_channel_pre_answer(channel) != SWITCH_STATUS_SUCCESS) {
 		return SWITCH_STATUS_FALSE;
@@ -1103,6 +1111,9 @@ SWITCH_DECLARE(switch_status_t) switch_ivr_play_file(switch_core_session_t *sess
 		fh->samples = 0;
 	}
 	
+
+
+
 	for (cur = 0; switch_channel_ready(channel) && !done && cur < argc; cur++) {
 		file = argv[cur];
 		eof = 0;
@@ -1185,20 +1196,33 @@ SWITCH_DECLARE(switch_status_t) switch_ivr_play_file(switch_core_session_t *sess
 
 		if (!strstr(file, SWITCH_URL_SEPARATOR)) {
 			if (!switch_is_file_path(file)) {
-				char *tfile = NULL;
+				char *tfile = NULL, *tfile2 = NULL;
 				char *e;
+				int x;
 
-				if (*file == '[') {
-					tfile = switch_core_session_strdup(session, file);
-					if ((e = switch_find_end_paren(tfile, '[', ']'))) {
-						*e = '\0';
-						file = e + 1;
+				for (x = 0; x < 2; x++) {
+					if (*file == '[') {
+						tfile = switch_core_session_strdup(session, file);
+						if ((e = switch_find_end_paren(tfile, '[', ']'))) {
+							*e = '\0';
+							file = e + 1;
+						} else {
+							tfile = NULL;
+						}
+					} else if (*file == '{') {
+						tfile2 = switch_core_session_strdup(session, file);
+						if ((e = switch_find_end_paren(tfile2, '{', '}'))) {
+							*e = '\0';
+							file = e + 1;
+						} else {
+							tfile2 = NULL;
+						}
 					} else {
-						tfile = NULL;
+						break;
 					}
 				}
 
-				file = switch_core_session_sprintf(session, "%s%s%s%s%s", switch_str_nil(tfile), tfile ? "]" : "", prefix, SWITCH_PATH_SEPARATOR, file);
+				file = switch_core_session_sprintf(session, "%s%s%s%s%s%s%s", switch_str_nil(tfile), tfile ? "]" : "", switch_str_nil(tfile2), tfile2 ? "}" : "", prefix, SWITCH_PATH_SEPARATOR, file);
 			}
 			if ((ext = strrchr(file, '.'))) {
 				ext++;
@@ -1235,9 +1259,9 @@ SWITCH_DECLARE(switch_status_t) switch_ivr_play_file(switch_core_session_t *sess
 
 
 		if (!abuf) {
-			switch_zmalloc(abuf, FILE_STARTSAMPLES * sizeof(*abuf));
+			buflen = write_frame.buflen = FILE_STARTSAMPLES * sizeof(*abuf) * fh->channels;
+			switch_zmalloc(abuf, write_frame.buflen);
 			write_frame.data = abuf;
-			write_frame.buflen = FILE_STARTSAMPLES;
 		}
 
 		if (sample_start > 0) {
@@ -1420,7 +1444,10 @@ SWITCH_DECLARE(switch_status_t) switch_ivr_play_file(switch_core_session_t *sess
 					switch_event_t *event;
 
 					if (switch_core_session_dequeue_event(session, &event, SWITCH_FALSE) == SWITCH_STATUS_SUCCESS) {
-						status = args->input_callback(session, event, SWITCH_INPUT_TYPE_EVENT, args->buf, args->buflen);
+						switch_status_t ostatus = args->input_callback(session, event, SWITCH_INPUT_TYPE_EVENT, args->buf, args->buflen);
+						if (ostatus != SWITCH_STATUS_SUCCESS) {
+							status = ostatus;
+						}
 						switch_event_destroy(&event);
 					}
 				}
@@ -1429,6 +1456,14 @@ SWITCH_DECLARE(switch_status_t) switch_ivr_play_file(switch_core_session_t *sess
 					done = 1;
 					break;
 				}
+			}
+
+			buflen = FILE_STARTSAMPLES * sizeof(*abuf) * fh->cur_channels;
+
+			if (buflen > write_frame.buflen) {
+				abuf = realloc(abuf, buflen);
+				write_frame.data = abuf;
+				write_frame.buflen = buflen;
 			}
 
 			if (switch_test_flag(fh, SWITCH_FILE_PAUSE)) {
@@ -1470,6 +1505,8 @@ SWITCH_DECLARE(switch_status_t) switch_ivr_play_file(switch_core_session_t *sess
 
 				olen = switch_test_flag(fh, SWITCH_FILE_NATIVE) ? framelen : ilen;
 			} else {
+				switch_status_t rstatus;
+
 				if (eof) {
 					break;
 				}
@@ -1477,7 +1514,12 @@ SWITCH_DECLARE(switch_status_t) switch_ivr_play_file(switch_core_session_t *sess
 				if (!switch_test_flag(fh, SWITCH_FILE_NATIVE)) {
 					olen /= 2;
 				}
-				if (switch_core_file_read(fh, abuf, &olen) != SWITCH_STATUS_SUCCESS) {
+				switch_set_flag(fh, SWITCH_FILE_BREAK_ON_CHANGE);
+				if ((rstatus = switch_core_file_read(fh, abuf, &olen)) == SWITCH_STATUS_BREAK) {
+					continue;
+				}
+
+				if (rstatus != SWITCH_STATUS_SUCCESS) {
 					eof++;
 					continue;
 				}
@@ -1597,6 +1639,7 @@ SWITCH_DECLARE(switch_status_t) switch_ivr_play_file(switch_core_session_t *sess
 
 					tstatus = switch_core_session_read_frame(session, &read_frame, SWITCH_IO_FLAG_SINGLE_READ, 0);
 
+
 					if (!SWITCH_READ_ACCEPTABLE(tstatus)) {
 						break;
 					}
@@ -1680,8 +1723,8 @@ SWITCH_DECLARE(switch_status_t) switch_ivr_play_file(switch_core_session_t *sess
 		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "done playing file %s\n", file);
 
 		if (read_impl.samples_per_second) {
-			switch_channel_set_variable_printf(channel, "playback_seconds", "%d", fh->samples_in / read_impl.samples_per_second);
-			switch_channel_set_variable_printf(channel, "playback_ms", "%d", fh->samples_in / (read_impl.samples_per_second / 1000));
+			switch_channel_set_variable_printf(channel, "playback_seconds", "%d", fh->samples_in / fh->native_rate);
+			switch_channel_set_variable_printf(channel, "playback_ms", "%d", fh->samples_in / (fh->native_rate / 1000));
 		}
 		switch_channel_set_variable_printf(channel, "playback_samples", "%d", fh->samples_in);
 
@@ -2128,6 +2171,10 @@ SWITCH_DECLARE(switch_status_t) switch_ivr_speak_text_handle(switch_core_session
 		return SWITCH_STATUS_FALSE;
 	}
 
+	if (!switch_core_codec_ready(codec)) {
+		return SWITCH_STATUS_FALSE;
+	}
+
 	arg_recursion_check_start(args);
 
 	write_frame.data = abuf;
@@ -2260,7 +2307,10 @@ SWITCH_DECLARE(switch_status_t) switch_ivr_speak_text_handle(switch_core_session
 
 			if (args->input_callback) {
 				if (switch_core_session_dequeue_event(session, &event, SWITCH_FALSE) == SWITCH_STATUS_SUCCESS) {
-					status = args->input_callback(session, event, SWITCH_INPUT_TYPE_EVENT, args->buf, args->buflen);
+					switch_status_t ostatus = args->input_callback(session, event, SWITCH_INPUT_TYPE_EVENT, args->buf, args->buflen);
+					if (ostatus != SWITCH_STATUS_SUCCESS) {
+						status = ostatus;
+					}
 					switch_event_destroy(&event);
 				}
 			}
@@ -2652,5 +2702,5 @@ SWITCH_DECLARE(switch_status_t) switch_ivr_soft_hold(switch_core_session_t *sess
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */

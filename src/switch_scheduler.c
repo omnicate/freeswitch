@@ -37,6 +37,7 @@ struct switch_scheduler_task_container {
 	int64_t executed;
 	int in_thread;
 	int destroyed;
+	int running;
 	switch_scheduler_func_t func;
 	switch_memory_pool_t *pool;
 	uint32_t flags;
@@ -59,6 +60,10 @@ static void switch_scheduler_execute(switch_scheduler_task_container_t *tp)
 	//switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Executing task %u %s (%s)\n", tp->task.task_id, tp->desc, switch_str_nil(tp->task.group));
 
 	tp->func(&tp->task);
+
+	if (tp->task.repeat) {
+		tp->task.runtime = switch_epoch_time_now(NULL) + tp->task.repeat;
+	}
 
 	if (tp->task.runtime > tp->executed) {
 		tp->executed = 0;
@@ -124,7 +129,11 @@ static int task_thread_loop(int done)
 					tp->in_thread = 1;
 					switch_thread_create(&thread, thd_attr, task_own_thread, tp, tp->pool);
 				} else {
+					tp->running = 1;
+					switch_mutex_unlock(globals.task_mutex);
 					switch_scheduler_execute(tp);
+					switch_mutex_lock(globals.task_mutex);
+					tp->running = 0;
 				}
 			}
 		}
@@ -185,10 +194,17 @@ SWITCH_DECLARE(uint32_t) switch_scheduler_add_task(time_t task_runtime,
 {
 	switch_scheduler_task_container_t *container, *tp;
 	switch_event_t *event;
+	switch_time_t now = switch_epoch_time_now(NULL);
 
 	switch_mutex_lock(globals.task_mutex);
 	switch_zmalloc(container, sizeof(*container));
 	switch_assert(func);
+
+	if (task_runtime < now) {
+		container->task.repeat = (uint32_t)task_runtime;
+		task_runtime += now;
+	}
+
 	container->func = func;
 	container->task.created = switch_epoch_time_now(NULL);
 	container->task.runtime = task_runtime;
@@ -238,6 +254,13 @@ SWITCH_DECLARE(uint32_t) switch_scheduler_del_task_id(uint32_t task_id)
 								  tp->task.task_id, tp->task.group);
 				break;
 			}
+
+			if (tp->running) {
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Attempt made to delete running task #%u (group %s)\n",
+								  tp->task.task_id, tp->task.group);
+				break;
+			}
+
 			tp->destroyed++;
 			if (switch_event_create(&event, SWITCH_EVENT_DEL_SCHEDULE) == SWITCH_STATUS_SUCCESS) {
 				switch_event_add_header(event, SWITCH_STACK_BOTTOM, "Task-ID", "%u", tp->task.task_id);
@@ -328,5 +351,5 @@ SWITCH_DECLARE(void) switch_scheduler_task_thread_stop(void)
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */

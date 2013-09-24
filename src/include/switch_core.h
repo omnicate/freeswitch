@@ -61,6 +61,12 @@ struct switch_app_log {
 	struct switch_app_log *next;
 };
 
+typedef struct switch_thread_data_s {
+	switch_thread_start_t func;
+	void *obj;
+	int alloc;
+	switch_memory_pool_t *pool;
+} switch_thread_data_t;
 
 typedef struct switch_hold_record_s {
 	switch_time_t on;
@@ -69,12 +75,76 @@ typedef struct switch_hold_record_s {
 	struct switch_hold_record_s *next;
 } switch_hold_record_t;
 
+typedef struct device_uuid_node_s {
+	char *uuid;
+	switch_xml_t xml_cdr;
+	switch_event_t *event;
+	switch_channel_callstate_t callstate;
+	switch_hold_record_t *hold_record;
+	switch_caller_profile_t *hup_profile;
+	struct switch_device_record_s *parent;
+	struct device_uuid_node_s *next;
+} switch_device_node_t;
 
-typedef struct switch_thread_data_s {
-	switch_thread_start_t func;
-	void *obj;
-	int alloc;
-} switch_thread_data_t;
+typedef struct switch_device_stats_s {
+	uint32_t total; 
+	uint32_t offhook;
+	uint32_t active;
+	uint32_t held;
+	uint32_t hup;
+	uint32_t ringing;
+	uint32_t early;
+} switch_device_stats_t;
+
+
+typedef struct switch_device_record_s {
+	char *device_id;
+	char *uuid;
+	int refs;
+	switch_device_stats_t stats;
+	switch_device_state_t state;
+	switch_device_state_t last_state;
+	switch_time_t active_start;
+	switch_time_t active_stop;
+	switch_time_t last_call_time;
+	struct device_uuid_node_s *uuid_list;
+	struct device_uuid_node_s *uuid_tail;
+	switch_mutex_t *mutex;
+	switch_memory_pool_t *pool;
+} switch_device_record_t;
+
+typedef void(*switch_device_state_function_t)(switch_core_session_t *session, switch_channel_callstate_t callstate, switch_device_record_t *drec);
+
+
+#define DTLS_SRTP_FNAME "dtls-srtp"
+#define MAX_FPLEN 64
+#define MAX_FPSTRLEN 192
+
+typedef struct dtls_fp_s { 
+	uint32_t len;
+	uint8_t data[MAX_FPLEN+1];
+	char *type;
+	char str[MAX_FPSTRLEN];
+} dtls_fingerprint_t;
+
+typedef enum {
+	DTLS_TYPE_CLIENT = (1 << 0),
+	DTLS_TYPE_SERVER = (1 << 1),
+	DTLS_TYPE_RTP = (1 << 2),
+	DTLS_TYPE_RTCP = (1 << 3)
+} dtls_type_t;
+
+typedef enum {
+	DS_HANDSHAKE,
+	DS_SETUP,
+	DS_READY,
+	DS_FAIL,
+	DS_INVALID,
+} dtls_state_t;
+
+
+
+
 
 
 #define MESSAGE_STAMP_FFL(_m) _m->_file = __FILE__; _m->_func = __SWITCH_FUNC__; _m->_line = __LINE__
@@ -281,6 +351,10 @@ SWITCH_DECLARE(switch_status_t) switch_core_media_bug_remove_all_function(_In_ s
 
 SWITCH_DECLARE(switch_status_t) switch_core_media_bug_enumerate(switch_core_session_t *session, switch_stream_handle_t *stream);
 SWITCH_DECLARE(switch_status_t) switch_core_media_bug_transfer_recordings(switch_core_session_t *orig_session, switch_core_session_t *new_session);
+
+SWITCH_DECLARE(switch_status_t) switch_core_media_bug_transfer_callback(switch_core_session_t *orig_session, switch_core_session_t *new_session, 
+																		switch_media_bug_callback_t callback, void * (*user_data_dup_func) (switch_core_session_t *, void *));
+
 
 /*!
   \brief Read a frame from the bug
@@ -805,12 +879,15 @@ SWITCH_DECLARE(char *) switch_core_get_variable_pdup(_In_z_ const char *varname,
 SWITCH_DECLARE(const char *) switch_core_get_hostname(void);
 SWITCH_DECLARE(const char *) switch_core_get_switchname(void);
 
+SWITCH_DECLARE(char *) switch_core_get_domain(switch_bool_t dup);
+
 /*! 
   \brief Add a global variable to the core
   \param varname the name of the variable
   \param value the value of the variable
 */
 SWITCH_DECLARE(void) switch_core_set_variable(_In_z_ const char *varname, _In_opt_z_ const char *value);
+SWITCH_DECLARE(switch_status_t) switch_core_get_variables(switch_event_t **event);
 
 /*! 
   \brief Conditionally add a global variable to the core
@@ -847,7 +924,7 @@ SWITCH_DECLARE(uint32_t) switch_core_session_hupall_matching_var_ans(_In_ const 
 																	 switch_call_cause_t cause, switch_hup_type_t type);
 SWITCH_DECLARE(switch_console_callback_match_t *) switch_core_session_findall_matching_var(const char *var_name, const char *var_val);
 #define switch_core_session_hupall_matching_var(_vn, _vv, _c) switch_core_session_hupall_matching_var_ans(_vn, _vv, _c, SHT_UNANSWERED | SHT_ANSWERED)
-
+SWITCH_DECLARE(switch_console_callback_match_t *) switch_core_session_findall(void);
 /*! 
   \brief Hangup all sessions that belong to an endpoint
   \param endpoint_interface The endpoint interface 
@@ -941,6 +1018,8 @@ SWITCH_DECLARE(switch_app_log_t *) switch_core_session_get_app_log(_In_ switch_c
 */
 SWITCH_DECLARE(switch_status_t) switch_core_session_exec(_In_ switch_core_session_t *session,
 														 _In_ const switch_application_interface_t *application_interface, _In_opt_z_ const char *arg);
+
+SWITCH_DECLARE(void) switch_core_session_video_reset(switch_core_session_t *session);
 /*! 
   \brief Execute an application on a session 
   \param session the current session
@@ -1672,7 +1751,7 @@ SWITCH_DECLARE(void) switch_core_db_test_reactive(switch_core_db_t *db, char *te
 SWITCH_DECLARE(switch_status_t) switch_core_perform_file_open(const char *file, const char *func, int line,
 															  _In_ switch_file_handle_t *fh,
 															  _In_opt_z_ const char *file_path,
-															  _In_ uint8_t channels,
+															  _In_ uint32_t channels,
 															  _In_ uint32_t rate, _In_ unsigned int flags, _In_opt_ switch_memory_pool_t *pool);
 
 /*! 
@@ -1892,6 +1971,15 @@ SWITCH_DECLARE(switch_status_t) switch_core_asr_check_results(switch_asr_handle_
   \return SWITCH_STATUS_SUCCESS
 */
 SWITCH_DECLARE(switch_status_t) switch_core_asr_get_results(switch_asr_handle_t *ah, char **xmlstr, switch_asr_flag_t *flags);
+
+/*!
+  \brief Get result headers from an asr handle
+  \param ah the handle to get results from
+  \param headers a pointer to dynamically allocate an switch_event_t result to
+  \param flags flags to influence behaviour
+  \return SWITCH_STATUS_SUCCESS
+*/
+SWITCH_DECLARE(switch_status_t) switch_core_asr_get_result_headers(switch_asr_handle_t *ah, switch_event_t **headers, switch_asr_flag_t *flags);
 
 /*!
   \brief Load a grammar to an asr handle
@@ -2396,6 +2484,7 @@ SWITCH_DECLARE(void) switch_cache_db_flush_handles(void);
 SWITCH_DECLARE(const char *) switch_core_banner(void);
 SWITCH_DECLARE(switch_bool_t) switch_core_session_in_thread(switch_core_session_t *session);
 SWITCH_DECLARE(uint32_t) switch_default_ptime(const char *name, uint32_t number);
+SWITCH_DECLARE(uint32_t) switch_default_rate(const char *name, uint32_t number);
 
 /*!
  \brief Add user registration
@@ -2440,7 +2529,7 @@ SWITCH_DECLARE(void) switch_close_extra_files(int *keep, int keep_ttl);
 SWITCH_DECLARE(switch_status_t) switch_core_thread_set_cpu_affinity(int cpu);
 SWITCH_DECLARE(void) switch_os_yield(void);
 SWITCH_DECLARE(switch_status_t) switch_core_get_stacksizes(switch_size_t *cur, switch_size_t *max);
-
+SWITCH_DECLARE(void) switch_core_gen_encoded_silence(unsigned char *data, const switch_codec_implementation_t *read_impl, switch_size_t len);
 
 SWITCH_DECLARE(switch_cache_db_handle_type_t) switch_core_dbtype(void);
 SWITCH_DECLARE(void) switch_core_sql_exec(const char *sql);
@@ -2476,6 +2565,17 @@ SWITCH_DECLARE(void) switch_sql_queue_manger_execute_sql_event_callback(switch_s
 							
 SWITCH_DECLARE(pid_t) switch_fork(void);
 
+SWITCH_DECLARE(int) switch_core_gen_certs(const char *prefix);
+SWITCH_DECLARE(int) switch_core_cert_gen_fingerprint(const char *prefix, dtls_fingerprint_t *fp);
+SWITCH_DECLARE(int) switch_core_cert_expand_fingerprint(dtls_fingerprint_t *fp, const char *str);
+SWITCH_DECLARE(int) switch_core_cert_verify(dtls_fingerprint_t *fp);
+SWITCH_DECLARE(switch_status_t) switch_core_session_refresh_video(switch_core_session_t *session);
+
+SWITCH_DECLARE(int) switch_system(const char *cmd, switch_bool_t wait);
+SWITCH_DECLARE(int) switch_stream_system_fork(const char *cmd, switch_stream_handle_t *stream);
+SWITCH_DECLARE(int) switch_stream_system(const char *cmd, switch_stream_handle_t *stream);
+
+
 SWITCH_END_EXTERN_C
 #endif
 /* For Emacs:
@@ -2486,5 +2586,5 @@ SWITCH_END_EXTERN_C
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */

@@ -984,6 +984,11 @@ SWITCH_DECLARE(switch_status_t) switch_thread_create(switch_thread_t ** new_thre
  * The default values come from FreeBSD 4.1.1
  */
 #define SWITCH_INET     AF_INET
+#ifdef AF_INET6
+#define SWITCH_INET6    AF_INET6
+#else
+#define SWITCH_INET6 0
+#endif
 
 /** @def SWITCH_UNSPEC
  * Let the system decide which address family to use
@@ -1449,5 +1454,5 @@ SWITCH_END_EXTERN_C
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */

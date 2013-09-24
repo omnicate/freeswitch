@@ -597,7 +597,9 @@ static void send_disconnect(listener_t *listener, const char *message)
 	} else {
 		switch_snprintf(disco_buf, sizeof(disco_buf), "Content-Type: text/disconnect-notice\nContent-Length: %d\n\n", mlen);
 	}
-	
+
+	if (!listener->sock) return;
+
 	len = strlen(disco_buf);
 	switch_socket_send(listener->sock, disco_buf, &len);
 	if (len > 0) {
@@ -2911,5 +2913,5 @@ SWITCH_MODULE_RUNTIME_FUNCTION(mod_event_socket_runtime)
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */

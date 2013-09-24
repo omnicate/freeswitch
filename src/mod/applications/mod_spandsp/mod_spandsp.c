@@ -577,6 +577,26 @@ switch_status_t load_configuration(switch_bool_t reload)
 						spandsp_globals.disable_v17 = 1;
 					else
 						spandsp_globals.disable_v17 = 0;
+				} else if (!strcmp(name, "enable-colour")) {
+					if (switch_true(value))
+						spandsp_globals.enable_colour_fax = 1;
+					else
+						spandsp_globals.enable_colour_fax = 0;
+				} else if (!strcmp(name, "enable-image-resizing")) {
+					if (switch_true(value))
+						spandsp_globals.enable_image_resizing = 1;
+					else
+						spandsp_globals.enable_image_resizing = 0;
+				} else if (!strcmp(name, "enable-colour-to-bilevel")) {
+					if (switch_true(value))
+						spandsp_globals.enable_colour_to_bilevel = 1;
+					else
+						spandsp_globals.enable_colour_to_bilevel = 0;
+				} else if (!strcmp(name, "enable-grayscale-to-bilevel")) {
+					if (switch_true(value))
+						spandsp_globals.enable_grayscale_to_bilevel = 1;
+					else
+						spandsp_globals.enable_grayscale_to_bilevel = 0;
 				} else if (!strcmp(name, "enable-t38")) {
 					if (switch_true(value)) {
 						spandsp_globals.enable_t38= 1;
@@ -648,7 +668,7 @@ switch_status_t load_configuration(switch_bool_t reload)
 								"Unable to add tone_descriptor: %s, tone: %s.  (too many tones)\n", name, tone_name);
 						switch_goto_status(SWITCH_STATUS_FALSE, done);
 					}
-					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG10, 
+					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG10,
 							"Adding tone_descriptor: %s, tone: %s(%d)\n", name, tone_name, id);
 					/* add elements to tone */
 					for (element = switch_xml_child(tone, "element"); element; element = switch_xml_next(element)) {
@@ -683,7 +703,7 @@ switch_status_t load_configuration(switch_bool_t reload)
 							switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Invalid element param.\n");
 							switch_goto_status(SWITCH_STATUS_FALSE, done);
 						}
-						switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG10, 
+						switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG10,
 								"Adding tone_descriptor: %s, tone: %s(%d), element (%d, %d, %d, %d)\n", name, tone_name, id, freq1, freq2, min, max);
 						tone_descriptor_add_tone_element(descriptor, id, freq1, freq2, min, max);
 					}
@@ -713,7 +733,7 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_spandsp_init)
 	*module_interface = switch_loadable_module_create_module_interface(pool, modname);
 	switch_mutex_init(&spandsp_globals.mutex, SWITCH_MUTEX_NESTED, pool);
 
-	SWITCH_ADD_APP(app_interface, "t38_gateway", "Convert to T38 Gateway if tones are heard", "Convert to T38 Gateway if tones are heard", 
+	SWITCH_ADD_APP(app_interface, "t38_gateway", "Convert to T38 Gateway if tones are heard", "Convert to T38 Gateway if tones are heard",
 				   t38_gateway_function, "", SAF_MEDIA_TAP);
 
 	SWITCH_ADD_APP(app_interface, "rxfax", "FAX Receive Application", "FAX Receive Application", spanfax_rx_function, SPANFAX_RX_USAGE,
@@ -734,7 +754,7 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_spandsp_init)
 
 	SWITCH_ADD_APP(app_interface, "spandsp_send_tdd", "Send TDD data", "Send TDD data", tdd_send_function, "", SAF_NONE);
 
-	SWITCH_ADD_APP(app_interface, "spandsp_start_fax_detect", "start fax detect", "start fax detect", spandsp_fax_detect_session_function, 
+	SWITCH_ADD_APP(app_interface, "spandsp_start_fax_detect", "start fax detect", "start fax detect", spandsp_fax_detect_session_function,
 				   "<app>[ <arg>][ <timeout>][ <tone_type>]", SAF_NONE);
 
 	SWITCH_ADD_APP(app_interface, "spandsp_stop_fax_detect", "stop fax detect", "stop fax detect", spandsp_stop_fax_detect_session_function, "", SAF_NONE);
@@ -752,8 +772,9 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_spandsp_init)
 		SWITCH_ADD_APP(app_interface, "stop_tone_detect", "Stop background tone detection with cadence", "", stop_tone_detect_app, "", SAF_NONE);
 		SWITCH_ADD_API(api_interface, "start_tone_detect", "Start background tone detection with cadence", start_tone_detect_api, "<uuid> <name>");
 		SWITCH_ADD_API(api_interface, "stop_tone_detect", "Stop background tone detection with cadence", stop_tone_detect_api, "<uuid>");
+		switch_console_set_complete("add start_tone_detect ::console::list_uuid");
+		switch_console_set_complete("add stop_tone_detect ::console::list_uuid");
 	}
-
 
 	SWITCH_ADD_API(api_interface, "start_tdd_detect", "Start background tdd detection", start_tdd_detect_api, "<uuid>");
 	SWITCH_ADD_API(api_interface, "stop_tdd_detect", "Stop background tdd detection", stop_tdd_detect_api, "<uuid>");
@@ -811,5 +832,5 @@ SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_spandsp_shutdown)
  * c-basic-offset:4
  * End:
  * For VIM:
- * vim:set softtabstop=4 shiftwidth=4 tabstop=4:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */
