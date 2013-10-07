@@ -64,7 +64,7 @@ void handle_sng_log(uint8_t level, char *fmt,...)
 	va_list	ap;
 
 	va_start(ap, fmt);
-	ret = ftdm_vasprintf(&data, fmt, ap);
+	ret = vasprintf(&data, fmt, ap);
 	if (ret == -1) {
 		goto end;
 	}
