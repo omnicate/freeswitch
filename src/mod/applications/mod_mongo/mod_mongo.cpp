@@ -1,6 +1,6 @@
-/* 
+/*
  * FreeSWITCH Modular Media Switching Software Library / Soft-Switch Application
- * Copyright (C) 2005-2012, Anthony Minessale II <anthm@freeswitch.org>
+ * Copyright (C) 2005-2013, Anthony Minessale II <anthm@freeswitch.org>
  *
  * Version: MPL 1.1
  *
@@ -22,8 +22,9 @@
  * the Initial Developer. All Rights Reserved.
  *
  * Contributor(s):
- * 
+ *
  * Tamas Cseke <cstomi.levlist@gmail.com>
+ * Christopher Rienzo <crienzo@grasshopper.com>
  *
  * mod_mongo.cpp -- API for MongoDB 
  *
@@ -33,7 +34,7 @@
 #include "mod_mongo.h"
 
 #define DELIMITER ';'
-#define FIND_ONE_SYNTAX  "mongo_find_one ns; query; fields"
+#define FIND_ONE_SYNTAX  "mongo_find_one ns; query; fields; options"
 #define MAPREDUCE_SYNTAX "mongo_mapreduce ns; query"
 
 static struct {
@@ -42,6 +43,33 @@ static struct {
 	char *reduce;
 	char *finalize;
 } globals;
+
+static int parse_query_options(char *query_options_str)
+{
+	int query_options = 0;
+	if (strstr(query_options_str, "cursorTailable")) {
+		query_options |= QueryOption_CursorTailable;
+	}
+	if (strstr(query_options_str, "slaveOk")) {
+		query_options |= QueryOption_SlaveOk;
+	}
+	if (strstr(query_options_str, "oplogReplay")) {
+		query_options |= QueryOption_OplogReplay;
+	}
+	if (strstr(query_options_str, "noCursorTimeout")) {
+		query_options |= QueryOption_NoCursorTimeout;
+	}
+	if (strstr(query_options_str, "awaitData")) {
+		query_options |= QueryOption_AwaitData;
+	}
+	if (strstr(query_options_str, "exhaust")) {
+		query_options |= QueryOption_Exhaust;
+	}
+	if (strstr(query_options_str, "partialResults")) {
+		query_options |= QueryOption_PartialResults;
+	}
+	return query_options;
+}
 
 SWITCH_STANDARD_API(mongo_mapreduce_function)
 {
@@ -53,7 +81,7 @@ SWITCH_STANDARD_API(mongo_mapreduce_function)
 	switch_assert(ns != NULL);
 
 	if ((json_query = strchr(ns, DELIMITER))) {
-	  *json_query++ = '\0';
+		*json_query++ = '\0';
 	}
 
 	if (!zstr(ns) && !zstr(json_query)) {
@@ -62,7 +90,7 @@ SWITCH_STANDARD_API(mongo_mapreduce_function)
 			BSONObj out;
 			BSONObjBuilder cmd;
 
-			cmd.append("mapreduce", conn->nsGetCollection(ns));
+			cmd.append("mapreduce", nsGetCollection(ns));
 			if (!zstr(globals.map)) {
 				cmd.appendCode("map", globals.map);
 			}
@@ -79,10 +107,10 @@ SWITCH_STANDARD_API(mongo_mapreduce_function)
 
 			conn = mongo_connection_pool_get(globals.conn_pool);
 			if (conn) {
-				conn->runCommand(conn->nsGetDB(ns), cmd.done(), out);
+				conn->runCommand(nsGetDB(ns), cmd.done(), out);
 				mongo_connection_pool_put(globals.conn_pool, conn, SWITCH_FALSE);
 
-				stream->write_function(stream, "-OK\n%s\n", out.toString().c_str());
+				stream->write_function(stream, "-OK\n%s\n", out.jsonString().c_str());
 			} else {
 				stream->write_function(stream, "-ERR\nNo connection\n");
 			}
@@ -93,7 +121,7 @@ SWITCH_STANDARD_API(mongo_mapreduce_function)
 			stream->write_function(stream, "-ERR\n%s\n", e.toString().c_str());
 		}
 	} else {
-	  stream->write_function(stream, "-ERR\n%s\n", MAPREDUCE_SYNTAX);	  
+		stream->write_function(stream, "-ERR\n%s\n", MAPREDUCE_SYNTAX);	  
 	}
 
 	switch_safe_free(ns);
@@ -101,53 +129,59 @@ SWITCH_STANDARD_API(mongo_mapreduce_function)
 	return status;
 }
 
-
 SWITCH_STANDARD_API(mongo_find_one_function) 
 {
-  switch_status_t status = SWITCH_STATUS_SUCCESS;
-  char *ns = NULL, *json_query = NULL, *json_fields = NULL;
+	switch_status_t status = SWITCH_STATUS_SUCCESS;
+	char *ns = NULL, *json_query = NULL, *json_fields = NULL, *query_options_str = NULL;
+	int query_options = 0;
 
-  ns = strdup(cmd);
-  switch_assert(ns != NULL);
+	ns = strdup(cmd);
+	switch_assert(ns != NULL);
 
-  if ((json_query = strchr(ns, DELIMITER))) {
-	  *json_query++ = '\0';
-	  if ((json_fields = strchr(json_query, DELIMITER))) {
-		  *json_fields++ = '\0';
-	  }
-  }
+	if ((json_query = strchr(ns, DELIMITER))) {
+		*json_query++ = '\0';
+		if ((json_fields = strchr(json_query, DELIMITER))) {
+			*json_fields++ = '\0';
+			if ((query_options_str = strchr(json_fields, DELIMITER))) {
+				*query_options_str++ = '\0';
+				if (!zstr(query_options_str)) {
+					query_options = parse_query_options(query_options_str);
+				}
+			}
+		}
+	}
 
-  if (!zstr(ns) && !zstr(json_query) && !zstr(json_fields)) {
+	if (!zstr(ns) && !zstr(json_query) && !zstr(json_fields)) {
 
-	  DBClientBase *conn = NULL;
+		DBClientBase *conn = NULL;
 
-	  try {
-		  BSONObj query = fromjson(json_query);
-		  BSONObj fields = fromjson(json_fields);
+		try {
+			BSONObj query = fromjson(json_query);
+			BSONObj fields = fromjson(json_fields);
 
-		  conn = mongo_connection_pool_get(globals.conn_pool);
-		  if (conn) {
-			  BSONObj res = conn->findOne(ns, Query(query), &fields);
-			  mongo_connection_pool_put(globals.conn_pool, conn, SWITCH_FALSE);
+			conn = mongo_connection_pool_get(globals.conn_pool);
+			if (conn) {
+				BSONObj res = conn->findOne(ns, Query(query), &fields, query_options);
+				mongo_connection_pool_put(globals.conn_pool, conn, SWITCH_FALSE);
 
-			  stream->write_function(stream, "-OK\n%s\n", res.toString().c_str());
-		  } else {
-			  stream->write_function(stream, "-ERR\nNo connection\n");
-		  }
-	  } catch (DBException &e) {
-		  if (conn) {
-			  mongo_connection_pool_put(globals.conn_pool, conn, SWITCH_TRUE);
-		  }
-		  stream->write_function(stream, "-ERR\n%s\n", e.toString().c_str());
-	  }
+				stream->write_function(stream, "-OK\n%s\n", res.jsonString().c_str());
+			} else {
+				stream->write_function(stream, "-ERR\nNo connection\n");
+			}
+		} catch (DBException &e) {
+			if (conn) {
+				mongo_connection_pool_put(globals.conn_pool, conn, SWITCH_TRUE);
+			}
+			stream->write_function(stream, "-ERR\n%s\n", e.toString().c_str());
+		}
 
-  } else {
+	} else {
 	  stream->write_function(stream, "-ERR\n%s\n", FIND_ONE_SYNTAX);	  
-  }
+	}
 
-  switch_safe_free(ns);
+	switch_safe_free(ns);
 
-  return status;
+	return status;
 }
 
 static switch_status_t config(void)
@@ -214,21 +248,21 @@ SWITCH_MODULE_DEFINITION(mod_mongo, mod_mongo_load, mod_mongo_shutdown, NULL);
 
 SWITCH_MODULE_LOAD_FUNCTION(mod_mongo_load)
 {
-  switch_api_interface_t *api_interface;
-  switch_application_interface_t *app_interface;
+	switch_api_interface_t *api_interface;
+	switch_application_interface_t *app_interface;
 
-  *module_interface = switch_loadable_module_create_module_interface(pool, modname);
+	*module_interface = switch_loadable_module_create_module_interface(pool, modname);
 
-  memset(&globals, 0, sizeof(globals));
+	memset(&globals, 0, sizeof(globals));
 
-  if (config() != SWITCH_STATUS_SUCCESS) {
-	  return SWITCH_STATUS_TERM;
-  }
-  
-  SWITCH_ADD_API(api_interface, "mongo_find_one", "findOne", mongo_find_one_function, FIND_ONE_SYNTAX);
-  SWITCH_ADD_API(api_interface, "mongo_mapreduce", "Map/Reduce", mongo_mapreduce_function, MAPREDUCE_SYNTAX);
+	if (config() != SWITCH_STATUS_SUCCESS) {
+		return SWITCH_STATUS_TERM;
+	}
 
-  return SWITCH_STATUS_SUCCESS;
+	SWITCH_ADD_API(api_interface, "mongo_find_one", "findOne", mongo_find_one_function, FIND_ONE_SYNTAX);
+	SWITCH_ADD_API(api_interface, "mongo_mapreduce", "Map/Reduce", mongo_mapreduce_function, MAPREDUCE_SYNTAX);
+
+	return SWITCH_STATUS_SUCCESS;
 }
 
 SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_mongo_shutdown)

@@ -1659,6 +1659,7 @@ SWITCH_DECLARE(switch_status_t) switch_core_init(switch_core_flag_t flags, switc
 		runtime.console = stdout;
 	}
 
+	SSL_library_init();
 	switch_ssl_init_ssl_locks();
 	switch_curl_init();
 
@@ -1791,6 +1792,7 @@ static void switch_load_core_config(const char *file)
 	switch_core_hash_insert(runtime.ptimes, "ilbc", &d_30);
 	switch_core_hash_insert(runtime.ptimes, "isac", &d_30);
 	switch_core_hash_insert(runtime.ptimes, "G723", &d_30);
+
 
 	if ((xml = switch_xml_open_cfg(file, &cfg, NULL))) {
 		switch_xml_t settings, param;
@@ -1932,7 +1934,19 @@ static void switch_load_core_config(const char *file)
 				} else if (!strcasecmp(var, "enable-monotonic-timing")) {
 					switch_time_set_monotonic(switch_true(val));
 				} else if (!strcasecmp(var, "enable-softtimer-timerfd")) {
-					switch_time_set_timerfd(switch_true(val));
+					int ival = 0;
+					if (val) {
+						if (switch_true(val)) {
+							ival = 2;
+						} else {
+							if (strcasecmp(val, "broadcast")) {
+								ival = 1;
+							} else if (strcasecmp(val, "fd-per-timer")) {
+								ival = 2;
+							}
+						}
+					}
+					switch_time_set_timerfd(ival);
 				} else if (!strcasecmp(var, "enable-clock-nanosleep")) {
 					switch_time_set_nanosleep(switch_true(val));
 				} else if (!strcasecmp(var, "enable-cond-yield")) {
@@ -1964,7 +1978,7 @@ static void switch_load_core_config(const char *file)
 				} else if (!strcasecmp(var, "tipping-point") && !zstr(val)) {
 					runtime.tipping_point = atoi(val);
 				} else if (!strcasecmp(var, "events-use-dispatch") && !zstr(val)) {
-					runtime.events_use_dispatch = 1;
+					runtime.events_use_dispatch = switch_true(val);
 				} else if (!strcasecmp(var, "initial-event-threads") && !zstr(val)) {
 					int tmp;
 
@@ -2086,6 +2100,7 @@ SWITCH_DECLARE(switch_status_t) switch_core_init_and_modload(switch_core_flag_t 
 	}
 
 	runtime.runlevel++;
+	runtime.events_use_dispatch = 1;
 
 	switch_core_set_signal_handlers();
 	switch_load_network_lists(SWITCH_FALSE);
@@ -2611,7 +2626,6 @@ SWITCH_DECLARE(switch_status_t) switch_core_destroy(void)
 		switch_nat_shutdown();
 	}
 	switch_xml_destroy();
-	switch_core_session_uninit();
 	switch_console_shutdown();
 	switch_channel_global_uninit();
 
@@ -2621,6 +2635,7 @@ SWITCH_DECLARE(switch_status_t) switch_core_destroy(void)
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CONSOLE, "Finalizing Shutdown.\n");
 	switch_log_shutdown();
 
+	switch_core_session_uninit();
 	switch_core_unset_variables();
 	switch_core_memory_stop();
 

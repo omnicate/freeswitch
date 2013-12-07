@@ -75,6 +75,10 @@
 #include "spandsp/v27ter_rx.h"
 #include "spandsp/v17tx.h"
 #include "spandsp/v17rx.h"
+#if defined(SPANDSP_SUPPORT_V34)
+#include "spandsp/bitstream.h"
+#include "spandsp/v34.h"
+#endif
 #include "spandsp/super_tone_rx.h"
 #include "spandsp/modem_connect_tones.h"
 #include "spandsp/timezone.h"
@@ -100,6 +104,10 @@
 #include "spandsp/private/silence_gen.h"
 #include "spandsp/private/power_meter.h"
 #include "spandsp/private/fsk.h"
+#if defined(SPANDSP_SUPPORT_V34)
+#include "spandsp/private/bitstream.h"
+#include "spandsp/private/v34.h"
+#endif
 #include "spandsp/private/v17tx.h"
 #include "spandsp/private/v17rx.h"
 #include "spandsp/private/v27ter_tx.h"
@@ -258,7 +266,6 @@ static int set_next_tx_type(t38_gateway_state_t *s)
     int indicator;
     fax_modems_state_t *t;
     t38_gateway_hdlc_state_t *u;
-    int bit_rate;
     int short_train;
     int use_hdlc;
 
@@ -348,20 +355,18 @@ static int set_next_tx_type(t38_gateway_state_t *s)
         break;
     case T38_IND_V27TER_2400_TRAINING:
     case T38_IND_V27TER_4800_TRAINING:
-        bit_rate =
         t->tx_bit_rate = (indicator == T38_IND_V27TER_4800_TRAINING)  ?  4800  :  2400;
         silence_gen_alter(&t->silence_gen, ms_to_samples(75));
-        fax_modems_start_fast_modem(t, FAX_MODEM_V27TER_TX, bit_rate, s->core.short_train, use_hdlc);
+        fax_modems_start_fast_modem(t, FAX_MODEM_V27TER_TX, t->tx_bit_rate, s->core.short_train, use_hdlc);
         fax_modems_set_tx_handler(t, (span_tx_handler_t) &silence_gen, &t->silence_gen);
         fax_modems_set_next_tx_handler(t, (span_tx_handler_t) &v27ter_tx, &t->fast_modems.v27ter_tx);
         fax_modems_set_rx_active(t, true);
         break;
     case T38_IND_V29_7200_TRAINING:
     case T38_IND_V29_9600_TRAINING:
-        bit_rate =
         t->tx_bit_rate = (indicator == T38_IND_V29_9600_TRAINING)  ?  9600  :  7200;
         silence_gen_alter(&t->silence_gen, ms_to_samples(75));
-        fax_modems_start_fast_modem(t, FAX_MODEM_V29_TX, bit_rate, s->core.short_train, use_hdlc);
+        fax_modems_start_fast_modem(t, FAX_MODEM_V29_TX, t->tx_bit_rate, s->core.short_train, use_hdlc);
         fax_modems_set_tx_handler(t, (span_tx_handler_t) &silence_gen, &t->silence_gen);
         fax_modems_set_next_tx_handler(t, (span_tx_handler_t) &v29_tx, &t->fast_modems.v29_tx);
         fax_modems_set_rx_active(t, true);
@@ -379,37 +384,36 @@ static int set_next_tx_type(t38_gateway_state_t *s)
         {
         case T38_IND_V17_7200_SHORT_TRAINING:
             short_train = true;
-            bit_rate = 7200;
+            t->tx_bit_rate = 7200;
             break;
         case T38_IND_V17_7200_LONG_TRAINING:
-            bit_rate = 7200;
+            t->tx_bit_rate = 7200;
             break;
         case T38_IND_V17_9600_SHORT_TRAINING:
             short_train = true;
-            bit_rate = 9600;
+            t->tx_bit_rate = 9600;
             break;
         case T38_IND_V17_9600_LONG_TRAINING:
-            bit_rate = 9600;
+            t->tx_bit_rate = 9600;
             break;
         case T38_IND_V17_12000_SHORT_TRAINING:
             short_train = true;
-            bit_rate = 12000;
+            t->tx_bit_rate = 12000;
             break;
         case T38_IND_V17_12000_LONG_TRAINING:
-            bit_rate = 12000;
+            t->tx_bit_rate = 12000;
             break;
         case T38_IND_V17_14400_SHORT_TRAINING:
             short_train = true;
-            bit_rate = 14400;
+            t->tx_bit_rate = 14400;
             break;
         case T38_IND_V17_14400_LONG_TRAINING:
-            bit_rate = 14400;
+            t->tx_bit_rate = 14400;
             break;
         }
         /*endswitch*/
-        t->tx_bit_rate = bit_rate;
         silence_gen_alter(&t->silence_gen, ms_to_samples(75));
-        fax_modems_start_fast_modem(t, FAX_MODEM_V17_TX, bit_rate, short_train, use_hdlc);
+        fax_modems_start_fast_modem(t, FAX_MODEM_V17_TX, t->tx_bit_rate, short_train, use_hdlc);
         fax_modems_set_tx_handler(t, (span_tx_handler_t) &silence_gen, &t->silence_gen);
         fax_modems_set_next_tx_handler(t, (span_tx_handler_t) &v17_tx, &t->fast_modems.v17_tx);
         fax_modems_set_rx_active(t, true);
@@ -2061,7 +2065,8 @@ SPAN_DECLARE_NONSTD(int) t38_gateway_rx(t38_gateway_state_t *s, int16_t amp[], i
     for (i = 0;  i < len;  i++)
         amp[i] = dc_restore(&s->audio.modems.dc_restore, amp[i]);
     /*endfor*/
-    s->audio.modems.rx_handler(s->audio.modems.rx_user_data, amp, len);
+    if (s->audio.modems.rx_handler)
+        s->audio.modems.rx_handler(s->audio.modems.rx_user_data, amp, len);
     return 0;
 }
 /*- End of function --------------------------------------------------------*/
@@ -2102,12 +2107,13 @@ SPAN_DECLARE_NONSTD(int) t38_gateway_tx(t38_gateway_state_t *s, int16_t amp[], i
 
     required_len = max_len;
 #endif
+    len = 0;
     if ((len = s->audio.modems.tx_handler(s->audio.modems.tx_user_data, amp, max_len)) < max_len)
     {
         if (set_next_tx_type(s))
         {
             /* Give the new handler a chance to file the remaining buffer space */
-            len += s->audio.modems.tx_handler(s->audio.modems.tx_user_data, amp + len, max_len - len);
+            len += s->audio.modems.tx_handler(s->audio.modems.tx_user_data, &amp[len], max_len - len);
             if (len < max_len)
             {
                 silence_gen_set(&s->audio.modems.silence_gen, 0);
@@ -2121,7 +2127,7 @@ SPAN_DECLARE_NONSTD(int) t38_gateway_tx(t38_gateway_state_t *s, int16_t amp[], i
     if (s->audio.modems.transmit_on_idle)
     {
         /* Pad to the requested length with silence */
-        memset(amp + len, 0, (max_len - len)*sizeof(int16_t));
+        memset(&amp[len], 0, (max_len - len)*sizeof(int16_t));
         len = max_len;
     }
     /*endif*/
@@ -2129,7 +2135,7 @@ SPAN_DECLARE_NONSTD(int) t38_gateway_tx(t38_gateway_state_t *s, int16_t amp[], i
     if (s->audio.modems.audio_tx_log >= 0)
     {
         if (len < required_len)
-            memset(amp + len, 0, (required_len - len)*sizeof(int16_t));
+            memset(&amp[len], 0, (required_len - len)*sizeof(int16_t));
         /*endif*/
         write(s->audio.modems.audio_tx_log, amp, required_len*sizeof(int16_t));
     }

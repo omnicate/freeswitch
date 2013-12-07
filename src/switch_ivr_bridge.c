@@ -976,18 +976,12 @@ static switch_status_t sb_on_dtmf(switch_core_session_t *session, const switch_d
 
 static switch_status_t hanguphook(switch_core_session_t *session)
 {
-	switch_core_session_message_t msg = { 0 };
+	switch_core_session_message_t *msg = NULL;
 	switch_channel_t *channel = NULL;
 	switch_event_t *event;
 
 	channel = switch_core_session_get_channel(session);
 
-
-	msg.message_id = SWITCH_MESSAGE_INDICATE_UNBRIDGE;
-	msg.from = __FILE__;
-	msg.string_arg = switch_channel_get_variable(channel, SWITCH_SIGNAL_BRIDGE_VARIABLE);
-
-	
 	if (switch_channel_test_flag(channel, CF_BRIDGE_ORIGINATOR)) {
 		switch_channel_clear_flag_recursive(channel, CF_BRIDGE_ORIGINATOR);
 		if (switch_event_create(&event, SWITCH_EVENT_CHANNEL_UNBRIDGE) == SWITCH_STATUS_SUCCESS) {
@@ -996,8 +990,14 @@ static switch_status_t hanguphook(switch_core_session_t *session)
 		}
 	}
 
+
+	msg = switch_core_session_alloc(session, sizeof(*msg));
+	MESSAGE_STAMP_FFL(msg);
+	msg->message_id = SWITCH_MESSAGE_INDICATE_UNBRIDGE;
+	msg->from = __FILE__;
+	msg->string_arg = switch_channel_get_variable(channel, SWITCH_SIGNAL_BRIDGE_VARIABLE);
+	switch_core_session_queue_message(session, msg);	
 	
-	switch_core_session_receive_message(session, &msg);
 	switch_core_event_hook_remove_state_change(session, hanguphook);
 
 	return SWITCH_STATUS_SUCCESS;
@@ -1122,7 +1122,9 @@ static switch_status_t signal_bridge_on_hangup(switch_core_session_t *session)
 						}
 						switch_channel_hangup(other_channel, switch_channel_get_cause(channel));
 					} else {
-						switch_channel_handle_cause(other_channel, switch_channel_get_cause(channel));
+						if (!switch_channel_test_flag(channel, CF_ANSWERED)) {
+							switch_channel_handle_cause(other_channel, switch_channel_get_cause(channel));
+						}
 						switch_channel_set_state(other_channel, CS_EXECUTE);
 					}
 				} else {
@@ -1691,6 +1693,10 @@ SWITCH_DECLARE(switch_status_t) switch_ivr_uuid_bridge(const char *originator_uu
 					switch_core_session_rwunlock(originatee_session);
 					return SWITCH_STATUS_FALSE;
 				}
+			}
+
+			if (switch_channel_direction(originatee_channel) == SWITCH_CALL_DIRECTION_OUTBOUND && switch_channel_test_flag(originatee_channel, CF_DIALPLAN)) {
+				switch_channel_clear_flag(originatee_channel, CF_DIALPLAN);
 			}
 
 			cleanup_proxy_mode_a(originator_session);

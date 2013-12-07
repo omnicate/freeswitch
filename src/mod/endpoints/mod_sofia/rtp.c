@@ -300,12 +300,12 @@ static switch_status_t channel_on_init(switch_core_session_t *session)
     
     switch_channel_set_state(channel, CS_CONSUME_MEDIA);
     
-    return SWITCH_STATUS_SUCCESS;
+    return SWITCH_STATUS_FALSE;
 }
 
 static switch_status_t channel_on_destroy(switch_core_session_t *session)
 {
-    crtp_private_t *tech_pvt = switch_core_session_get_private(session);
+    crtp_private_t *tech_pvt = NULL;
     
  	if ((tech_pvt = switch_core_session_get_private(session))) {
         
@@ -513,7 +513,7 @@ static switch_status_t channel_receive_event(switch_core_session_t *session, swi
 		}
 
 		switch_rtp_set_default_payload(tech_pvt->rtp_session, pt);
-		switch_rtp_set_recv_pt(tech_pvt->rtp_session, pt);
+		//switch_rtp_set_recv_pt(tech_pvt->rtp_session, pt);
 	}
         
         if (compare_var(event, channel, kRFC2833PT)) {

@@ -752,7 +752,7 @@ switch_status_t sofia_glue_do_invite(switch_core_session_t *session)
 	}
 
 	if (!switch_channel_get_private(tech_pvt->channel, "t38_options") || zstr(tech_pvt->mparams.local_sdp_str)) {
-		switch_core_media_gen_local_sdp(session, NULL, 0, NULL, 0);
+		switch_core_media_gen_local_sdp(session, SDP_TYPE_REQUEST, NULL, 0, NULL, 0);
 	}
 
 	sofia_set_flag_locked(tech_pvt, TFLAG_READY);
@@ -1907,12 +1907,14 @@ int sofia_recover_callback(switch_core_session_t *session)
 								  switch_channel_get_name(channel), use_uuid);
 			}
 		}
-	
-		switch_core_media_recover_session(session);
-	
 	}
 
 	r++;
+
+	if (profile) {
+		sofia_glue_release_profile(profile);
+	}
+
 
 	return r;
 
@@ -2109,6 +2111,7 @@ int sofia_glue_init_sql(sofia_profile_t *profile)
 		"create index sr_orig_server_host on sip_registrations (orig_server_host)",
 		"create index sr_orig_hostname on sip_registrations (orig_hostname)",
 		"create index ss_call_id on sip_subscriptions (call_id)",
+		"create index ss_multi on sip_subscriptions (call_id, profile_name, hostname)",
 		"create index ss_hostname on sip_subscriptions (hostname)",
 		"create index ss_network_ip on sip_subscriptions (network_ip)",
 		"create index ss_sip_user on sip_subscriptions (sip_user)",

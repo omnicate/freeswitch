@@ -144,7 +144,7 @@ struct switch_core_session {
 	int stream_count;
 
 	char uuid_str[SWITCH_UUID_FORMATTED_LENGTH + 1];
-	void *private_info;
+	void *private_info[SWITCH_CORE_SESSION_MAX_PRIVATES];
 	switch_queue_t *event_queue;
 	switch_queue_t *message_queue;
 	switch_queue_t *signal_data_queue;
@@ -178,6 +178,7 @@ struct switch_core_session {
 	switch_size_t recur_buffer_len;
 
 	switch_media_handle_t *media_handle;
+	uint32_t decoder_errors;
 };
 
 struct switch_media_bug {
@@ -290,10 +291,14 @@ struct switch_session_manager {
 	switch_queue_t *thread_queue;
 	switch_thread_t *manager_thread;
 	switch_mutex_t *mutex;
+	switch_thread_cond_t *cond;
+	switch_mutex_t *cond_mutex;
+	switch_mutex_t *cond2_mutex;
 	int ready;
 	int running;
 	int busy;
 	int popping;
+	int starting;
 };
 
 extern struct switch_session_manager session_manager;
