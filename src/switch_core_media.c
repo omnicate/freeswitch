@@ -33,7 +33,6 @@
 #include <switch_ssl.h>
 #include <switch_stun.h>
 #include <switch_nat.h>
-#include <switch_version.h>
 #include "private/switch_core_pvt.h"
 #include <switch_curl.h>
 #include <errno.h>
@@ -3668,8 +3667,11 @@ SWITCH_DECLARE(int) switch_core_media_toggle_hold(switch_core_session_t *session
 					msg = "hold-private";
 				}
 			}
-			
-			switch_rtp_set_flag(a_engine->rtp_session, SWITCH_RTP_FLAG_PAUSE);
+
+			if (a_engine->rtp_session) {
+				switch_rtp_set_flag(a_engine->rtp_session, SWITCH_RTP_FLAG_PAUSE);
+			}
+
 			if (v_engine->rtp_session) {
 				switch_rtp_set_flag(v_engine->rtp_session, SWITCH_RTP_FLAG_PAUSE);
 			}
@@ -3679,7 +3681,7 @@ SWITCH_DECLARE(int) switch_core_media_toggle_hold(switch_core_session_t *session
 			switch_channel_presence(session->channel, "unknown", msg, NULL);
 			changed = 1;
 
-			if (a_engine->max_missed_hold_packets) {
+			if (a_engine->max_missed_hold_packets && a_engine->rtp_session) {
 				switch_rtp_set_max_missed_packets(a_engine->rtp_session, a_engine->max_missed_hold_packets);
 			}
 
@@ -3706,7 +3708,10 @@ SWITCH_DECLARE(int) switch_core_media_toggle_hold(switch_core_session_t *session
 			switch_channel_set_flag(session->channel, CF_PROTO_HOLD);
 			switch_channel_mark_hold(session->channel, SWITCH_TRUE);
 
-			switch_rtp_set_flag(a_engine->rtp_session, SWITCH_RTP_FLAG_PAUSE);
+			if (a_engine->rtp_session) {
+				switch_rtp_set_flag(a_engine->rtp_session, SWITCH_RTP_FLAG_PAUSE);
+			}
+
 			if (v_engine->rtp_session) {
 				switch_rtp_set_flag(v_engine->rtp_session, SWITCH_RTP_FLAG_PAUSE);
 			}
@@ -3721,7 +3726,7 @@ SWITCH_DECLARE(int) switch_core_media_toggle_hold(switch_core_session_t *session
 
 			switch_yield(250000);
 
-			if (a_engine->max_missed_packets) {
+			if (a_engine->max_missed_packets && a_engine->rtp_session) {
 				switch_rtp_reset_media_timer(a_engine->rtp_session);
 				switch_rtp_set_max_missed_packets(a_engine->rtp_session, a_engine->max_missed_packets);
 			}
@@ -6389,7 +6394,7 @@ SWITCH_DECLARE(void) switch_core_media_gen_local_sdp(switch_core_session_t *sess
 				if (switch_media_handle_test_media_flag(smh, SCMF_MULTI_ANSWER_VIDEO)) {
 					switch_mutex_lock(smh->sdp_mutex);
 					for (pmap = v_engine->cur_payload_map; pmap && pmap->allocated; pmap = pmap->next) {
-						if (pmap->pt != v_engine->cur_payload_map->pt) {
+						if (pmap->pt != v_engine->cur_payload_map->pt && pmap->negotiated) {
 							switch_snprintf(buf + strlen(buf), SDPBUFLEN - strlen(buf), "a=rtpmap:%d %s/%ld\n",
 											pmap->pt, pmap->iananame, pmap->rate);
 							

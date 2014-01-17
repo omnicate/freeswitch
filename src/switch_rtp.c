@@ -51,10 +51,9 @@
 #include <datatypes.h>
 #include <srtp.h>
 #include <srtp_priv.h>
-#include <switch_version.h>
 #include <switch_ssl.h>
 
-#define FIR_COUNTDOWN 25
+#define FIR_COUNTDOWN 50
 
 #define READ_INC(rtp_session) switch_mutex_lock(rtp_session->read_mutex); rtp_session->reading++
 #define READ_DEC(rtp_session)  switch_mutex_unlock(rtp_session->read_mutex); rtp_session->reading--
@@ -757,7 +756,7 @@ static switch_status_t ice_out(switch_rtp_t *rtp_session, switch_rtp_ice_t *ice)
 
 		switch_stun_packet_attribute_add_priority(packet, ice->ice_params->cands[ice->ice_params->chosen[ice->proto]][ice->proto].priority);
 
-		switch_snprintf(sw, sizeof(sw), "FreeSWITCH (%s)", SWITCH_VERSION_REVISION_HUMAN);
+		switch_snprintf(sw, sizeof(sw), "FreeSWITCH (%s)", switch_version_revision_human());
 		switch_stun_packet_attribute_add_software(packet, sw, (uint16_t)strlen(sw));
 
 		if ((ice->type & ICE_CONTROLLED)) {
@@ -1015,7 +1014,7 @@ static void handle_ice(switch_rtp_t *rtp_session, switch_rtp_ice_t *ice, void *d
 		}
 	}
 
-	if (ice->missed_count > 5) {
+	if (ice->missed_count > 5 && !(ice->type & ICE_GOOGLE_JINGLE)) {
 		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(rtp_session->session), SWITCH_LOG_WARNING, "missed too many: %d, looking for new ICE dest.\n", 
 						  ice->missed_count);
 		ice->rready = 0;
@@ -1573,11 +1572,11 @@ static int check_rtcp_and_ice(switch_rtp_t *rtp_session)
 
 
 	if (rtp_session->fir_countdown) {
-		if (rtp_session->fir_countdown == FIR_COUNTDOWN) {
-			do_flush(rtp_session, SWITCH_TRUE);
-		}
+		//if (rtp_session->fir_countdown == FIR_COUNTDOWN) {
+		//	do_flush(rtp_session, SWITCH_TRUE);
+		//}
 
-		if (rtp_session->fir_countdown == FIR_COUNTDOWN || rtp_session->fir_countdown == 1) {
+		if (rtp_session->fir_countdown == FIR_COUNTDOWN || (rtp_session->fir_countdown == FIR_COUNTDOWN / 2) || rtp_session->fir_countdown == 1) {
 			if (rtp_session->flags[SWITCH_RTP_FLAG_PLI]) {
 				send_pli(rtp_session);
 			} else {
@@ -3449,6 +3448,7 @@ SWITCH_DECLARE(switch_status_t) switch_rtp_activate_ice(switch_rtp_t *rtp_sessio
 	if ((type & ICE_VANILLA)) {
 		switch_snprintf(ice_user, sizeof(ice_user), "%s:%s", login, rlogin);
 		switch_snprintf(user_ice, sizeof(user_ice), "%s:%s", rlogin, login);
+		ice->ready = ice->rready = 0;
 	} else {
 		switch_snprintf(ice_user, sizeof(ice_user), "%s%s", login, rlogin);
 		switch_snprintf(user_ice, sizeof(user_ice), "%s%s", rlogin, login);
@@ -3461,8 +3461,6 @@ SWITCH_DECLARE(switch_status_t) switch_rtp_activate_ice(switch_rtp_t *rtp_sessio
 	ice->ice_params = ice_params;
 	ice->pass = "";
 	ice->rpass = "";
-	ice->ready = 0;
-	ice->rready = 0;
 	ice->next_run = switch_micro_time_now();
 
 	if (password) {
@@ -4354,7 +4352,7 @@ static switch_status_t read_rtp_packet(switch_rtp_t *rtp_session, switch_size_t 
 		rtp_session->last_flush_packet_count = rtp_session->stats.inbound.flush_packet_count;
 		
 		
-		if (rtp_session->flags[SWITCH_RTP_FLAG_VIDEO] && now - rtp_session->last_read_time > 500000) {
+		if (rtp_session->flags[SWITCH_RTP_FLAG_VIDEO] && now - rtp_session->last_read_time > 5000000) {
 			switch_rtp_video_refresh(rtp_session);
 		}
 
@@ -5772,11 +5770,11 @@ static int rtp_common_write(switch_rtp_t *rtp_session,
 				rtp_session->ts_norm.delta_percent = (double)((double)rtp_session->ts_norm.delta / (double)rtp_session->ts_norm.delta_avg) * 100.0f;
 
 
-				if (rtp_session->ts_norm.delta_ct > 50 && rtp_session->ts_norm.delta_percent > 150.0) {
+				//if (rtp_session->ts_norm.delta_ct > 50 && rtp_session->ts_norm.delta_percent > 150.0) {
 					//printf("%s diff %d %d (%.2f)\n", switch_core_session_get_name(rtp_session->session),
 					//rtp_session->ts_norm.delta, rtp_session->ts_norm.delta_avg, rtp_session->ts_norm.delta_percent);
-					switch_rtp_video_refresh(rtp_session);
-				}
+					//switch_rtp_video_refresh(rtp_session);
+					//}
 			}
 			rtp_session->ts_norm.ts += rtp_session->ts_norm.delta;
 		}
