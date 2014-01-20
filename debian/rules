@@ -2,7 +2,8 @@
 # -*- mode:makefile -*-
 ##### Author: Travis Cross <tc@traviscross.com>
 
-#export DH_VERBOSE=1
+export DH_VERBOSE=1
+export VERBOSE=1
 
 FS_CC?=gcc
 FS_CXX?=g++
@@ -78,7 +79,8 @@ override_dh_auto_clean:
 		--with-grammardir=/usr/share/freeswitch/grammar \
 		--with-certsdir=/etc/freeswitch/tls \
 		--with-scriptdir=/usr/share/freeswitch/scripts \
-		--with-recordingsdir=/var/lib/freeswitch/recordings
+		--with-recordingsdir=/var/lib/freeswitch/recordings \
+		--enable-static-v8
 	touch $@
 
 override_dh_auto_configure: .stamp-configure
