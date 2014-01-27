@@ -4626,7 +4626,7 @@ void sofia_presence_handle_sip_i_message(int status,
 				auth_res = sofia_reg_parse_auth(profile, authorization, sip, de,
 												(char *) sip->sip_request->rq_method_name, key, keylen, network_ip, NULL, 0,
 												REG_INVITE, NULL, NULL, NULL, NULL);
-			} else if ( sofia_reg_handle_register(nua, profile, nh, sip, de, REG_INVITE, key, keylen, &v_event, NULL, NULL, NULL)) {
+			} else if ( sofia_reg_handle_register(nua, profile, nh, sip, de, REG_INVITE, key, (uint32_t)keylen, &v_event, NULL, NULL, NULL)) {
 				if (v_event) {
 					switch_event_destroy(&v_event);
 				}
@@ -4783,7 +4783,11 @@ void sofia_presence_handle_sip_i_message(int status,
 
  end:
 
-	nua_respond(nh, SIP_202_ACCEPTED, NUTAG_WITH_THIS_MSG(de->data->e_msg), TAG_END());
+	if (sofia_test_pflag(profile, PFLAG_MESSAGES_RESPOND_200_OK)) {
+		nua_respond(nh, SIP_200_OK, NUTAG_WITH_THIS_MSG(de->data->e_msg), TAG_END());
+	} else {
+		nua_respond(nh, SIP_202_ACCEPTED, NUTAG_WITH_THIS_MSG(de->data->e_msg), TAG_END());
+	}
 
 }
 

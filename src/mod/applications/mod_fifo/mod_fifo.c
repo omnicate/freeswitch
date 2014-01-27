@@ -313,6 +313,7 @@ struct fifo_node {
 	int ring_timeout;
 	int default_lag;
 	char *domain_name;
+	int retry_delay;
 	struct fifo_node *next;
 };
 
@@ -1576,7 +1577,7 @@ static void *SWITCH_THREAD_FUNC ringall_thread_run(switch_thread_t *thread, void
 											   "outbound_fail_count=outbound_fail_count+1, "
 											   "outbound_fail_total_count = outbound_fail_total_count+1, "
 											   "next_avail=%ld + lag + 1 where uuid='%q' and ring_count > 0",
-											   (long) switch_epoch_time_now(NULL), h->uuid);
+											   (long) switch_epoch_time_now(NULL) + node->retry_delay, h->uuid);
 					fifo_execute_sql_queued(&sql, SWITCH_TRUE, SWITCH_TRUE);
 
 				}
@@ -1720,15 +1721,15 @@ static void *SWITCH_THREAD_FUNC o_thread_run(switch_thread_t *thread, void *obj)
 
 	expanded_originate_string = switch_event_expand_headers(ovars, h->originate_string);
 
-	if (switch_stristr("origination_caller", expanded_originate_string)) {
+	if (node && switch_stristr("origination_caller", expanded_originate_string)) {
 		originate_string = switch_mprintf("{execute_on_answer='unset fifo_hangup_check',fifo_name='%q',fifo_hangup_check='%q'}%s",
 										  node->name, node->name, expanded_originate_string);
 	} else {
-		if (!zstr(node->outbound_name)) {
+		if (node && !zstr(node->outbound_name)) {
 			originate_string = switch_mprintf("{execute_on_answer='unset fifo_hangup_check',fifo_name='%q',fifo_hangup_check='%q',"
 											  "origination_caller_id_name=Queue,origination_caller_id_number='Queue: %q'}%s",
 											  node->name, node->name,  node->outbound_name, expanded_originate_string);
-		} else {
+		} else if (node) {
 			originate_string = switch_mprintf("{execute_on_answer='unset fifo_hangup_check',fifo_name='%q',fifo_hangup_check='%q',"
 											  "origination_caller_id_name=Queue,origination_caller_id_number='Queue: %q'}%s",
 											  node->name, node->name,  node->name, expanded_originate_string);
@@ -1737,7 +1738,7 @@ static void *SWITCH_THREAD_FUNC o_thread_run(switch_thread_t *thread, void *obj)
 	}
 
 	if (switch_event_create_subclass(&event, SWITCH_EVENT_CUSTOM, FIFO_EVENT) == SWITCH_STATUS_SUCCESS) {
-		switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "FIFO-Name", node->name);
+		switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "FIFO-Name", node ? node->name : "");
 		switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "FIFO-Action", "pre-dial");
 		switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "FIFO-Outbound-UUID", h->uuid);
 		switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "outbound-strategy", "enterprise");
@@ -1755,11 +1756,11 @@ static void *SWITCH_THREAD_FUNC o_thread_run(switch_thread_t *thread, void *obj)
 
 		sql = switch_mprintf("update fifo_outbound set ring_count=ring_count-1, "
 							 "outbound_fail_count=outbound_fail_count+1, next_avail=%ld + lag + 1 where uuid='%q'",
-							 (long) switch_epoch_time_now(NULL), h->uuid);
+							 (long) switch_epoch_time_now(NULL) + node->retry_delay, h->uuid);
 		fifo_execute_sql_queued(&sql, SWITCH_TRUE, SWITCH_TRUE);
 
 		if (switch_event_create_subclass(&event, SWITCH_EVENT_CUSTOM, FIFO_EVENT) == SWITCH_STATUS_SUCCESS) {
-			switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "FIFO-Name", node->name);
+			switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "FIFO-Name", node ? node->name : "");
 			switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "FIFO-Action", "post-dial");
 			switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "FIFO-Outbound-UUID", h->uuid);
 			switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "outbound-strategy", "enterprise");
@@ -1776,7 +1777,7 @@ static void *SWITCH_THREAD_FUNC o_thread_run(switch_thread_t *thread, void *obj)
 
 	if (switch_event_create_subclass(&event, SWITCH_EVENT_CUSTOM, FIFO_EVENT) == SWITCH_STATUS_SUCCESS) {
 		switch_channel_event_set_data(channel, event);
-		switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "FIFO-Name", node->name);
+		switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "FIFO-Name", node ? node->name : "");
 		switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "FIFO-Action", "post-dial");
 		switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "FIFO-Outbound-UUID", h->uuid);
 		switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "outbound-strategy", "enterprise");
@@ -4435,6 +4436,16 @@ static switch_status_t load_config(int reload, int del_all)
 					outbound_per_cycle = 1;
 				}
 				node->has_outbound = 1;
+			}
+
+			if ((val = switch_xml_attr(fifo, "retry_delay"))) {
+				int tmp;
+
+				if ((tmp = atoi(val)) < 0) {
+					tmp = 0;
+				}
+
+				node->retry_delay = tmp;
 			}
 
 			if ((val = switch_xml_attr(fifo, "outbound_priority"))) {

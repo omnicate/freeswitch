@@ -817,7 +817,7 @@ static void handle_ice(switch_rtp_t *rtp_session, switch_rtp_ice_t *ice, void *d
 
 	
 	memcpy(buf, data, cpylen);
-	packet = switch_stun_packet_parse(buf, cpylen);
+	packet = switch_stun_packet_parse(buf, (uint32_t)cpylen);
 	if (!packet) {
 		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(rtp_session->session), SWITCH_LOG_ERROR, "Invalid STUN/ICE packet received %ld %d\n", (long)cpylen, *(uint8_t *) data);
 		goto end;
@@ -1587,7 +1587,7 @@ static int check_rtcp_and_ice(switch_rtp_t *rtp_session)
 		rtp_session->fir_countdown--;
 	}
 
-	if (rtp_session->flags[SWITCH_RTP_FLAG_AUTO_CNG] && rtp_session->send_msg.header.ts &&
+	if (rtp_session->flags[SWITCH_RTP_FLAG_AUTO_CNG] && rtp_session->send_msg.header.ts && rtp_session->cng_pt &&
 		rtp_session->timer.samplecount >= (rtp_session->last_write_samplecount + (rtp_session->samples_per_interval * 60))) {
 		uint8_t data[10] = { 0 };
 		switch_frame_flag_t frame_flags = SFF_NONE;
@@ -1676,7 +1676,7 @@ static int check_rtcp_and_ice(switch_rtp_t *rtp_session)
 			str_cname = switch_get_addr(bufa, sizeof(bufa), rtp_session->rtcp_local_addr);
 
 			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG10, "Setting RTCP src-1 to %s\n", str_cname);
-			sr->sr_desc_ssrc.length = strlen(str_cname);
+			sr->sr_desc_ssrc.length = (unsigned int)strlen(str_cname);
 			memcpy ((char*)sr->sr_desc_ssrc.text, str_cname, strlen(str_cname));
 		}
 
@@ -1869,7 +1869,7 @@ SWITCH_DECLARE(switch_port_t) switch_rtp_request_port(const char *ip)
 	switch_mutex_lock(port_lock);
 	alloc = switch_core_hash_find(alloc_hash, ip);
 	if (!alloc) {
-		if (switch_core_port_allocator_new(START_PORT, END_PORT, SPF_EVEN, &alloc) != SWITCH_STATUS_SUCCESS) {
+		if (switch_core_port_allocator_new(ip, START_PORT, END_PORT, SPF_EVEN, &alloc) != SWITCH_STATUS_SUCCESS) {
 			abort();
 		}
 
@@ -2504,7 +2504,7 @@ static int do_dtls(switch_rtp_t *rtp_session, switch_dtls_t *dtls)
 		//	
 		//}
 
-		if ((ret = BIO_write(dtls->read_bio, dtls->data, dtls->bytes)) != (int)dtls->bytes) {
+		if ((ret = BIO_write(dtls->read_bio, dtls->data, (int)dtls->bytes)) != (int)dtls->bytes) {
 			ret = SSL_get_error(dtls->ssl, ret);
 			switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(rtp_session->session), SWITCH_LOG_ERROR, "%s DTLS packet read err %d\n", rtp_type(rtp_session), ret);
 			dtls_set_state(dtls, DS_FAIL);
@@ -2512,7 +2512,7 @@ static int do_dtls(switch_rtp_t *rtp_session, switch_dtls_t *dtls)
 		}
 	}
 
-	if (SSL_read(dtls->ssl, dtls->data, dtls->bytes) == (int)dtls->bytes) {
+	if (SSL_read(dtls->ssl, dtls->data, (int)dtls->bytes) == (int)dtls->bytes) {
 		if (BIO_reset(dtls->read_bio));
 	}
 
@@ -5639,6 +5639,26 @@ SWITCH_DECLARE(switch_status_t) switch_rtp_zerocopy_read(switch_rtp_t *rtp_sessi
 	return SWITCH_STATUS_SUCCESS;
 }
 
+static int rtp_write_ready(switch_rtp_t *rtp_session, uint32_t bytes, int line)
+{
+	if (rtp_session->ice.ice_user && !(rtp_session->ice.rready)) {
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG1, "Skip sending %s packet %ld bytes (ice not ready @ line %d!)\n", 
+						  rtp_type(rtp_session), (long)bytes, line);
+		return 0;
+	}
+
+	if (rtp_session->dtls && rtp_session->dtls->state != DS_READY) {
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG1, "Skip sending %s packet %ld bytes (dtls not ready @ line %d!)\n", 
+						  rtp_type(rtp_session), (long)bytes, line);
+		return 0;
+	}
+	
+	return 1;
+}
+
+
+
+
 static int rtp_common_write(switch_rtp_t *rtp_session,
 							rtp_msg_t *send_msg, void *data, uint32_t datalen, switch_payload_t payload, uint32_t timestamp, switch_frame_flag_t *flags)
 {
@@ -5650,7 +5670,11 @@ static int rtp_common_write(switch_rtp_t *rtp_session,
 	uint8_t m = 0;
 
 	if (!switch_rtp_ready(rtp_session)) {
-		return SWITCH_STATUS_FALSE;
+		return -1;
+	}
+
+	if (!rtp_write_ready(rtp_session, datalen, __LINE__)) {
+		return 0;
 	}
 
 	WRITE_INC(rtp_session);
@@ -5918,16 +5942,6 @@ static int rtp_common_write(switch_rtp_t *rtp_session,
 		}
 	}
 
-	if (rtp_session->ice.ice_user && !(rtp_session->ice.rready)) {
-		send = 0;
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG1, "Skip sending %s packet %ld bytes (ice not ready!)\n", rtp_type(rtp_session), (long)bytes);
-	}
-
-	if (rtp_session->dtls && rtp_session->dtls->state != DS_READY) {
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG1, "Skip sending %s packet %ld bytes (dtls not ready!)\n", rtp_type(rtp_session), (long)bytes);
-		send = 0;
-	}
-
 	if (rtp_session->flags[SWITCH_RTP_FLAG_PAUSE]) {
 		send = 0;
 	}
@@ -6148,6 +6162,10 @@ SWITCH_DECLARE(int) switch_rtp_write_frame(switch_rtp_t *rtp_session, switch_fra
 	if (!switch_rtp_ready(rtp_session) || !rtp_session->remote_addr) {
 		return -1;
 	}
+
+	if (!rtp_write_ready(rtp_session, frame->datalen, __LINE__)) {
+		return 0;
+	}
 	
 	//if (rtp_session->flags[SWITCH_RTP_FLAG_VIDEO]) {
 	//	rtp_session->flags[SWITCH_RTP_FLAG_DEBUG_RTP_READ]++;
@@ -6337,6 +6355,10 @@ SWITCH_DECLARE(int) switch_rtp_write_manual(switch_rtp_t *rtp_session,
 
 	if (!switch_rtp_ready(rtp_session) || !rtp_session->remote_addr || datalen > SWITCH_RTP_MAX_BUF_LEN) {
 		return -1;
+	}
+
+	if (!rtp_write_ready(rtp_session, datalen, __LINE__)) {
+		return 0;
 	}
 
 	WRITE_INC(rtp_session);
