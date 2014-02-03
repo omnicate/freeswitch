@@ -1116,6 +1116,11 @@ SWITCH_DECLARE(void) switch_core_session_check_outgoing_crypto(switch_core_sessi
 	switch_snprintf(var_val, sizeof(var_val), "%" SWITCH_SIZE_T_FMT, _i); \
 	switch_channel_set_variable(channel, var_name, var_val)
 
+#define add_stat_double(_i, _s)												\
+	switch_snprintf(var_name, sizeof(var_name), "rtp_%s_%s", switch_str_nil(prefix), _s) ; \
+	switch_snprintf(var_val, sizeof(var_val), "%0.2f", _i); \
+	switch_channel_set_variable(channel, var_name, var_val)
+
 static void set_stats(switch_core_session_t *session, switch_media_type_t type, const char *prefix)
 {
 	switch_rtp_stats_t *stats = switch_core_media_get_stats(session, type, NULL);
@@ -1124,17 +1129,27 @@ static void set_stats(switch_core_session_t *session, switch_media_type_t type, 
 	char var_name[256] = "", var_val[35] = "";
 
 	if (stats) {
+		stats->inbound.std_deviation = sqrt(stats->inbound.variance);
 
 		add_stat(stats->inbound.raw_bytes, "in_raw_bytes");
 		add_stat(stats->inbound.media_bytes, "in_media_bytes");
 		add_stat(stats->inbound.packet_count, "in_packet_count");
 		add_stat(stats->inbound.media_packet_count, "in_media_packet_count");
 		add_stat(stats->inbound.skip_packet_count, "in_skip_packet_count");
-		add_stat(stats->inbound.jb_packet_count, "in_jb_packet_count");
+		add_stat(stats->inbound.jb_packet_count, "in_jitter_packet_count");
 		add_stat(stats->inbound.dtmf_packet_count, "in_dtmf_packet_count");
 		add_stat(stats->inbound.cng_packet_count, "in_cng_packet_count");
 		add_stat(stats->inbound.flush_packet_count, "in_flush_packet_count");
 		add_stat(stats->inbound.largest_jb_size, "in_largest_jb_size");
+		add_stat_double(stats->inbound.min_variance, "in_jitter_min_variance");
+		add_stat_double(stats->inbound.max_variance, "in_jitter_max_variance");
+		add_stat_double(stats->inbound.lossrate, "in_jitter_loss_rate");
+		add_stat_double(stats->inbound.burstrate, "in_jitter_burst_rate");
+		add_stat_double(stats->inbound.mean_interval, "in_mean_interval");
+		add_stat(stats->inbound.flaws, "in_flaw_total");
+		add_stat_double(stats->inbound.R, "in_quality_percentage");
+		add_stat_double(stats->inbound.mos, "in_mos");
+
 
 		add_stat(stats->outbound.raw_bytes, "out_raw_bytes");
 		add_stat(stats->outbound.media_bytes, "out_media_bytes");
@@ -1334,7 +1349,7 @@ SWITCH_DECLARE(void) switch_core_media_prepare_codecs(switch_core_session_t *ses
 		return;
 	}
 
-	if (switch_channel_test_flag(session->channel, CF_PROXY_MODE) || switch_channel_test_flag(session->channel, CF_PROXY_MEDIA)) {
+	if (!force && (switch_channel_test_flag(session->channel, CF_PROXY_MODE) || switch_channel_test_flag(session->channel, CF_PROXY_MEDIA))) {
 		return;
 	}
 
@@ -1712,7 +1727,7 @@ SWITCH_DECLARE(switch_status_t) switch_core_media_read_frame(switch_core_session
 					/* search for payload type */
 					switch_mutex_lock(smh->sdp_mutex);
 					for (pmap = engine->payload_map; pmap; pmap = pmap->next) {
-						if (engine->read_frame.payload == pmap->recv_pt) {
+						if (engine->read_frame.payload == pmap->recv_pt && pmap->negotiated) {
 							engine->cur_payload_map = pmap;
 
 							switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_WARNING,
@@ -2657,7 +2672,7 @@ static void clear_pmaps(switch_rtp_engine_t *engine)
 {
 	payload_map_t *pmap;
 
-	for (pmap = engine->cur_payload_map; pmap && pmap->allocated; pmap = pmap->next) {
+	for (pmap = engine->payload_map; pmap && pmap->allocated; pmap = pmap->next) {
 		pmap->negotiated = 0;
 	}
 }
@@ -5470,7 +5485,6 @@ static void generate_m(switch_core_session_t *session, char *buf, size_t buflen,
 			already_did[smh->ianacodes[i]] = 1;
 		}
 
-		
 		rate = imp->samples_per_second;
 
 		if (map) {
@@ -5838,6 +5852,10 @@ SWITCH_DECLARE(void) switch_core_media_gen_local_sdp(switch_core_session_t *sess
 
 		smh->payload_space = 98;
 
+		for (i = 0; i < smh->mparams->num_codecs; i++) {
+			smh->ianacodes[i] = smh->codecs[i]->ianacode;
+		}
+		
 		if (sdp_type == SDP_TYPE_REQUEST) {
 			switch_core_session_t *orig_session = NULL;
 
@@ -5848,7 +5866,7 @@ SWITCH_DECLARE(void) switch_core_media_gen_local_sdp(switch_core_session_t *sess
 				switch_payload_t orig_pt = 0;
 				char *orig_fmtp = NULL;
 
-				smh->ianacodes[i] = imp->ianacode;
+				//smh->ianacodes[i] = imp->ianacode;
 				
 				if (smh->ianacodes[i] > 64) {
 					if (smh->mparams->dtmf_type == DTMF_2833 && smh->mparams->te > 95 && smh->mparams->te == smh->payload_space) {
@@ -5896,7 +5914,9 @@ SWITCH_DECLARE(void) switch_core_media_gen_local_sdp(switch_core_session_t *sess
 		fmtp_out = fmtp_out_var;
 	}
 
-	if ((val = switch_channel_get_variable(session->channel, "verbose_sdp")) && switch_true(val)) {
+	val = switch_channel_get_variable(session->channel, "verbose_sdp");
+
+	if (!val || switch_true(val)) {
 		switch_channel_set_flag(session->channel, CF_VERBOSE_SDP);
 	}
 
@@ -7464,6 +7484,7 @@ SWITCH_DECLARE(switch_status_t) switch_core_media_receive_message(switch_core_se
 			switch_channel_set_flag(session->channel, CF_PROXY_MODE);
 
 			a_engine->codec_negotiated = 0;
+			v_engine->codec_negotiated = 0;
 
 			switch_core_media_set_local_sdp(session, NULL, SWITCH_FALSE);
 
@@ -7478,7 +7499,11 @@ SWITCH_DECLARE(switch_status_t) switch_core_media_receive_message(switch_core_se
 				ip = switch_channel_get_variable(other_channel, SWITCH_REMOTE_MEDIA_IP_VARIABLE);
 				port = switch_channel_get_variable(other_channel, SWITCH_REMOTE_MEDIA_PORT_VARIABLE);
 				switch_core_session_rwunlock(other_session);
+
 				if (ip && port) {
+					switch_core_media_prepare_codecs(session, 1);
+					clear_pmaps(a_engine);
+					clear_pmaps(v_engine);
 					switch_core_media_gen_local_sdp(session, SDP_TYPE_REQUEST, ip, (switch_port_t)atoi(port), NULL, 1);
 				}
 			}

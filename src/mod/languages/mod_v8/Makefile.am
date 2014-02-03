@@ -90,7 +90,8 @@ mod_v8_la_SOURCES  = \
 	src/fssocket.cpp \
 	src/fsteletone.cpp \
 	src/fsxml.cpp \
-	src/fsfile.cpp
+	src/fsfile.cpp \
+	src/fseventhandler.cpp
 
 mod_v8_la_CFLAGS   = $(AM_CFLAGS) $(LIBCURL_CPPFLAGS) -I$(switch_srcdir)/libs/libteletone/src
 mod_v8_la_CPPFLAGS = $(AM_CPPFLAGS) $(LIBCURL_CPPFLAGS) -I$(switch_srcdir)/libs/libteletone/src
@@ -121,7 +122,9 @@ $(V8LIB): $(V8_DIR)
 	      fi; \
 	   fi; \
 	fi; \
-	cd $(V8_BUILDDIR) && CFLAGS="$(V8_CXXFLAGS)" CXXFLAGS="$(V8_CXXFLAGS)" GYPFLAGS="--no-parallel" GYP_DEFINES="$$defines" $(MAKE) $(V8_BUILDPARAMS) native
+	cd $(V8_BUILDDIR) && CFLAGS="$(V8_CXXFLAGS)" CXXFLAGS="$(V8_CXXFLAGS)" \
+	GYPFLAGS="--no-parallel" GYP_DEFINES="$$defines" \
+	PYTHONPATH="$(V8_BUILDDIR)/build/gyp/pylib:$(PYTHONPATH)" $(MAKE) $(V8_BUILDPARAMS) native
 
 $(CURLLA):
 	@cd $(CURL_BUILDDIR) && $(MAKE)

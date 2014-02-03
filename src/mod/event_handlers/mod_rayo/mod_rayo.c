@@ -993,12 +993,17 @@ static void rayo_call_cleanup(struct rayo_actor *actor)
 		iks_insert(end, RAYO_END_REASON_HANGUP_LOCAL);
 	} else {
 		/* remote hangup... translate to specific rayo reason */
+		iks *reason;
 		switch_call_cause_t cause = SWITCH_CAUSE_NONE;
 		char *cause_str = switch_event_get_header(event, "variable_hangup_cause");
+		char *cause_q850_str = switch_event_get_header(event, "variable_hangup_cause_q850");
 		if (cause_str) {
 			cause = switch_channel_str2cause(cause_str);
 		}
-		iks_insert(end, switch_cause_to_rayo_cause(cause));
+		reason = iks_insert(end, switch_cause_to_rayo_cause(cause));
+		if (!zstr(cause_q850_str)) {
+			iks_insert_attrib(reason, "platform-code", cause_q850_str);
+		}
 	}
 
 	#if 0
@@ -1616,16 +1621,35 @@ void rayo_server_send(struct rayo_actor *server, struct rayo_message *msg)
 void rayo_call_send(struct rayo_actor *call, struct rayo_message *msg)
 {
 	rayo_actor_xmpp_handler handler = NULL;
-	iks *iq = msg->payload;
+	iks *stanza = msg->payload;
 	switch_core_session_t *session;
 	iks *response = NULL;
+
+	if (!strcmp("message", iks_name(stanza))) {
+		char *type = iks_find_attrib(stanza, "type");
+
+		if (!strcmp("normal", type)) {
+			switch_event_t *event;
+
+			if (switch_event_create(&event, SWITCH_EVENT_SEND_MESSAGE) == SWITCH_STATUS_SUCCESS) {
+				switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "content-type", "text/plain");
+				switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "uuid", rayo_call_get_uuid(RAYO_CALL(call)));
+				switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "subject", iks_find_cdata(stanza, "subject"));
+				switch_event_add_body(event, iks_find_cdata(stanza, "body"));
+				switch_event_fire(&event);
+			}
+		} else if (!msg->is_reply) {
+			RAYO_SEND_REPLY(call, msg->from_jid, iks_new_error(stanza, STANZA_ERROR_FEATURE_NOT_IMPLEMENTED));
+		}
+		return;
+	}
 
 	/* is this a command a call supports? */
 	handler = rayo_actor_command_handler_find(call, msg);
 	if (!handler) {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "%s, no handler function for command\n", RAYO_JID(call));
 		if (!msg->is_reply) {
-			RAYO_SEND_REPLY(call, msg->from_jid, iks_new_error(iq, STANZA_ERROR_FEATURE_NOT_IMPLEMENTED));
+			RAYO_SEND_REPLY(call, msg->from_jid, iks_new_error(stanza, STANZA_ERROR_FEATURE_NOT_IMPLEMENTED));
 		}
 		return;
 	}
@@ -1635,7 +1659,7 @@ void rayo_call_send(struct rayo_actor *call, struct rayo_message *msg)
 	if (!session) {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "%s, session not found\n", RAYO_JID(call));
 		if (!msg->is_reply) {
-			RAYO_SEND_REPLY(call, msg->from_jid, iks_new_error(iq, STANZA_ERROR_ITEM_NOT_FOUND));
+			RAYO_SEND_REPLY(call, msg->from_jid, iks_new_error(stanza, STANZA_ERROR_ITEM_NOT_FOUND));
 		}
 		return;
 	}
@@ -1814,22 +1838,33 @@ static iks *on_rayo_redirect(struct rayo_actor *call, struct rayo_message *msg, 
 {
 	iks *node = msg->payload;
 	switch_core_session_t *session = (switch_core_session_t *)session_data;
+	switch_channel_t *channel = switch_core_session_get_channel(session);
 	iks *response = NULL;
 	iks *redirect = iks_find(node, "redirect");
 	char *redirect_to = iks_find_attrib(redirect, "to");
 
 	if (zstr(redirect_to)) {
 		response = iks_new_error_detailed(node, STANZA_ERROR_BAD_REQUEST, "Missing redirect to attrib");
-	} else {
+	} else if (switch_channel_test_flag(channel, CF_ANSWERED)) {
+		/* call is answered- must deflect */
 		switch_core_session_message_t msg = { 0 };
-		add_signaling_headers(session, redirect, RAYO_SIP_RESPONSE_HEADER);
-
-		/* Tell the channel to deflect the call */
+		add_signaling_headers(session, redirect, RAYO_SIP_REQUEST_HEADER);
 		msg.from = __FILE__;
 		msg.string_arg = switch_core_session_strdup(session, redirect_to);
 		msg.message_id = SWITCH_MESSAGE_INDICATE_DEFLECT;
 		switch_core_session_receive_message(session, &msg);
 		response = iks_new_iq_result(node);
+	} else if (switch_channel_direction(channel) == SWITCH_CALL_DIRECTION_INBOUND) {
+		/* Inbound call not answered - redirect */
+		switch_core_session_message_t msg = { 0 };
+		add_signaling_headers(session, redirect, RAYO_SIP_RESPONSE_HEADER);
+		msg.from = __FILE__;
+		msg.string_arg = switch_core_session_strdup(session, redirect_to);
+		msg.message_id = SWITCH_MESSAGE_INDICATE_REDIRECT;
+		switch_core_session_receive_message(session, &msg);
+		response = iks_new_iq_result(node);
+	} else {
+		response = iks_new_error_detailed(node, STANZA_ERROR_UNEXPECTED_REQUEST, "Call must be answered");
 	}
 	return response;
 }
@@ -3971,14 +4006,14 @@ static int alias_api(struct rayo_cmd_alias *alias, char *args, switch_stream_han
 /**
  * Send message from console
  */
-static void send_console_message(struct rayo_client *client, const char *to, const char *message_str)
+static void send_console_message(struct rayo_client *client, const char *to, const char *type, const char *message_str)
 {
 	iks *message = NULL, *x;
 	message = iks_new("message");
 	iks_insert_attrib(message, "to", to);
 	iks_insert_attrib(message, "from", RAYO_JID(client));
 	iks_insert_attrib_printf(message, "id", "console-%i", RAYO_SEQ_NEXT(client));
-	iks_insert_attrib(message, "type", "chat");
+	iks_insert_attrib(message, "type", type);
 	x = iks_insert(message, "body");
 	iks_insert_cdata(x, message_str, strlen(message_str));
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CONSOLE, "\nSEND: to %s, %s\n", to, iks_string(iks_stack(message), message));
@@ -3990,10 +4025,10 @@ static void send_console_message(struct rayo_client *client, const char *to, con
  */
 static int message_api(char *cmd, switch_stream_handle_t *stream)
 {
-	char *argv[2] = { 0 };
+	char *argv[3] = { 0 };
 	if (!zstr(cmd)) {
 		int argc = switch_separate_string(cmd, ' ', argv, sizeof(argv) / sizeof(argv[0]));
-		if (argc != 2) {
+		if (argc != 3) {
 			return 0;
 		}
 	} else {
@@ -4001,7 +4036,7 @@ static int message_api(char *cmd, switch_stream_handle_t *stream)
 	}
 
 	/* send message */
-	send_console_message(globals.console, argv[0], argv[1]);
+	send_console_message(globals.console, argv[0], argv[1], argv[2]);
 	stream->write_function(stream, "+OK\n");
 
 	return 1;
@@ -4348,8 +4383,11 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_rayo_load)
 	globals.console = rayo_console_client_create();
 
 	switch_console_set_complete("add rayo status");
-	switch_console_set_complete("add rayo msg ::rayo::list_external");
-	switch_console_set_complete("add rayo cmd ::rayo::list_all");
+	switch_console_set_complete("add rayo msg ::rayo::list_all");
+	switch_console_set_complete("add rayo msg ::rayo::list_all chat");
+	switch_console_set_complete("add rayo msg ::rayo::list_all groupchat");
+	switch_console_set_complete("add rayo msg ::rayo::list_all headline");
+	switch_console_set_complete("add rayo msg ::rayo::list_all normal");
 	switch_console_set_complete("add rayo presence ::rayo::list_server online");
 	switch_console_set_complete("add rayo presence ::rayo::list_server offline");
 	switch_console_add_complete_func("::rayo::list_all", list_all);

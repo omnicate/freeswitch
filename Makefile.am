@@ -211,6 +211,7 @@ library_include_HEADERS = \
 	src/include/switch_xml.h \
 	src/include/switch_xml_config.h \
 	src/include/switch_cpp.h \
+	src/include/switch_curl.h \
 	src/include/switch_json.h \
 	libs/stfu/stfu.h \
 	libs/libteletone/src/libteletone_detect.h \
@@ -436,6 +437,8 @@ $(switch_builddir)/quiet_libtool: $(switch_builddir)/libtool
 
 build/print_git_revision: build/print_git_revision.c
 	$(CC) -o $@ $<
+
+src/switch_version.lo: src/include/switch_version.h
 
 src/include/switch_version.h: src/include/switch_version.h.in Makefile build/print_git_revision $(libfreeswitch_la_SOURCES) $(library_include_HEADERS)
 	@cat $< > $@; \
