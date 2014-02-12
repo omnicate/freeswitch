@@ -1,6 +1,6 @@
 /*
  * FreeSWITCH Modular Media Switching Software Library / Soft-Switch Application
- * Copyright (C) 2005-2012, Anthony Minessale II <anthm@freeswitch.org>
+ * Copyright (C) 2005-2014, Anthony Minessale II <anthm@freeswitch.org>
  *
  * Version: MPL 1.1
  *
@@ -266,6 +266,7 @@ typedef enum {
 	PFLAG_FIRE_MESSAGE_EVENTS,
 	PFLAG_SEND_DISPLAY_UPDATE,
 	PFLAG_RUNNING_TRANS,
+	PFLAG_SOCKET_TCP_KEEPALIVE,
 	PFLAG_TCP_KEEPALIVE,
 	PFLAG_TCP_PINGPONG,
 	PFLAG_TCP_PING2PONG,
@@ -400,6 +401,14 @@ typedef enum {
 } sofia_transport_t;
 
 typedef enum {
+	SOFIA_TLS_VERSION_SSLv2 = (1 << 0),
+	SOFIA_TLS_VERSION_SSLv3 = (1 << 1),
+	SOFIA_TLS_VERSION_TLSv1 = (1 << 2),
+	SOFIA_TLS_VERSION_TLSv1_1 = (1 << 3),
+	SOFIA_TLS_VERSION_TLSv1_2 = (1 << 4),
+} sofia_tls_version_t;
+
+typedef enum {
 	SOFIA_GATEWAY_DOWN,
 	SOFIA_GATEWAY_UP,
 
@@ -508,7 +517,8 @@ typedef enum {
 typedef enum {
 	MEDIA_OPT_NONE = 0,
 	MEDIA_OPT_MEDIA_ON_HOLD = (1 << 0),
-	MEDIA_OPT_BYPASS_AFTER_ATT_XFER = (1 << 1)
+	MEDIA_OPT_BYPASS_AFTER_ATT_XFER = (1 << 1),
+	MEDIA_OPT_BYPASS_AFTER_HOLD = (1 << 2)
 } sofia_media_options_t;
 
 typedef enum {
@@ -578,6 +588,7 @@ struct sofia_profile {
 	switch_port_t sip_port;
 	switch_port_t extsipport;
 	switch_port_t tls_sip_port;
+	char *tls_ciphers;
 	int tls_version;
 	unsigned int tls_timeout;
 	char *inbound_codec_string;
@@ -685,6 +696,7 @@ struct sofia_profile {
 	switch_port_t ws_port;
 	char *wss_ip;
 	switch_port_t wss_port;
+	int socket_tcp_keepalive;
 	int tcp_keepalive;
 	int tcp_pingpong;
 	int tcp_ping2pong;

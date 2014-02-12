@@ -1,6 +1,6 @@
 /* 
  * FreeSWITCH Modular Media Switching Software Library / Soft-Switch Application
- * Copyright (C) 2005-2012, Anthony Minessale II <anthm@freeswitch.org>
+ * Copyright (C) 2005-2014, Anthony Minessale II <anthm@freeswitch.org>
  *
  * Version: MPL 1.1
  *
@@ -1032,6 +1032,12 @@ static void handle_ice(switch_rtp_t *rtp_session, switch_rtp_ice_t *ice, void *d
 	}
 
 	if (ok) {
+		const char *host = NULL, *host2 = NULL;
+		switch_port_t port = 0, port2 = 0;
+		char buf[80] = "";
+		char buf2[80] = "";
+		const char *err = "";
+
 		if (packet->header.type == SWITCH_STUN_BINDING_REQUEST) {
 			uint8_t stunbuf[512];
 			switch_stun_packet_t *rpacket;
@@ -1061,31 +1067,47 @@ static void handle_ice(switch_rtp_t *rtp_session, switch_rtp_ice_t *ice, void *d
 			remote_ip = switch_get_addr(ipbuf, sizeof(ipbuf), from_addr);
 			switch_stun_packet_attribute_add_xor_binded_address(rpacket, (char *) remote_ip, switch_sockaddr_get_port(from_addr));
 
+
+			if (!switch_cmp_addr(from_addr, ice->addr)) {
+				host = switch_get_addr(buf, sizeof(buf), from_addr);
+				port = switch_sockaddr_get_port(from_addr);
+				host2 = switch_get_addr(buf2, sizeof(buf2), ice->addr);
+				port2 = switch_sockaddr_get_port(ice->addr);
+			}
+
 			if ((ice->type & ICE_VANILLA)) {
 				switch_stun_packet_attribute_add_integrity(rpacket, ice->pass);
 				switch_stun_packet_attribute_add_fingerprint(rpacket);
+			} else {
+				if (!switch_cmp_addr(from_addr, ice->addr)) {
+					switch_sockaddr_info_get(&ice->addr, host, SWITCH_UNSPEC, port, 0, rtp_session->pool);
+					
+					switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(rtp_session->session), SWITCH_LOG_NOTICE,
+									  "ICE Auto Changing %s media address from %s:%u to %s:%u\n", is_rtcp ? "rtcp" : "rtp", 
+									  host2, port2,
+									  host, port);
 
+					if (!is_rtcp || rtp_session->flags[SWITCH_RTP_FLAG_RTCP_MUX]) {
+						switch_rtp_set_remote_address(rtp_session, host, port, 0, SWITCH_FALSE, &err);
+					}
+
+					if (is_rtcp && !rtp_session->flags[SWITCH_RTP_FLAG_RTCP_MUX]) {
+						ice->addr = rtp_session->rtcp_remote_addr;
+					} else {
+						ice->addr = rtp_session->remote_addr;
+					}
+
+				}
 			}
 
 			bytes = switch_stun_packet_length(rpacket);
 
 			if (!ice->rready && (ice->type & ICE_VANILLA) && ice->ice_params && !switch_cmp_addr(from_addr, ice->addr)) {
-				const char *host, *host2;
-				switch_port_t port, port2;
-				char buf[80] = "";
-				char buf2[80] = "";
-				const char *err = "";
 				int i = 0;
 
 				ice->missed_count = 0;
 				ice->rready = 1;
 
-				host = switch_get_addr(buf, sizeof(buf), from_addr);
-				port = switch_sockaddr_get_port(from_addr);
-
-				host2 = switch_get_addr(buf2, sizeof(buf2), ice->addr);
-				port2 = switch_sockaddr_get_port(ice->addr);
-				
 				for (i = 0; i <= ice->ice_params->cand_idx; i++) {
 					if (ice->ice_params->cands[i][ice->proto].con_port == port) {
 						if (!strcmp(ice->ice_params->cands[i][ice->proto].con_addr, host) && 
@@ -5236,7 +5258,7 @@ static int rtp_common_read(switch_rtp_t *rtp_session, switch_payload_t *payload_
 								if ((other_rtp_session = switch_channel_get_private(other_channel, "__rtcp_audio_rtp_session")) && 
 									other_rtp_session->rtcp_sock_output &&
 									switch_rtp_test_flag(other_rtp_session, SWITCH_RTP_FLAG_ENABLE_RTCP)) {
-									*other_rtp_session->rtcp_send_msg.body = *rtp_session->rtcp_recv_msg_p->body;
+									other_rtp_session->rtcp_send_msg = rtp_session->rtcp_recv_msg;
 
 									if (rtp_session->rtcp_recv_msg_p->header.type == 206) {
 										rtcp_ext_msg_t *extp = (rtcp_ext_msg_t *) rtp_session->rtcp_recv_msg_p;
@@ -5439,6 +5461,9 @@ static int rtp_common_read(switch_rtp_t *rtp_session, switch_payload_t *payload_
 					rtp_session->auto_adj_used = 1;
 					switch_rtp_set_remote_address(rtp_session, tx_host, switch_sockaddr_get_port(rtp_session->from_addr), 0, SWITCH_FALSE, &err);
 					switch_rtp_clear_flag(rtp_session, SWITCH_RTP_FLAG_AUTOADJ);
+					if (rtp_session->ice.ice_user) {
+						rtp_session->ice.addr = rtp_session->remote_addr;
+					}
 				}
 			} else {
 				switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(rtp_session->session), SWITCH_LOG_DEBUG, "Correct ip/port confirmed.\n");

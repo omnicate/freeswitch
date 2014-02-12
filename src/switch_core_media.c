@@ -1,6 +1,6 @@
 /* 
  * FreeSWITCH Modular Media Switching Software Library / Soft-Switch Application
- * Copyright (C) 2005-2012, Anthony Minessale II <anthm@freeswitch.org>
+ * Copyright (C) 2005-2014, Anthony Minessale II <anthm@freeswitch.org>
  *
  * Version: MPL 1.1
  *
@@ -1830,7 +1830,7 @@ SWITCH_DECLARE(switch_status_t) switch_core_media_write_frame(switch_core_sessio
 
 	engine->timestamp_send += samples;
 
-	if (switch_rtp_write_frame(engine->rtp_session, frame) <= 0) {
+	if (switch_rtp_write_frame(engine->rtp_session, frame) < 0) {
 		status = SWITCH_STATUS_FALSE;
 	}
 
@@ -3754,6 +3754,12 @@ SWITCH_DECLARE(int) switch_core_media_toggle_hold(switch_core_session_t *session
 			const char *val;
 
 			switch_yield(250000);
+
+			if (b_channel && (switch_channel_test_flag(session->channel, CF_BYPASS_MEDIA_AFTER_HOLD) ||
+				switch_channel_test_flag(b_channel, CF_BYPASS_MEDIA_AFTER_HOLD))) {
+				/* try to stay out from media stream */
+				switch_ivr_nomedia(switch_core_session_get_uuid(session), SMF_REBRIDGE);
+			}
 
 			if (a_engine->max_missed_packets && a_engine->rtp_session) {
 				switch_rtp_reset_media_timer(a_engine->rtp_session);

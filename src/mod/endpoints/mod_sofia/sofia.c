@@ -1,6 +1,6 @@
 /*
  * FreeSWITCH Modular Media Switching Software Library / Soft-Switch Application
- * Copyright (C) 2005-2012, Anthony Minessale II <anthm@freeswitch.org>
+ * Copyright (C) 2005-2014, Anthony Minessale II <anthm@freeswitch.org>
  *
  * Version: MPL 1.1
  *
@@ -1525,10 +1525,8 @@ static void our_sofia_event_callback(nua_event_t event,
 				sofia_gateway_t *gateway = NULL;
 
 				if ((gateway = sofia_reg_find_gateway(sofia_private->gateway_name))) {
-					nua_handle_bind(gateway->nh, NULL);
-					gateway->sofia_private = NULL;
-					nua_handle_destroy(gateway->nh);
-					gateway->nh = NULL;
+					gateway->state = REG_STATE_FAILED;
+					gateway->failure_status = status;
 					sofia_reg_release_gateway(gateway);
 				}
 			} else {
@@ -2536,6 +2534,8 @@ void *SWITCH_THREAD_FUNC sofia_profile_thread_run(switch_thread_t *thread, void 
 							  TAG_IF(sofia_test_pflag(profile, PFLAG_TLS) && profile->tls_verify_in_subjects,
 									  TPTAG_TLS_VERIFY_SUBJECTS(profile->tls_verify_in_subjects)),
 							  TAG_IF(sofia_test_pflag(profile, PFLAG_TLS),
+									 TPTAG_TLS_CIPHERS(profile->tls_ciphers)),
+							  TAG_IF(sofia_test_pflag(profile, PFLAG_TLS),
 									 TPTAG_TLS_VERSION(profile->tls_version)),
 							  TAG_IF(sofia_test_pflag(profile, PFLAG_TLS) && profile->tls_timeout,
 									 TPTAG_TLS_TIMEOUT(profile->tls_timeout)),
@@ -2551,6 +2551,8 @@ void *SWITCH_THREAD_FUNC sofia_profile_thread_run(switch_thread_t *thread, void 
 									 TPTAG_PINGPONG(profile->tcp_ping2pong)),
 							  TAG_IF(sofia_test_pflag(profile, PFLAG_DISABLE_SRV503),
 									 NTATAG_SRV_503(0)),
+							  TAG_IF(sofia_test_pflag(profile, PFLAG_SOCKET_TCP_KEEPALIVE),
+									 TPTAG_KEEPALIVE(profile->socket_tcp_keepalive)),
 							  TAG_IF(sofia_test_pflag(profile, PFLAG_TCP_KEEPALIVE),
 									 TPTAG_KEEPALIVE(profile->tcp_keepalive)),
 							  NTATAG_DEFAULT_PROXY(profile->outbound_proxy),
@@ -3480,14 +3482,15 @@ static void config_sofia_profile_urls(sofia_profile_t * profile)
 	}
 
 	if (profile->bind_params) {
-		char *bindurl = profile->bindurl;
+		char *bindurl;
 		if (!switch_stristr("transport=", profile->bind_params)) {
 			profile->bind_params = switch_core_sprintf(profile->pool, "%s;transport=udp,tcp", profile->bind_params);
 		}
-		profile->bindurl = switch_core_sprintf(profile->pool, "%s;%s", bindurl, profile->bind_params);
+		bindurl = switch_core_sprintf(profile->pool, "%s;%s", profile->bindurl, profile->bind_params);
+		profile->bindurl = bindurl;
 	} else {
-		char *bindurl = profile->bindurl;
-		profile->bindurl = switch_core_sprintf(profile->pool, "%s;transport=udp,tcp", bindurl);
+		char *bindurl = switch_core_sprintf(profile->pool, "%s;transport=udp,tcp", profile->bindurl);
+		profile->bindurl = bindurl;
 	}
 
 
@@ -3763,7 +3766,10 @@ switch_status_t config_sofia(sofia_config_t reload, char *profile_name)
 					profile->sip_force_expires = 0;
 					profile->sip_expires_max_deviation = 0;
 					profile->sip_subscription_max_deviation = 0;
-					profile->tls_version = 0;
+					profile->tls_ciphers = "ALL:!ADH:!LOW:!EXP:!MD5:@STRENGTH";
+					profile->tls_version = SOFIA_TLS_VERSION_TLSv1;
+					profile->tls_version |= SOFIA_TLS_VERSION_TLSv1_1;
+					profile->tls_version |= SOFIA_TLS_VERSION_TLSv1_2;
 					profile->tls_timeout = 300;
 					profile->mflags = MFLAG_REFER | MFLAG_REGISTER;
 					profile->server_rport_level = 1;
@@ -3829,6 +3835,9 @@ switch_status_t config_sofia(sofia_config_t reload, char *profile_name)
 					} else if (!strcasecmp(var, "sip-capture") && switch_true(val)) {
 						sofia_set_flag(profile, TFLAG_CAPTURE);
 						nua_set_params(profile->nua, TPTAG_CAPT(mod_sofia_globals.capture_server), TAG_END());
+					} else if (!strcasecmp(var, "socket-tcp-keepalive") && !zstr(val)) {
+						profile->socket_tcp_keepalive = atoi(val);
+						sofia_set_pflag(profile, PFLAG_SOCKET_TCP_KEEPALIVE);
 					} else if (!strcasecmp(var, "tcp-keepalive") && !zstr(val)) {
 						profile->tcp_keepalive = atoi(val);
 						sofia_set_pflag(profile, PFLAG_TCP_KEEPALIVE);
@@ -4304,6 +4313,13 @@ switch_status_t config_sofia(sofia_config_t reload, char *profile_name)
 							profile->media_options |= MEDIA_OPT_MEDIA_ON_HOLD;
 						} else if (!strcasecmp(val, "bypass-media-after-att-xfer")) {
 							profile->media_options |= MEDIA_OPT_BYPASS_AFTER_ATT_XFER;
+						} else if (!strcasecmp(val, "bypass-media-after-hold")) {
+							if (profile->media_options & MEDIA_OPT_MEDIA_ON_HOLD) {
+								profile->media_options |= MEDIA_OPT_BYPASS_AFTER_HOLD;
+							} else {
+								switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,
+												  "bypass-media-after-hold can be set only with resume-media-on-hold media-option\n");
+							}
 						}
 					} else if (!strcasecmp(var, "pnp-provision-url")) {
 						profile->pnp_prov_url = switch_core_strdup(profile->pool, val);
@@ -4691,12 +4707,30 @@ switch_status_t config_sofia(sofia_config_t reload, char *profile_name)
 						profile->tls_passphrase = switch_core_strdup(profile->pool, val);
 					} else if (!strcasecmp(var, "tls-verify-in-subjects") && !zstr(val)) {
 						profile->tls_verify_in_subjects_str = switch_core_strdup(profile->pool, val);
+					} else if (!strcasecmp(var, "tls-ciphers") && !zstr(val)) {
+						profile->tls_ciphers = switch_core_strdup(profile->pool, val);
 					} else if (!strcasecmp(var, "tls-version") && !zstr(val)) {
-
-						if (!strcasecmp(val, "tlsv1")) {
-							profile->tls_version = 1;
-						} else {
-							profile->tls_version = 0;
+						char *ps = val, *pe;
+						profile->tls_version = 0;
+						while (1) {
+							int n;
+							pe = strchr(ps,',');
+							if (!pe && !(pe = memchr(ps,0,1024))) break;
+							n = pe-ps;
+							if (n==5 && !strncasecmp(ps, "sslv2", n))
+								profile->tls_version |= SOFIA_TLS_VERSION_SSLv2;
+							if (n==5 && !strncasecmp(ps, "sslv3", n))
+								profile->tls_version |= SOFIA_TLS_VERSION_SSLv3;
+							if (n==6 && !strncasecmp(ps, "sslv23", n))
+								profile->tls_version |= SOFIA_TLS_VERSION_SSLv2 | SOFIA_TLS_VERSION_SSLv3;
+							if (n==5 && !strncasecmp(ps, "tlsv1", n))
+								profile->tls_version |= SOFIA_TLS_VERSION_TLSv1;
+							if (n==7 && !strncasecmp(ps, "tlsv1.1", n))
+								profile->tls_version |= SOFIA_TLS_VERSION_TLSv1_1;
+							if (n==7 && !strncasecmp(ps, "tlsv1.2", n))
+								profile->tls_version |= SOFIA_TLS_VERSION_TLSv1_2;
+							ps=pe+1;
+							if (!*pe) break;
 						}
 					} else if (!strcasecmp(var, "tls-timeout")) {
 						int v = atoi(val);
@@ -5457,7 +5491,7 @@ static void sofia_handle_sip_r_invite(switch_core_session_t *session, int status
 		}
 
 		if (switch_channel_test_flag(channel, CF_PROXY_MODE)) {
-			switch_channel_clear_flag(tech_pvt->channel, CF_T38_PASSTHRU);
+			switch_channel_clear_flag(channel, CF_T38_PASSTHRU);
 			has_t38 = 0;
 		}
 
@@ -5509,12 +5543,13 @@ static void sofia_handle_sip_r_invite(switch_core_session_t *session, int status
 					} else if (status > 299) {
 						switch_channel_set_private(channel, "t38_options", NULL);
 						switch_channel_set_private(other_channel, "t38_options", NULL);
-						switch_channel_clear_flag(tech_pvt->channel, CF_T38_PASSTHRU);
-						switch_channel_clear_flag(other_tech_pvt->channel, CF_T38_PASSTHRU);
-						switch_channel_clear_app_flag_key("T38", tech_pvt->channel, CF_APP_T38);
-						switch_channel_clear_app_flag_key("T38", tech_pvt->channel, CF_APP_T38_REQ);
-						switch_channel_set_app_flag_key("T38", tech_pvt->channel, CF_APP_T38_FAIL);
-					} else if (status == 200 && switch_channel_test_flag(tech_pvt->channel, CF_T38_PASSTHRU) && has_t38 && sip->sip_payload && sip->sip_payload->pl_data) {
+						switch_channel_clear_flag(channel, CF_T38_PASSTHRU);
+						switch_channel_clear_flag(other_channel, CF_T38_PASSTHRU);
+						switch_channel_clear_app_flag_key("T38", channel, CF_APP_T38);
+						switch_channel_clear_app_flag_key("T38", channel, CF_APP_T38_REQ);
+						switch_channel_set_app_flag_key("T38", channel, CF_APP_T38_FAIL);
+					} else if (status == 200 && switch_channel_test_flag(channel, CF_T38_PASSTHRU) && 
+							   has_t38 && sip->sip_payload && sip->sip_payload->pl_data) {
 						switch_t38_options_t *t38_options = switch_core_media_extract_t38_options(session, sip->sip_payload->pl_data);
 
 						if (!t38_options) {
@@ -5542,11 +5577,11 @@ static void sofia_handle_sip_r_invite(switch_core_session_t *session, int status
 						msg->pointer_arg_size = strlen(r_sdp);
 					}
 
-					if (status == 200 && switch_channel_test_flag(tech_pvt->channel, CF_T38_PASSTHRU) && has_t38) {
-						if (switch_core_media_ready(tech_pvt->session, SWITCH_MEDIA_TYPE_AUDIO) &&
-							switch_core_media_ready(other_tech_pvt->session, SWITCH_MEDIA_TYPE_AUDIO)) {
-							switch_channel_clear_flag(tech_pvt->channel, CF_NOTIMER_DURING_BRIDGE);
-							switch_core_media_udptl_mode(tech_pvt->session, SWITCH_MEDIA_TYPE_AUDIO);
+					if (status == 200 && switch_channel_test_flag(channel, CF_T38_PASSTHRU) && has_t38) {
+						if (switch_core_media_ready(session, SWITCH_MEDIA_TYPE_AUDIO) &&
+							switch_core_media_ready(other_session, SWITCH_MEDIA_TYPE_AUDIO)) {
+							switch_channel_clear_flag(channel, CF_NOTIMER_DURING_BRIDGE);
+							switch_core_media_udptl_mode(session, SWITCH_MEDIA_TYPE_AUDIO);
 							switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, "Activating T38 Passthru\n");
 						}
 					}
@@ -8538,6 +8573,10 @@ void sofia_handle_sip_i_invite(switch_core_session_t *session, nua_t *nua, sofia
 
 	if (sofia_test_flag(tech_pvt, TFLAG_INB_NOMEDIA)) {
 		switch_channel_set_flag(channel, CF_PROXY_MODE);
+	}
+
+	if (profile->media_options & MEDIA_OPT_BYPASS_AFTER_HOLD) {
+		switch_channel_set_flag(channel, CF_BYPASS_MEDIA_AFTER_HOLD);
 	}
 
 	if (sofia_test_flag(tech_pvt, TFLAG_PROXY_MEDIA)) {
