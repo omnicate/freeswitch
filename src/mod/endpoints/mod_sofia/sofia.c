@@ -2484,7 +2484,7 @@ void *SWITCH_THREAD_FUNC sofia_profile_thread_run(switch_thread_t *thread, void 
 		goto end;
 	}
 
-	supported = switch_core_sprintf(profile->pool, "%s%s%sprecondition, path, replaces", use_100rel ? "100rel, " : "", use_timer ? "timer, " : "", use_rfc_5626 ? "outbound, " : "");
+	supported = switch_core_sprintf(profile->pool, "%s%s%spath, replaces", use_100rel ? "precondition, 100rel, " : "", use_timer ? "timer, " : "", use_rfc_5626 ? "outbound, " : "");
 
 	if (sofia_test_pflag(profile, PFLAG_AUTO_NAT) && switch_nat_get_type()) {
 		if ( (! sofia_test_pflag(profile, PFLAG_TLS) || ! profile->tls_only) && switch_nat_add_mapping(profile->sip_port, SWITCH_NAT_UDP, NULL, SWITCH_FALSE) == SWITCH_STATUS_SUCCESS) {
@@ -6086,6 +6086,16 @@ static void sofia_handle_sip_i_state(switch_core_session_t *session, int status,
 			} else {
 				if (sofia_test_flag(tech_pvt, TFLAG_LATE_NEGOTIATION) &&  switch_channel_direction(tech_pvt->channel) == SWITCH_CALL_DIRECTION_INBOUND) {
 					switch_channel_set_variable(channel, SWITCH_ENDPOINT_DISPOSITION_VARIABLE, "DELAYED NEGOTIATION");
+				} else if (switch_channel_test_flag(channel, CF_PROXY_MEDIA)) {
+					switch_channel_set_variable(channel, SWITCH_ENDPOINT_DISPOSITION_VARIABLE, "PROXY MEDIA");
+					switch_core_media_patch_sdp(tech_pvt->session);
+					if (sofia_media_activate_rtp(tech_pvt) != SWITCH_STATUS_SUCCESS) {
+						nua_respond(nh, SIP_488_NOT_ACCEPTABLE, TAG_END());
+						switch_channel_hangup(channel, SWITCH_CAUSE_INCOMPATIBLE_DESTINATION);
+					} else{
+						switch_channel_mark_pre_answered(channel);
+					}
+
 				} else {
 					if (sofia_media_tech_media(tech_pvt, (char *) r_sdp) != SWITCH_STATUS_SUCCESS) {
 						switch_channel_set_variable(channel, SWITCH_ENDPOINT_DISPOSITION_VARIABLE, "CODEC NEGOTIATION ERROR");
@@ -7957,6 +7967,7 @@ void sofia_handle_sip_i_invite(switch_core_session_t *session, nua_t *nua, sofia
 	char *sql = NULL;
 	char *acl_context = NULL;
 	const char *r_sdp = NULL;
+	int broken_device = 0;
 
 	profile->ib_calls++;
 
@@ -8000,7 +8011,13 @@ void sofia_handle_sip_i_invite(switch_core_session_t *session, nua_t *nua, sofia
 	}
 
 
-	if (sofia_test_pflag(profile, PFLAG_AGGRESSIVE_NAT_DETECTION)) {
+	if (profile->server_rport_level >= 2 && sip->sip_user_agent && sip->sip_user_agent->g_string &&
+		(!strncasecmp(sip->sip_user_agent->g_string, "Polycom", 7) || 
+		 !strncasecmp(sip->sip_user_agent->g_string, "KIRK Wireless Server", 20) )) {
+		broken_device = 1;
+	}
+
+	if (sofia_test_pflag(profile, PFLAG_AGGRESSIVE_NAT_DETECTION) || broken_device) {
 		if (sip && sip->sip_via) {
 			const char *port = sip->sip_via->v_port;
 			const char *host = sip->sip_via->v_host;

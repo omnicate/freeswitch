@@ -284,6 +284,8 @@ Build-Depends:
  dpkg-dev (>= 1.15.8.12), gcc (>= 4:4.4.5), g++ (>= 4:4.4.5),
  libc6-dev (>= 2.11.3), make (>= 3.81),
  wget, pkg-config,
+# core codecs
+ libogg-dev,
 # configure options
  libssl-dev, unixodbc-dev, libpq-dev,
  libncurses5-dev, libjpeg62-dev | libjpeg8-dev,
@@ -431,7 +433,6 @@ Depends: \${misc:Depends}, freeswitch (= \${binary:Version}),
  freeswitch-mod-g723-1 (= \${binary:Version}),
  freeswitch-mod-g729 (= \${binary:Version}),
  freeswitch-mod-amr (= \${binary:Version}),
- freeswitch-mod-speex (= \${binary:Version}),
  freeswitch-mod-h26x (= \${binary:Version}),
  freeswitch-mod-sndfile (= \${binary:Version}),
  freeswitch-mod-native-file (= \${binary:Version}),
@@ -669,7 +670,6 @@ Depends: \${misc:Depends}, freeswitch (= \${binary:Version}),
  freeswitch-mod-opus (= \${binary:Version}),
  freeswitch-mod-silk (= \${binary:Version}),
  freeswitch-mod-spandsp (= \${binary:Version}),
- freeswitch-mod-speex (= \${binary:Version}),
  freeswitch-mod-theora (= \${binary:Version}),
  freeswitch-mod-vp8 (= \${binary:Version})
 Suggests:

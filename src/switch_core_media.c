@@ -1255,9 +1255,10 @@ SWITCH_DECLARE(switch_status_t) switch_media_handle_create(switch_media_handle_t
 
 		session->media_handle->engines[SWITCH_MEDIA_TYPE_AUDIO].payload_map = switch_core_alloc(session->pool, sizeof(payload_map_t));
 		session->media_handle->engines[SWITCH_MEDIA_TYPE_AUDIO].cur_payload_map = session->media_handle->engines[SWITCH_MEDIA_TYPE_AUDIO].payload_map;
+		session->media_handle->engines[SWITCH_MEDIA_TYPE_AUDIO].cur_payload_map->current = 1;
 		session->media_handle->engines[SWITCH_MEDIA_TYPE_VIDEO].payload_map = switch_core_alloc(session->pool, sizeof(payload_map_t));
 		session->media_handle->engines[SWITCH_MEDIA_TYPE_VIDEO].cur_payload_map = session->media_handle->engines[SWITCH_MEDIA_TYPE_VIDEO].payload_map;
-
+		session->media_handle->engines[SWITCH_MEDIA_TYPE_VIDEO].cur_payload_map->current = 1;
 
 		switch_channel_set_flag(session->channel, CF_DTLS_OK);
 
@@ -1366,11 +1367,6 @@ SWITCH_DECLARE(void) switch_core_media_prepare_codecs(switch_core_session_t *ses
 	switch_assert(smh->session != NULL);
 
 	if ((abs = switch_channel_get_variable(session->channel, "absolute_codec_string"))) {
-		/* inherit_codec == true will implicitly clear the absolute_codec_string 
-		   variable if used since it was the reason it was set in the first place and is no longer needed */
-		if (switch_true(switch_channel_get_variable(session->channel, "inherit_codec"))) {
-			switch_channel_set_variable(session->channel, "absolute_codec_string", NULL);
-		}
 		codec_string = abs;
 		goto ready;
 	}
@@ -1729,7 +1725,7 @@ SWITCH_DECLARE(switch_status_t) switch_core_media_read_frame(switch_core_session
 					for (pmap = engine->payload_map; pmap; pmap = pmap->next) {
 						if (engine->read_frame.payload == pmap->recv_pt && pmap->negotiated) {
 							engine->cur_payload_map = pmap;
-
+							engine->cur_payload_map->current = 1;
 							switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_WARNING,
 											  "Changing current codec to %s (payload type %d).\n",
 											  pmap->iananame, pmap->pt);
@@ -2674,6 +2670,7 @@ static void clear_pmaps(switch_rtp_engine_t *engine)
 
 	for (pmap = engine->payload_map; pmap && pmap->allocated; pmap = pmap->next) {
 		pmap->negotiated = 0;
+		pmap->current = 0;
 	}
 }
 
@@ -3330,6 +3327,10 @@ SWITCH_DECLARE(uint8_t) switch_core_media_negotiate_sdp(switch_core_session_t *s
 			
 					if (j == 0) {
 						a_engine->cur_payload_map = pmap;
+						a_engine->cur_payload_map->current = 1;
+						if (a_engine->rtp_session) {
+							switch_rtp_set_default_payload(a_engine->rtp_session, pmap->pt);
+						}
 					}
 						
 					pmap->rm_encoding = switch_core_session_strdup(session, (char *) mmap->rm_encoding);
@@ -3588,6 +3589,10 @@ SWITCH_DECLARE(uint8_t) switch_core_media_negotiate_sdp(switch_core_session_t *s
 																			SWITCH_TRUE);
 					if (j == 0) {
 						v_engine->cur_payload_map = pmap;
+						v_engine->cur_payload_map->current = 1;
+						if (v_engine->rtp_session) {
+							switch_rtp_set_default_payload(v_engine->rtp_session, pmap->pt);
+						}
 					}
 					
 					mimp = matches[j].imp;
@@ -3682,7 +3687,7 @@ SWITCH_DECLARE(int) switch_core_media_toggle_hold(switch_core_session_t *session
 			const char *info;
 
 			if ((switch_channel_test_flag(session->channel, CF_SLA_BARGE) || switch_channel_test_flag(session->channel, CF_SLA_BARGING)) && 
-				(!b_channel || switch_channel_test_flag(b_channel, CF_BROADCAST))) {
+				(!b_channel || switch_channel_test_flag(b_channel, CF_EVENT_LOCK_PRI))) {
 				switch_channel_mark_hold(session->channel, sendonly);
 				switch_channel_set_flag(session->channel, CF_PROTO_HOLD);
 				changed = 0;
@@ -3719,13 +3724,13 @@ SWITCH_DECLARE(int) switch_core_media_toggle_hold(switch_core_session_t *session
 			}
 
 
-			if (stream && strcasecmp(stream, "silence") && (!b_channel || !switch_channel_test_flag(b_channel, CF_BROADCAST))) {
+			if (stream && strcasecmp(stream, "silence") && (!b_channel || !switch_channel_test_flag(b_channel, CF_EVENT_LOCK_PRI))) {
 				if (!strcasecmp(stream, "indicate_hold")) {
 					switch_channel_set_flag(session->channel, CF_SUSPEND);
 					switch_channel_set_flag(session->channel, CF_HOLD);
-					switch_ivr_hold_uuid(switch_channel_get_partner_uuid(session->channel), NULL, 0);
+					switch_ivr_hold_uuid(switch_core_session_get_uuid(b_session), NULL, 0);
 				} else {
-					switch_ivr_broadcast(switch_channel_get_partner_uuid(session->channel), stream,
+					switch_ivr_broadcast(switch_core_session_get_uuid(b_session), stream,
 										 SMF_ECHO_ALEG | SMF_LOOP | SMF_PRIORITY);
 					switch_yield(250000);
 				}
@@ -4077,6 +4082,13 @@ SWITCH_DECLARE(switch_status_t) switch_core_media_proxy_remote_addr(switch_core_
 		if (remote_host && remote_port && !strcmp(remote_host, a_engine->cur_payload_map->remote_sdp_ip) && remote_port == a_engine->cur_payload_map->remote_sdp_port) {
 			switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "Remote address:port [%s:%d] has not changed.\n",
 							  a_engine->cur_payload_map->remote_sdp_ip, a_engine->cur_payload_map->remote_sdp_port);
+			switch_goto_status(SWITCH_STATUS_BREAK, end);
+		} else if (remote_host && ( (strcmp(remote_host, "0.0.0.0") == 0) ||
+									(strcmp(a_engine->cur_payload_map->remote_sdp_ip, "0.0.0.0") == 0))) {
+			
+			switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG,
+							  "Remote address changed from [%s] to [%s]. Ignoring...\n",
+							  a_engine->cur_payload_map->remote_sdp_ip, remote_host);
 			switch_goto_status(SWITCH_STATUS_BREAK, end);
 		}
 
@@ -8441,7 +8453,7 @@ SWITCH_DECLARE (void) switch_core_media_recover_session(switch_core_session_t *s
 
 SWITCH_DECLARE(void) switch_core_media_init(void)
 {
-	switch_core_gen_certs(DTLS_SRTP_FNAME);	
+	switch_core_gen_certs(DTLS_SRTP_FNAME ".pem");	
 }
 
 SWITCH_DECLARE(void) switch_core_media_deinit(void)

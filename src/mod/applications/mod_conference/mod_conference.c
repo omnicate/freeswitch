@@ -3655,7 +3655,7 @@ static void *SWITCH_THREAD_FUNC conference_loop_input(switch_thread_t *thread, v
 	switch_frame_t *read_frame = NULL;
 	uint32_t hangover = 40, hangunder = 5, hangover_hits = 0, hangunder_hits = 0, diff_level = 400;
 	switch_core_session_t *session = member->session;
-
+	uint32_t flush_len;
 
 	if (switch_core_session_read_lock(session) != SWITCH_STATUS_SUCCESS) {
 		goto end;
@@ -3670,6 +3670,8 @@ static void *SWITCH_THREAD_FUNC conference_loop_input(switch_thread_t *thread, v
 	switch_core_session_get_read_impl(session, &member->read_impl);
 
 	switch_channel_audio_sync(channel);
+
+	flush_len = switch_samples_per_packet(member->conference->rate, member->conference->interval) * 6;
 
 	/* As long as we have a valid read, feed that data into an input buffer where the conference thread will take it 
 	   and mux it with any audio from other channels. */
@@ -3944,6 +3946,10 @@ static void *SWITCH_THREAD_FUNC conference_loop_input(switch_thread_t *thread, v
 
 				/* Write the audio into the input buffer */
 				switch_mutex_lock(member->audio_in_mutex);
+				if (switch_buffer_inuse(member->audio_buffer) > flush_len) {
+					switch_buffer_zero(member->audio_buffer);
+					switch_channel_audio_sync(channel);
+				}
 				ok = switch_buffer_write(member->audio_buffer, data, datalen);
 				switch_mutex_unlock(member->audio_in_mutex);
 				if (!ok) {
@@ -9383,7 +9389,7 @@ static conference_obj_t *conference_new(char *name, conf_xml_cfg_t cfg, switch_c
 	if (!zstr(auto_gain_level)) {
 		int level = 0;
 
-		if (switch_true(auto_gain_level)) {
+		if (switch_true(auto_gain_level) && !switch_is_number(auto_gain_level)) {
 			level = DEFAULT_AGC_LEVEL;
 		} else {
 			level = atoi(auto_gain_level);
