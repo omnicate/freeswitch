@@ -33,6 +33,10 @@
 #include <switch_stun.h>
 #include <libdingaling.h>
 
+#define SWITCH_RTP_KEY_LEN 30
+#define SWITCH_RTP_CRYPTO_KEY_32 "AES_CM_128_HMAC_SHA1_32"
+#define SWITCH_RTP_CRYPTO_KEY_80 "AES_CM_128_HMAC_SHA1_80"
+
 #define MDL_RTCP_DUR 5000
 #define DL_CAND_WAIT 10000000
 #define DL_CAND_INITIAL_WAIT 2000000
@@ -4249,6 +4253,22 @@ static ldl_status handle_signalling(ldl_handle_t *handle, ldl_session_t *dlsessi
 				}
 
 				tech_pvt->them = switch_core_session_strdup(session, ldl_session_get_callee(dlsession));
+
+				if (tech_pvt->them && (tmp = strdup(tech_pvt->them))) {
+					char *p, *q;
+
+					if ((p = strchr(tmp, '@'))) {
+						*p++ = '\0';
+						if ((q = strchr(p, '/'))) {
+							*q = '\0';
+						}
+						switch_channel_set_variable(channel, "dl_to_user", tmp);
+						switch_channel_set_variable(channel, "dl_to_host", p);
+					}
+
+					switch_safe_free(tmp);
+				}
+
 				tech_pvt->us = switch_core_session_strdup(session, ldl_session_get_caller(dlsession));
 
 				if (tech_pvt->us && (tmp = strdup(tech_pvt->us))) {

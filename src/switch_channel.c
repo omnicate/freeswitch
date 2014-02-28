@@ -278,11 +278,9 @@ SWITCH_DECLARE(void) switch_channel_perform_set_callstate(switch_channel_t *chan
 					  "(%s) Callstate Change %s -> %s\n", channel->name, 
 					  switch_channel_callstate2str(o_callstate), switch_channel_callstate2str(callstate));
 
-	switch_channel_check_device_state(channel, channel->callstate);
-
-	if (callstate == CCS_HANGUP) {
-		process_device_hup(channel);
-	}	
+	if (callstate != CCS_HANGUP) {
+		switch_channel_check_device_state(channel, channel->callstate);
+	}
 
 	if (switch_event_create(&event, SWITCH_EVENT_CHANNEL_CALLSTATE) == SWITCH_STATUS_SUCCESS) {
 		switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Original-Channel-Call-State", switch_channel_callstate2str(o_callstate));
@@ -3160,6 +3158,11 @@ SWITCH_DECLARE(switch_channel_state_t) switch_channel_perform_hangup(switch_chan
 	}
 	switch_mutex_unlock(channel->state_mutex);
 
+	if (switch_channel_test_flag(channel, CF_LEG_HOLDING)) {
+		switch_channel_mark_hold(channel, SWITCH_FALSE);
+		switch_channel_set_flag(channel, CF_HANGUP_HELD);
+	}
+
 	if (!ok) {
 		return channel->state;
 	}
@@ -3329,21 +3332,6 @@ SWITCH_DECLARE(void) switch_channel_check_zrtp(switch_channel_t *channel)
 	}
 }
 
-static void check_secure(switch_channel_t *channel)
-{
-	const char *var, *sec;
-
-	if (!switch_channel_media_ready(channel) && switch_channel_direction(channel) == SWITCH_CALL_DIRECTION_INBOUND) {
-		if ((sec = switch_channel_get_variable(channel, "rtp_secure_media")) && switch_true(sec)) {
-			if (!(var = switch_channel_get_variable(channel, "rtp_has_crypto"))) {
-				switch_log_printf(SWITCH_CHANNEL_CHANNEL_LOG(channel), SWITCH_LOG_WARNING, "rtp_secure_media invalid in this context.\n");
-				switch_channel_set_variable(channel, "rtp_secure_media", NULL);
-			}
-		}
-	}
-
-}
-
 SWITCH_DECLARE(switch_status_t) switch_channel_perform_mark_pre_answered(switch_channel_t *channel, const char *file, const char *func, int line)
 {
 	switch_event_t *event;
@@ -3430,8 +3418,6 @@ SWITCH_DECLARE(switch_status_t) switch_channel_perform_pre_answer(switch_channel
 	if (switch_channel_test_flag(channel, CF_EARLY_MEDIA)) {
 		return SWITCH_STATUS_SUCCESS;
 	}
-
-	check_secure(channel);
 
 	if (switch_channel_direction(channel) == SWITCH_CALL_DIRECTION_INBOUND) {
 		msg.message_id = SWITCH_MESSAGE_INDICATE_PROGRESS;
@@ -3717,8 +3703,6 @@ SWITCH_DECLARE(switch_status_t) switch_channel_perform_answer(switch_channel_t *
 	if (switch_channel_test_flag(channel, CF_ANSWERED)) {
 		return SWITCH_STATUS_SUCCESS;
 	}
-
-	check_secure(channel);
 
 	msg.message_id = SWITCH_MESSAGE_INDICATE_ANSWER;
 	msg.from = channel->name;
@@ -4843,6 +4827,14 @@ SWITCH_DECLARE(void) switch_channel_clear_device_record(switch_channel_t *channe
 	switch_mutex_unlock(globals.device_mutex);
 	
 	
+}
+
+SWITCH_DECLARE(void) switch_channel_process_device_hangup(switch_channel_t *channel) 
+{
+
+	switch_channel_check_device_state(channel, channel->callstate);
+	process_device_hup(channel);
+
 }
 
 static void process_device_hup(switch_channel_t *channel)

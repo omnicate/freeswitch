@@ -34,6 +34,7 @@
  * Joseph Sullivan <jossulli@amazon.com>
  * Emmanuel Schmidbauer <e.schmidbauer@gmail.com>
  * William King <william.king@quentustech.com>
+ * David Knell <david.knell@telng.com>
  *
  * sofia.c -- SOFIA SIP Endpoint (sofia code)
  *
@@ -325,7 +326,196 @@ static void extract_vars(sofia_profile_t *profile, sip_t const *sip,
 	}
 }
 
+/**
+ * Add a specific SIP INVITE header to the channel variables, prefixed with "sip_i_"
+ */
+static void sofia_add_invite_header_to_chanvars(switch_channel_t *channel, nua_handle_t *nh, void *sip_header, const char *var)
+{
+	switch_assert(channel);
+	switch_assert(nh);
+	switch_assert(var);
 
+	if (sip_header) {
+		char *full;
+		if ((full = sip_header_as_string(nh->nh_home, sip_header))) {
+			switch_channel_set_variable(channel, var, full);
+			su_free(nh->nh_home, full);
+		}
+	}
+}
+
+/**
+ * Deep search into the SIP message to recreate the original headers, including multiple Diversions, etc.
+ * Finally sets the "sip_invite_headers" to a string containing the 'original' SIP headers, except that the order may have changed.
+ * Multiple headers will have the original internal order, though.
+ *
+ * @param sip A sip_t struct containing the parsed message
+ * @param session A call session
+ * @param nh A NUA handle for string allocation
+ */
+static void sofia_parse_all_invite_headers(sip_t const *sip, switch_core_session_t *session, nua_handle_t *nh)
+{
+	switch_channel_t *channel = switch_core_session_get_channel(session);
+	sip_unknown_t *un;
+	sip_p_asserted_identity_t *passerted;
+	sip_p_preferred_identity_t *ppreferred;
+	sip_remote_party_id_t *rpid;
+	sip_reply_to_t *reply_to;
+	sip_alert_info_t *alert_info;
+
+	if (!sip) return;
+
+	/* Add simple (unique) headers first */
+	sofia_add_invite_header_to_chanvars(channel, nh, sip->sip_from, "sip_i_from");
+	sofia_add_invite_header_to_chanvars(channel, nh, sip->sip_to, "sip_i_to");
+	sofia_add_invite_header_to_chanvars(channel, nh, sip->sip_call_id, "sip_i_call_id");
+	sofia_add_invite_header_to_chanvars(channel, nh, sip->sip_cseq, "sip_i_cseq");
+	sofia_add_invite_header_to_chanvars(channel, nh, sip->sip_route, "sip_i_route");
+	sofia_add_invite_header_to_chanvars(channel, nh, sip->sip_max_forwards, "sip_i_max_forwards");
+	sofia_add_invite_header_to_chanvars(channel, nh, sip->sip_proxy_require, "sip_i_proxy_require");
+	sofia_add_invite_header_to_chanvars(channel, nh, sip->sip_contact, "sip_i_contact");
+	sofia_add_invite_header_to_chanvars(channel, nh, sip->sip_user_agent, "sip_i_user_agent");
+	sofia_add_invite_header_to_chanvars(channel, nh, sip->sip_subject, "sip_i_subject");
+	sofia_add_invite_header_to_chanvars(channel, nh, sip->sip_priority, "sip_i_priority");
+	sofia_add_invite_header_to_chanvars(channel, nh, sip->sip_organization, "sip_i_organization");
+	sofia_add_invite_header_to_chanvars(channel, nh, sip->sip_in_reply_to, "sip_i_in_reply_to");
+	sofia_add_invite_header_to_chanvars(channel, nh, sip->sip_accept_encoding, "sip_i_accept_encoding");
+	sofia_add_invite_header_to_chanvars(channel, nh, sip->sip_accept_language, "sip_i_accept_language");
+	sofia_add_invite_header_to_chanvars(channel, nh, sip->sip_allow, "sip_i_allow");
+	sofia_add_invite_header_to_chanvars(channel, nh, sip->sip_require, "sip_i_require");
+	sofia_add_invite_header_to_chanvars(channel, nh, sip->sip_supported, "sip_i_supported");
+	sofia_add_invite_header_to_chanvars(channel, nh, sip->sip_date, "sip_i_date");
+	sofia_add_invite_header_to_chanvars(channel, nh, sip->sip_timestamp, "sip_i_timestamp");
+	sofia_add_invite_header_to_chanvars(channel, nh, sip->sip_expires, "sip_i_expires");
+	sofia_add_invite_header_to_chanvars(channel, nh, sip->sip_min_expires, "sip_i_min_expires");
+	sofia_add_invite_header_to_chanvars(channel, nh, sip->sip_session_expires, "sip_i_session_expires");
+	sofia_add_invite_header_to_chanvars(channel, nh, sip->sip_min_se, "sip_i_min_se");
+	sofia_add_invite_header_to_chanvars(channel, nh, sip->sip_privacy, "sip_i_privacy");
+	sofia_add_invite_header_to_chanvars(channel, nh, sip->sip_mime_version, "sip_i_mime_version");
+	sofia_add_invite_header_to_chanvars(channel, nh, sip->sip_content_type, "sip_i_content_type");
+	sofia_add_invite_header_to_chanvars(channel, nh, sip->sip_content_encoding, "sip_i_content_encoding");
+	sofia_add_invite_header_to_chanvars(channel, nh, sip->sip_content_language, "sip_i_content_language");
+	sofia_add_invite_header_to_chanvars(channel, nh, sip->sip_content_disposition, "sip_i_content_disposition");
+	sofia_add_invite_header_to_chanvars(channel, nh, sip->sip_content_length, "sip_i_content_length");
+
+	/* Add all other headers - which might exist more than once */
+
+	if (sip->sip_via) {
+		sip_via_t *vp;
+		for (vp = sip->sip_via; vp; vp = vp->v_next) {
+			char *v = sip_header_as_string(nh->nh_home, (void *) vp);
+			switch_channel_add_variable_var_check(channel, "sip_i_via", v, SWITCH_FALSE, SWITCH_STACK_PUSH);
+			su_free(nh->nh_home, v);
+		}
+	}
+
+	if (sip->sip_record_route) {
+		sip_record_route_t *rrp;
+		for (rrp = sip->sip_record_route; rrp; rrp = rrp->r_next) {
+			char *rr = sip_header_as_string(nh->nh_home, (void *) rrp);
+			switch_channel_add_variable_var_check(channel, "sip_i_record_route", rr, SWITCH_FALSE, SWITCH_STACK_PUSH);
+			su_free(nh->nh_home, rr);
+		}
+	}
+
+	if (sip->sip_proxy_authorization) {
+		sip_proxy_authorization_t *vp;
+		for (vp = sip->sip_proxy_authorization; vp; vp = vp->au_next) {
+			char *v = sip_header_as_string(nh->nh_home, (void *) vp);
+			switch_channel_add_variable_var_check(channel, "sip_i_proxy_authorization", v, SWITCH_FALSE, SWITCH_STACK_PUSH);
+			su_free(nh->nh_home, v);
+		}
+	}
+
+	if (sip->sip_call_info) {
+		sip_call_info_t *vp;
+		for (vp = sip->sip_call_info; vp; vp = vp->ci_next) {
+			char *v = sip_header_as_string(nh->nh_home, (void *) vp);
+			switch_channel_add_variable_var_check(channel, "sip_i_call_info", v, SWITCH_FALSE, SWITCH_STACK_PUSH);
+			su_free(nh->nh_home, v);
+		}
+	}
+
+	if (sip->sip_accept) {
+		sip_accept_t *vp;
+		for (vp = sip->sip_accept; vp; vp = vp->ac_next) {
+			char *v = sip_header_as_string(nh->nh_home, (void *) vp);
+			switch_channel_add_variable_var_check(channel, "sip_i_accept", v, SWITCH_FALSE, SWITCH_STACK_PUSH);
+			su_free(nh->nh_home, v);
+		}
+	}
+
+	if (sip->sip_authorization) {
+		sip_authorization_t *vp;
+		for (vp = sip->sip_authorization; vp; vp = vp->au_next) {
+			char *v = sip_header_as_string(nh->nh_home, (void *) vp);
+			switch_channel_add_variable_var_check(channel, "sip_i_authorization", v, SWITCH_FALSE, SWITCH_STACK_PUSH);
+			su_free(nh->nh_home, v);
+		}
+	}
+
+	if ((alert_info = sip_alert_info(sip))) {
+		sip_alert_info_t *vp;
+		for (vp = alert_info; vp; vp = vp->ai_next) {
+			char *v = sip_header_as_string(nh->nh_home, (void *) vp);
+			switch_channel_add_variable_var_check(channel, "sip_i_alert_info", v, SWITCH_FALSE, SWITCH_STACK_PUSH);
+			su_free(nh->nh_home, v);
+		}
+	}
+
+	if ((passerted = sip_p_asserted_identity(sip))) {
+		sip_p_asserted_identity_t *vp;
+		for (vp = passerted; vp; vp = vp->paid_next) {
+			char *v = sip_header_as_string(nh->nh_home, (void *) vp);
+			switch_channel_add_variable_var_check(channel, "sip_i_p_asserted_identity", v, SWITCH_FALSE, SWITCH_STACK_PUSH);
+			su_free(nh->nh_home, v);
+		}
+	}
+
+	if ((ppreferred = sip_p_preferred_identity(sip))) {
+		sip_p_preferred_identity_t *vp;
+		for (vp = ppreferred; vp; vp = vp->ppid_next) {
+			char *v = sip_header_as_string(nh->nh_home, (void *) vp);
+			switch_channel_add_variable_var_check(channel, "sip_i_p_preferred_identity", v, SWITCH_FALSE, SWITCH_STACK_PUSH);
+			su_free(nh->nh_home, v);
+		}
+	}
+
+	if ((rpid = sip_remote_party_id(sip))) {
+		sip_remote_party_id_t *vp;
+		for (vp = rpid; vp; vp = vp->rpid_next) {
+			char *v = sip_header_as_string(nh->nh_home, (void *) vp);
+			switch_channel_add_variable_var_check(channel, "sip_i_remote_party_id", v, SWITCH_FALSE, SWITCH_STACK_PUSH);
+			su_free(nh->nh_home, v);
+		}
+	}
+
+	if ((reply_to = sip_reply_to(sip))) {
+		sip_reply_to_t *vp;
+		for (vp = reply_to; vp; vp = vp->rplyto_next) {
+			char *v = sip_header_as_string(nh->nh_home, (void *) vp);
+			switch_channel_add_variable_var_check(channel, "sip_i_reply_to", v, SWITCH_FALSE, SWITCH_STACK_PUSH);
+			su_free(nh->nh_home, v);
+		}
+	}
+
+	/* Loop through the unknown headers */
+	for (un = sip->sip_unknown; un; un = un->un_next) {
+		if (!zstr(un->un_name) && !zstr(un->un_value)) {
+			char *parsed_name;
+			if ((parsed_name = switch_mprintf("sip_i_%s", un->un_name))) {
+				char *p, *x = parsed_name;
+				switch_tolower_max(x);
+				while ((p = strchr(x, '-'))) {
+					*p = '_';
+					x = ++p;
+				}
+				switch_channel_add_variable_var_check(channel, parsed_name, un->un_value, SWITCH_FALSE, SWITCH_STACK_PUSH);
+				free(parsed_name);
+			}
+		}
+	}
+}
 
 void sofia_handle_sip_i_notify(switch_core_session_t *session, int status,
 							   char const *phrase,
@@ -1127,9 +1317,10 @@ static void our_sofia_event_callback(nua_event_t event,
 
 		if (authorization) {
 			char network_ip[80];
-			sofia_glue_get_addr(de->data->e_msg, network_ip, sizeof(network_ip), NULL);
+			int network_port;
+			sofia_glue_get_addr(de->data->e_msg, network_ip, sizeof(network_ip), &network_port);
 			auth_res = sofia_reg_parse_auth(profile, authorization, sip, de,
-											(char *) sip->sip_request->rq_method_name, tech_pvt->key, strlen(tech_pvt->key), network_ip, NULL, 0,
+											(char *) sip->sip_request->rq_method_name, tech_pvt->key, strlen(tech_pvt->key), network_ip, network_port, NULL, 0,
 											REG_INVITE, NULL, NULL, NULL, NULL);
 		}
 
@@ -3765,6 +3956,7 @@ switch_status_t config_sofia(sofia_config_t reload, char *profile_name)
 					profile->rtp_digit_delay = 40;
 					profile->sip_force_expires = 0;
 					profile->sip_expires_max_deviation = 0;
+					profile->sip_expires_late_margin = 60;
 					profile->sip_subscription_max_deviation = 0;
 					profile->tls_ciphers = "ALL:!ADH:!LOW:!EXP:!MD5:@STRENGTH";
 					profile->tls_version = SOFIA_TLS_VERSION_TLSv1;
@@ -4545,6 +4737,12 @@ switch_status_t config_sofia(sofia_config_t reload, char *profile_name)
 						} else {
 							sofia_clear_flag(profile, TFLAG_ENABLE_SOA);
 						}
+					} else if (!strcasecmp(var, "parse-all-invite-headers")) {
+						if (switch_true(val)) {
+							sofia_set_pflag(profile, PFLAG_PARSE_ALL_INVITE_HEADERS);
+						} else {
+							sofia_clear_pflag(profile, PFLAG_PARSE_ALL_INVITE_HEADERS);
+						}
 					} else if (!strcasecmp(var, "bitpacking")) {
 						if (!strcasecmp(val, "aal2")) {
 							profile->codec_flags = SWITCH_CODEC_FLAG_AAL2;
@@ -4769,6 +4967,13 @@ switch_status_t config_sofia(sofia_config_t reload, char *profile_name)
 												} else {
 														sofia_clear_pflag(profile, PFLAG_OPTIONS_RESPOND_503_ON_BUSY);
 												}
+					} else if (!strcasecmp(var, "sip-expires-late-margin")) {
+						int32_t sip_expires_late_margin = atoi(val);
+						if (sip_expires_late_margin >= 0) {
+							profile->sip_expires_late_margin = sip_expires_late_margin;
+						} else {
+							profile->sip_expires_late_margin = 60;
+						}
 					} else if (!strcasecmp(var, "sip-force-expires")) {
 						int32_t sip_force_expires = atoi(val);
 						if (sip_force_expires >= 0) {
@@ -7819,18 +8024,24 @@ void sofia_handle_sip_i_info(nua_t *nua, sofia_profile_t *profile, nua_handle_t 
 				if (!strcasecmp(rec_header, "on")) {
 					char *file = NULL, *tmp = NULL;
 
-					tmp = switch_mprintf("%s%s%s", profile->record_path ? profile->record_path : "${recordings_dir}",
-										 SWITCH_PATH_SEPARATOR, profile->record_template);
-					file = switch_channel_expand_variables(channel, tmp);
-					switch_ivr_record_session(session, file, 0, NULL);
-					switch_channel_set_variable(channel, "sofia_record_file", file);
-					switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_NOTICE, "Recording %s to %s\n", switch_channel_get_name(channel),
-									  file);
-					switch_safe_free(tmp);
-					nua_respond(nh, SIP_200_OK, NUTAG_WITH_THIS_MSG(de->data->e_msg), TAG_END());
-					if (file != profile->record_template) {
-						free(file);
-						file = NULL;
+					if (switch_true(switch_channel_get_variable(channel, "sip_disable_recording"))) {
+						switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_WARNING, "Record attempted but is disabled by sip_disable_recording variable.\n");
+						nua_respond(nh, 488, "Recording disabled for this channel", NUTAG_WITH_THIS_MSG(de->data->e_msg), TAG_END());
+					} else {
+
+						tmp = switch_mprintf("%s%s%s", profile->record_path ? profile->record_path : "${recordings_dir}",
+								SWITCH_PATH_SEPARATOR, profile->record_template);
+						file = switch_channel_expand_variables(channel, tmp);
+						switch_ivr_record_session(session, file, 0, NULL);
+						switch_channel_set_variable(channel, "sofia_record_file", file);
+						switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_NOTICE, "Recording %s to %s\n", switch_channel_get_name(channel),
+								file);
+						switch_safe_free(tmp);
+						nua_respond(nh, SIP_200_OK, NUTAG_WITH_THIS_MSG(de->data->e_msg), TAG_END());
+						if (file != profile->record_template) {
+							free(file);
+							file = NULL;
+						}
 					}
 				} else {
 					const char *file;
@@ -9129,6 +9340,10 @@ void sofia_handle_sip_i_invite(switch_core_session_t *session, nua_t *nua, sofia
 
 	if (profile->pres_type && sofia_test_pflag(profile, PFLAG_IN_DIALOG_CHAT)) {
 		sofia_presence_set_chat_hash(tech_pvt, sip);
+	}
+
+	if (sofia_test_pflag(profile, PFLAG_PARSE_ALL_INVITE_HEADERS)) {
+		sofia_parse_all_invite_headers(sip, session, nh);
 	}
 
 	if (sip->sip_to) {

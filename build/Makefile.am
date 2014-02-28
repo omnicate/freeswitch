@@ -36,6 +36,7 @@ install:
 	@echo " +       Install non english sounds:               +"
 	@echo " +       replace XX with language                  +"
 	@echo " +       (ru : Russian)                            +"
+	@echo " +       (fr : French)                             +"
 	@echo " +       ------------------------------------      +"
 	@echo " +               $(MK) cd-sounds-XX-install        +"
 	@echo " +               $(MK) uhd-sounds-XX-install       +"
@@ -70,7 +71,7 @@ install:
 	@echo " +                                                 +"
 	@echo " +-------------------------------------------------+"
 	@cat ../cluecon2.tmpl
-
+	@sh modcheck.sh $(modulesdir)
 
 .PHONY: check dvi html info install-data \
         install-dvi install-exec install-html install-info install-pdf install-ps installcheck installdirs pdf \

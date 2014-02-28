@@ -834,6 +834,10 @@ ESL_DECLARE(int) esl_wait_sock(esl_socket_t sock, uint32_t ms, esl_poll_t flags)
 	fd_set efds;
 	struct timeval tv;
 
+        if (sock == ESL_SOCK_INVALID) {
+                return ESL_SOCK_INVALID;
+        }
+
 	FD_ZERO(&rfds);
 	FD_ZERO(&wfds);
 	FD_ZERO(&efds);
@@ -913,7 +917,11 @@ ESL_DECLARE(int) esl_wait_sock(esl_socket_t sock, uint32_t ms, esl_poll_t flags)
 {
 	struct pollfd pfds[2] = { { 0 } };
 	int s = 0, r = 0;
-	
+
+	if (sock == ESL_SOCK_INVALID) {
+		return ESL_SOCK_INVALID;
+	}	
+
 	pfds[0].fd = sock;
 
 	if ((flags & ESL_POLL_READ)) {
@@ -967,7 +975,7 @@ ESL_DECLARE(esl_status_t) esl_connect_timeout(esl_handle_t *handle, const char *
 	int err = WSAStartup(wVersionRequested, &wsaData);
 	if (err != 0) {
 		snprintf(handle->err, sizeof(handle->err), "WSAStartup Error");
-		return ESL_FAIL;
+		goto fail;
 	}
 
 #endif
@@ -1009,7 +1017,7 @@ ESL_DECLARE(esl_status_t) esl_connect_timeout(esl_handle_t *handle, const char *
 	
 	if (handle->sock == ESL_SOCK_INVALID) {
 		snprintf(handle->err, sizeof(handle->err), "Socket Error");
-		return ESL_FAIL;
+		goto fail;
 	}
 
 	if (timeout) {
@@ -1110,7 +1118,6 @@ ESL_DECLARE(esl_status_t) esl_connect_timeout(esl_handle_t *handle, const char *
  fail:
 
 	handle->connected = 0;
-	esl_disconnect(handle);
 
 	return ESL_FAIL;
 }
@@ -1230,7 +1237,9 @@ static esl_ssize_t handle_recv(esl_handle_t *handle, void *data, esl_size_t data
 	
 	if (handle->connected) {
 		if ((activity = esl_wait_sock(handle->sock, 1000, ESL_POLL_READ|ESL_POLL_ERROR)) > 0) {
-			if ((activity & ESL_POLL_ERROR)) {
+			if (activity < 0) {
+				activity = -1;
+			} else if ((activity & ESL_POLL_ERROR)) {
 				activity = -1;
 			} else if ((activity & ESL_POLL_READ)) {
 				if (!(activity = recv(handle->sock, data, datalen, 0))) {

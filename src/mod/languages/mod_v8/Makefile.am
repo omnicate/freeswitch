@@ -68,7 +68,7 @@ BUILT_SOURCES = $(V8LIB) $(LIBCURL_DEPS)
 if HAVE_ODBC
 AM_CFLAGS   += -DHAVE_ODBC $(ODBC_INC_FLAGS)
 AM_CPPFLAGS += -DHAVE_ODBC $(ODBC_INC_FLAGS)
-AM_LDFLAGS  += -DHAVE_ODBC
+AM_LDFLAGS  += -DHAVE_ODBC -lodbc
 endif
 
 mod_LTLIBRARIES    = mod_v8.la
@@ -109,6 +109,9 @@ $(SOURCES): $(BUILT_SOURCES)
 
 $(V8_DIR):
 	$(GETLIB) $(V8).tar.bz2
+if ISFREEBSD
+	/bin/cp -f gyp  $(V8_DIR)/build/gyp
+endif
 
 $(V8LIB): $(V8_DIR)
 	if test "$(CXX_TARGET_PLATFORM)" = "x86_64"; then \
@@ -123,7 +126,7 @@ $(V8LIB): $(V8_DIR)
 	   fi; \
 	fi; \
 	cd $(V8_BUILDDIR) && CFLAGS="$(V8_CXXFLAGS)" CXXFLAGS="$(V8_CXXFLAGS)" \
-	GYPFLAGS="--no-parallel" GYP_DEFINES="$$defines" \
+	LINK=@CXX@ CXX=@CXX@ GYPFLAGS="--no-parallel" GYP_DEFINES="$$defines" \
 	PYTHONPATH="$(V8_BUILDDIR)/build/gyp/pylib:$(PYTHONPATH)" $(MAKE) $(V8_BUILDPARAMS) native
 
 $(CURLLA):

@@ -271,6 +271,7 @@ typedef enum {
 	PFLAG_TCP_PINGPONG,
 	PFLAG_TCP_PING2PONG,
 	PFLAG_MESSAGES_RESPOND_200_OK,
+	PFLAG_PARSE_ALL_INVITE_HEADERS,
 	/* No new flags below this line */
 	PFLAG_MAX
 } PFLAGS;
@@ -685,6 +686,7 @@ struct sofia_profile {
 	su_strlst_t *tls_verify_in_subjects;
 	uint32_t sip_force_expires;
 	uint32_t sip_expires_max_deviation;
+	uint32_t sip_expires_late_margin;
 	uint32_t sip_subscription_max_deviation;
 	int ireg_seconds;
 	sofia_paid_type_t paid_type;
@@ -901,7 +903,7 @@ void sofia_reg_auth_challenge(sofia_profile_t *profile, nua_handle_t *nh, sofia_
 							  sofia_regtype_t regtype, const char *realm, int stale, long exptime);
 auth_res_t sofia_reg_parse_auth(sofia_profile_t *profile, sip_authorization_t const *authorization,
 								sip_t const *sip,
-								sofia_dispatch_event_t *de, const char *regstr, char *np, size_t nplen, char *ip, switch_event_t **v_event,
+								sofia_dispatch_event_t *de, const char *regstr, char *np, size_t nplen, char *ip, int network_port, switch_event_t **v_event,
 								long exptime, sofia_regtype_t regtype, const char *to_user, switch_event_t **auth_params, long *reg_count, switch_xml_t *user_xml);
 
 
