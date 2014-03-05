@@ -4045,6 +4045,12 @@ switch_status_t config_sofia(sofia_config_t reload, char *profile_name)
 						} else {
 							sofia_clear_pflag(profile, PFLAG_MESSAGES_RESPOND_200_OK);
 						}
+					} else if (!strcasecmp(var, "sip-subscribe-respond-200-ok") && !zstr(val)) {
+						if (switch_true(val)) {
+							sofia_set_pflag(profile, PFLAG_SUBSCRIBE_RESPOND_200_OK);
+						} else {
+							sofia_clear_pflag(profile, PFLAG_SUBSCRIBE_RESPOND_200_OK);
+						}
 					} else if (!strcasecmp(var, "odbc-dsn") && !zstr(val)) {
 						profile->odbc_dsn = switch_core_strdup(profile->pool, val);
 					} else if (!strcasecmp(var, "db-pre-trans-execute") && !zstr(val)) {
@@ -7207,6 +7213,10 @@ void sofia_handle_sip_i_refer(nua_t *nua, sofia_profile_t *profile, nua_handle_t
 			exten = switch_core_session_sprintf(session, "%s@%s", (char *) refer_to->r_url->url_user, (char *) refer_to->r_url->url_host);
 		} else {
 			exten = (char *) refer_to->r_url->url_user;
+		}
+
+		if (refer_to->r_url->url_params) {
+			switch_channel_set_variable(tech_pvt->channel, "sip_refer_to_params", refer_to->r_url->url_params);
 		}
 
 		switch_core_session_queue_indication(session, SWITCH_MESSAGE_REFER_EVENT);
