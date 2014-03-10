@@ -80,6 +80,7 @@ sng_link_type_t sng_link_type_map[] =
 	{ 1, "ansi88" , LSD_SW_ANSI88, LSN_SW_ANS   },
 	{ 1, "ansi92" , LSD_SW_ANSI92, LSN_SW_ANS   },
 	{ 1, "ansi96" , LSD_SW_ANSI92, LSN_SW_ANS96 },
+	{ 1, "china"  , LSD_SW_CHINA , LSN_SW_CHINA },
 	{ 0, "", 0, 0 },
 };
 
