@@ -41,7 +41,8 @@
 	<meta name="author" content="">
 
 	<!-- Le styles -->
-	<link href="assets/bootstrap/css/bootstrap.css" rel="stylesheet">
+	<link href="assets/bootstrap-3.1.1/css/bootstrap.min.css" rel="stylesheet">
+	<link href="assets/bs_for_ember/css/bs-growl-notifications.min.css" rel="stylesheet">
 	<style>
 		body {
 			padding-top: 60px; /* 60px to make the container go all the way to the bottom of the topbar */
@@ -70,29 +71,33 @@
 
 <body>
 
-	<div class="navbar navbar-inverse navbar-fixed-top">
-		<div class="navbar-inner">
-			<div class="container">
-				<button type="button" class="btn btn-navbar" data-toggle="collapse" data-target=".nav-collapse">
+	<header class="navbar navbar-inverse navbar-fixed-top bs-docs-nav" role="banner">
+		<div class="container">
+			<div class="pull-right" id='ws-status' style="padding-top:5px"></div>
+
+			<div class="navbar-header">
+				<button class="navbar-toggle" type="button" data-toggle="collapse" data-target=".bs-navbar-collapse">
+					<span class="sr-only">Toggle navigation</span>
 					<span class="icon-bar"></span>
 					<span class="icon-bar"></span>
 					<span class="icon-bar"></span>
 				</button>
-				<a class="brand" href="#">FreeSWITCH Portal</a>
-				<div class="pull-right" id='ws-status' style="padding-top:5px"></div>
-				<div class="nav-collapse collapse">
-					<ul class="nav">
-						<li class="active"><a href="#">Home</a></li>
-						<li><a id="menu-users" href="#users">Users</a></li>
-						<li><a id="menu-calls" href="#calls">Calls</a></li>
-						<li><a id="menu-channels" href="#channels">Channels</a></li>
-						<li><a href="#show">Show</a></li>
-						<li><a href="#about">About</a></li>
-					</ul>
-				</div><!--/.nav-collapse -->
+				<a class="navbar-brand" href="#">FreeSWITCH Portal</a>
 			</div>
+
+			<nav class="collapse navbar-collapse bs-navbar-collapse" role="navigation">
+				<ul class="nav navbar-nav">
+					<li><a href="#">Home</a></li>
+					<li><a id="menu-users" href="#users">Users</a></li>
+					<li><a id="menu-calls" href="#calls">Calls</a></li>
+					<li><a id="menu-channels" href="#channels">Channels</a></li>
+					<li><a href="#show">Show</a></li>
+					<li><a href="#sofiaStatus">Sofia</a></li>
+					<li><a href="#about">About</a></li>
+				</ul>
+			</nav>
 		</div>
-	</div>
+	</header>
 
 	<div class="container" id="container">
 		<div id="main">
@@ -591,8 +596,23 @@
 		<br>
 	</script>
 
-	<script type="text/x-handlebars" data-template-name="users">
+	<script type="text/x-handlebars" data-template-name="users" id="users/index">
+		<div class="pull-right">
+			{{#bs-button type="primary" clicked="newUser"}}Create User{{/bs-button}}
+		</div>
+
+		{{#bs-modal name="newUserForm" fade="true" footerButtonsBinding="newUserButtons" title="Create User (Experimental)"}}
+			<p>
+				User ID: <input name="user_id" id="user_id"></input><br>
+			</p>
+			<div class="modal-footer">
+				{{#bs-button type="primary" clicked="submit"}}Create{{/bs-button}}
+				{{#bs-button clicked="cancel"}}Cancel{{/bs-button}}
+			</div>
+		{{/bs-modal}}
+
 		<h1>Users</h1>
+
 		<div>
 			<table class="table">
 			<tr>
@@ -615,6 +635,66 @@
 				<td>{{ callgroup }}</td>
 				<td>{{ cid_name }}</td>
 				<td>{{ cid_number }}</td>
+			</tr>
+			{{/each}}
+			</table>
+		</div>
+	</script>
+
+	<script type="text/x-handlebars" data-template-name="sofiaStatus">
+		<div class="pull-right">
+			{{#bs-button type="primary" clicked="addGateway"}}Add Gateway{{/bs-button}}
+		</div>
+
+		{{#bs-modal name="newUserForm" fade="true" footerButtonsBinding="addGatewayButtons" title="Add Gateway"}}
+			<div class="form-group form-horizontal">
+				<label class="control-label" for="gateway_name">Name</label>
+				<div class="controls">
+					<input type="text" name="gateway_name" value="">
+				</div>
+			</div>
+			<div class="form-group">
+				<label class="control-label" for="gateway_realm">Realm</label>
+				<div class="controls">
+					<input type="text" name="gateway_realm" value="">
+				</div>
+			</div>
+			<div class="form-group">
+				<label class="control-label" for="gateway_name">Username</label>
+				<div class="controls">
+					<input type="text" name="gateway_username" value="">
+				</div>
+			</div>
+			<div class="form-group">
+				<label class="control-label" for="gateway_name">Password</label>
+				<div class="controls">
+					<input type="text" name="gateway_password" value="">
+				</div>
+			</div>
+			<div class="modal-footer">
+				{{#bs-button type="primary" clicked="submit"}}Add{{/bs-button}}
+				{{#bs-button clicked="cancel"}}Cancel{{/bs-button}}
+			</div>
+		{{/bs-modal}}
+
+		<h1>Sofia Status</h1>
+
+		<div>
+			<table class="table">
+			<tr>
+				<th>Type</th>
+				<th>Name</th>
+				<th>Data</th>
+				<th>State</th>
+				<th>Action</th>
+			</tr>
+			{{#each App.sofiaStatusController.content}}
+			<tr>
+				<td>{{ type }}</td>
+				<td>{{ name }}</td>
+				<td>{{ data }}</td>
+				<td>{{ state }}</td>
+				<td>{{ actions }}</td>
 			</tr>
 			{{/each}}
 			</table>
@@ -688,10 +768,26 @@
 ================================================== -->
 <!-- Placed at the end of the document so the pages load faster -->
 <script src="assets/js/ie-console.js"></script>
-<script src="assets/js/jquery-1.9.1.min.js"></script>
-<script src="assets/js/handlebars.js"></script>
-<script src="assets/js/ember-1.0.0-rc.1.js"></script>
-<script src="assets/js/ember-data.js"></script>
+<script src="assets/js/jquery.min.js"></script>
+<script src="assets/js/handlebars.min.js"></script>
+<script src="assets/js/ember.min.js"></script>
+<!-- <script src="assets/js/ember-data.min.js"></script> -->
+<script src="assets/bs_for_ember/js/bs-core.min.js"></script>
+<script src="assets/bs_for_ember/js/bs-alert.min.js"></script>
+<script src="assets/bs_for_ember/js/bs-badge.min.js"></script>
+<script src="assets/bs_for_ember/js/bs-basic.min.js"></script>
+<script src="assets/bs_for_ember/js/bs-button.min.js"></script>
+<script src="assets/bs_for_ember/js/bs-growl-notifications.min.js"></script>
+<script src="assets/bs_for_ember/js/bs-items-action-bar.min.js"></script>
+<script src="assets/bs_for_ember/js/bs-label.min.js"></script>
+<script src="assets/bs_for_ember/js/bs-list-group.min.js"></script>
+<script src="assets/bs_for_ember/js/bs-modal.min.js"></script>
+<script src="assets/bs_for_ember/js/bs-nav.min.js"></script>
+<script src="assets/bs_for_ember/js/bs-notifications.min.js"></script>
+<script src="assets/bs_for_ember/js/bs-progressbar.min.js"></script>
+<script src="assets/bs_for_ember/js/bs-wizard.min.js"></script>
+
+
 <script src="assets/js/fsportal.js"></script>
 <!--
 <script src="assets/js/bootstrap-transition.js"></script>

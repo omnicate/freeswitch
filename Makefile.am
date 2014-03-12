@@ -1,6 +1,6 @@
 EXTRA_DIST =
 SUBDIRS = . src
-AUTOMAKE_OPTIONS = foreign
+AUTOMAKE_OPTIONS = foreign subdir-objects
 NAME = freeswitch
 
 AM_LIBAPR_CFLAGS := $(shell ./libs/apr/apr-1-config --cflags)
@@ -139,7 +139,7 @@ endif
 
 if HAVE_LIBEDIT
 CORE_CFLAGS += -I$(switch_srcdir)/libs/libedit/src -DSWITCH_HAVE_LIBEDIT
-CORE_LIBS   += libs/libedit/src/.libs/libedit.a $(TINFO_LIBS)
+CORE_LIBS   += libs/libedit/src/.libs/libedit.a
 endif
 
 if ENABLE_TIMERFD_WRAPPER
@@ -158,6 +158,10 @@ libfreeswitch_la_CFLAGS  = $(CORE_CFLAGS) $(AM_CFLAGS)
 libfreeswitch_la_LDFLAGS = -version-info 1:0:0 $(AM_LDFLAGS) $(PLATFORM_CORE_LDFLAGS)
 libfreeswitch_la_LIBADD  = $(CORE_LIBS) $(APR_LIBS) $(PLATFORM_CORE_LIBS)
 libfreeswitch_la_DEPENDENCIES = $(BUILT_SOURCES)
+
+if HAVE_LIBEDIT
+libfreeswitch_la_LIBADD += $(TINFO_LIBS)
+endif
 
 if HAVE_ODBC
 libfreeswitch_la_LDFLAGS += $(ODBC_LIB_FLAGS)
@@ -220,7 +224,8 @@ library_include_HEADERS = \
 	libs/libtpl-1.5/src/tpl.h \
 	src/include/switch_limit.h \
 	src/include/switch_odbc.h \
-	src/include/switch_pgsql.h
+	src/include/switch_pgsql.h \
+	src/include/switch_hashtable.h
 
 nodist_libfreeswitch_la_SOURCES = \
 	src/include/switch_frame.h \
@@ -287,6 +292,7 @@ libfreeswitch_la_SOURCES = \
 	src/switch_profile.c \
 	src/switch_json.c \
 	src/switch_curl.c \
+	src/switch_hashtable.c\
 	libs/libtpl-1.5/src/tpl.c \
 	libs/stfu/stfu.c \
 	libs/libteletone/src/libteletone_detect.c \

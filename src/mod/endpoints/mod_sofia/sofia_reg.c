@@ -1099,8 +1099,8 @@ void sofia_reg_close_handles(sofia_profile_t *profile)
 	switch_mutex_lock(profile->flag_mutex);
 	if (profile->reg_nh_hash) {
 	top:
-		for (hi = switch_hash_first(NULL, profile->reg_nh_hash); hi; hi = switch_hash_next(hi)) {
-			switch_hash_this(hi, &var, NULL, &val);
+		for (hi = switch_core_hash_first( profile->reg_nh_hash); hi; hi = switch_core_hash_next(hi)) {
+			switch_core_hash_this(hi, &var, NULL, &val);
 			if ((nh = (nua_handle_t *) val)) {
 				nua_handle_unref(nh);
 				nua_handle_destroy(nh);
@@ -1187,10 +1187,10 @@ uint8_t sofia_reg_handle_register(nua_t *nua, sofia_profile_t *profile, nua_hand
 	if (sip && sip->sip_via && (vproto = sip->sip_via->v_protocol)) {
 		if (!strcasecmp(vproto, "sip/2.0/ws")) {
 			is_ws = 1;
-			is_nat++;
+			is_nat = "ws";
 		} else if (!strcasecmp(vproto, "sip/2.0/wss")) {
 			is_wss = 1;
-			is_nat++;
+			is_nat = "wss";
 
 			if (uparams && (p = switch_stristr("transport=ws", uparams))) {
 				if (p[12] != 's') {
@@ -1269,24 +1269,29 @@ uint8_t sofia_reg_handle_register(nua_t *nua, sofia_profile_t *profile, nua_hand
 
 		if (uparams && switch_stristr("transport=tls", uparams)) {
 			is_tls += 1;
-			is_nat++;
+			if (sofia_test_pflag(profile, PFLAG_TLS_ALWAYS_NAT)) {
+				is_nat = "tls";
+			}
 		}
 
 		if (!is_wss && !is_ws && uparams && switch_stristr("transport=ws", uparams)) {
-			is_nat++;
+			is_nat = "ws";
 			is_ws += 1;
 		}
 
 		if (sip->sip_contact->m_url->url_type == url_sips) {
 			proto = "sips";
 			is_tls += 2;
-			is_nat++;
+			if (sofia_test_pflag(profile, PFLAG_TLS_ALWAYS_NAT)) {
+				is_nat = "tls";
+			}
 		}
-
 
 		if (uparams && switch_stristr("transport=tcp", uparams)) {
 			is_tcp = 1;
-			is_nat++;
+			if (sofia_test_pflag(profile, PFLAG_TCP_ALWAYS_NAT)) {
+				is_nat = "tcp";
+			}
 		}
 
 		display = contact->m_display;
@@ -1464,7 +1469,8 @@ uint8_t sofia_reg_handle_register(nua_t *nua, sofia_profile_t *profile, nua_hand
 				to_user = force_user;
 			}
 
-			if (profile->server_rport_level >= 2 && sip->sip_user_agent &&
+			if (!is_tcp && !is_tls && (zstr(network_ip) || !switch_check_network_list_ip(network_ip, profile->local_network)) &&
+				profile->server_rport_level >= 2 && sip->sip_user_agent &&
 				sip->sip_user_agent->g_string &&
 				( !strncasecmp(sip->sip_user_agent->g_string, "Polycom", 7) || !strncasecmp(sip->sip_user_agent->g_string, "KIRK Wireless Server", 20) )) {
 				if (sip && sip->sip_via) {
@@ -1737,9 +1743,7 @@ uint8_t sofia_reg_handle_register(nua_t *nua, sofia_profile_t *profile, nua_hand
 		switch_safe_free(url);
 		switch_safe_free(contact);
 		
-
-		
-		if ((is_wss || is_ws || is_tcp || is_tls) && !sofia_private && call_id) {
+		if ((is_wss || is_ws || (sofia_test_pflag(profile, PFLAG_TCP_UNREG_ON_SOCKET_CLOSE) && (is_tcp || is_tls))) && !sofia_private && call_id) {
 			char key[256] = "";
 			nua_handle_t *hnh;
 			switch_snprintf(key, sizeof(key), "%s%s%s", call_id, network_ip, network_port_c);
@@ -3132,8 +3136,8 @@ sofia_gateway_t *sofia_reg_find_gateway_by_realm__(const char *file, const char 
 	void *val;
 
 	switch_mutex_lock(mod_sofia_globals.hash_mutex);
-	for (hi = switch_hash_first(NULL, mod_sofia_globals.gateway_hash); hi; hi = switch_hash_next(hi)) {
-		switch_hash_this(hi, &var, NULL, &val);
+	for (hi = switch_core_hash_first( mod_sofia_globals.gateway_hash); hi; hi = switch_core_hash_next(hi)) {
+		switch_core_hash_this(hi, &var, NULL, &val);
 		if (key && (gateway = (sofia_gateway_t *) val) && !gateway->deleted && gateway->register_realm && !strcasecmp(gateway->register_realm, key)) {
 			break;
 		} else {
