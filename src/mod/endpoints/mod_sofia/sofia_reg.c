@@ -253,6 +253,15 @@ void sofia_sub_check_gateway(sofia_profile_t *profile, time_t now)
 				break;
 
 			case SUB_STATE_FAILED:
+				gw_sub_ptr->expires = now;
+				gw_sub_ptr->retry = now + gw_sub_ptr->retry_seconds;
+				gw_sub_ptr->state = SUB_STATE_FAIL_WAIT;
+				break;
+			case SUB_STATE_FAIL_WAIT:
+				if (!gw_sub_ptr->retry || now >= gw_sub_ptr->retry) {
+					gw_sub_ptr->state = SUB_STATE_UNSUBED;
+				}
+				break;
 			case SUB_STATE_TRYING:
 				if (gw_sub_ptr->retry && now >= gw_sub_ptr->retry) {
 					gw_sub_ptr->state = SUB_STATE_UNSUBED;
@@ -671,6 +680,7 @@ int sofia_reg_del_callback(void *pArg, int argc, char **argv, char **columnNames
 			switch_event_add_header_string(s_event, SWITCH_STACK_BOTTOM, "contact", argv[3]);
 			switch_event_add_header_string(s_event, SWITCH_STACK_BOTTOM, "expires", argv[6]);
 			switch_event_add_header_string(s_event, SWITCH_STACK_BOTTOM, "user-agent", argv[7]);
+			switch_event_add_header_string(s_event, SWITCH_STACK_BOTTOM, "realm", argv[14]);
 			sofia_event_fire(profile, &s_event);
 		}
 
@@ -724,7 +734,7 @@ void sofia_reg_expire_call_id(sofia_profile_t *profile, const char *call_id, int
 
 	sql = switch_mprintf("select call_id,sip_user,sip_host,contact,status,rpid,expires"
 						 ",user_agent,server_user,server_host,profile_name,network_ip,network_port"
-						 ",%d from sip_registrations where call_id='%q' %s", reboot, call_id, sqlextra);
+						 ",%d,sip_realm from sip_registrations where call_id='%q' %s", reboot, call_id, sqlextra);
 
 
 	sofia_glue_execute_sql_callback(profile, profile->dbh_mutex, sql, sofia_reg_del_callback, profile);
@@ -746,10 +756,10 @@ void sofia_reg_check_expire(sofia_profile_t *profile, time_t now, int reboot)
 	if (now) {
 		sql = switch_mprintf("select call_id,sip_user,sip_host,contact,status,rpid,expires"
 						",user_agent,server_user,server_host,profile_name,network_ip, network_port"
-						",%d from sip_registrations where expires > 0 and expires <= %ld", reboot, (long) now);
+						",%d,sip_realm from sip_registrations where expires > 0 and expires <= %ld", reboot, (long) now);
 	} else {
 		sql = switch_mprintf("select call_id,sip_user,sip_host,contact,status,rpid,expires"
-						",user_agent,server_user,server_host,profile_name,network_ip, network_port" ",%d from sip_registrations where expires > 0", reboot);
+						",user_agent,server_user,server_host,profile_name,network_ip, network_port" ",%d,sip_realm from sip_registrations where expires > 0", reboot);
 	}
 
 	sofia_glue_execute_sql_callback(profile, profile->dbh_mutex, sql, sofia_reg_del_callback, profile);
@@ -897,7 +907,7 @@ void sofia_reg_check_sync(sofia_profile_t *profile)
 	char *sql;
 
 	sql = switch_mprintf("select call_id,sip_user,sip_host,contact,status,rpid,expires"
-					",user_agent,server_user,server_host,profile_name,network_ip,network_port" 
+					",user_agent,server_user,server_host,profile_name,network_ip,network_port,0,sip_realm"
 					" from sip_registrations where expires > 0");
 
 
@@ -1116,9 +1126,9 @@ void sofia_reg_close_handles(sofia_profile_t *profile)
 }
 
 
-uint8_t sofia_reg_handle_register(nua_t *nua, sofia_profile_t *profile, nua_handle_t *nh, sip_t const *sip,
+uint8_t sofia_reg_handle_register_token(nua_t *nua, sofia_profile_t *profile, nua_handle_t *nh, sip_t const *sip,
 								sofia_dispatch_event_t *de, sofia_regtype_t regtype, char *key,
-								  uint32_t keylen, switch_event_t **v_event, const char *is_nat, sofia_private_t **sofia_private_p, switch_xml_t *user_xml)
+								  uint32_t keylen, switch_event_t **v_event, const char *is_nat, sofia_private_t **sofia_private_p, switch_xml_t *user_xml, const char *sw_acl_token)
 {
 	sip_to_t const *to = NULL;
 	sip_from_t const *from = NULL;
@@ -1172,6 +1182,9 @@ uint8_t sofia_reg_handle_register(nua_t *nua, sofia_profile_t *profile, nua_hand
 	const char *p;
 	char *utmp = NULL;
 	sofia_private_t *sofia_private = NULL;
+	char *sw_to_user;
+	char *sw_reg_host;
+	char *token_val = NULL;
 
 	if (sofia_private_p) {
 		sofia_private = *sofia_private_p;
@@ -1398,6 +1411,13 @@ uint8_t sofia_reg_handle_register(nua_t *nua, sofia_profile_t *profile, nua_hand
 
 	if (regtype == REG_AUTO_REGISTER || (regtype == REG_REGISTER && sofia_test_pflag(profile, PFLAG_BLIND_REG))) {
 		regtype = REG_REGISTER;
+		if (!zstr(sw_acl_token)) {
+			token_val = strdup(sw_acl_token);
+
+			switch_split_user_domain(token_val, &sw_to_user, &sw_reg_host);
+			to_user = sw_to_user;
+			reg_host = sw_reg_host;
+		}
 		goto reg;
 	}
 
@@ -2047,6 +2067,7 @@ uint8_t sofia_reg_handle_register(nua_t *nua, sofia_profile_t *profile, nua_hand
 	switch_safe_free(dup_mwi_account);
 	switch_safe_free(utmp);
 	switch_safe_free(path_val);
+	switch_safe_free(token_val);
 
 	if (auth_params) {
 		switch_event_destroy(&auth_params);
@@ -2067,6 +2088,7 @@ void sofia_reg_handle_sip_i_register(nua_t *nua, sofia_profile_t *profile, nua_h
 	sofia_regtype_t type = REG_REGISTER;
 	int network_port = 0;
 	char *is_nat = NULL;
+	const char *acl_token = NULL;
 
 
 #if 0 /* This seems to cause undesirable effects so nevermind */
@@ -2144,16 +2166,18 @@ void sofia_reg_handle_sip_i_register(nua_t *nua, sofia_profile_t *profile, nua_h
 		uint32_t x = 0;
 		int ok = 1;
 		char *last_acl = NULL;
+		const char *token_sw = NULL;
 
 		for (x = 0; x < profile->reg_acl_count; x++) {
 			last_acl = profile->reg_acl[x];
-			if (!(ok = switch_check_network_list_ip(network_ip, last_acl))) {
+			if (!(ok = switch_check_network_list_ip_token(network_ip, last_acl, &token_sw))) {
 				break;
 			}
 		}
 
 		if (ok && !sofia_test_pflag(profile, PFLAG_BLIND_REG)) {
 			type = REG_AUTO_REGISTER;
+			acl_token = token_sw;
 		} else if (!ok) {
 			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "IP %s Rejected by register acl \"%s\"\n", network_ip, profile->reg_acl[x]);
 			nua_respond(nh, SIP_403_FORBIDDEN, NUTAG_WITH_THIS_MSG(de->data->e_msg), TAG_END());
@@ -2174,7 +2198,7 @@ void sofia_reg_handle_sip_i_register(nua_t *nua, sofia_profile_t *profile, nua_h
 		is_nat = NULL;
 	}
 
-	sofia_reg_handle_register(nua, profile, nh, sip, de, type, key, sizeof(key), &v_event, is_nat, sofia_private_p, NULL);
+	sofia_reg_handle_register_token(nua, profile, nh, sip, de, type, key, sizeof(key), &v_event, is_nat, sofia_private_p, NULL, acl_token);
 
 	if (v_event) {
 		switch_event_destroy(&v_event);

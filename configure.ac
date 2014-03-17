@@ -14,6 +14,7 @@ AC_CONFIG_FILES([src/include/switch_version.h.in:src/include/switch_version.h.te
 
 AC_CONFIG_AUX_DIR(build/config)
 AM_INIT_AUTOMAKE
+m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 AC_CONFIG_SRCDIR([src/switch.c])
 AC_CONFIG_HEADER([src/include/switch_private.h])
 AC_CONFIG_HEADER([libs/xmlrpc-c/xmlrpc_amconfig.h])
@@ -203,8 +204,8 @@ if test "${enable_optimizer}" = "yes" ; then
 fi
 
 # set defaults for use on all platforms
-SWITCH_AM_CFLAGS="-I${switch_srcdir}/src/include -I${switch_builddir}/src/include -I${switch_srcdir}/libs/libteletone/src -I${switch_srcdir}/libs/stfu"
-SWITCH_AM_CXXFLAGS="-I${switch_srcdir}/src/include -I${switch_builddir}/src/include -I${switch_srcdir}/libs/libteletone/src -I${switch_srcdir}/libs/stfu"
+SWITCH_AM_CFLAGS="-I${switch_srcdir}/src/include -I${switch_builddir}/src/include -I${switch_srcdir}/libs/libteletone/src"
+SWITCH_AM_CXXFLAGS="-I${switch_srcdir}/src/include -I${switch_builddir}/src/include -I${switch_srcdir}/libs/libteletone/src"
 SWITCH_AM_LDFLAGS="-lm"
 
 #set SOLINK variable based on compiler and host
@@ -236,16 +237,6 @@ elif test "x${ax_cv_c_compiler_vendor}" = "xgnu" ; then
 else
     AC_ERROR([Please update configure.in with SOLINK values for your compiler])
 fi
-# set DYNAMIC_LIB_EXTEN
-# we should really be using libtool so we don't need to do this
-case "$host" in
-    *cygwin* | *mingw*)
-        DYNAMIC_LIB_EXTEN="dll"
-    ;;
-    *)
-        DYNAMIC_LIB_EXTEN="so"
-    ;;
-esac
 
 ##
 # detect libtool major version,
@@ -263,7 +254,7 @@ if test -z "$LIBTOOL_MAJOR_VERSION" ; then
 fi
 AC_MSG_RESULT([${LIBTOOL_MAJOR_VERSION}])
 
-LIBTOOL_LIB_EXTEN="$DYNAMIC_LIB_EXTEN"
+LIBTOOL_LIB_EXTEN=so
 
 if test "${LIBTOOL_MAJOR_VERSION}" = "2" ; then
    LIBTOOL_LIB_EXTEN="la"
@@ -297,6 +288,9 @@ if test "x${ax_cv_c_compiler_vendor}"  =  "xsun" ; then
         APR_ADDTO(SWITCH_AM_LDFLAGS, -m64)
 	LIBS="$LIBS -m64"
     fi
+elif test "x${ax_cv_c_compiler_vendor}" = "xclang" ; then
+    APR_ADDTO(SWITCH_AM_CFLAGS, -fPIC)
+    APR_ADDTO(SWITCH_AM_CXXFLAGS, -fPIC)
 elif test "x${ax_cv_c_compiler_vendor}" = "xgnu" ; then
     APR_ADDTO(SWITCH_AM_CFLAGS, -fPIC)
     APR_ADDTO(SWITCH_AM_CXXFLAGS, -fPIC)
@@ -409,6 +403,19 @@ AC_ARG_ENABLE(cpp,
 [AC_HELP_STRING([--disable-cpp],[build without cpp code])],[enable_cpp="$enableval"],[enable_cpp="yes"])
 
 AM_CONDITIONAL([ENABLE_CPP],[test "${enable_cpp}" = "yes"])
+
+AC_ARG_ENABLE([system-xmlrpc-c],
+  [AS_HELP_STRING([--enable-system-xmlrpc-c],
+    [use system lib for xmlrpc-c])],,
+  [enable_xmlrpcc="no"])
+
+if test "${enable_xmlrpcc}" = "yes" ; then
+SYS_XMLRPC_CFLAGS=`xmlrpc-c-config --cflags`
+SYS_XMLRPC_LDFLAGS=`xmlrpc-c-config --libs`
+fi
+AC_SUBST(SYS_XMLRPC_CFLAGS)
+AC_SUBST(SYS_XMLRPC_LDFLAGS)
+AM_CONDITIONAL([SYSTEM_XMLRPCC],[test "${enable_xmlrpcc}" = "yes"])
 
 AC_ARG_ENABLE(srtp,
 [AC_HELP_STRING([--disable-srtp],[build without srtp support])],[enable_srtp="$enableval"],[enable_srtp="yes"])
@@ -623,7 +630,6 @@ AC_SUBST(ESL_LDFLAGS)
 AC_SUBST(PLATFORM_CORE_LDFLAGS)
 AC_SUBST(PLATFORM_CORE_LIBS)
 AC_SUBST(SOLINK)
-AC_SUBST(DYNAMIC_LIB_EXTEN)
 AC_SUBST(LIBTOOL_LIB_EXTEN)
 
 # Checks for header files.
@@ -1030,7 +1036,7 @@ fi
 
 if test "$ac_cv_use_system_curl" = "yes" ; then
 AC_CACHE_CHECK([whether to use system libcurl library], [ac_cv_curl_usable], [
-  AC_CHECK_LIB(curl, Curl_setopt, [ac_cv_curl_usable="yes"], [ac_cv_curl_usable="no"])
+  AC_CHECK_LIB(curl, curl_easy_setopt, [ac_cv_curl_usable="yes"], [ac_cv_curl_usable="no"])
 ])
 fi
 
@@ -1399,7 +1405,6 @@ AM_CONDITIONAL(HAVE_G729, [ test -d ${switch_srcdir}/libs/libg729 ])
 
 #some vars to sub into the Makefile.am's
 #LIBS+=> core.log || error="yes";if test -n "$(VERBOSE)" -o "$$error" = "yes";then cat core.log;fi;if test "$$error" = "yes";then exit 1;fi
-LIBTOOL='`if test -z "$(VERBOSE)" ; then echo $(SHELL) $(switch_builddir)/quiet_libtool ;else echo $(switch_builddir)/libtool; fi;`'
 TOUCH_TARGET='if test -f "$@";then touch "$@";fi;'
 CONF_MODULES='$$(grep -v "\#" $(switch_builddir)/modules.conf | sed -e "s|^.*/||" | sort | uniq )'
 CONF_DISABLED_MODULES='$$(grep "\#" $(switch_builddir)/modules.conf | grep -v "\#\#" | sed -e "s|^.*/||" | sort | uniq )'

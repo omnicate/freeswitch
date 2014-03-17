@@ -51,7 +51,6 @@
 #include <apr_thread_rwlock.h>
 #include <apr_file_io.h>
 #include <apr_poll.h>
-#include <apr_dso.h>
 #include <apr_strings.h>
 #define APR_WANT_STDIO
 #define APR_WANT_STRFUNC
@@ -121,28 +120,6 @@ SWITCH_DECLARE(unsigned int) switch_ci_hashfunc_default(const char *char_key, sw
 SWITCH_DECLARE(unsigned int) switch_hashfunc_default(const char *key, switch_ssize_t *klen)
 {
 	return apr_hashfunc_default(key, klen);
-}
-
-/* DSO functions */
-
-SWITCH_DECLARE(switch_status_t) switch_dso_load(switch_dso_handle_t ** res_handle, const char *path, switch_memory_pool_t *ctx)
-{
-	return apr_dso_load(res_handle, path, ctx);
-}
-
-SWITCH_DECLARE(switch_status_t) switch_dso_unload(switch_dso_handle_t *handle)
-{
-	return apr_dso_unload(handle);
-}
-
-SWITCH_DECLARE(switch_status_t) switch_dso_sym(switch_dso_handle_sym_t *ressym, switch_dso_handle_t *handle, const char *symname)
-{
-	return apr_dso_sym(ressym, handle, symname);
-}
-
-SWITCH_DECLARE(const char *) switch_dso_error(switch_dso_handle_t *dso, char *buf, size_t bufsize)
-{
-	return apr_dso_error(dso, buf, bufsize);
 }
 
 /* string functions */
@@ -618,21 +595,13 @@ struct apr_threadattr_t {
 	int priority;
 };
 #else
-/* we are implementing our own windows support for thread priority settings because apr does not*/
+/* this needs to be revisited when apr for windows supports thread priority settings */
+/* search for WIN32 in this file */
 struct apr_threadattr_t {
     apr_pool_t *pool;
     apr_int32_t detach;
     apr_size_t stacksize;
-    int priority;
-};
-struct apr_thread_t {
-    apr_pool_t *pool;
-    HANDLE td;
-    apr_int32_t cancel;
-    apr_int32_t cancel_how;
-    void *data;
-    apr_thread_start_t func;
-    apr_status_t exitval;
+	int priority;
 };
 #endif
 
@@ -642,7 +611,9 @@ SWITCH_DECLARE(switch_status_t) switch_threadattr_create(switch_threadattr_t ** 
 	switch_status_t status;
 
 	if ((status = apr_threadattr_create(new_attr, pool)) == SWITCH_STATUS_SUCCESS) {
+
 		(*new_attr)->priority = SWITCH_PRI_LOW;
+
 	}
 
 	return status;
@@ -660,7 +631,9 @@ SWITCH_DECLARE(switch_status_t) switch_threadattr_stacksize_set(switch_threadatt
 
 SWITCH_DECLARE(switch_status_t) switch_threadattr_priority_set(switch_threadattr_t *attr, switch_thread_priority_t priority)
 {
+
 	attr->priority = priority;
+
 	return SWITCH_STATUS_SUCCESS;
 }
 
@@ -669,16 +642,8 @@ static char TT_KEY[] = "1";
 SWITCH_DECLARE(switch_status_t) switch_thread_create(switch_thread_t ** new_thread, switch_threadattr_t *attr,
 													 switch_thread_start_t func, void *data, switch_memory_pool_t *cont)
 {
-	apr_status_t status;
-
 	switch_core_memory_pool_set_data(cont, "_in_thread", TT_KEY);
-	status = apr_thread_create(new_thread, attr, func, data, cont);
-#ifdef WIN32
-	if (attr->priority == SWITCH_PRI_REALTIME) {
-		SetThreadPriority(((apr_thread_t*)*new_thread)->td, THREAD_PRIORITY_HIGHEST);
-	}
-#endif
-	return (switch_status_t)status;
+	return apr_thread_create(new_thread, attr, func, data, cont);
 }
 
 /* socket stubs */
