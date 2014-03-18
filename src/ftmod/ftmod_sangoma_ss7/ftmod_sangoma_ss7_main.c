@@ -1175,6 +1175,20 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 			break;
 		}
 
+		i = 0;
+		while (ftdmchan->caller_data.cid_num.digits[i] != '\0') {
+			i++;
+		}
+
+		/* check if there is a pulsating character in end of calling party number */
+		if (ftdmchan->caller_data.cid_num.digits[i -1] == 'F') {
+			/* Remove the pulsating character */
+			ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Received Calling party number with pulsing character %s\n", ftdmchan->caller_data.cid_num.digits);
+			ftdmchan->caller_data.cid_num.digits[i-1] = '\0';
+			ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Refined Calling party number %s\n", ftdmchan->caller_data.cid_num.digits);
+		}
+
+		i = 0;
 		while (ftdmchan->caller_data.dnis.digits[i] != '\0'){
 			i++;
 		}
