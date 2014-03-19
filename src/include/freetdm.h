@@ -317,9 +317,10 @@ typedef enum {
 	FTDM_CPC_DATA,
 	FTDM_CPC_TEST,
 	FTDM_CPC_PAYPHONE,
+	FTDM_CPC_CHINA,
 	FTDM_CPC_INVALID
 } ftdm_calling_party_category_t;
-#define CALLING_PARTY_CATEGORY_STRINGS "unknown", "operator", "operator-french", "operator-english", "operator-german", "operator-russian", "operator-spanish", "ordinary", "priority", "data-call", "test-call", "payphone", "invalid"
+#define CALLING_PARTY_CATEGORY_STRINGS "unknown", "operator", "operator-french", "operator-english", "operator-german", "operator-russian", "operator-spanish", "ordinary", "priority", "data-call", "test-call", "payphone", "china", "invalid"
 FTDM_STR2ENUM_P(ftdm_str2ftdm_calling_party_category, ftdm_calling_party_category2str, ftdm_calling_party_category_t)
 
 /*! Network responses to transfer requests */
