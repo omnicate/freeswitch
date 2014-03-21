@@ -518,8 +518,8 @@ void ft_to_sngss7_rel (ftdm_channel_t * ftdmchan)
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found user supplied location indicator in REL, value \"%s\"\n", loc_ind);
 		rel.causeDgn.location.val = atoi(loc_ind);
 	} else {
-		rel.causeDgn.location.val = 0x01;
-		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "No user supplied location indicator in REL, using 0x01\"%s\"\n", "");
+		rel.causeDgn.location.val = 0x00;
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "No user supplied location indicator in REL, using 0x00\"%s\"\n", "");
 	}
 	rel_cause = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_rel_cause");
 	if (!ftdm_strlen_zero(rel_cause)) {

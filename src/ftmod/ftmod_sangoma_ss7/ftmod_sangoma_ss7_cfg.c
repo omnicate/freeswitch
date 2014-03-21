@@ -1253,10 +1253,10 @@ int ftmod_ss7_mtp3_route_config(int id)
 	} else {
 		cfg.t.cfg.s.snRout.slsRange		= LSN_ANSI_5BIT_SLS_RANGE;	/* max value of SLS for this DPC */
 	}
-	cfg.t.cfg.s.snRout.lsetSel			= 0x1;						/* linkset selection bit in SLS for STP */
+	cfg.t.cfg.s.snRout.lsetSel			= 0x8;						/* linkset selection bit in SLS for STP */
 	cfg.t.cfg.s.snRout.multiMsgPrior	= TRUE;					/* TRUE if multiple cong priorities of messages */
 	cfg.t.cfg.s.snRout.rctReq			= TRUE;					/* route set congestion test required or not */
-	cfg.t.cfg.s.snRout.slsLnk			= FALSE;
+	cfg.t.cfg.s.snRout.slsLnk			= TRUE;
 #ifdef LSNV2
 # if (SS7_NTT || defined(TDS_ROLL_UPGRADE_SUPPORT))
 	cfg.t.cfg.s.snRout.destSpec			=;							/* destination specfication A or B*/ 
@@ -1428,7 +1428,7 @@ int ftmod_ss7_isup_intf_config(int id)
 
 #endif
 #if (LSIV4 || LSIV5)
-	cfg.t.cfg.s.siIntfCb.lnkSelOpt				= LSI_LINSEK_CIC;		/* link select option */
+	cfg.t.cfg.s.siIntfCb.lnkSelOpt				= LSI_LNKSEL_CIC;		/* link select option */
 # if (SS7_ANS88 || SS7_ANS92 || SS7_ANS95 || SS7_BELL)
 	cfg.t.cfg.s.siIntfCb.lnkSelBits				= LSI_LNKSEL_8BITS;		/* number of bits for link selection */
 # endif
