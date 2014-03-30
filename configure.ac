@@ -17,6 +17,7 @@ AM_INIT_AUTOMAKE
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 AC_CONFIG_SRCDIR([src/switch.c])
 AC_CONFIG_HEADER([src/include/switch_private.h])
+AC_CONFIG_HEADER([libs/esl/src/include/esl_config_auto.h])
 AC_CONFIG_HEADER([libs/xmlrpc-c/xmlrpc_amconfig.h])
 
 AC_PREFIX_DEFAULT(/usr/local/freeswitch)
@@ -32,6 +33,29 @@ switch_srcdir=`(cd $srcdir && pwd)`
 switch_builddir=`pwd`
 AC_SUBST(switch_srcdir)
 AC_SUBST(switch_builddir)
+
+#
+# --enable-64 has been moved up higher prior to AC_PROG_CC so that we can tuck in the -m64 flag 
+# so devs on with Solaris wanting to build 64bit can not bother with adding any additional 
+# flags on the ./configure line.  User friendly.
+#
+
+#  Enable 64 bit build
+AC_ARG_ENABLE(64,
+[AC_HELP_STRING([--enable-64],[build with 64 bit support])],[enable_64="$enable_64"],[enable_64="no"])
+
+if test "${enable_64}" = "yes"; then
+   case "$host" in
+        *-solaris2*)
+	    # All three have to have -m64 for AC_PROG_CC to pick the right libtool
+            CFLAGS="$CFLAGS -m64"
+            LDFLAGS="$LDFLAGS -m64"
+            CXXFLAGS="$CXXFLAGS -m64"
+        ;;
+        *)
+        ;;
+   esac
+fi
 
 # Whether to follow FHS
 AC_ARG_ENABLE([fhs],
@@ -194,6 +218,14 @@ AC_PROG_LIBTOOL
 #Check for compiler vendor
 AX_COMPILER_VENDOR
 
+# Set CC_FOR_BUILD
+if test "x${cross_compiling}" = "xyes"; then
+    CC_FOR_BUILD=${CC_FOR_BUILD-gcc}
+else
+    CC_FOR_BUILD='$(CC)'
+fi
+AC_SUBST(CC_FOR_BUILD)
+
 #  Optimize
 AC_ARG_ENABLE(optimization,
 [AC_HELP_STRING([--enable-optimization],[Set if you want us to add max optimising compiler flags])],[enable_optimizer="$enableval"],[enable_optimizer="no"])
@@ -234,6 +266,12 @@ elif test "x${ax_cv_c_compiler_vendor}" = "xgnu" ; then
             SOLINK="-shared -Xlinker -x"
         ;;
     esac
+elif test "x${ax_cv_c_compiler_vendor}" = "xintel" ; then
+    case "$host" in
+        *)
+            SOLINK="-shared -Xlinker -x"
+        ;;
+    esac
 else
     AC_ERROR([Please update configure.in with SOLINK values for your compiler])
 fi
@@ -261,10 +299,6 @@ if test "${LIBTOOL_MAJOR_VERSION}" = "2" ; then
 fi
 AC_MSG_RESULT([using libtool library extension... ${LIBTOOL_LIB_EXTEN}])
 
-
-#  Enable 64 bit build
-AC_ARG_ENABLE(64,
-[AC_HELP_STRING([--enable-64],[build with 64 bit support])],[enable_64="$enable_64"],[enable_64="no"])
 
 # tweak compiler specific flags
 if test "x${ax_cv_c_compiler_vendor}"  =  "xsun" ; then
@@ -299,9 +333,14 @@ elif test "x${ax_cv_c_compiler_vendor}" = "xgnu" ; then
 	case "$host" in
              *darwin12.*|*darwin11.*|*darwin10.*|*darwin9.*|*darwin8.*)
 		APR_ADDTO(CFLAGS, -arch x86_64)
-       		APR_ADDTO(LDFLAGS, -arch x86_64)
-       		APR_ADDTO(CXXFLAGS, -arch x86_64)
+		APR_ADDTO(LDFLAGS, -arch x86_64)
+		APR_ADDTO(CXXFLAGS, -arch x86_64)
 		;;
+             *-solaris2*)
+		APR_ADDTO(CFLAGS, -m64)
+		APR_ADDTO(LDFLAGS, -m64)
+		APR_ADDTO(CXXFLAGS, -m64)
+	        ;;
 	     *)
 	     	LIBS="$LIBS -m64"
 	     ;;
@@ -530,9 +569,18 @@ ESL_LDFLAGS=
 PLATFORM_CORE_LDFLAGS=
 PLATFORM_CORE_LIBS=
 
+path_remove () {
+  echo "$1" | sed 's/:/\n/g' | grep -Fxv "$2" | tr '\n' ':' | sed 's/:$/\n/'
+}
+path_push_unique () {
+  x="$(eval echo \$$1)"
+  x="$(path_remove "$x" "$2")"
+  eval export $1="$2:$x"
+}
+
 # tweak platform specific flags
 case "$host" in
-    *darwin12.*|*darwin11.*)
+    *darwin13.*|*darwin12.*|*darwin11.*)
         APR_ADDTO(SWITCH_AM_CFLAGS, -DMACOSX)
         APR_ADDTO(CFLAGS, -pipe -no-cpp-precomp -Wno-deprecated-declarations -I/usr/local/opt/openssl/include)
         APR_ADDTO(LDFLAGS, -pipe -bind_at_load -L/usr/local/opt/openssl/lib)
@@ -565,6 +613,19 @@ case "$host" in
 	APR_ADDTO([PLATFORM_CORE_LIBS], [-ldl])
     ;;
     *-solaris2*)
+	if test "${enable_64}" = "yes"; then
+           APR_ADDTO(CFLAGS, [-I/opt/64/include])
+           APR_ADDTO(CXXFLAGS, [-I/opt/64/include])
+           APR_ADDTO(LDFLAGS, [-L/opt/64/lib -Wl,-rpath,/opt/64/lib])
+           APR_ADDTO(SWITCH_AM_CFLAGS, [-I/opt/64/include])
+           APR_ADDTO(SWITCH_AM_LDFLAGS, [-L/opt/64/lib -Wl,-rpath,/opt/64/lib])
+	else
+           APR_ADDTO(CFLAGS, [-I/opt/include])
+           APR_ADDTO(CXXFLAGS, -I/opt/include)
+           APR_ADDTO(LDFLAGS, [-L/opt/lib -Wl,-rpath,/opt/lib])
+           APR_ADDTO(SWITCH_AM_CFLAGS, [-I/opt/include])
+           APR_ADDTO(SWITCH_AM_LDFLAGS, [-L/opt/lib -Wl,-rpath,/opt/lib])
+	fi
         APR_ADDTO(SWITCH_AM_CFLAGS, -DPATH_MAX=2048 -D__EXTENSIONS__)
         APR_ADDTO(SWITCH_AM_LDFLAGS, -lsendfile -lresolv -lsocket -lnsl -luuid)
         APR_ADDTO(ESL_LDFLAGS, -lnsl -lsocket)
@@ -602,6 +663,11 @@ AC_CHECK_LIB(z, inflateReset, have_libz=yes, AC_MSG_ERROR([no usable zlib; pleas
 if test "x$have_libz" = "xyes"  ; then
 APR_ADDTO([PLATFORM_CORE_LIBS], [-lz])
 fi
+
+AC_CHECK_LIB(apr-1, apr_pool_mutex_set, use_system_apr=yes, use_system_apr=no)
+AM_CONDITIONAL([SYSTEM_APR],[test "${use_system_apr}" = "yes"])
+AC_CHECK_LIB(aprutil-1, apr_queue_pop_timeout, use_system_aprutil=yes, use_system_aprutil=no)
+AM_CONDITIONAL([SYSTEM_APRUTIL],[test "${use_system_aprutil}" = "yes"])
 
 AC_CHECK_LIB(jpeg, jpeg_std_error,, AC_MSG_ERROR([no usable libjpeg; please install libjpeg devel package or equivalent]))
 
@@ -1016,65 +1082,45 @@ AC_SUBST(GETG729)
 GETSOUNDS="${SHELL} $switch_builddir/build/getsounds.sh"
 AC_SUBST(GETSOUNDS)
 
+case $host in
+   *-darwin*)
+        path_push_unique PKG_CONFIG_PATH /usr/local/opt/curl/lib/pkgconfig
+        path_push_unique PKG_CONFIG_PATH /usr/local/opt/sqlite/lib/pkgconfig/
+       ;;
+esac
 
-LIBCURL_DEPS=
-
-AC_ARG_WITH(libcurl,
- AC_HELP_STRING([--with-libcurl=DIR],[look for the curl library in DIR]),
- [_libcurl_with=$withval],[_libcurl_with=ifelse([$1],,[yes],[$1])])
-
-AC_CACHE_CHECK([whether to use system libcurl library], [ac_cv_use_system_curl], [
-  LIBCURL_CHECK_CONFIG([yes], [7.13.0], [ac_cv_use_system_curl='yes'], [ac_cv_use_system_curl='no']) 
-])
-
-if test "$_libcurl_with" = "no" ; then
-  ac_cv_use_system_curl=no;
-fi
-if test "$_libcurl_with" = "yes" ; then
-  ac_cv_use_system_curl=yes;
-fi
-
-if test "$ac_cv_use_system_curl" = "yes" ; then
-AC_CACHE_CHECK([whether to use system libcurl library], [ac_cv_curl_usable], [
-  AC_CHECK_LIB(curl, curl_easy_setopt, [ac_cv_curl_usable="yes"], [ac_cv_curl_usable="no"])
-])
-fi
-
-if test "$ac_cv_curl_usable" != "yes" ; then
-  ac_cv_use_system_curl=no;
-fi
-
-if test "$ac_cv_use_system_curl" != "yes" ; then
- LIBCURL_DEPS='${switch_builddir}/libs/curl/lib/libcurl.la'
- LIBCURL='${switch_builddir}/libs/curl/lib/libcurl.la'
- LIBCURL_CPPFLAGS='-I${switch_srcdir}/libs/curl/include'
-else
- SWITCH_AM_LDFLAGS="$LIBCURL $SWITCH_AM_LDFLAGS"
-fi
-
-SWITCH_AM_CFLAGS="$LIBCURL_CPPFLAGS $SWITCH_AM_CFLAGS"
-SWITCH_AM_CXXFLAGS="$LIBCURL_CPPFLAGS $SWITCH_AM_CXXFLAGS"
-
-AM_CONDITIONAL([CURL_BUILTIN],[test "${ac_cv_use_system_curl}" != "yes"])
-
-AC_SUBST(LIBCURL_DEPS)
-
+PKG_CHECK_MODULES([SQLITE], [sqlite3 >= 3.6.20])
+PKG_CHECK_MODULES([CURL], [libcurl >= 7.19])
+PKG_CHECK_MODULES([PCRE], [libpcre >= 7.8])
+PKG_CHECK_MODULES([SPEEX], [speex >= 1.2rc1 speexdsp >= 1.2rc1])
+PKG_CHECK_MODULES([YAML], [yaml-0.1 >= 0.1.4],[
+  AM_CONDITIONAL([HAVE_YAML],[true])],[
+  AM_CONDITIONAL([HAVE_YAML],[false])])
 
 AC_ARG_ENABLE(core-libedit-support,     
-	[AS_HELP_STRING([--disable-core-libedit-support], [Compile without libedit Support])], [enable_core_libedit_support="$enableval"], [enable_core_libedit_support="yes"])
+  [AS_HELP_STRING([--disable-core-libedit-support], [Compile without libedit Support])])
 
-if test "$enable_core_libedit_support" = "yes" ; then
-    AC_CHECK_LIB(tinfo, tgetent, [have_libtinfo="yes"], [have_libtinfo="no"])
-    if test "$have_libtinfo" == "yes" ; then
-       TINFO_LIBS="-ltinfo"
-    else
-       TINFO_LIBS=""
-       AC_CHECK_LIB(ncurses, tgetent,,
-          [AC_CHECK_LIB(curses, tgetent,,
-	     [AC_MSG_ERROR([libtermcap, libcurses or libncurses are required!])] )] )
-    fi
-    AC_SUBST(TINFO_LIBS)
-fi
+case x$enable_core_libedit_support in
+  xno) ;;
+  xyes|*)
+    PKG_CHECK_MODULES([LIBEDIT], [libedit >= 2.11],,
+      [AC_MSG_ERROR([You need to either install libedit-dev (>= 2.11) or configure with --disable-core-libedit-support])])
+    ;;
+esac
+
+AS_IF([test "x$enable_core_libedit_support" != "xno"], [
+  # If making changes here, don't forget to run autoheader and
+  # update libs/esl/src/include/esl_config_auto.h.in manually.
+  AC_DEFINE([HAVE_LIBEDIT], [1], [Define to 1 if you have libedit is available])
+  save_LIBS="${LIBS}"
+  save_CPPFLAGS="${CPPFLAGS}"
+  LIBS="${LIBEDIT_LIBS}"
+  CPPFLAGS="${LIBEDIT_CFLAGS}"
+  AC_CHECK_DECLS([EL_PROMPT_ESC, EL_REFRESH],,, [[#include <histedit.h>]])
+  AC_CHECK_FUNCS([el_wset])
+  LIBS="${save_LIBS}"
+  CPPFLAGS="${save_CPPFLAGS}"
+])
 
 SAC_OPENSSL
 
@@ -1094,9 +1140,61 @@ AC_ARG_ENABLE(static-v8,
 [AS_HELP_STRING([--enable-static-v8], [Statically link V8 into mod_v8])], [enable_static_v8="$enableval"], [enable_static_v8="no"])
 AM_CONDITIONAL([ENABLE_STATIC_V8],[test "x$enable_static_v8" != "xno"])
 
+# Option to disable parallel build of Google's V8
+AC_ARG_ENABLE(parallel-build-v8,
+[AS_HELP_STRING([--disable-parallel-build-v8], [Disable parallel build of V8])], [enable_parallel_build_v8="$enableval"], [enable_parallel_build_v8="yes"])
+AM_CONDITIONAL([ENABLE_PARALLEL_BUILD_V8],[test "x$enable_parallel_build_v8" != "xno"])
+
 AM_CONDITIONAL([HAVE_ODBC],[test "x$enable_core_odbc_support" != "xno"])
-AM_CONDITIONAL([HAVE_LIBEDIT],[test "x$enable_core_libedit_support" != "xno"])
 AM_CONDITIONAL([HAVE_MYSQL],[test "$found_mysql" = "yes"])
+
+#
+# perl checks
+#
+
+AC_CHECK_PROG(PERL,perl,[ac_cv_have_perl=yes],[ac_cv_have_perl=no])
+AM_CONDITIONAL([HAVE_PERL],[test "x$ac_cv_have_perl" != "xno"])
+
+if test "x$ac_cv_have_perl" != "xno" ; then
+   PERL=perl
+   PERL_SITEDIR="`$PERL -MConfig -e 'print $Config{sitelibexp}'`"
+   PERL_LIBDIR="-L`$PERL -MConfig -e 'print $Config{archlib}'`/CORE"
+   PERL_LIBS="`$PERL -MConfig -e 'print $Config{libs}'`"
+   PERL_CFLAGS="-w -DMULTIPLICITY `$PERL -MExtUtils::Embed -e ccopts` -DEMBED_PERL"
+   PERL_LDFLAGS="`$PERL -MExtUtils::Embed -e ldopts` `$PERL -MConfig -e 'print $Config{libs}'`"
+   PERL_INC="`$PERL -MExtUtils::Embed -e perl_inc`"
+   AC_SUBST(PERL_SITEDIR)
+   AC_SUBST(PERL_LIBDIR)
+   AC_SUBST(PERL_LIBS)
+   AC_SUBST(PERL_CFLAGS)
+   AC_SUBST(PERL_LDFLAGS)
+   AC_SUBST(PERL_INC)
+fi
+
+#
+# php checks
+#
+
+AC_CHECK_PROG(PHP,php,[ac_cv_have_php=yes],[ac_cv_have_php=no])
+AC_CHECK_PROG(PHP_CONFIG,php-config,[ac_cv_have_php_config=yes],[ac_cv_have_php_config=no])
+AM_CONDITIONAL([HAVE_PHP],[test "x$ac_cv_have_php" != "xno" -a "x$ac_cv_have_php_config" != "xno"])
+
+if test "x$ac_cv_have_php" != "xno" -a "x$ac_cv_have_php_config" != "xno"; then
+   PHP=php
+   PHP_CONFIG=php-config
+   PHP_LDFLAGS="`$PHP_CONFIG --ldflags`"
+   PHP_LIBS="`$PHP_CONFIG --libs | sed -r 's/ ?-l(bz2|pcre|xml2|gssapi_krb5|krb5|k5crypto|com_err|history|z|readline|gmp|ssl|crypto)//g'`"
+   PHP_EXT_DIR="`$PHP_CONFIG --extension-dir`"
+   PHP_INC_DIR="`$PHP -r 'echo ini_get("include_path");' | cut -d: -f2`"
+   PHP_INI_DIR="`$PHP_CONFIG --configure-options | tr " " "\n" | grep -- --with-config-file-scan-dir | cut -f2 -d=`"
+   PHP_CFLAGS="`$PHP_CONFIG --includes`"
+   AC_SUBST(PHP_LDFLAGS)
+   AC_SUBST(PHP_LIBS)
+   AC_SUBST(PHP_EXT_DIR)
+   AC_SUBST(PHP_INC_DIR)
+   AC_SUBST(PHP_INI_DIR)
+   AC_SUBST(PHP_CFLAGS)
+fi
 
 #
 # Python checks for mod_python
@@ -1221,6 +1319,9 @@ fi
 
 CHECK_ERLANG
 
+# we never use this, and hard setting it will make cross compile work better
+ac_cv_file_dbd_apr_dbd_mysql_c=no
+
 AC_CONFIG_FILES([Makefile
 		build/Makefile
 		src/Makefile
@@ -1309,6 +1410,7 @@ AC_CONFIG_FILES([Makefile
 		src/mod/directories/mod_ldap/Makefile
 		src/mod/endpoints/mod_alsa/Makefile
 		src/mod/endpoints/mod_dingaling/Makefile
+		src/mod/endpoints/mod_gsmopen/Makefile
 		src/mod/endpoints/mod_h323/Makefile
 		src/mod/endpoints/mod_khomp/Makefile
 		src/mod/endpoints/mod_loopback/Makefile
@@ -1348,10 +1450,10 @@ AC_CONFIG_FILES([Makefile
 		src/mod/languages/mod_managed/Makefile
 		src/mod/languages/mod_perl/Makefile
 		src/mod/languages/mod_python/Makefile
-		src/mod/languages/mod_spidermonkey/Makefile
 		src/mod/languages/mod_v8/Makefile
 		src/mod/languages/mod_yaml/Makefile
 		src/mod/legacy/languages/mod_lua/Makefile
+		src/mod/legacy/languages/mod_spidermonkey/Makefile
 		src/mod/loggers/mod_console/Makefile
 		src/mod/loggers/mod_logfile/Makefile
 		src/mod/loggers/mod_syslog/Makefile
@@ -1386,7 +1488,10 @@ AC_CONFIG_FILES([Makefile
 		build/getg729.sh
 		build/freeswitch.pc
 		build/modmake.rules
-                libs/esl/eslmake.rules
+                libs/esl/Makefile
+                libs/esl/perl/Makefile
+                libs/esl/php/Makefile
+		libs/xmlrpc-c/include/xmlrpc-c/config.h
 		libs/xmlrpc-c/xmlrpc_config.h
 		libs/xmlrpc-c/config.mk
 		libs/xmlrpc-c/srcdir.mk
@@ -1405,6 +1510,7 @@ AM_CONDITIONAL(HAVE_G729, [ test -d ${switch_srcdir}/libs/libg729 ])
 
 #some vars to sub into the Makefile.am's
 #LIBS+=> core.log || error="yes";if test -n "$(VERBOSE)" -o "$$error" = "yes";then cat core.log;fi;if test "$$error" = "yes";then exit 1;fi
+LIBTOOL='$(SHELL) $(switch_builddir)/libtool'
 TOUCH_TARGET='if test -f "$@";then touch "$@";fi;'
 CONF_MODULES='$$(grep -v "\#" $(switch_builddir)/modules.conf | sed -e "s|^.*/||" | sort | uniq )'
 CONF_DISABLED_MODULES='$$(grep "\#" $(switch_builddir)/modules.conf | grep -v "\#\#" | sed -e "s|^.*/||" | sort | uniq )'
@@ -1441,25 +1547,19 @@ ac_configure_args="$ac_configure_args CONFIGURE_CFLAGS='$CFLAGS' CONFIGURE_CXXFL
 
 # Run configure in all the subdirs
 AC_CONFIG_SUBDIRS([libs/srtp])
-AC_CONFIG_SUBDIRS([libs/sqlite])
-if test "$enable_core_libedit_support" = "yes" ; then
-    AC_CONFIG_SUBDIRS([libs/libedit])
+if test "$use_system_apr" != "yes"; then
+   AC_CONFIG_SUBDIRS([libs/apr])
 fi
-
-AC_CONFIG_SUBDIRS([libs/pcre])
-AC_CONFIG_SUBDIRS([libs/apr])
-AC_CONFIG_SUBDIRS([libs/apr-util])
+if test "$use_system_aprutil" != "yes"; then
+   AC_CONFIG_SUBDIRS([libs/apr-util])
+fi
 AC_CONFIG_SUBDIRS([libs/ilbc])
-if test "$ac_cv_use_system_curl" != "yes"; then
-	AC_CONFIG_SUBDIRS([libs/curl])
-fi
 AC_CONFIG_SUBDIRS([libs/iksemel])
 AC_CONFIG_SUBDIRS([libs/js/nsprpub])
 AC_CONFIG_SUBDIRS([libs/js])
 AC_CONFIG_SUBDIRS([libs/libdingaling])
 AC_CONFIG_SUBDIRS([libs/libsndfile])
 AC_CONFIG_SUBDIRS([libs/sofia-sip])
-AC_CONFIG_SUBDIRS([libs/speex])
 AC_CONFIG_SUBDIRS([libs/portaudio])
 AC_CONFIG_SUBDIRS([libs/openzap])
 AC_CONFIG_SUBDIRS([libs/freetdm])
@@ -1475,8 +1575,8 @@ if test "x${enable_zrtp}" = "xyes"; then
 fi
 
 case $host in
-   *-openbsd*)
-       # libtool won't link static libs against shared ones on OpenBSD unless we tell it not to be stupid
+   *-openbsd*|*-netbsd*)
+       # libtool won't link static libs against shared ones on NetBSD/OpenBSD unless we tell it not to be stupid
        AC_CONFIG_COMMANDS([hacklibtool], [cp libtool libtool.orig  && sed -e "s/deplibs_check_method=.*/deplibs_check_method=pass_all/g" libtool.orig > libtool])
        ;;
 esac

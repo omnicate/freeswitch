@@ -174,7 +174,7 @@ static void do_unload(void) {
 		void *val = NULL;
 		const void *key;
 		switch_ssize_t keylen;
-		translate_rule_t *rl, *nrl;
+		translate_rule_t *rl = NULL, *nrl;
 
 		switch_core_hash_this(hi, &key, &keylen, &val);
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "deleting translate profile [%s]\n", (char *) key);
@@ -225,7 +225,7 @@ SWITCH_STANDARD_APP(translate_app_function)
 	char *translated = NULL;
 	switch_channel_t *channel = switch_core_session_get_channel(session);
 	switch_memory_pool_t *pool;
-	switch_event_t *event;
+	switch_event_t *event = NULL;
 
 	if (!(mydata = switch_core_session_strdup(session, data))) {
 		goto end;

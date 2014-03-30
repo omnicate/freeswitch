@@ -29,27 +29,6 @@ Rules:
    Copyright: Nokia Corporation
    License: LGPL-2.1+
   -
-   Glob: libs/speex/include/speex/speex_types.h
-   Copyright: Xiph.Org Foundation
-  -
-   Glob: libs/speex/libspeex/lsp.c
-   Copyright: Jean-Marc Valin
-  -
-   Glob: libs/speex/libspeex/smallft.[ch]
-   Copyright: the XIPHOPHORUS Company
-  -
-   Glob: libs/speex/src/getopt1.c
-   Matches: Copyright\s\(C\)\s1987,88,89,90,91,92,93,94,96,97,98
-   Copyright: 1987-1998 Free Software Foundation, Inc.
-  -
-   Glob: libs/speex/src/getopt.c
-   Matches: Copyright\s\(C\)\s1987,\s88,\s89,\s90,\s91,\s92,\s93,\s94,\s95,\s96,\s97,\s98,\s99
-   Copyright: 1987-1999 Free Software Foundation, Inc.
-  -
-   Glob: libs/speex/src/getopt_win.h
-   Matches: Copyright\s\(C\)\s1989,90,91,92,93,94,96,97,98\sFree\sSoftware\sFoundation,\sInc.
-   Copyright: 1989-1998 Free Software Foundation, Inc.
-  -
    Glob: libs/srtp/update.sh
    Copyright: Ingate Systems AB
   -
@@ -108,29 +87,9 @@ Rules:
    Matches: Copyright\s+:\sCopyright\s\(c\)\s2010\sSoft\sIndustry
    Copyright: 2010 Soft Industry
   -
-   Glob: libs/sqlite/*
-   Matches: The\sauthor\sdisclaims\scopyright\sto\sthis\ssource\scode.
-   Copyright: 2006 Abandoned D. Richard Hipp <drh@hwaci.com>
-   License: public-domain
-  -
    Glob: libs/win32/sqlite/*.[ch]
    Matches: The\sauthor\sdisclaims\scopyright\sto\sthis\ssource\scode.
    Copyright: 2006 Abandoned D. Richard Hipp <drh@hwaci.com>
-   License: public-domain
-  -
-   Glob: libs/sqlite/src/test_md5.c
-   Matches: written\sby\sColin\sPlumb\sin\s1993,\sno\scopyright\sis\sclaimed.
-   Matches: This\scode\sis\sin\sthe\spublic\sdomain;\sdo\swith\sit\swhat\syou\swish.
-   Copyright: 1993 Abandoned Colin Plumb
-   License: public-domain
-  -
-   Glob: libs/sqlite/src/printf.c
-   Matches: The\s\"printf\"\scode\sthat\sfollows\sdates\sfrom\sthe\s1980\'s.\s\sIt\sis\sin
-   Matches: the\spublic\sdomain.
-   License: public-domain
-  -
-   Glob: libs/sqlite/src/test_md5.c
-   Matches: This\scode\sis\sin\sthe\spublic\sdomain;\sdo\swith\sit\swhat\syou\swish.
    License: public-domain
   -
    Glob: libs/libtpl-1.5/src/tpl.[ch]
@@ -265,10 +224,6 @@ Rules:
    Glob: libs/esl/getopt/getopt_long.c
    Matches: This\scode\sis\sderived\sfrom\ssoftware\scontributed\sto\sThe\sNetBSD\sFoundation
    License: BSD-2-clause
-  -
-   Glob: libs/curl/lib/md5.c
-   Matches: Copyright\s\(C\)\s1991-2,\sRSA\sData\sSecurity,\sInc.\sCreated\s1991.
-   Copyright: 1991-1992, RSA Data Security, Inc.
   -
    Glob: libs/silk/*
    Matches: Copyright\s\(c\)\s2006-2011,\sSkype\sLimited.

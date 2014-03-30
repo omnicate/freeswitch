@@ -9,8 +9,8 @@ VERBOSE=false
 BASEDIR=`pwd`;
 LIBDIR=${BASEDIR}/libs;
 SUBDIRS="apr \
-  libzrtp ilbc curl iksemel js js/nsprpub ldns libdingaling libedit libsndfile pcre sofia-sip \
-  speex sqlite srtp openzap freetdm spandsp libg722_1 portaudio unimrcp tiff-4.0.2 broadvoice silk libcodec2 \
+  libzrtp ilbc iksemel js js/nsprpub ldns libdingaling libsndfile sofia-sip \
+  speex srtp openzap freetdm spandsp libg722_1 portaudio unimrcp tiff-4.0.2 broadvoice silk libcodec2 \
   fs";
 
 while getopts 'jhd:v' o; do 
@@ -432,6 +432,7 @@ bootstrap_libs_post() {
       if test ! -x install-sh; then
         ex ${AUTOMAKE:-automake} --add-missing --copy
         ex rm -rf autom4te*.cache
+        chmod a+x install-sh
       fi
       ;;
   esac

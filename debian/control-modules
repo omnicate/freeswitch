@@ -342,10 +342,6 @@ Module: codecs/mod_theora
 Description: mod_theora
  Adds mod_theora.
 
-Module: codecs/mod_voipcodecs
-Description: mod_voipcodecs
- Adds mod_voipcodecs.
-
 Module: codecs/mod_vp8
 Description: VP8 video codec
  This module adds the VP8 video codec, also known as WebM.
@@ -402,6 +398,7 @@ Description: mod_loopback
 Module: endpoints/mod_opal
 Description: mod_opal
  Adds mod_opal.
+Build-Depends: libopal-dev
 
 Module: endpoints/mod_portaudio
 Description: mod_portaudio
@@ -565,11 +562,6 @@ Module: languages/mod_python
 Description: mod_python
  Adds mod_python.
 Build-Depends: python-dev
-
-Module: languages/mod_spidermonkey
-Description: mod_spidermonkey
- Adds mod_spidermonkey.
-Build-Depends: unixodbc-dev
 
 Module: languages/mod_v8
 Description: mod_v8

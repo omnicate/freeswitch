@@ -193,7 +193,7 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mod_event_multicast", "src\
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libteletone", "libs\libteletone\libteletone.2010.vcxproj", "{89385C74-5860-4174-9CAF-A39E7C48909C}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mod_spidermonkey", "src\mod\languages\mod_spidermonkey\mod_spidermonkey.2010.vcxproj", "{1AD3F51E-BBB6-4090-BA39-9DFAB1EF1F5F}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mod_spidermonkey", "src\mod\legacy\languages\mod_spidermonkey\mod_spidermonkey.2010.vcxproj", "{1AD3F51E-BBB6-4090-BA39-9DFAB1EF1F5F}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mod_v8", "src\mod\languages\mod_v8\mod_v8.2010.vcxproj", "{9B9D2551-D6BD-4F20-8BE5-DE30E154A064}"
 EndProject
@@ -261,15 +261,15 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mod_iSAC", "src\mod\codecs\
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mod_native_file", "src\mod\formats\mod_native_file\mod_native_file.2010.vcxproj", "{9254C4B0-6F60-42B6-BB3A-36D63FC001C7}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mod_spidermonkey_core_db", "src\mod\languages\mod_spidermonkey\mod_spidermonkey_core_db.2010.vcxproj", "{ACFFF684-4D19-4D48-AF12-88EA1D778BDF}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mod_spidermonkey_core_db", "src\mod\legacy\languages\mod_spidermonkey\mod_spidermonkey_core_db.2010.vcxproj", "{ACFFF684-4D19-4D48-AF12-88EA1D778BDF}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mod_spidermonkey_teletone", "src\mod\languages\mod_spidermonkey\mod_spidermonkey_teletone.2010.vcxproj", "{8F992C49-6C51-412F-B2A3-34EAB708EB65}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mod_spidermonkey_teletone", "src\mod\legacy\languages\mod_spidermonkey\mod_spidermonkey_teletone.2010.vcxproj", "{8F992C49-6C51-412F-B2A3-34EAB708EB65}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libudns", "libs\win32\udns\libudns.2010.vcxproj", "{4043FC6A-9A30-4577-8AD5-9B233C9575D8}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mod_enum", "src\mod\applications\mod_enum\mod_enum.2010.vcxproj", "{71A967D5-0E99-4CEF-A587-98836EE6F2EF}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mod_spidermonkey_odbc", "src\mod\languages\mod_spidermonkey\mod_spidermonkey_odbc.2010.vcxproj", "{0A6B5EA5-6E9B-4A51-931F-ED25AA87B4DF}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mod_spidermonkey_odbc", "src\mod\legacy\languages\mod_spidermonkey\mod_spidermonkey_odbc.2010.vcxproj", "{0A6B5EA5-6E9B-4A51-931F-ED25AA87B4DF}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mod_xml_curl", "src\mod\xml_int\mod_xml_curl\mod_xml_curl.2010.vcxproj", "{AB91A099-7690-4ECF-8994-E458F4EA1ED4}"
 EndProject
@@ -287,7 +287,7 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mod_esf", "src\mod\applicat
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mod_local_stream", "src\mod\formats\mod_local_stream\mod_local_stream.2010.vcxproj", "{2CA40887-1622-46A1-A7F9-17FD7E7E545B}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mod_spidermonkey_socket", "src\mod\languages\mod_spidermonkey\mod_spidermonkey_socket.2010.vcxproj", "{028C7278-05D7-4E18-82FE-BE231B844F41}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mod_spidermonkey_socket", "src\mod\legacy\languages\mod_spidermonkey\mod_spidermonkey_socket.2010.vcxproj", "{028C7278-05D7-4E18-82FE-BE231B844F41}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mod_voicemail", "src\mod\applications\mod_voicemail\mod_voicemail.2010.vcxproj", "{D7F1E3F2-A3F4-474C-8555-15122571AF52}"
 EndProject
@@ -317,7 +317,7 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mod_tone_stream", "src\mod\
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mod_fsv", "src\mod\applications\mod_fsv\mod_fsv.2010.vcxproj", "{E3246D17-E29B-4AB5-962A-C69B0C5837BB}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mod_spidermonkey_curl", "src\mod\languages\mod_spidermonkey\mod_spidermonkey_curl.2010.vcxproj", "{36E854E3-CE12-4348-A125-CCF3F9D74813}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mod_spidermonkey_curl", "src\mod\legacy\languages\mod_spidermonkey\mod_spidermonkey_curl.2010.vcxproj", "{36E854E3-CE12-4348-A125-CCF3F9D74813}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "mod_lua", "src\mod\languages\mod_lua\mod_lua.2010.vcxproj", "{7B077E7F-1BE7-4291-AB86-55E527B25CAC}"
 EndProject
@@ -397,9 +397,9 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libtiff", "libs\spandsp\src
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libspandsp", "libs\spandsp\src\libspandsp.2010.vcxproj", "{1CBB0077-18C5-455F-801C-0A0CE7B0BBF5}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libspeex", "libs\speex\win32\VS2008\libspeex\libspeex.vcxproj", "{E972C52F-9E85-4D65-B19C-031E511E9DB4}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libspeex", "libs\win32\speex\libspeex.2010.vcxproj", "{E972C52F-9E85-4D65-B19C-031E511E9DB4}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libspeexdsp", "libs\speex\win32\VS2008\libspeexdsp\libspeexdsp.vcxproj", "{03207781-0D1C-4DB3-A71D-45C608F28DBD}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libspeexdsp", "libs\win32\speex\libspeexdsp.2010.vcxproj", "{03207781-0D1C-4DB3-A71D-45C608F28DBD}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libilbc", "libs\ilbc\libilbc.2010.vcxproj", "{9A5DDF08-C88C-4A35-B7F6-D605228446BD}"
 EndProject
@@ -602,6 +602,10 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Download CURL", "libs\win32\Download CURL.2010.vcxproj", "{3970BCDE-BE1A-4CF3-A65F-5264BA2E47B5}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Download PCRE", "libs\win32\Download PCRE.2010.vcxproj", "{B1E7E876-347F-4DC9-9BEA-D1AFBD9DFF8A}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Download SPEEX", "libs\win32\Download SPEEX.2010.vcxproj", "{1BDAB935-27DC-47E3-95EA-17E024D39C31}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Download SQLITE", "libs\win32\Download SQLITE.2010.vcxproj", "{97D25665-34CD-4E0C-96E7-88F0795B8883}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -4084,6 +4088,40 @@ Global
 		{B1E7E876-347F-4DC9-9BEA-D1AFBD9DFF8A}.Release|x64.Build.0 = Release|Win32
 		{B1E7E876-347F-4DC9-9BEA-D1AFBD9DFF8A}.Release|x64 Setup.ActiveCfg = Release|Win32
 		{B1E7E876-347F-4DC9-9BEA-D1AFBD9DFF8A}.Release|x86 Setup.ActiveCfg = Release|Win32
+		{1BDAB935-27DC-47E3-95EA-17E024D39C31}.All|Win32.ActiveCfg = Release|Win32
+		{1BDAB935-27DC-47E3-95EA-17E024D39C31}.All|Win32.Build.0 = Release|Win32
+		{1BDAB935-27DC-47E3-95EA-17E024D39C31}.All|x64.ActiveCfg = Release|Win32
+		{1BDAB935-27DC-47E3-95EA-17E024D39C31}.All|x64 Setup.ActiveCfg = Release|Win32
+		{1BDAB935-27DC-47E3-95EA-17E024D39C31}.All|x86 Setup.ActiveCfg = Release|Win32
+		{1BDAB935-27DC-47E3-95EA-17E024D39C31}.Debug|Win32.ActiveCfg = Debug|Win32
+		{1BDAB935-27DC-47E3-95EA-17E024D39C31}.Debug|Win32.Build.0 = Debug|Win32
+		{1BDAB935-27DC-47E3-95EA-17E024D39C31}.Debug|x64.ActiveCfg = Debug|Win32
+		{1BDAB935-27DC-47E3-95EA-17E024D39C31}.Debug|x64.Build.0 = Debug|Win32
+		{1BDAB935-27DC-47E3-95EA-17E024D39C31}.Debug|x64 Setup.ActiveCfg = Debug|Win32
+		{1BDAB935-27DC-47E3-95EA-17E024D39C31}.Debug|x86 Setup.ActiveCfg = Debug|Win32
+		{1BDAB935-27DC-47E3-95EA-17E024D39C31}.Release|Win32.ActiveCfg = Release|Win32
+		{1BDAB935-27DC-47E3-95EA-17E024D39C31}.Release|Win32.Build.0 = Release|Win32
+		{1BDAB935-27DC-47E3-95EA-17E024D39C31}.Release|x64.ActiveCfg = Release|Win32
+		{1BDAB935-27DC-47E3-95EA-17E024D39C31}.Release|x64.Build.0 = Release|Win32
+		{1BDAB935-27DC-47E3-95EA-17E024D39C31}.Release|x64 Setup.ActiveCfg = Release|Win32
+		{1BDAB935-27DC-47E3-95EA-17E024D39C31}.Release|x86 Setup.ActiveCfg = Release|Win32
+		{97D25665-34CD-4E0C-96E7-88F0795B8883}.All|Win32.ActiveCfg = Release|Win32
+		{97D25665-34CD-4E0C-96E7-88F0795B8883}.All|Win32.Build.0 = Release|Win32
+		{97D25665-34CD-4E0C-96E7-88F0795B8883}.All|x64.ActiveCfg = Release|Win32
+		{97D25665-34CD-4E0C-96E7-88F0795B8883}.All|x64 Setup.ActiveCfg = Release|Win32
+		{97D25665-34CD-4E0C-96E7-88F0795B8883}.All|x86 Setup.ActiveCfg = Release|Win32
+		{97D25665-34CD-4E0C-96E7-88F0795B8883}.Debug|Win32.ActiveCfg = Debug|Win32
+		{97D25665-34CD-4E0C-96E7-88F0795B8883}.Debug|Win32.Build.0 = Debug|Win32
+		{97D25665-34CD-4E0C-96E7-88F0795B8883}.Debug|x64.ActiveCfg = Debug|Win32
+		{97D25665-34CD-4E0C-96E7-88F0795B8883}.Debug|x64.Build.0 = Debug|Win32
+		{97D25665-34CD-4E0C-96E7-88F0795B8883}.Debug|x64 Setup.ActiveCfg = Debug|Win32
+		{97D25665-34CD-4E0C-96E7-88F0795B8883}.Debug|x86 Setup.ActiveCfg = Debug|Win32
+		{97D25665-34CD-4E0C-96E7-88F0795B8883}.Release|Win32.ActiveCfg = Release|Win32
+		{97D25665-34CD-4E0C-96E7-88F0795B8883}.Release|Win32.Build.0 = Release|Win32
+		{97D25665-34CD-4E0C-96E7-88F0795B8883}.Release|x64.ActiveCfg = Release|Win32
+		{97D25665-34CD-4E0C-96E7-88F0795B8883}.Release|x64.Build.0 = Release|Win32
+		{97D25665-34CD-4E0C-96E7-88F0795B8883}.Release|x64 Setup.ActiveCfg = Release|Win32
+		{97D25665-34CD-4E0C-96E7-88F0795B8883}.Release|x86 Setup.ActiveCfg = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -4249,6 +4287,8 @@ Global
 		{092124C9-09ED-43C7-BD6D-4AE5D6B3C547} = {C120A020-773F-4EA3-923F-B67AF28B750D}
 		{3970BCDE-BE1A-4CF3-A65F-5264BA2E47B5} = {C120A020-773F-4EA3-923F-B67AF28B750D}
 		{B1E7E876-347F-4DC9-9BEA-D1AFBD9DFF8A} = {C120A020-773F-4EA3-923F-B67AF28B750D}
+		{1BDAB935-27DC-47E3-95EA-17E024D39C31} = {C120A020-773F-4EA3-923F-B67AF28B750D}
+		{97D25665-34CD-4E0C-96E7-88F0795B8883} = {C120A020-773F-4EA3-923F-B67AF28B750D}
 		{988CACF7-3FCB-4992-BE69-77872AE67DC8} = {6CD61A1D-797C-470A-BE08-8C31B68BB336}
 		{5BC072DB-3826-48EA-AF34-FE32AA01E83B} = {6CD61A1D-797C-470A-BE08-8C31B68BB336}
 		{FA429E98-8B03-45E6-A096-A4BC5E821DE4} = {6CD61A1D-797C-470A-BE08-8C31B68BB336}

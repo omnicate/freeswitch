@@ -205,7 +205,7 @@ static switch_status_t load_config(JavaVMOption **javaOptions, int *optionCount,
             if (path != NULL)
             {
 				javaVMHandle = switch_dso_open(path, 0, &derr);
-				if (derr || !dso) {
+				if (derr || !javaVMHandle) {
                     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error loading %s\n", path);
 				}
             }
@@ -295,7 +295,7 @@ static switch_status_t create_java_vm(JavaVMOption *options, int optionCount, vm
     switch_status_t status;
 	char *derr = NULL;
 
-	pJNI_CreateJavaVM = (void *)switch_dso_func_sym(javaVMHandle, "JNI_CreateJavaVM", &derr)
+	pJNI_CreateJavaVM = (jint (*)(JavaVM **, void **, void *))switch_dso_func_sym(javaVMHandle, "JNI_CreateJavaVM", &derr);
 		
     if (!derr)
     {
