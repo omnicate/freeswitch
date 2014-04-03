@@ -1287,7 +1287,15 @@ ftdm_status_t copy_hopCounter_from_sngss7(ftdm_channel_t *ftdmchan, SiHopCounter
 
 	if (hopCounter->eh.pres == PRSNT_NODEF &&
 	    hopCounter->hopCounter.pres == PRSNT_NODEF) {
+		hopCounter->hopCounter.val = (hopCounter->hopCounter.val)?(hopCounter->hopCounter.val -1):0;
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Hop Counter = %d\n", hopCounter->hopCounter.val);
+	}
+	else {
+		/* If no hop counter received in IAM then set to default SIP max-forward */
+		hopCounter->hopCounter.val = 70;
+	}
+
+	if (hopCounter->hopCounter.val) {
 		sprintf(var, "%d",  hopCounter->hopCounter.val);
 		sngss7_add_var(sngss7_info, "ss7_hopCounter_val", var);
 	}
@@ -1297,21 +1305,31 @@ ftdm_status_t copy_hopCounter_from_sngss7(ftdm_channel_t *ftdmchan, SiHopCounter
 
 ftdm_status_t copy_hopCounter_to_sngss7(ftdm_channel_t *ftdmchan, SiHopCounter *hopCounter)
 {
-        const char *val = NULL;
-        if(!hopCounter) {
+	const char *val = NULL;
+	int temp = 0x00;
+	if(!hopCounter) {
 		SS7_ERROR ("Wrong Hop Counter pointer \n");
-                return FTDM_FAIL;
-        }
+		return FTDM_FAIL;
+	}
 
-        val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_hopCounter_val");
-        if (!ftdm_strlen_zero(val)) {
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_hopCounter_val");
+	if (!ftdm_strlen_zero(val)) {
 		hopCounter->eh.pres = PRSNT_NODEF;
 		hopCounter->hopCounter.pres = PRSNT_NODEF;
-		hopCounter->hopCounter.val = (int)atoi(val);
+		temp = (int)atoi(val);
+		if (temp > 31 ) {
+			/* SS7 has max value of hop counter 31, if max forward is more then 31 then reset to 31 */
+			temp = 31;
+		}
+		else {
+			/* reduce counter by 1 to consider this node */
+			temp = (temp)?(temp-1):0;
+		}
+		hopCounter->hopCounter.val = temp;
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "ss7_hopCounter_val = %s\n", val);
-        } else {
+	} else {
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "No user supplied Hop Counter parameters %s\n", " ");
-        }
+	}
 	return FTDM_SUCCESS;
 }
 
