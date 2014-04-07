@@ -2746,7 +2746,7 @@ void *SWITCH_THREAD_FUNC sofia_profile_thread_run(switch_thread_t *thread, void 
 							  TAG_IF(sofia_test_pflag(profile, PFLAG_DISABLE_SRV503),
 									 NTATAG_SRV_503(0)),
 							  TAG_IF(sofia_test_pflag(profile, PFLAG_SOCKET_TCP_KEEPALIVE),
-									 TPTAG_KEEPALIVE(profile->socket_tcp_keepalive)),
+									 TPTAG_SOCKET_KEEPALIVE(profile->socket_tcp_keepalive)),
 							  TAG_IF(sofia_test_pflag(profile, PFLAG_TCP_KEEPALIVE),
 									 TPTAG_KEEPALIVE(profile->tcp_keepalive)),
 							  NTATAG_DEFAULT_PROXY(profile->outbound_proxy),
@@ -7196,7 +7196,7 @@ nua_handle_t *sofia_global_nua_handle_by_replaces(sip_replaces_t *replaces)
 
 	switch_mutex_lock(mod_sofia_globals.hash_mutex);
 	if (mod_sofia_globals.profile_hash) {
-		for (hi = switch_core_hash_first( mod_sofia_globals.profile_hash); hi; hi = switch_core_hash_next(hi)) {
+		for (hi = switch_core_hash_first(mod_sofia_globals.profile_hash); hi; hi = switch_core_hash_next(&hi)) {
 			switch_core_hash_this(hi, &var, NULL, &val);
 			if ((profile = (sofia_profile_t *) val)) {
 				if (!(nh = nua_handle_by_replaces(profile->nua, replaces))) {
@@ -7206,6 +7206,7 @@ nua_handle_t *sofia_global_nua_handle_by_replaces(sip_replaces_t *replaces)
 					break;
 			}
 		}
+		switch_safe_free(hi);
 	}
 	switch_mutex_unlock(mod_sofia_globals.hash_mutex);
 

@@ -1880,7 +1880,11 @@ SWITCH_DECLARE(switch_status_t) switch_console_set_complete(const char *string)
 				status = SWITCH_STATUS_SUCCESS;
 			} else if (!strcasecmp(argv[0], "del")) {
 				char *what = argv[1];
-				if (!strcasecmp(what, "*")) {
+				if (zstr(what)) {
+					switch_safe_free(mystream.data);  
+					switch_safe_free(mydata); 
+					return SWITCH_STATUS_FALSE;
+				} else if (!strcasecmp(what, "*")) {
 					mystream.write_function(&mystream, "delete from complete where hostname='%s'", switch_core_get_hostname());
 					switch_core_sql_exec(mystream.data);
 				} else {
@@ -1920,7 +1924,7 @@ SWITCH_DECLARE(switch_status_t) switch_console_set_alias(const char *string)
 			switch_cache_db_handle_t *db = NULL;
 			char *sql = NULL;
 
-			if (!strcmp(argv[1], argv[2])) {
+			if (argc > 2 && !strcmp(argv[1], argv[2])) {
 				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Alias and command cannot be the same, this will cause loop!\n");
 				return SWITCH_STATUS_FALSE;
 			}

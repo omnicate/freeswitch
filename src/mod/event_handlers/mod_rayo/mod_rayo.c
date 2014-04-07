@@ -498,7 +498,7 @@ static void pause_when_offline(void)
 
 		switch_mutex_lock(globals.clients_mutex);
 
-		for (hi = switch_core_hash_first(globals.clients_roster); hi; hi = switch_core_hash_next(hi)) {
+		for (hi = switch_core_hash_first(globals.clients_roster); hi; hi = switch_core_hash_next(&hi)) {
 			const void *key;
 			void *client;
 			switch_core_hash_this(hi, &key, NULL, &client);
@@ -508,6 +508,7 @@ static void pause_when_offline(void)
 				break;
 			}
 		}
+		switch_safe_free(hi);
 
 		if (is_online) {
 			resume_inbound_calling();
@@ -529,7 +530,7 @@ static void broadcast_event(struct rayo_actor *from, iks *rayo_event, int online
 {
 	switch_hash_index_t *hi = NULL;
 	switch_mutex_lock(globals.clients_mutex);
-	for (hi = switch_core_hash_first(globals.clients_roster); hi; hi = switch_core_hash_next(hi)) {
+	for (hi = switch_core_hash_first(globals.clients_roster); hi; hi = switch_core_hash_next(&hi)) {
 		struct rayo_client *rclient;
 		const void *key;
 		void *val;
@@ -572,7 +573,7 @@ static struct dial_gateway *dial_gateway_find(const char *uri)
 
 	/* find longest prefix match */
 	switch_mutex_lock(globals.dial_gateways_mutex);
-	for (hi = switch_core_hash_first(globals.dial_gateways); hi; hi = switch_core_hash_next(hi)) {
+	for (hi = switch_core_hash_first(globals.dial_gateways); hi; hi = switch_core_hash_next(&hi)) {
 		struct dial_gateway *candidate = NULL;
 		const void *prefix;
 		int prefix_len = 0;
@@ -1111,7 +1112,7 @@ static void rayo_call_cleanup(struct rayo_actor *actor)
 	}
 
 	/* send <end> to all offered clients */
-	for (hi = switch_core_hash_first(call->pcps); hi; hi = switch_core_hash_next(hi)) {
+	for (hi = switch_core_hash_first(call->pcps); hi; hi = switch_core_hash_next(&hi)) {
 		const void *key;
 		void *val;
 		const char *client_jid = NULL;
@@ -2466,7 +2467,7 @@ static void *SWITCH_THREAD_FUNC rayo_dial_thread(switch_thread_t *thread, void *
 		goto done;
 	}
 	call->dcp_jid = switch_core_strdup(RAYO_POOL(call), dcp_jid);
-	call->dial_request_id = iks_find_attrib(iq, "id");
+	call->dial_request_id = switch_core_strdup(RAYO_POOL(call), iks_find_attrib_soft(iq, "id"));
 	switch_log_printf(SWITCH_CHANNEL_UUID_LOG(rayo_call_get_uuid(call)), SWITCH_LOG_INFO, "%s has control of call\n", dcp_jid);
 	uuid = switch_core_strdup(dtdata->pool, rayo_call_get_uuid(call));
 
@@ -2575,7 +2576,7 @@ static void *SWITCH_THREAD_FUNC rayo_dial_thread(switch_thread_t *thread, void *
 			if (strncmp("+OK", api_stream.data, strlen("+OK"))) {
 				switch_log_printf(SWITCH_CHANNEL_UUID_LOG(uuid), SWITCH_LOG_INFO, "Failed to originate call\n");
 
-				if (call->dial_request_id) {
+				if (!zstr(call->dial_request_id)) {
 					call->dial_request_failed = 1;
 					call->dial_request_id = NULL;
 
@@ -2612,7 +2613,7 @@ static void *SWITCH_THREAD_FUNC rayo_dial_thread(switch_thread_t *thread, void *
 			switch_mutex_unlock(RAYO_ACTOR(call)->mutex);
 		} else {
 			switch_mutex_lock(RAYO_ACTOR(call)->mutex);
-			if (call->dial_request_id) {
+			if (!zstr(call->dial_request_id)) {
 				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Failed to exec originate API\n");
 				call->dial_request_failed = 1;
 				call->dial_request_id = NULL;
@@ -2898,7 +2899,7 @@ static void broadcast_mixer_event(struct rayo_mixer *mixer, iks *rayo_event)
 {
 	switch_hash_index_t *hi = NULL;
 	switch_mutex_lock(RAYO_ACTOR(mixer)->mutex);
-	for (hi = switch_core_hash_first(mixer->subscribers); hi; hi = switch_core_hash_next(hi)) {
+	for (hi = switch_core_hash_first(mixer->subscribers); hi; hi = switch_core_hash_next(&hi)) {
 		const void *key;
 		void *val;
 		struct rayo_mixer_subscriber *subscriber;
@@ -3146,7 +3147,7 @@ static void on_call_originate_event(struct rayo_client *rclient, switch_event_t 
 		switch_log_printf(SWITCH_CHANNEL_UUID_LOG(RAYO_ID(call)), SWITCH_LOG_DEBUG, "Got originate event\n");
 
 		switch_mutex_lock(RAYO_ACTOR(call)->mutex);
-		if (call->dial_request_id) {
+		if (!zstr(call->dial_request_id)) {
 			/* send response to DCP */
 			response = iks_new("iq");
 			iks_insert_attrib(response, "from", RAYO_JID(globals.server));
@@ -3184,7 +3185,7 @@ static void on_call_end_event(switch_event_t *event)
 		switch_log_printf(SWITCH_CHANNEL_UUID_LOG(RAYO_ID(call)), SWITCH_LOG_DEBUG, "Got channel destroy event\n");
 
 		switch_mutex_lock(RAYO_ACTOR(call)->mutex);
-		if (!call->dial_request_id && !call->dial_request_failed) {
+		if (zstr(call->dial_request_id) && !call->dial_request_failed) {
 			switch_event_dup(&call->end_event, event);
 			RAYO_DESTROY(call);
 			RAYO_UNLOCK(call); /* decrement ref from creation */
@@ -3615,7 +3616,7 @@ SWITCH_STANDARD_APP(rayo_app)
 		/* Offer call to all ONLINE clients */
 		/* TODO load balance offers so first session doesn't always get offer first? */
 		switch_mutex_lock(globals.clients_mutex);
-		for (hi = switch_core_hash_first(globals.clients_roster); hi; hi = switch_core_hash_next(hi)) {
+		for (hi = switch_core_hash_first(globals.clients_roster); hi; hi = switch_core_hash_next(&hi)) {
 			struct rayo_client *rclient;
 			const void *key;
 			void *val;
@@ -4059,7 +4060,7 @@ static int dump_api(const char *cmd, switch_stream_handle_t *stream)
 
 	stream->write_function(stream, "\nENTITIES\n");
 	switch_mutex_lock(globals.actors_mutex);
-	for (hi = switch_core_hash_first(globals.actors); hi; hi = switch_core_hash_next(hi)) {
+	for (hi = switch_core_hash_first(globals.actors); hi; hi = switch_core_hash_next(&hi)) {
 		struct rayo_actor *actor = NULL;
 		const void *key;
 		void *val;
@@ -4071,7 +4072,7 @@ static int dump_api(const char *cmd, switch_stream_handle_t *stream)
 		stream->write_function(stream, "\n");
 	}
 
-	for (hi = switch_core_hash_first(globals.destroy_actors); hi; hi = switch_core_hash_next(hi)) {
+	for (hi = switch_core_hash_first(globals.destroy_actors); hi; hi = switch_core_hash_next(&hi)) {
 		struct rayo_actor *actor = NULL;
 		const void *key;
 		void *val;
@@ -4370,7 +4371,7 @@ static switch_status_t list_actors(const char *line, const char *cursor, switch_
 	struct rayo_actor *actor;
 
 	switch_mutex_lock(globals.actors_mutex);
-	for (hi = switch_core_hash_first(globals.actors); hi; hi = switch_core_hash_next(hi)) {
+	for (hi = switch_core_hash_first(globals.actors); hi; hi = switch_core_hash_next(&hi)) {
 		switch_core_hash_this(hi, &vvar, NULL, &val);
 
 		actor = (struct rayo_actor *) val;

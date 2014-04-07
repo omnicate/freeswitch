@@ -643,6 +643,21 @@ static void conference_cdr_rejected(conference_obj_t *conference, switch_channel
 	rp->cp = switch_caller_profile_dup(conference->pool, cp);
 }
 
+static const char *audio_flow(conference_member_t *member)
+{
+	const char *flow = "sendrecv";
+
+	if (!switch_test_flag(member, MFLAG_CAN_SPEAK)) {
+		flow = "recvonly";
+	}
+
+	if (member->channel && switch_channel_test_flag(member->channel, CF_HOLD)) {
+		flow = "sendonly";
+	}
+
+	return flow;
+}
+
 static char *conference_rfc4579_render(conference_obj_t *conference, switch_event_t *event, switch_event_t *revent)
 {
 	switch_xml_t xml, x_tag, x_tag1, x_tag2, x_tag3, x_tag4;
@@ -856,7 +871,7 @@ static char *conference_rfc4579_render(conference_obj_t *conference, switch_even
 			if (!(x_tag4 = switch_xml_add_child_d(x_tag3, "status", off4++))) {
 				abort();
 			}
-			switch_xml_set_txt_d(x_tag4, switch_channel_test_flag(channel, CF_HOLD) ? "sendonly" : "sendrecv");
+			switch_xml_set_txt_d(x_tag4, audio_flow(np->member));
 			
 			
 			if (switch_channel_test_flag(channel, CF_VIDEO)) {
@@ -1247,7 +1262,7 @@ static cJSON *conference_json_render(conference_obj_t *conference, cJSON *req)
 				json_add_child_string(juser, "rtpAudioSSRC", var);
 			}
 			
-			json_add_child_string(juser, "rtpAudioDirection", switch_channel_test_flag(channel, CF_HOLD) ? "sendonly" : "sendrecv");
+			json_add_child_string(juser, "rtpAudioDirection", audio_flow(np->member));
 			
 			
 			if (switch_channel_test_flag(channel, CF_VIDEO)) {
@@ -1839,6 +1854,14 @@ static switch_status_t conference_add_member(conference_obj_t *conference, confe
 			}
 			/* Tell the channel to request a fresh vid frame */
 			switch_core_session_refresh_video(member->session);
+
+			if (conference->video_floor_holder) {
+				switch_mutex_lock(conference->mutex);
+				if (conference->video_floor_holder) {
+					switch_core_session_refresh_video(conference->video_floor_holder->session);
+				}
+				switch_mutex_unlock(conference->mutex);
+			}
 		}
 
 		if (!switch_channel_get_variable(channel, "conference_call_key")) {
@@ -5283,7 +5306,7 @@ static switch_status_t list_conferences(const char *line, const char *cursor, sw
 	const void *vvar;
 
 	switch_mutex_lock(globals.hash_mutex);
-	for (hi = switch_core_hash_first( globals.conference_hash); hi; hi = switch_core_hash_next(hi)) {
+	for (hi = switch_core_hash_first(globals.conference_hash); hi; hi = switch_core_hash_next(&hi)) {
 		switch_core_hash_this(hi, &vvar, NULL, &val);
 		switch_console_push_match(&my_matches, (const char *) vvar);		
 	}
@@ -5775,7 +5798,7 @@ static switch_status_t conf_api_sub_list(conference_obj_t *conference, switch_st
 
 	if (conference == NULL) {
 		switch_mutex_lock(globals.hash_mutex);
-		for (hi = switch_core_hash_first( globals.conference_hash); hi; hi = switch_core_hash_next(hi)) {
+		for (hi = switch_core_hash_first(globals.conference_hash); hi; hi = switch_core_hash_next(&hi)) {
 			int fcount = 0;
 			switch_core_hash_this(hi, NULL, NULL, &val);
 			conference = (conference_obj_t *) val;
@@ -6254,7 +6277,7 @@ static switch_status_t conf_api_sub_xml_list(conference_obj_t *conference, switc
 
 	if (conference == NULL) {
 		switch_mutex_lock(globals.hash_mutex);
-		for (hi = switch_core_hash_first( globals.conference_hash); hi; hi = switch_core_hash_next(hi)) {
+		for (hi = switch_core_hash_first(globals.conference_hash); hi; hi = switch_core_hash_next(&hi)) {
 			switch_core_hash_this(hi, NULL, NULL, &val);
 			conference = (conference_obj_t *) val;
 

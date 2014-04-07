@@ -143,7 +143,7 @@ SWITCH_DECLARE(switch_status_t) switch_core_hash_delete_multi(switch_hash_t *has
 	   When done, iterate through the list deleting hash entries
 	 */
 	
-	for (hi = switch_core_hash_first(hash); hi; hi = switch_core_hash_next(hi)) {
+	for (hi = switch_core_hash_first(hash); hi; hi = switch_core_hash_next(&hi)) {
 		const void *key;
 		void *val;
 		switch_core_hash_this(hi, &key, NULL, &val);
@@ -205,12 +205,25 @@ SWITCH_DECLARE(void *) switch_core_hash_find_rdlock(switch_hash_t *hash, const c
 	return val;
 }
 
-SWITCH_DECLARE(switch_hash_index_t *) switch_core_hash_first(switch_hash_t *hash)
+SWITCH_DECLARE(switch_bool_t) switch_core_hash_empty(switch_hash_t *hash)
 {
-	return switch_hashtable_first(hash);
+	switch_hash_index_t *hi = switch_core_hash_first(hash);
+
+	if (hi) {
+		switch_safe_free(hi);
+		return SWITCH_FALSE;
+	}
+
+	return SWITCH_TRUE;
+
 }
 
-SWITCH_DECLARE(switch_hash_index_t *) switch_core_hash_next(switch_hash_index_t *hi)
+SWITCH_DECLARE(switch_hash_index_t *) switch_core_hash_first_iter(switch_hash_t *hash, switch_hash_index_t *hi)
+{
+	return switch_hashtable_first_iter(hash, hi);
+}
+
+SWITCH_DECLARE(switch_hash_index_t *) switch_core_hash_next(switch_hash_index_t **hi)
 {
 	return switch_hashtable_next(hi);
 }

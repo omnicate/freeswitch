@@ -282,7 +282,7 @@ static switch_status_t input_handler_on_dtmf(switch_core_session_t *session, con
 		switch_mutex_lock(handler->mutex);
 	
 		/* check input on each component */
-		for (hi = switch_core_hash_first(handler->dtmf_components); hi; hi = switch_core_hash_next(hi)) {
+		for (hi = switch_core_hash_first(handler->dtmf_components); hi; hi = switch_core_hash_next(&hi)) {
 			const void *jid;
 			void *component;
 			switch_core_hash_this(hi, &jid, NULL, &component);
@@ -330,7 +330,7 @@ static switch_bool_t input_handler_bug_callback(switch_media_bug_t *bug, void *u
 			switch_event_t *components_to_remove = NULL;
 
 			/* check timeout/stop on each component */
-			for (hi = switch_core_hash_first(handler->dtmf_components); hi; hi = switch_core_hash_next(hi)) {
+			for (hi = switch_core_hash_first(handler->dtmf_components); hi; hi = switch_core_hash_next(&hi)) {
 				const void *jid;
 				void *component;
 				switch_core_hash_this(hi, &jid, NULL, &component);
@@ -356,7 +356,7 @@ static switch_bool_t input_handler_bug_callback(switch_media_bug_t *bug, void *u
 		}
 		case SWITCH_ABC_TYPE_CLOSE:
 			/* complete all components */
-			for (hi = switch_core_hash_first(handler->dtmf_components); hi; hi = switch_core_hash_next(hi)) {
+			for (hi = switch_core_hash_first(handler->dtmf_components); hi; hi = switch_core_hash_next(&hi)) {
 				const void *jid;
 				void *component;
 				switch_core_hash_this(hi, &jid, NULL, &component);
@@ -604,8 +604,8 @@ static iks *start_call_input(struct input_component *component, switch_core_sess
 	component->barge_event = iks_find_bool_attrib(input, "barge-event");
 	component->start_timers = iks_find_bool_attrib(input, "start-timers");
 	component->term_digit = iks_find_char_attrib(input, "terminator");
-	component->recognizer = iks_find_attrib(input, "recognizer");
-	component->language = iks_find_attrib(input, "language");
+	component->recognizer = switch_core_strdup(RAYO_POOL(input), iks_find_attrib_soft(input, "recognizer"));
+	component->language = switch_core_strdup(RAYO_POOL(input), iks_find_attrib_soft(input, "language"));
 	component->handler = handler;
 	component->speech_mode = strcmp(iks_find_attrib_soft(input, "mode"), "dtmf");
 

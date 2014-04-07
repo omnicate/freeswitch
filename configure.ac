@@ -221,10 +221,42 @@ AX_COMPILER_VENDOR
 # Set CC_FOR_BUILD
 if test "x${cross_compiling}" = "xyes"; then
     CC_FOR_BUILD=${CC_FOR_BUILD-gcc}
+    case "$host" in
+    	 arm*-linux-gnueabi*|arm*-*-linux-gnueabi*)
+		# spandsp modem
+		ac_cv_file__dev_ptmx=yes
+		# libjs
+		export ac_cv_va_copy=yes
+		# srtp
+		export ac_cv_file__dev_urandom=yes
+		# rpl_malloc
+		export ac_cv_func_realloc_0_nonnull=yes
+		export ac_cv_func_malloc_0_nonnull=yes
+		# apr
+		export ac_cv_func_setpgrp_void=yes
+		export ac_cv_file__dev_zero=yes
+		export apr_cv_tcp_nodelay_with_cork=yes
+		export ac_cv_file_dbd_apr_dbd_mysql_c=no
+		export ac_cv_sizeof_ssize_t=4
+		export apr_cv_mutex_recursive=yes
+		export ac_cv_func_pthread_rwlock_init=yes
+		export apr_cv_type_rwlock_t=yes
+		export apr_cv_process_shared_works=yes
+		export apr_cv_mutex_robust_shared=yes
+	 ;;
+    esac
 else
     CC_FOR_BUILD='$(CC)'
 fi
 AC_SUBST(CC_FOR_BUILD)
+
+if test -n "$lt_sysroot" ; then
+   APR_ADDTO(CFLAGS, --sysroot=$lt_sysroot)
+   APR_ADDTO(CXXFLAGS, --sysroot=$lt_sysroot)
+   APR_ADDTO(CPPFLAGS, --sysroot=$lt_sysroot)
+   APR_ADDTO(LDFLAGS, --sysroot=$lt_sysroot)
+   PKG_CONFIG_SYSROOT_DIR=$lt_sysroot
+fi
 
 #  Optimize
 AC_ARG_ENABLE(optimization,
@@ -582,7 +614,8 @@ path_push_unique () {
 case "$host" in
     *darwin13.*|*darwin12.*|*darwin11.*)
         APR_ADDTO(SWITCH_AM_CFLAGS, -DMACOSX)
-        APR_ADDTO(CFLAGS, -pipe -no-cpp-precomp -Wno-deprecated-declarations -I/usr/local/opt/openssl/include)
+        APR_ADDTO(CFLAGS, -pipe -no-cpp-precomp -Wno-deprecated-declarations)
+        APR_ADDTO(CPPFLAGS, -I/usr/local/opt/openssl/include)
         APR_ADDTO(LDFLAGS, -pipe -bind_at_load -L/usr/local/opt/openssl/lib)
         APR_ADDTO(CXXFLAGS, -pipe)
         APR_REMOVEFROM(SWITCH_AM_CFLAGS, -fPIC)
@@ -593,7 +626,8 @@ case "$host" in
     ;;
     *darwin10.*)
         APR_ADDTO(SWITCH_AM_CFLAGS, -DMACOSX)
-        APR_ADDTO(CFLAGS, -pipe -no-cpp-precomp -I/usr/local/opt/openssl/include)
+        APR_ADDTO(CFLAGS, -pipe -no-cpp-precomp)
+        APR_ADDTO(CPPFLAGS, -I/usr/local/opt/openssl/include)
         APR_ADDTO(LDFLAGS, -pipe -bind_at_load -L/usr/local/opt/openssl/lib)
         APR_ADDTO(CXXFLAGS, -pipe)
         APR_REMOVEFROM(SWITCH_AM_CFLAGS, -fPIC)
@@ -603,7 +637,7 @@ case "$host" in
 	APR_ADDTO([PLATFORM_CORE_LIBS], [-ldl])
     ;;
     *darwin*)
-        APR_ADDTO(CFLAGS, -I/usr/local/opt/openssl/include)
+        APR_ADDTO(CPPFLAGS, -I/usr/local/opt/openssl/include)
         APR_ADDTO(LDFLAGS, -L/usr/local/opt/openssl/lib)
         APR_ADDTO(SWITCH_AM_CFLAGS, -DMACOSX)
         APR_REMOVEFROM(SWITCH_AM_CFLAGS, -fPIC)
@@ -614,14 +648,12 @@ case "$host" in
     ;;
     *-solaris2*)
 	if test "${enable_64}" = "yes"; then
-           APR_ADDTO(CFLAGS, [-I/opt/64/include])
-           APR_ADDTO(CXXFLAGS, [-I/opt/64/include])
+           APR_ADDTO(CPPFLAGS, [-I/opt/64/include])
            APR_ADDTO(LDFLAGS, [-L/opt/64/lib -Wl,-rpath,/opt/64/lib])
            APR_ADDTO(SWITCH_AM_CFLAGS, [-I/opt/64/include])
            APR_ADDTO(SWITCH_AM_LDFLAGS, [-L/opt/64/lib -Wl,-rpath,/opt/64/lib])
 	else
-           APR_ADDTO(CFLAGS, [-I/opt/include])
-           APR_ADDTO(CXXFLAGS, -I/opt/include)
+           APR_ADDTO(CPPFLAGS, [-I/opt/include])
            APR_ADDTO(LDFLAGS, [-L/opt/lib -Wl,-rpath,/opt/lib])
            APR_ADDTO(SWITCH_AM_CFLAGS, [-I/opt/include])
            APR_ADDTO(SWITCH_AM_LDFLAGS, [-L/opt/lib -Wl,-rpath,/opt/lib])
@@ -632,22 +664,22 @@ case "$host" in
 	APR_ADDTO([PLATFORM_CORE_LIBS], [-ldl -lcrypt -lrt -lsendfile -lresolv -lsocket -lnsl -luuid])
     ;;
     *dragonfly*)
-        APR_ADDTO(CFLAGS, -I/usr/local/include)
+        APR_ADDTO(CPPFLAGS, -I/usr/local/include)
         APR_ADDTO(LDFLAGS, -L/usr/local/lib)
         APR_ADDTO(SWITCH_AM_CFLAGS, -I/usr/local/include)
     ;;
     *openbsd*)
-        APR_ADDTO(CFLAGS, -I/usr/local/include)
+        APR_ADDTO(CPPFLAGS, -I/usr/local/include)
         APR_ADDTO(LDFLAGS, -L/usr/local/lib)
         APR_ADDTO(SWITCH_AM_CFLAGS, -I/usr/local/include)
     ;;
     *netbsd*)
-        APR_ADDTO(CFLAGS, -I/usr/pkg/include)
+        APR_ADDTO(CPPFLAGS, -I/usr/pkg/include)
         APR_ADDTO(LDFLAGS, [-L/usr/pkg/lib -Wl,-rpath,/usr/pkg/lib])
         APR_ADDTO(SWITCH_AM_CFLAGS, -I/usr/pkg/include)
     ;;
     *bsd*)
-        APR_ADDTO(CFLAGS, -I/usr/local/include)
+        APR_ADDTO(CPPFLAGS, -I/usr/local/include)
         APR_ADDTO(LDFLAGS, -L/usr/local/lib)
         APR_ADDTO(SWITCH_AM_CFLAGS, -I/usr/local/include)
 	APR_ADDTO([PLATFORM_CORE_LIBS], [-lcrypt -lrt])
@@ -1100,13 +1132,14 @@ PKG_CHECK_MODULES([YAML], [yaml-0.1 >= 0.1.4],[
 AC_ARG_ENABLE(core-libedit-support,     
   [AS_HELP_STRING([--disable-core-libedit-support], [Compile without libedit Support])])
 
-case x$enable_core_libedit_support in
-  xno) ;;
-  xyes|*)
-    PKG_CHECK_MODULES([LIBEDIT], [libedit >= 2.11],,
-      [AC_MSG_ERROR([You need to either install libedit-dev (>= 2.11) or configure with --disable-core-libedit-support])])
-    ;;
-esac
+AS_IF([test "x$enable_core_libedit_support" != "xno"],[
+  PKG_CHECK_MODULES([LIBEDIT], [libedit >= 2.11],,[
+    AC_MSG_RESULT([no])
+    AC_CHECK_LIB([edit], [el_line], [LIBEDIT_LIBS=-ledit])
+    AC_CHECK_HEADER([histedit.h], [], [unset LIBEDIT_LIBS])
+    AS_IF([test "x$LIBEDIT_LIBS" = "x"], [
+      AC_MSG_ERROR([You need to either install libedit-dev (>= 2.11) or configure with --disable-core-libedit-support])
+      ])])])
 
 AS_IF([test "x$enable_core_libedit_support" != "xno"], [
   # If making changes here, don't forget to run autoheader and
@@ -1452,6 +1485,7 @@ AC_CONFIG_FILES([Makefile
 		src/mod/languages/mod_python/Makefile
 		src/mod/languages/mod_v8/Makefile
 		src/mod/languages/mod_yaml/Makefile
+		src/mod/languages/mod_basic/Makefile
 		src/mod/legacy/languages/mod_lua/Makefile
 		src/mod/legacy/languages/mod_spidermonkey/Makefile
 		src/mod/loggers/mod_console/Makefile
@@ -1540,7 +1574,7 @@ AC_SUBST(OUR_DISABLED_INSTALL_MODS)
 AC_SUBST(OUR_DISABLED_UNINSTALL_MODS)
 AC_SUBST(AM_MAKEFLAGS)
 
-ac_configure_args="$ac_configure_args CONFIGURE_CFLAGS='$CFLAGS' CONFIGURE_CXXFLAGS='$CXXFLAGS' CONFIGURE_LDFLAGS='$LDFLAGS' "
+ac_configure_args="$ac_configure_args CONFIGURE_CFLAGS='$CFLAGS $CPPFLAGS' CONFIGURE_CXXFLAGS='$CXXFLAGS $CPPFLAGS' CONFIGURE_LDFLAGS='$LDFLAGS' "
 
 #	--prefix='$prefix' --exec_prefix='$exec_prefix' --libdir='$libdir' --libexecdir='$libexecdir' --bindir='$bindir' --sbindir='$sbindir' \
 #	--localstatedir='$localstatedir' --datadir='$datadir'"

@@ -2474,7 +2474,7 @@ static switch_status_t cmd_status(char **argv, int argc, switch_stream_handle_t 
 			stream->write_function(stream, "%25s\t%32s\t%s\t%s\t%s\n", "Profile::Gateway-Name", "    Data    ", "State", "IB Calls(F/T)", "OB Calls(F/T)");
 			stream->write_function(stream, "%s\n", line);
 			switch_mutex_lock(mod_sofia_globals.hash_mutex);
-			for (hi = switch_core_hash_first( mod_sofia_globals.profile_hash); hi; hi = switch_core_hash_next(hi)) {
+			for (hi = switch_core_hash_first(mod_sofia_globals.profile_hash); hi; hi = switch_core_hash_next(&hi)) {
 				switch_core_hash_this(hi, &vvar, NULL, &val);
 				profile = (sofia_profile_t *) val;
 				if (sofia_test_pflag(profile, PFLAG_RUNNING)) {
@@ -2707,7 +2707,7 @@ static switch_status_t cmd_status(char **argv, int argc, switch_stream_handle_t 
 	stream->write_function(stream, "%25s\t%s\t  %40s\t%s\n", "Name", "   Type", "Data", "State");
 	stream->write_function(stream, "%s\n", line);
 	switch_mutex_lock(mod_sofia_globals.hash_mutex);
-	for (hi = switch_core_hash_first( mod_sofia_globals.profile_hash); hi; hi = switch_core_hash_next(hi)) {
+	for (hi = switch_core_hash_first(mod_sofia_globals.profile_hash); hi; hi = switch_core_hash_next(&hi)) {
 		switch_core_hash_this(hi, &vvar, NULL, &val);
 		profile = (sofia_profile_t *) val;
 		if (sofia_test_pflag(profile, PFLAG_RUNNING)) {
@@ -2819,7 +2819,7 @@ static switch_status_t cmd_xml_status(char **argv, int argc, switch_stream_handl
 			stream->write_function(stream, "<gateways>\n", header);
 
 			switch_mutex_lock(mod_sofia_globals.hash_mutex);
-			for (hi = switch_core_hash_first( mod_sofia_globals.profile_hash); hi; hi = switch_core_hash_next(hi)) {
+			for (hi = switch_core_hash_first(mod_sofia_globals.profile_hash); hi; hi = switch_core_hash_next(&hi)) {
 				switch_core_hash_this(hi, &vvar, NULL, &val);
 				profile = (sofia_profile_t *) val;
 				if (sofia_test_pflag(profile, PFLAG_RUNNING)) {
@@ -2991,7 +2991,7 @@ static switch_status_t cmd_xml_status(char **argv, int argc, switch_stream_handl
 	stream->write_function(stream, "%s\n", header);
 	stream->write_function(stream, "<profiles>\n");
 	switch_mutex_lock(mod_sofia_globals.hash_mutex);
-	for (hi = switch_core_hash_first( mod_sofia_globals.profile_hash); hi; hi = switch_core_hash_next(hi)) {
+	for (hi = switch_core_hash_first(mod_sofia_globals.profile_hash); hi; hi = switch_core_hash_next(&hi)) {
 		switch_core_hash_this(hi, &vvar, NULL, &val);
 		profile = (sofia_profile_t *) val;
 		if (sofia_test_pflag(profile, PFLAG_RUNNING)) {
@@ -3654,7 +3654,7 @@ SWITCH_STANDARD_API(sofia_contact_function)
 			const void *var;
 			void *val;
 
-			for (hi = switch_core_hash_first( mod_sofia_globals.profile_hash); hi; hi = switch_core_hash_next(hi)) {
+			for (hi = switch_core_hash_first(mod_sofia_globals.profile_hash); hi; hi = switch_core_hash_next(&hi)) {
 				switch_core_hash_this(hi, &var, NULL, &val);
 				if ((profile = (sofia_profile_t *) val) && !strcmp((char *)var, profile->name)) {
 					select_from_profile(profile, user, domain, concat, exclude_contact, &mystream, SWITCH_TRUE);
@@ -3839,7 +3839,7 @@ SWITCH_STANDARD_API(sofia_presence_data_function)
 			const void *var;
 			void *val;
 
-			for (hi = switch_core_hash_first( mod_sofia_globals.profile_hash); hi; hi = switch_core_hash_next(hi)) {
+			for (hi = switch_core_hash_first(mod_sofia_globals.profile_hash); hi; hi = switch_core_hash_next(&hi)) {
 				switch_core_hash_this(hi, &var, NULL, &val);
 				if ((profile = (sofia_profile_t *) val) && !strcmp((char *)var, profile->name)) {
 					get_presence_data(profile, user, domain, search, stream);
@@ -4666,7 +4666,6 @@ static int notify_csta_callback(void *pArg, int argc, char **argv, char **column
 	char *contact;
 	sip_cseq_t *cseq = NULL;
 	uint32_t callsequence;
-	uint32_t now = (uint32_t) switch_epoch_time_now(NULL);
 	sofia_destination_t *dst = NULL;
 	char *route_uri = NULL;
 
@@ -4691,12 +4690,7 @@ static int notify_csta_callback(void *pArg, int argc, char **argv, char **column
 		route_uri = sofia_glue_strip_uri(dst->route_uri);
 	}
 
-	switch_mutex_lock(profile->ireg_mutex);
-	if (!profile->cseq_base) {
-		profile->cseq_base = (now - 1312693200) * 10;
-	}
-	callsequence = ++profile->cseq_base;
-	switch_mutex_unlock(profile->ireg_mutex);
+	callsequence = sofia_presence_get_cseq(profile);
 
 	//nh = nua_handle(profile->nua, NULL, NUTAG_URL(dst->contact), SIPTAG_FROM_STR(id), SIPTAG_TO_STR(id), SIPTAG_CONTACT_STR(profile->url), TAG_END());
 	nh = nua_handle(profile->nua, NULL, NUTAG_URL(dst->contact), SIPTAG_FROM_STR(full_to), SIPTAG_TO_STR(full_from), SIPTAG_CONTACT_STR(profile->url), TAG_END());
@@ -5236,7 +5230,7 @@ static void general_event_handler(switch_event_t *event)
 
 				switch_mutex_lock(mod_sofia_globals.hash_mutex);
 				if (mod_sofia_globals.profile_hash && !zstr(old_ip4) && !zstr(new_ip4)) {
-					for (hi = switch_core_hash_first( mod_sofia_globals.profile_hash); hi; hi = switch_core_hash_next(hi)) {
+					for (hi = switch_core_hash_first(mod_sofia_globals.profile_hash); hi; hi = switch_core_hash_next(&hi)) {
 						switch_core_hash_this(hi, &var, NULL, &val);
 
 						if ((profile = (sofia_profile_t *) val)) {
@@ -5265,7 +5259,7 @@ static void general_event_handler(switch_event_t *event)
 
 				switch_mutex_lock(mod_sofia_globals.hash_mutex);
 				if (mod_sofia_globals.profile_hash) {
-					for (hi = switch_core_hash_first( mod_sofia_globals.profile_hash); hi; hi = switch_core_hash_next(hi)) {
+					for (hi = switch_core_hash_first(mod_sofia_globals.profile_hash); hi; hi = switch_core_hash_next(&hi)) {
 						int rb = 0;
 						uint32_t x = 0;
 						switch_core_hash_this(hi, &var, NULL, &val);
@@ -5378,7 +5372,7 @@ switch_status_t list_profiles_full(const char *line, const char *cursor, switch_
 	switch_status_t status = SWITCH_STATUS_FALSE;
 
 	switch_mutex_lock(mod_sofia_globals.hash_mutex);
-	for (hi = switch_core_hash_first( mod_sofia_globals.profile_hash); hi; hi = switch_core_hash_next(hi)) {
+	for (hi = switch_core_hash_first(mod_sofia_globals.profile_hash); hi; hi = switch_core_hash_next(&hi)) {
 		switch_core_hash_this(hi, &vvar, NULL, &val);
 
 		profile = (sofia_profile_t *) val;
@@ -5416,7 +5410,7 @@ static switch_status_t list_gateways(const char *line, const char *cursor, switc
 	switch_status_t status = SWITCH_STATUS_FALSE;
 
 	switch_mutex_lock(mod_sofia_globals.hash_mutex);
-	for (hi = switch_core_hash_first( mod_sofia_globals.profile_hash); hi; hi = switch_core_hash_next(hi)) {
+	for (hi = switch_core_hash_first(mod_sofia_globals.profile_hash); hi; hi = switch_core_hash_next(&hi)) {
 		switch_core_hash_this(hi, &vvar, NULL, &val);
 		profile = (sofia_profile_t *) val;
 		if (sofia_test_pflag(profile, PFLAG_RUNNING)) {
@@ -5528,6 +5522,8 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_sofia_load)
 	switch_management_interface_t *management_interface;
 	switch_application_interface_t *app_interface;
 	struct in_addr in;
+	struct tm tm = {0};
+	time_t now;
 
 	memset(&mod_sofia_globals, 0, sizeof(mod_sofia_globals));
 	mod_sofia_globals.destroy_private.destroy_nh = 1;
@@ -5535,6 +5531,11 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_sofia_load)
 	mod_sofia_globals.keep_private.is_static = 1;
 	mod_sofia_globals.pool = pool;
 	switch_mutex_init(&mod_sofia_globals.mutex, SWITCH_MUTEX_NESTED, mod_sofia_globals.pool);
+
+	now = switch_epoch_time_now(NULL);
+	tm = *(localtime(&now));
+
+	mod_sofia_globals.presence_epoch = now - (tm.tm_yday * 86400);
 
 	switch_find_local_ip(mod_sofia_globals.guess_ip, sizeof(mod_sofia_globals.guess_ip), &mod_sofia_globals.guess_mask, AF_INET);
 	in.s_addr = mod_sofia_globals.guess_mask;
