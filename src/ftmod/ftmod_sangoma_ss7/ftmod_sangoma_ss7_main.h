@@ -1101,6 +1101,7 @@ ftdm_status_t copy_numPortFwdInfo_to_sngss7(ftdm_channel_t *ftdmchan, SiNumPortF
 ftdm_status_t copy_numPortFwdInfo_from_sngss7(ftdm_channel_t *ftdmchan, SiNumPortFwdInfo *numPortFwdInfo);
 ftdm_status_t copy_optBckCallInd_to_sngss7(ftdm_channel_t *ftdmchan, SiOptBckCalInd *optBckCalInd);
 ftdm_status_t copy_redirectionNumber_to_sngss7(ftdm_channel_t *ftdmchan, SiCdPtyNum *redirNum);
+ftdm_status_t copy_usr2UsrInfo_to_sngss7(ftdm_channel_t *ftdmchan, SiUsr2UsrInfo *usr2UsrInfo);
 
 ftdm_status_t copy_hopCounter_to_sngss7(ftdm_channel_t *ftdmchan, SiHopCounter *hopCounter);
 ftdm_status_t copy_hopCounter_from_sngss7(ftdm_channel_t *ftdmchan, SiHopCounter *hopCounter);

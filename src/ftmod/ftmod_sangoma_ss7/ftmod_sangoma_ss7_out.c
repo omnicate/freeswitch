@@ -152,6 +152,7 @@ void ft_to_sngss7_iam (ftdm_channel_t * ftdmchan)
 			copy_access_transport_to_sngss7(ftdmchan, &iam.accTrnspt);
 			copy_numPortFwdInfo_to_sngss7(ftdmchan, &iam.numPortFwdInfo);
 			copy_hopCounter_to_sngss7(ftdmchan, &iam.hopCounter);
+			copy_usr2UsrInfo_to_sngss7(ftdmchan, &iam.usr2UsrInfo);
 		}
 	} else if (sngss7_info->circuit->transparent_iam &&
 		sngss7_retrieve_iam(ftdmchan, &iam) == FTDM_SUCCESS) {
@@ -180,6 +181,7 @@ void ft_to_sngss7_iam (ftdm_channel_t * ftdmchan)
 		copy_NatureOfConnection_to_sngss7(ftdmchan, &iam.natConInd);
 		copy_numPortFwdInfo_to_sngss7(ftdmchan, &iam.numPortFwdInfo);
 		copy_hopCounter_to_sngss7(ftdmchan, &iam.hopCounter);
+		copy_usr2UsrInfo_to_sngss7(ftdmchan, &iam.usr2UsrInfo);
 	} else {
 		/* Nature of Connection Indicators */
 		copy_natConInd_to_sngss7(ftdmchan, &iam.natConInd);
@@ -229,6 +231,7 @@ void ft_to_sngss7_iam (ftdm_channel_t * ftdmchan)
 		copy_NatureOfConnection_to_sngss7(ftdmchan, &iam.natConInd);
 		copy_numPortFwdInfo_to_sngss7(ftdmchan, &iam.numPortFwdInfo);
 		copy_hopCounter_to_sngss7(ftdmchan, &iam.hopCounter);
+		copy_usr2UsrInfo_to_sngss7(ftdmchan, &iam.usr2UsrInfo);
 
 		SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Tx IAM clg = \"%s\" (NADI=%d), cld = \"%s\" (NADI=%d), loc = %s (NADI=%d)\n",
 									sngss7_info->circuit->cic,

@@ -1652,6 +1652,13 @@ static switch_call_cause_t channel_outgoing_channel(switch_core_session_t *sessi
 		if (sipvar) {
 			ftdm_usrmsg_add_var(&usrmsg, "ss7_iam_nature_connection_hex", sipvar);
 		}
+
+		/* for ftmod_sangoma_ss7 use only in order to set user to user information as recieved */
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-UUI");
+		if (sipvar) {
+			ftdm_log(FTDM_LOG_INFO, "Got user to user information value as [%s] recieved in X-header\n", sipvar);
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_usr2UsrInfo_val", sipvar);
+		}
 	}
 
 	if (switch_test_flag(outbound_profile, SWITCH_CPF_SCREEN)) {
@@ -2135,6 +2142,11 @@ ftdm_status_t ftdm_channel_from_event(ftdm_sigmsg_t *sigmsg, switch_core_session
 		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_hopCounter_val");
 		if (!ftdm_strlen_zero(var_value)) {
 			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-hopCounter", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_usr2UsrInfo_val");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-UUI", "%s", var_value);
 		}
 	}
 
