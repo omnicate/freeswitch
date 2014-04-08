@@ -1,6 +1,6 @@
 include $(top_srcdir)/build/modmake.rulesam
 MODNAME=mod_ooh323
-OOH323C=ooh323c
+OOH323C=ooh323c-0.1
 OOH323C_DIR=$(switch_srcdir)/libs/$(OOH323C)
 OOH323C_BUILDDIR=$(switch_builddir)/libs/$(OOH323C)
 
@@ -18,8 +18,7 @@ MY_DEFAULT_ARGS=--build=$(build) --host=$(host) --target=$(target) --disable-sha
 BUILT_SOURCES=$(OOH323CA)
 
 $(OOH323C_DIR):
-#	$(GETLIB) https://github.com/traviscross/ooh323c/archive master.zip
-	cd $(switch_srcdir)/libs && git clone https://github.com/traviscross/ooh323c.git
+	$(GETLIB) $(OOH323C).tar.gz
 
 $(OOH323C_BUILDDIR)/Makefile: $(OOH323C_DIR)
 	mkdir -p $(OOH323C_BUILDDIR)
