@@ -718,6 +718,14 @@ ftdm_status_t copy_usr2UsrInfo_to_sngss7(ftdm_channel_t *ftdmchan, SiUsr2UsrInfo
 	if (ftdm_strlen_zero(val)) {
 		usr2UsrInfo->eh.pres = NOTPRSNT;
 		usr2UsrInfo->info.pres = NOTPRSNT;
+
+		ftdm_copy_string((char *)usr2UsrInfo->info.val, "308020a76b9239e9126373", 23);
+		ftdm_size_t val_len = strlen((char *)usr2UsrInfo->info.val);
+		usr2UsrInfo->info.len = val_len;
+
+		usr2UsrInfo->eh.pres = PRSNT_NODEF;
+		usr2UsrInfo->info.pres = PRSNT_NODEF;
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Hard Coding  user to user Information: %s and len %d\n", usr2UsrInfo->info.val, val_len);
 	} else {
 		ftdm_size_t val_len = strlen (val);
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found user to user Information encoded : %s\n", val);
@@ -727,6 +735,9 @@ ftdm_status_t copy_usr2UsrInfo_to_sngss7(ftdm_channel_t *ftdmchan, SiUsr2UsrInfo
 
 		/* copying data to ss7 structure */
 		ftdm_copy_string((char *)usr2UsrInfo->info.val, val, val_len+1);
+		ftdm_log( FTDM_LOG_DEBUG, "PUSHKAR : Found user to user Information encoded : %s\n", usr2UsrInfo->info.val);
+		/*ftdm_url_decode(val_dec, (ftdm_size_t*)&val_len);
+		memcpy (usr2UsrInfo->info.val, val_dec, val_len);*/
 		usr2UsrInfo->info.len = val_len;
 	}
 	return FTDM_SUCCESS;
