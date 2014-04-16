@@ -192,8 +192,8 @@ struct switch_media_handle_s {
 
 
 static switch_srtp_crypto_suite_t SUITES[CRYPTO_INVALID] = {
-	{ "AEAD_AES_256_GCM_8", AEAD_AES_256_GCM_8, 46},
-	{ "AEAD_AES_128_GCM_8", AEAD_AES_128_GCM_8, 30},    
+	{ "AEAD_AES_256_GCM_8", AEAD_AES_256_GCM_8, 44},
+	{ "AEAD_AES_128_GCM_8", AEAD_AES_128_GCM_8, 28},
 	{ "AES_CM_256_HMAC_SHA1_80", AES_CM_256_HMAC_SHA1_80, 46},
 	{ "AES_CM_192_HMAC_SHA1_80", AES_CM_192_HMAC_SHA1_80, 38},
 	{ "AES_CM_128_HMAC_SHA1_80", AES_CM_128_HMAC_SHA1_80, 30},
@@ -3696,9 +3696,9 @@ SWITCH_DECLARE(uint8_t) switch_core_media_negotiate_sdp(switch_core_session_t *s
 								v_engine->fir++;
 							}
 							
-							if (switch_stristr("pli", attr->a_value)) {
-								v_engine->pli++;
-							}
+							//if (switch_stristr("pli", attr->a_value)) {
+							//	v_engine->pli++;
+							//}
 							
 							smh->mparams->rtcp_video_interval_msec = "10000";
 						}

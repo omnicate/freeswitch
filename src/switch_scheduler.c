@@ -194,6 +194,12 @@ static void *SWITCH_THREAD_FUNC switch_scheduler_task_thread(switch_thread_t *th
 	task_thread_loop(1);
 
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "Task thread ending\n");
+
+	while(switch_queue_trypop(globals.event_queue, &pop) == SWITCH_STATUS_SUCCESS) {
+		switch_event_t *event = (switch_event_t *) pop;
+		switch_event_destroy(&event);
+	}
+
 	globals.task_thread_running = 0;
 
 	return NULL;
@@ -351,6 +357,9 @@ SWITCH_DECLARE(void) switch_scheduler_task_thread_stop(void)
 			}
 		}
 	}
+	
+	switch_core_destroy_memory_pool(&globals.memory_pool);
+
 }
 
 /* For Emacs:

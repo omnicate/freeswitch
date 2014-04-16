@@ -119,11 +119,13 @@ switch_create_hashtable(switch_hashtable_t **hp, unsigned int minsize,
 typedef enum {
 	HASHTABLE_FLAG_NONE = 0,
 	HASHTABLE_FLAG_FREE_KEY = (1 << 0),
-	HASHTABLE_FLAG_FREE_VALUE = (1 << 1)
+	HASHTABLE_FLAG_FREE_VALUE = (1 << 1),
+	HASHTABLE_DUP_CHECK = (1 << 2)
 } hashtable_flag_t;
 
 SWITCH_DECLARE(int)
-switch_hashtable_insert(switch_hashtable_t *h, void *k, void *v, hashtable_flag_t flags);
+switch_hashtable_insert_destructor(switch_hashtable_t *h, void *k, void *v, hashtable_flag_t flags, hashtable_destructor_t destructor);
+#define switch_hashtable_insert(_h, _k, _v, _f) switch_hashtable_insert_destructor(_h, _k, _v, _f, NULL)
 
 #define DEFINE_HASHTABLE_INSERT(fnname, keytype, valuetype)		\
 	int fnname (switch_hashtable_t *h, keytype *k, valuetype *v)	\

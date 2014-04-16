@@ -1014,6 +1014,7 @@ typedef enum {
 	SWITCH_MESSAGE_PROGRESS_EVENT,
 	SWITCH_MESSAGE_RING_EVENT,
 	SWITCH_MESSAGE_RESAMPLE_EVENT,
+	SWITCH_MESSAGE_HEARTBEAT_EVENT,
 	SWITCH_MESSAGE_INVALID
 } switch_core_session_message_types_t;
 
@@ -2078,6 +2079,8 @@ typedef struct switch_management_interface switch_management_interface_t;
 typedef struct switch_core_port_allocator switch_core_port_allocator_t;
 typedef struct switch_media_bug switch_media_bug_t;
 typedef struct switch_limit_interface switch_limit_interface_t;
+
+typedef void (*hashtable_destructor_t)(void *ptr);
 
 struct switch_console_callback_match_node {
 	char *val;

@@ -877,6 +877,10 @@ switch_status_t channel_on_destroy(switch_core_session_t *session)
 		if (switch_core_codec_ready(&tech_pvt->write_codec)) {
 			switch_core_codec_destroy(&tech_pvt->write_codec);
 		}
+
+		if (switch_rtp_ready(tech_pvt->rtp_session)) {
+			switch_rtp_destroy(&tech_pvt->rtp_session);
+		}
 	}
 
 	switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "%s CHANNEL DESTROY\n", switch_channel_get_name(channel));
@@ -2172,6 +2176,7 @@ static switch_status_t load_skinny_config(void)
 								}
 							} /* param */
 							switch_core_hash_insert(profile->device_type_params_hash, id_str, params);
+							switch_safe_free(id_str);
 						} else {
 							switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING,
 									"Unknow device type %s in profile %s.\n", switch_xml_attr_soft(xdevice_type, "id"), profile->name);
