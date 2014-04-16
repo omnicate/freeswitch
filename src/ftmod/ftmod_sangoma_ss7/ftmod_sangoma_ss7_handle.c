@@ -97,10 +97,8 @@ ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 	sngss7_chan_data_t *sngss7_info = NULL;
 	ftdm_channel_t *ftdmchan = NULL;
 	char var[FTDM_DIGITS_LIMIT];
-	char uui_var[120];
 	
 	memset(var, '\0', sizeof(var));
-	memset(var, '\0', 120);
 
 	ftdm_running_return(FTDM_FAIL);
 
@@ -240,14 +238,8 @@ ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 
 			copy_cgPtyCat_from_sngss7(ftdmchan, &siConEvnt->cgPtyCat);
 			copy_cdPtyNum_from_sngss7(ftdmchan, &siConEvnt->cdPtyNum);
+			copy_usr2UsrInfo_from_sngss7(ftdmchan, &siConEvnt->usr2UsrInfo);
 
-			/* fill in the User to User Information */
-			if (siConEvnt->usr2UsrInfo.eh.pres == PRSNT_NODEF &&
-					siConEvnt->usr2UsrInfo.info.pres == PRSNT_NODEF) {
-				ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Got User to user Information = %s\n", siConEvnt->usr2UsrInfo.info.val);
-				sprintf(uui_var, "%s", siConEvnt->usr2UsrInfo.info.val);
-				sngss7_add_var(sngss7_info, "ss7_usr2UsrInfo_val", uui_var);
-			}
 
 			/* fill in the TMR/bearer capability */
 			if (siConEvnt->txMedReq.eh.pres) {
