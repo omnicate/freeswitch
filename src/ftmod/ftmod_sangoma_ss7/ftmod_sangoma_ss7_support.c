@@ -715,11 +715,12 @@ ftdm_status_t copy_usr2UsrInfo_from_sngss7(ftdm_channel_t *ftdmchan, SiUsr2UsrIn
 	char val[MAX_SI_USER_2_USER_LEN];
 	sngss7_chan_data_t *sngss7_info = ftdmchan->call_data;
 
-	if (usr2UsrInfo && (usr2UsrInfo->eh.pres == PRSNT_NODEF) &&
+	if (usr2UsrInfo && 
+			(usr2UsrInfo->eh.pres == PRSNT_NODEF) &&
 			(usr2UsrInfo->info.pres == PRSNT_NODEF)) {
-		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "User to User information present in incoming IAM \n");
-		ftdm_url_encode((char*)siConEvnt->usr2UsrInfo.info.val, uui_var,siConEvnt->usr2UsrInfo.info.len+1);
-		sngss7_add_var(sngss7_info, "ss7_usr2UsrInfo_val", uui_var);
+		ftdm_log_chan_msg(ftdmchan, FTDM_LOG_DEBUG, "User to User information present in incoming IAM \n");
+		ftdm_url_encode((char*)usr2UsrInfo->info.val, val,usr2UsrInfo->info.len+1);
+		sngss7_add_var(sngss7_info, "ss7_usr2UsrInfo_val", val);
 	}
 
 	return FTDM_SUCCESS;
