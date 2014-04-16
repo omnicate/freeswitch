@@ -719,7 +719,7 @@ ftdm_status_t copy_usr2UsrInfo_from_sngss7(ftdm_channel_t *ftdmchan, SiUsr2UsrIn
 			(usr2UsrInfo->eh.pres == PRSNT_NODEF) &&
 			(usr2UsrInfo->info.pres == PRSNT_NODEF)) {
 		ftdm_log_chan_msg(ftdmchan, FTDM_LOG_DEBUG, "User to User information present in incoming IAM \n");
-		ftdm_url_encode((char*)usr2UsrInfo->info.val, val,usr2UsrInfo->info.len+1);
+		ftdm_url_encode((char*)usr2UsrInfo->info.val, val,usr2UsrInfo->info.len);
 		sngss7_add_var(sngss7_info, "ss7_usr2UsrInfo_val", val);
 	}
 
