@@ -739,6 +739,8 @@ ftdm_status_t copy_usr2UsrInfo_to_sngss7(ftdm_channel_t *ftdmchan, SiUsr2UsrInfo
 		char *val_dec = NULL;
 		ftdm_size_t val_len = strlen (val);
 
+		usr2UsrInfo->eh.pres = PRSNT_NODEF;
+		usr2UsrInfo->info.pres = PRSNT_NODEF;
 		val_dec = ftdm_strdup(val);
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found user to user Information encoded : %s\n", val);
 		ftdm_url_decode(val_dec, (ftdm_size_t*)&val_len);
