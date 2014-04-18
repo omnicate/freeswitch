@@ -131,7 +131,14 @@ void sngisdn_process_con_ind (sngisdn_event_data_t *sngisdn_event)
 			get_calling_num2(ftdmchan, &conEvnt->cgPtyNmb2);
 			get_called_num(ftdmchan, &conEvnt->cdPtyNmb);
 			get_redir_num(ftdmchan, &conEvnt->redirNmb);
+
+#if (ISDN_ETSI || ISDN_QSIG)
+			get_calling_subaddr(ftdmchan, &conEvnt->cgPtySad1);
+#else
 			get_calling_subaddr(ftdmchan, &conEvnt->cgPtySad);
+#endif
+			get_called_subaddr(ftdmchan, &conEvnt->cdPtySad);
+
 			get_prog_ind_ie(ftdmchan, &conEvnt->progInd);
 			get_facility_ie(ftdmchan, &conEvnt->facilityStr);
 			get_calling_name(ftdmchan, conEvnt);

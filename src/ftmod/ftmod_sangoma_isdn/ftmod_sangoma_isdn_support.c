@@ -447,6 +447,7 @@ ftdm_status_t get_calling_name(ftdm_channel_t *ftdmchan, ConEvnt *conEvnt)
 ftdm_status_t get_calling_subaddr(ftdm_channel_t *ftdmchan, CgPtySad *cgPtySad)
 {
 	char subaddress[100];
+	char val[100];
 	
 	if (cgPtySad->eh.pres != PRSNT_NODEF) {
 		return FTDM_FAIL;
@@ -456,10 +457,52 @@ ftdm_status_t get_calling_subaddr(ftdm_channel_t *ftdmchan, CgPtySad *cgPtySad)
 		ftdm_log_chan(ftdmchan, FTDM_LOG_WARNING, "Calling Party Subaddress exceeds local size limit (len:%d max:%d)\n", cgPtySad->sadInfo.len, sizeof(subaddress));
 		cgPtySad->sadInfo.len = sizeof(subaddress)-1;
 	}
+
+	/* calling party subaddress is raw hex dump so can not be considered as string */
+	/* transmit this as URL encoded format */
+	ftdm_url_encode((char*)cgPtySad->sadInfo.val, subaddress, cgPtySad->sadInfo.len);
 		
-	memcpy(subaddress, (char*)cgPtySad->sadInfo.val, cgPtySad->sadInfo.len);
-	subaddress[cgPtySad->sadInfo.len] = '\0';
-	sngisdn_add_var((sngisdn_chan_data_t*)ftdmchan->call_data, "isdn.calling_subaddr", subaddress);
+	sngisdn_add_var((sngisdn_chan_data_t*)ftdmchan->call_data, "isdn.calling_subaddr_addr", subaddress);
+
+	snprintf(val, sizeof(val), "%d", cgPtySad->oddEvenInd.val); 
+	sngisdn_add_var((sngisdn_chan_data_t*)ftdmchan->call_data, "isdn.calling_subaddr_oe_ind", val);
+
+	snprintf(val, sizeof(val), "%d", cgPtySad->typeSad.val);
+	sngisdn_add_var((sngisdn_chan_data_t*)ftdmchan->call_data, "isdn.calling_subaddr_type", val);
+
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Received Encoded calling party subaddress [ %s]\n", subaddress);
+
+	return FTDM_SUCCESS;
+}
+
+ftdm_status_t get_called_subaddr(ftdm_channel_t *ftdmchan, CdPtySad *cdPtySad)
+{
+	char subaddress[100];
+	char val[100];
+	
+	if (cdPtySad->eh.pres != PRSNT_NODEF) {
+		return FTDM_FAIL;
+	}
+	memset(subaddress, 0, sizeof(subaddress));
+	if(cdPtySad->sadInfo.len >= sizeof(subaddress)) {
+		ftdm_log_chan(ftdmchan, FTDM_LOG_WARNING, "Calling Party Subaddress exceeds local size limit (len:%d max:%d)\n", cdPtySad->sadInfo.len, sizeof(subaddress));
+		cdPtySad->sadInfo.len = sizeof(subaddress)-1;
+	}
+
+	/* calling party subaddress is raw hex dump so can not be considered as string */
+	/* transmit this as URL encoded format */
+	ftdm_url_encode((char*)cdPtySad->sadInfo.val, subaddress, cdPtySad->sadInfo.len);
+		
+	sngisdn_add_var((sngisdn_chan_data_t*)ftdmchan->call_data, "isdn.called_subaddr_addr", subaddress);
+
+	snprintf(val, sizeof(val), "%d", cdPtySad->typeSad.val);
+	sngisdn_add_var((sngisdn_chan_data_t*)ftdmchan->call_data, "isdn.called_subaddr_type", val);
+
+	snprintf(val, sizeof(val), "%d", cdPtySad->oddEvenInd.val); 
+	sngisdn_add_var((sngisdn_chan_data_t*)ftdmchan->call_data, "isdn.called_subaddr_oe_ind", val);
+
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Received Encoded calling party subaddress [ %s]\n", subaddress);
+
 	return FTDM_SUCCESS;
 }
 
