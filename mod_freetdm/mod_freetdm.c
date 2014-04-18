@@ -2177,6 +2177,11 @@ ftdm_status_t ftdm_channel_from_event(ftdm_sigmsg_t *sigmsg, switch_core_session
 		if (!ftdm_strlen_zero(var_value)) {
 			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-CdPty-SubAddr-OEIndicator", "%s", var_value);
 		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "isdn.user-user");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-User-User", "%s", var_value);
+		}
 	}
 
 	/* Add any call variable to the dial plan */

@@ -506,6 +506,29 @@ ftdm_status_t get_called_subaddr(ftdm_channel_t *ftdmchan, CdPtySad *cdPtySad)
 	return FTDM_SUCCESS;
 }
 
+ftdm_status_t get_user_to_user(ftdm_channel_t *ftdmchan, UsrUsr *usrUsr)
+{
+	char val[255];
+
+	if (usrUsr->eh.pres != PRSNT_NODEF) {
+		return FTDM_FAIL;
+	}
+	memset(val, 0, sizeof(val));
+
+	if (usrUsr->usrInfo.pres != PRSNT_NODEF) {
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "User Info[%d] not present in User-User IE \n", usrUsr->usrInfo.pres);
+		return FTDM_FAIL;
+	}
+
+	ftdm_url_encode((char*)usrUsr->usrInfo.val, val, usrUsr->usrInfo.len);
+
+	sngisdn_add_var((sngisdn_chan_data_t*)ftdmchan->call_data, "isdn.user-user", val);
+
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Received Encoded User-User subaddress [ %s]\n", val);
+
+	return FTDM_SUCCESS;
+}
+
 ftdm_status_t get_facility_ie(ftdm_channel_t *ftdmchan, FacilityStr *facilityStr)
 {
 	if (!facilityStr->eh.pres) {

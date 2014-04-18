@@ -139,6 +139,8 @@ void sngisdn_process_con_ind (sngisdn_event_data_t *sngisdn_event)
 #endif
 			get_called_subaddr(ftdmchan, &conEvnt->cdPtySad);
 
+			get_user_to_user(ftdmchan, &conEvnt->usrUsr);
+
 			get_prog_ind_ie(ftdmchan, &conEvnt->progInd);
 			get_facility_ie(ftdmchan, &conEvnt->facilityStr);
 			get_calling_name(ftdmchan, conEvnt);
