@@ -751,6 +751,7 @@ static const char *message_names[] = {
 	"BLIND_TRANSFER_RESPONSE",
 	"STUN_ERROR",
 	"MEDIA_RENEG",
+	"KEEPALIVE",
 	"ANSWER_EVENT",
 	"PROGRESS_EVENT",
 	"RING_EVENT",
@@ -1506,6 +1507,7 @@ SWITCH_STANDARD_SCHED_FUNC(sch_heartbeat_callback)
 		task->runtime = switch_epoch_time_now(NULL) + session->track_duration;
 
 		msg.message_id = SWITCH_MESSAGE_HEARTBEAT_EVENT;
+		msg.numeric_arg = session->track_duration;
 		switch_core_session_receive_message(session, &msg);
 
 		switch_core_session_rwunlock(session);
@@ -1536,6 +1538,8 @@ SWITCH_DECLARE(void) switch_core_session_enable_heartbeat(switch_core_session_t 
 		seconds = 60;
 	}
 
+
+	session->read_frame_count = (session->read_impl.actual_samples_per_second / session->read_impl.samples_per_packet) * seconds;
 	session->track_duration = seconds;
 
 	if (switch_channel_test_flag(session->channel, CF_PROXY_MODE)) {
@@ -1549,8 +1553,6 @@ SWITCH_DECLARE(void) switch_core_session_enable_heartbeat(switch_core_session_t 
 
 	switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, "%s setting session heartbeat to %u second(s).\n",
 					  switch_channel_get_name(session->channel), seconds);
-
-	session->read_frame_count = 0;
 
 }
 

@@ -4649,6 +4649,11 @@ void sofia_presence_handle_sip_i_message(int status,
 		switch_channel_t *channel = NULL;
 
 
+		if (!sofia_test_pflag(profile, PFLAG_ENABLE_CHAT)) {
+			goto end;
+		}
+
+
 		if (session) {
 			channel = switch_core_session_get_channel(session);
 		}

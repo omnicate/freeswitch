@@ -143,7 +143,7 @@ SWITCH_STANDARD_API(dump_hash)
 		switch_core_hash_this(hi, &key, NULL, &val);
 		spy = (spy_t *) val;
 
-		stream->write_function(stream, "%s :");
+		stream->write_function(stream, "%s :", key);
 		while (spy) {
 			stream->write_function(stream, " %s", spy->uuid);
 			spy = spy->next;
@@ -160,11 +160,12 @@ static switch_status_t process_event(switch_event_t *event)
 {
 	switch_status_t status = SWITCH_STATUS_SUCCESS;
 	switch_core_session_t *session = NULL;
-	char *username[3] = { NULL };
-	char *domain[3] = { NULL };
+	char *username[4] = { NULL };
+	char *domain[4] = { NULL };
 	char key[512];
 	char *uuid = NULL, *my_uuid = NULL;
 	int i;
+	int found = 0;
 
 
 	switch_thread_rwlock_rdlock(globals.spy_hash_lock);
@@ -182,7 +183,10 @@ static switch_status_t process_event(switch_event_t *event)
 	username[2] = switch_event_get_header(event, "variable_user_name");
 	domain[2] = switch_event_get_header(event, "variable_domain_name");
 
-	for (i = 0; i < 3; i++) {
+	username[3] = switch_event_get_header(event, "variable_sip_to_user");
+	domain[3] = switch_event_get_header(event, "variable_domain_name");
+
+	for (i = 0; i < 4; i++) {
 
 		if (username[i] && domain[i]) {
 			spy_t *spy = NULL;
@@ -193,10 +197,11 @@ static switch_status_t process_event(switch_event_t *event)
 					if ((session = switch_core_session_locate(spy->uuid))) {
 						switch_channel_t *channel = switch_core_session_get_channel(session);
 						
-						switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "UserSpy retrieved uuid %s for key %s, activating eavesdrop\n", uuid, key);
 						my_uuid = switch_event_get_header(event, "Unique-ID");
+						switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "UserSpy retrieved uuid %s for key %s, activating eavesdrop\n", uuid, key);
 						
 						switch_channel_set_variable(channel, "spy_uuid", my_uuid);
+						found++;
 						
 						switch_channel_set_state(channel, CS_EXCHANGE_MEDIA);
 						switch_channel_set_flag(channel, CF_BREAK);
@@ -211,6 +216,10 @@ static switch_status_t process_event(switch_event_t *event)
 				status = SWITCH_STATUS_FALSE;
 			}
 		}
+	}
+
+	if (!found) {
+		status = SWITCH_STATUS_FALSE;
 	}
 	
 	
