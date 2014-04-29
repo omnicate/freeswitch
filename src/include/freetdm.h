@@ -432,6 +432,7 @@ typedef struct {
 		ftdm_group_hunt_t group;
 		ftdm_chan_hunt_t chan;
 	} mode_data;
+	ftdm_bool_t even_only; /* Only hunt even channels */
 	ftdm_hunt_result_cb_t result_cb; 
 } ftdm_hunting_scheme_t;
 

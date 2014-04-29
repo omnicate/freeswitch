@@ -1718,6 +1718,10 @@ static switch_call_cause_t channel_outgoing_channel(switch_core_session_t *sessi
 	ftdm_set_string(caller_data.cid_num.digits, switch_str_nil(callerid_num));
 
 	memset(&hunting, 0, sizeof(hunting));
+	hunting.even_only = FTDM_FALSE;
+	if ((var = channel_get_variable(session, var_event, "freetdm_hunt_even_only")) && switch_true(var)) {
+		hunting.even_only = FTDM_TRUE;
+	}
 
 	if (group_id >= 0) {
 		hunting.mode = FTDM_HUNT_GROUP;

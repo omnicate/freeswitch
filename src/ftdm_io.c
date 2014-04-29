@@ -58,6 +58,7 @@ struct tm *localtime_r(const time_t *clock, struct tm *result);
 #define MAX_CALLIDS 6000
 #define FTDM_HALF_DTMF_PAUSE 500
 #define FTDM_FULL_DTMF_PAUSE 1000
+#define FTDM_IS_EVEN(intval) ((intval & 1) == 0)
 
 ftdm_time_t time_last_throttle_log = 0;
 
@@ -1739,7 +1740,7 @@ FT_DECLARE(int) ftdm_channel_get_availability(ftdm_channel_t *ftdmchan)
 	return availability;
 }
 
-static ftdm_status_t _ftdm_channel_open_by_group(uint32_t group_id, ftdm_direction_t direction, ftdm_caller_data_t *caller_data, ftdm_channel_t **ftdmchan)
+static ftdm_status_t _ftdm_channel_open_by_group(uint32_t group_id, ftdm_direction_t direction, ftdm_bool_t even_only, ftdm_caller_data_t *caller_data, ftdm_channel_t **ftdmchan)
 {
 	ftdm_status_t status = FTDM_FAIL;
 	ftdm_channel_t *check = NULL;
@@ -1780,6 +1781,10 @@ static ftdm_status_t _ftdm_channel_open_by_group(uint32_t group_id, ftdm_directi
 
 	ftdm_mutex_lock(group->mutex);
 	for (;;) {
+
+		if (even_only && !FTDM_IS_EVEN(i)) {
+			goto next_channel;
+		}
 	
 		if (!(check = group->channels[i])) {
 			status = FTDM_FAIL;
@@ -1796,13 +1801,14 @@ static ftdm_status_t _ftdm_channel_open_by_group(uint32_t group_id, ftdm_directi
 
 		calculate_best_rate(check, &best_rated, &best_rate);
 
+next_channel:
 		if (direction == FTDM_TOP_DOWN) {
 			if (i >= (group->chan_count - 1)) {
 				break;
 			}
 			i++;
 		} else if (direction == FTDM_RR_DOWN || direction == FTDM_RR_UP) {
-			if (check == best_rated) {
+			if (check && check == best_rated) {
 				group->last_used_index = i;
 			}
 			i = rr_next(i, 0, group->chan_count - 1, direction);
@@ -1828,7 +1834,7 @@ static ftdm_status_t _ftdm_channel_open_by_group(uint32_t group_id, ftdm_directi
 FT_DECLARE(ftdm_status_t) ftdm_channel_open_by_group(uint32_t group_id, ftdm_direction_t direction, ftdm_caller_data_t *caller_data, ftdm_channel_t **ftdmchan)
 {
 	ftdm_status_t status;
-	status = _ftdm_channel_open_by_group(group_id, direction, caller_data, ftdmchan);
+	status = _ftdm_channel_open_by_group(group_id, direction, FTDM_FALSE, caller_data, ftdmchan);
 	if (status == FTDM_SUCCESS) {
 		ftdm_channel_t *fchan = *ftdmchan;
 		ftdm_channel_unlock(fchan);
@@ -1858,7 +1864,7 @@ FT_DECLARE(ftdm_status_t) ftdm_span_channel_use_count(ftdm_span_t *span, uint32_
 }
 
 /* Hunt a channel by span, if successful the channel is returned locked */
-static ftdm_status_t _ftdm_channel_open_by_span(uint32_t span_id, ftdm_direction_t direction, ftdm_caller_data_t *caller_data, ftdm_channel_t **ftdmchan)
+static ftdm_status_t _ftdm_channel_open_by_span(uint32_t span_id, ftdm_direction_t direction, ftdm_bool_t even_only, ftdm_caller_data_t *caller_data, ftdm_channel_t **ftdmchan)
 {
 	ftdm_status_t status = FTDM_FAIL;
 	ftdm_channel_t *check = NULL;
@@ -1917,6 +1923,10 @@ static ftdm_status_t _ftdm_channel_open_by_span(uint32_t span_id, ftdm_direction
 				break;
 			}
 		}
+
+		if (even_only && !FTDM_IS_EVEN(i)) {
+			goto next_channel;
+		}
 			
 		if (!(check = span->channels[i])) {
 			status = FTDM_FAIL;
@@ -1933,10 +1943,11 @@ static ftdm_status_t _ftdm_channel_open_by_span(uint32_t span_id, ftdm_direction
 			
 		calculate_best_rate(check, &best_rated, &best_rate);
 
+next_channel:
 		if (direction == FTDM_TOP_DOWN) {
 			i++;
 		} else if (direction == FTDM_RR_DOWN || direction == FTDM_RR_UP) {
-			if (check == best_rated) {
+			if (check && check == best_rated) {
 				span->last_used_index = i;
 			}
 			i = rr_next(i, 1, span->chan_count, direction);
@@ -1960,7 +1971,7 @@ static ftdm_status_t _ftdm_channel_open_by_span(uint32_t span_id, ftdm_direction
 FT_DECLARE(ftdm_status_t) ftdm_channel_open_by_span(uint32_t span_id, ftdm_direction_t direction, ftdm_caller_data_t *caller_data, ftdm_channel_t **ftdmchan)
 {
 	ftdm_status_t status;
-	status = _ftdm_channel_open_by_span(span_id, direction, caller_data, ftdmchan);
+	status = _ftdm_channel_open_by_span(span_id, direction, FTDM_FALSE, caller_data, ftdmchan);
 	if (status == FTDM_SUCCESS) {
 		ftdm_channel_t *fchan = *ftdmchan;
 		ftdm_channel_unlock(fchan);
@@ -2889,10 +2900,10 @@ FT_DECLARE(ftdm_status_t) _ftdm_call_place(const char *file, const char *func, i
 
 	if (hunting->mode == FTDM_HUNT_SPAN) {
 		status = _ftdm_channel_open_by_span(hunting->mode_data.span.span_id, 
-				hunting->mode_data.span.direction, caller_data, &fchan);
+				hunting->mode_data.span.direction, hunting->even_only, caller_data, &fchan);
 	} else if (hunting->mode == FTDM_HUNT_GROUP) {
 		status = _ftdm_channel_open_by_group(hunting->mode_data.group.group_id, 
-				hunting->mode_data.group.direction, caller_data, &fchan);
+				hunting->mode_data.group.direction, hunting->even_only, caller_data, &fchan);
 	} else if (hunting->mode == FTDM_HUNT_CHAN) {
 		status = _ftdm_channel_open(hunting->mode_data.chan.span_id, hunting->mode_data.chan.chan_id, &fchan, 0);
 	} else {
