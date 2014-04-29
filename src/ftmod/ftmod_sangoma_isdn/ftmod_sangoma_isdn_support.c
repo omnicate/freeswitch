@@ -501,7 +501,7 @@ ftdm_status_t get_called_subaddr(ftdm_channel_t *ftdmchan, CdPtySad *cdPtySad)
 	snprintf(val, sizeof(val), "%d", cdPtySad->oddEvenInd.val); 
 	sngisdn_add_var((sngisdn_chan_data_t*)ftdmchan->call_data, "isdn.called_subaddr_oe_ind", val);
 
-	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Received Encoded calling party subaddress [ %s]\n", subaddress);
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Received Encoded called party subaddress [ %s]\n", subaddress);
 
 	return FTDM_SUCCESS;
 }
