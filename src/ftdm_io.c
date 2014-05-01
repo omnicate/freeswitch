@@ -58,7 +58,7 @@ struct tm *localtime_r(const time_t *clock, struct tm *result);
 #define MAX_CALLIDS 6000
 #define FTDM_HALF_DTMF_PAUSE 500
 #define FTDM_FULL_DTMF_PAUSE 1000
-#define FTDM_IS_EVEN(intval) (((intval+1) & 1) == 0)
+#define FTDM_IS_EVEN(intval) ((intval & 1) == 0)
 
 ftdm_time_t time_last_throttle_log = 0;
 
@@ -1785,11 +1785,9 @@ static ftdm_status_t _ftdm_channel_open_by_group(uint32_t group_id, ftdm_directi
 
 		/* I can be 0 at the begining as channels array starts from 0 but actual channel is +1*/
 		j = i+1;
-		if (even_only && FTDM_IS_EVEN(j)) {
-			ftdm_log(FTDM_LOG_DEBUG, "hunting.even_only TRUE ..not even continue..\n");
+		if (even_only && !FTDM_IS_EVEN(j)) {
 			goto next_channel;
 		}
-		ftdm_log(FTDM_LOG_DEBUG, "hunting.even_only TRUE ..found channel[%d]..\n",i);
 	
 		if (!(check = group->channels[i])) {
 			status = FTDM_FAIL;
