@@ -1748,7 +1748,6 @@ static ftdm_status_t _ftdm_channel_open_by_group(uint32_t group_id, ftdm_directi
 	ftdm_group_t *group = NULL;
 	int best_rate = 0;
 	uint32_t i = 0;
-	uint32_t j = 0;
 	uint32_t count = 0;
 	uint32_t first_channel = 0;
 
@@ -1783,15 +1782,13 @@ static ftdm_status_t _ftdm_channel_open_by_group(uint32_t group_id, ftdm_directi
 	ftdm_mutex_lock(group->mutex);
 	for (;;) {
 
-		/* I can be 0 at the begining as channels array starts from 0 but actual channel is +1*/
-		j = i+1;
-		if (even_only && !FTDM_IS_EVEN(j)) {
-			goto next_channel;
-		}
-	
 		if (!(check = group->channels[i])) {
 			status = FTDM_FAIL;
 			break;
+		}
+
+		if (even_only && !FTDM_IS_EVEN(check->chan_id)) {
+			goto next_channel;
 		}
 
 		if (request_voice_channel(check, ftdmchan, caller_data, direction)) {
@@ -1802,16 +1799,16 @@ static ftdm_status_t _ftdm_channel_open_by_group(uint32_t group_id, ftdm_directi
 			break;
 		}
 
+next_channel:
 		calculate_best_rate(check, &best_rated, &best_rate);
 
-next_channel:
 		if (direction == FTDM_TOP_DOWN) {
 			if (i >= (group->chan_count - 1)) {
 				break;
 			}
 			i++;
 		} else if (direction == FTDM_RR_DOWN || direction == FTDM_RR_UP) {
-			if (check && check == best_rated) {
+			if (check == best_rated) {
 				group->last_used_index = i;
 			}
 			i = rr_next(i, 0, group->chan_count - 1, direction);
@@ -1927,13 +1924,13 @@ static ftdm_status_t _ftdm_channel_open_by_span(uint32_t span_id, ftdm_direction
 			}
 		}
 
-		if (even_only && !FTDM_IS_EVEN(i)) {
-			goto next_channel;
-		}
-			
 		if (!(check = span->channels[i])) {
 			status = FTDM_FAIL;
 			break;
+		}
+
+		if (even_only && !FTDM_IS_EVEN(check->chan_id)) {
+			goto next_channel;
 		}
 
 		if (request_voice_channel(check, ftdmchan, caller_data, direction)) {
@@ -1944,13 +1941,13 @@ static ftdm_status_t _ftdm_channel_open_by_span(uint32_t span_id, ftdm_direction
 			break;
 		}
 			
+next_channel:
 		calculate_best_rate(check, &best_rated, &best_rate);
 
-next_channel:
 		if (direction == FTDM_TOP_DOWN) {
 			i++;
 		} else if (direction == FTDM_RR_DOWN || direction == FTDM_RR_UP) {
-			if (check && check == best_rated) {
+			if (check == best_rated) {
 				span->last_used_index = i;
 			}
 			i = rr_next(i, 1, span->chan_count, direction);
