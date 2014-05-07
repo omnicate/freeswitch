@@ -463,7 +463,6 @@ static int parse_hex_num(const char **s, int max_value)
 
     /* The spec. says a hex value is always 2 digits, and the alpha digits are
        upper case. */
-    i = 0;
     if (isdigit((int) **s))
         i = **s - '0';
     else if (**s >= 'A'  &&  **s <= 'F')
@@ -726,11 +725,18 @@ static int parse_string_list_out(at_state_t *s, const char **t, int *target, int
         val = (target)  ?  *target  :  0;
         while (val--  &&  (def = strchr(def, ',')))
             def++;
-        if ((tmp = strchr(def, ',')))
-            len = tmp - def;
+        if (def)
+        {
+            if ((tmp = strchr(def, ',')))
+                len = tmp - def;
+            else
+                len = strlen(def);
+            snprintf(buf, sizeof(buf), "%s%.*s", (prefix)  ?  prefix  :  "", (int) len, def);
+        }
         else
-            len = strlen(def);
-        snprintf(buf, sizeof(buf), "%s%.*s", (prefix)  ?  prefix  :  "", (int) len, def);
+        {
+            buf[0] = '\0';
+        }
         at_put_response(s, buf);
         break;
     default:
@@ -771,8 +777,8 @@ static int parse_string_out(at_state_t *s, const char **t, char **target, const 
     default:
         return false;
     }
-    while (*t)
-        t++;
+    while (**t)
+        (*t)++;
     return true;
 }
 /*- End of function --------------------------------------------------------*/
@@ -905,7 +911,6 @@ static const char *at_cmd_dummy(at_state_t *s, const char *t)
 static const char *at_cmd_A(at_state_t *s, const char *t)
 {
     /* V.250 6.3.5 - Answer (abortable) */
-    t += 1;
     if (!answer_call(s))
         return NULL;
     return (const char *) -1;
@@ -914,7 +919,6 @@ static const char *at_cmd_A(at_state_t *s, const char *t)
 
 static const char *at_cmd_D(at_state_t *s, const char *t)
 {
-    int ok;
     char *u;
     char num[100 + 1];
     char ch;
@@ -925,7 +929,6 @@ static const char *at_cmd_D(at_state_t *s, const char *t)
     s->silent_dial = false;
     s->command_dial = false;
     t += 1;
-    ok = false;
     /* There are a numbers of options in a dial command string.
        Many are completely irrelevant in this application. */
     u = num;
@@ -1017,7 +1020,7 @@ static const char *at_cmd_D(at_state_t *s, const char *t)
         }
     }
     *u = '\0';
-    if ((ok = at_modem_control(s, AT_MODEM_CONTROL_CALL, num)) < 0)
+    if (at_modem_control(s, AT_MODEM_CONTROL_CALL, num) < 0)
         return NULL;
     /* Dialing should now be in progress. No AT response should be
        issued at this point. */

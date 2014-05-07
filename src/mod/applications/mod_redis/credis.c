@@ -162,9 +162,13 @@ static int cr_morebulk(cr_multibulk *mb, int size)
   DEBUG("allocate %d x CR_MULTIBULK_SIZE, total %d (%lu bytes)", 
         n, total, total * ((sizeof(char *)+sizeof(int))));
   cptr = realloc(mb->bulks, total * sizeof(char *));
+
+  if (cptr == NULL)
+    return CREDIS_ERR_NOMEM;
+
   iptr = realloc(mb->idxs, total * sizeof(int));
 
-  if (cptr == NULL || iptr == NULL)
+  if (iptr == NULL)
     return CREDIS_ERR_NOMEM;
 
   mb->bulks = cptr;
@@ -600,7 +604,7 @@ REDIS credis_connect(const char *host, int port, int timeout)
   return rhnd;
 
  error:
-  if (fd > 0)
+  if (fd >= 0)
     close(fd);
   cr_delete(rhnd);
   return NULL;

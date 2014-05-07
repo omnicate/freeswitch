@@ -1264,36 +1264,6 @@ Files: libs/miniupnpc/bsdqueue.h
 Copyright: 1991,1993, The Regents of the University of California
 License: BSD-3-clause
 
-Files: libs/ldns/*
-Copyright: 2001-2010, NLnet Labs
- 2000-2001, Aaron D. Gifford
- 2000-2003 Damien Miller
- 1999 WIDE Project
- 1998 Todd C. Miller <Todd.Miller@courtesan.com>
- 1996, 1998 Internet Software Consortium.
- 1995 International Business Machines
-License: BSD-2-clause
-
-Files: libs/ldns/compat/fake-rfc2553.[ch]
- libs/ldns/examples/fake-rfc2553.h
- libs/ldns/ldns/rbtree.h
- libs/ldns/rbtree.c
- libs/win32/ldns/ldns-lib/util.h
-Copyright: 2001-2010, NLnet Labs
- 2000-2003 Damien Miller
- 1999 WIDE Project
-License: BSD-3-clause
-
-Files: libs/ldns/compat/b32_pton.c
- libs/ldns/compat/strlcpy.c
- libs/ldns/compat/b32_ntop.c
- libs/ldns/compat/b64_ntop.c
- libs/ldns/compat/inet_pton.c
-Copyright: 1996, 1998 Internet Software Consortium.
- 1995 International Business Machines, Inc.
- 1998 Todd C. Miller <Todd.Miller@courtesan.com>
-License: ISC
-
 Files: libs/js/*
 Copyright: 1998-2006 Mozilla <http://www.mozilla.org/>
  1996-2000 Netscape Communications Corporation
@@ -1903,45 +1873,6 @@ License: public-domain
 Files: libs/win32/pcre/dftables.c
 Copyright: 1997-2008 University of Cambridge
 License: BSD-3-clause
-
-Files: libs/openzap/*
-Copyright: 2005-2014, Anthony Minessale II <anthm@freeswitch.org>
- 2007-2014, Anthony Minessale II, Nenad Corbic
- 2005-2014, Anthony Minessale II
- 2006 Nenad Corbic <ncorbic@sangoma.com>
- 2007 Jan Vidar Berger, Case Labs, Ltd.
- 2007,2008 Michael Jerris
- 2008 Shane Burrell
- 2007 Michael S. Collins
- 2001 Steve Underwood <steveu@coppice.org>
- 2001 Steve Underwood
- 2002,2004 Christopher Clark <firstname.lastname@cl.cam.ac.uk>
- 2002 Christopher Clark
- 1984-2007 Sangoma Technologies Inc.
- 2007-2009, Sangoma Technologies
- 2009, Moises Silva <moy@sangoma.com>
- 2008, Stefan Knoblich, axsentis GmbH.
- 2005  Xygnada Technology, Inc.
-License: BSD-3-clause
-
-Files: libs/openzap/src/fsk.c
- libs/openzap/src/include/uart.h
- libs/openzap/src/uart.c
-Copyright: 2009-2012, Anthony Minessale II
- 2005 Robert Krten
-License: BSD-2-clause
-
-Files: libs/openzap/src/include/libteletone.h
- libs/openzap/mod_openzap/mod_openzap.c
-Copyright: 2005-2014, Anthony Minessale II <anthm@freeswitch.org>
- 2005-2014, Anthony Minessale II
-License: MPL-1.1
-
-Files: libs/openzap/src/sangoma_pri.[ch]
- libs/openzap/src/priserver.c
-Copyright: 2005-2014 Anthony Minessale II
- 2006 Nenad Corbic <ncorbic@sangoma.com>
-License: GPL-2+
 
 Files: libs/ilbc/*
 Copyright: 2007-2008, Steve Underwood

@@ -300,6 +300,7 @@ static int match_resolution(float actual, const float table[])
 }
 /*- End of function --------------------------------------------------------*/
 
+#if 0
 static int best_colour_resolution(float actual, int allowed_resolutions)
 {
     static const struct
@@ -325,7 +326,7 @@ static int best_colour_resolution(float actual, int allowed_resolutions)
         return -1;
 
     best_ratio = 0.0f;
-    best_entry = -1;
+    best_entry = 0;
     for (i = 0;  x_res_table[i].resolution > 0.0f;  i++)
     {
         if (!(allowed_resolutions & x_res_table[i].resolution_code))
@@ -343,6 +344,7 @@ static int best_colour_resolution(float actual, int allowed_resolutions)
     return x_res_table[best_entry].resolution_code;
 }
 /*- End of function --------------------------------------------------------*/
+#endif
 
 #if defined(SPANDSP_SUPPORT_TIFF_FX)
 static int read_colour_map(t4_tx_state_t *s, int bits_per_sample)
@@ -407,7 +409,7 @@ static int get_tiff_directory_info(t4_tx_state_t *s)
     char *u;
     char uu[10];
     float *fl_parms;
-    uint64_t diroff;
+    toff_t diroff;
     float lmin;
     float lmax;
     float amin;
@@ -618,6 +620,7 @@ static int get_tiff_directory_info(t4_tx_state_t *s)
 
     /* If global parameters are present they should only be on the first page of the file.
        However, as we scan the file we might as well look for them on any page. */
+    diroff = 0;
     if (TIFFGetField(t->tiff_file, TIFFTAG_GLOBALPARAMETERSIFD, &diroff))
     {
         if (!TIFFReadCustomDirectory(t->tiff_file, diroff, &tiff_fx_field_array))
@@ -949,6 +952,7 @@ static int read_tiff_t85_image(t4_tx_state_t *s)
 }
 /*- End of function --------------------------------------------------------*/
 
+#if defined(SPANDSP_SUPPORT_T43)
 static int read_tiff_t43_image(t4_tx_state_t *s)
 {
     int biggest;
@@ -1026,6 +1030,7 @@ static int read_tiff_t43_image(t4_tx_state_t *s)
     return s->tiff.image_size;
 }
 /*- End of function --------------------------------------------------------*/
+#endif
 
 static int read_tiff_t42_t81_image(t4_tx_state_t *s)
 {

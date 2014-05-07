@@ -345,15 +345,6 @@ static char *get_bridge_data(switch_memory_pool_t *pool, char *dialed_number, ch
 		}
 	}
 
-	if (session && (switch_string_var_check_const(data) || switch_string_has_escaped_data(data))) {
-		expanded = switch_channel_expand_variables(switch_core_session_get_channel(session), data);
-		if (expanded == data ) {
-			expanded = NULL;
-		} else {
-			data = switch_core_strdup( pool, expanded );
-		}
-	}
-
 	switch_safe_free(expanded);
 
 	switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "Returning Dialstring %s\n", data);
@@ -383,13 +374,13 @@ static profile_t *locate_profile(const char *profile_name)
 
 static void init_max_lens(max_len maxes)
 {
-	maxes->digit_str = (headers[LCR_HEADERS_DIGITS] == NULL ? 0 : strlen(headers[LCR_HEADERS_DIGITS]));
-	maxes->carrier_name = (headers[LCR_HEADERS_CARRIER] == NULL ? 0 : strlen(headers[LCR_HEADERS_CARRIER]));
-	maxes->dialstring = (headers[LCR_HEADERS_DIALSTRING] == NULL ? 0 : strlen(headers[LCR_HEADERS_DIALSTRING]));
+	maxes->digit_str = strlen(headers[LCR_HEADERS_DIGITS]);
+	maxes->carrier_name = strlen(headers[LCR_HEADERS_CARRIER]);
+	maxes->dialstring = strlen(headers[LCR_HEADERS_DIALSTRING]);
 	maxes->rate = 8;
-	maxes->codec = (headers[LCR_HEADERS_CODEC] == NULL ? 0 : strlen(headers[LCR_HEADERS_CODEC]));
-	maxes->cid = (headers[LCR_HEADERS_CID] == NULL ? 0 : strlen(headers[LCR_HEADERS_CID]));
-	maxes->limit = (headers[LCR_HEADERS_LIMIT] == NULL ? 0 : strlen(headers[LCR_HEADERS_LIMIT]));
+	maxes->codec = strlen(headers[LCR_HEADERS_CODEC]);
+	maxes->cid = strlen(headers[LCR_HEADERS_CID]);
+	maxes->limit = strlen(headers[LCR_HEADERS_LIMIT]);
 }
 
 static switch_status_t process_max_lengths(max_obj_t *maxes, lcr_route routes, char *destination_number)
@@ -633,6 +624,12 @@ static int route_add_callback(void *pArg, int argc, char **argv, char **columnNa
 	switch_memory_pool_t *pool = cbt->pool;
 
 	additional = switch_core_alloc(pool, sizeof(lcr_obj_t));
+
+	if (!additional) {
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error allocating in route_add_callback\n");
+		goto end;
+	}
+
 	switch_event_create(&additional->fields, SWITCH_EVENT_REQUEST_PARAMS);
 
 	for (i = 0; i < argc ; i++) {
@@ -1564,20 +1561,12 @@ SWITCH_STANDARD_DIALPLAN(lcr_dialplan_hunt)
 	switch_channel_t *channel = switch_core_session_get_channel(session);
 	callback_t routes = { 0 };
 	lcr_route cur_route = { 0 };
-	switch_memory_pool_t *pool = NULL;
-	switch_event_t *event = NULL;
+	switch_memory_pool_t *pool = switch_core_session_get_pool(session);
 	const char *intrastate = NULL;
 	const char *intralata = NULL;
 	const char *lrn = NULL;
 
-	if (session) {
-		pool = switch_core_session_get_pool(session);
-		routes.session = session;
-	} else {
-		switch_core_new_memory_pool(&pool);
-		switch_event_create(&event, SWITCH_EVENT_MESSAGE);
-		routes.event = event;
-	}
+	routes.session = session;
 	routes.pool = pool;
 
 	intrastate = switch_channel_get_variable(channel, "intrastate");
@@ -1603,6 +1592,11 @@ SWITCH_STANDARD_DIALPLAN(lcr_dialplan_hunt)
 		caller_profile = switch_channel_get_caller_profile(channel);
 	}
 
+	if (!caller_profile) {
+		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "No caller profile!\n");
+		goto end;
+	}
+
 	if (!(routes.profile = locate_profile(caller_profile->context))) {
 		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Unknown profile: %s\n", caller_profile->context);
 		goto end;
@@ -1611,14 +1605,12 @@ SWITCH_STANDARD_DIALPLAN(lcr_dialplan_hunt)
 	switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "LCR Lookup on %s using profile %s\n", caller_profile->destination_number, caller_profile->context);
 	routes.lookup_number = caller_profile->destination_number;
 
-	if (caller_profile) {
-		routes.cid = (char *) switch_channel_get_variable(channel, "effective_caller_id_number");
-		if (!routes.cid) {
-			routes.cid = (char *) caller_profile->caller_id_number;
-		}
+	routes.cid = (char *) switch_channel_get_variable(channel, "effective_caller_id_number");
+	if (!routes.cid) {
+		routes.cid = (char *) caller_profile->caller_id_number;
 	}
 
-	if (caller_profile && lcr_do_lookup(&routes) == SWITCH_STATUS_SUCCESS) {
+	if (lcr_do_lookup(&routes) == SWITCH_STATUS_SUCCESS) {
 		if ((extension = switch_caller_extension_new(session, caller_profile->destination_number, caller_profile->destination_number)) == 0) {
 			switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_CRIT, "memory error!\n");
 			goto end;
@@ -1653,14 +1645,12 @@ SWITCH_STANDARD_DIALPLAN(lcr_dialplan_hunt)
 			switch_caller_extension_add_application(session, extension, app, argc);
 		}
 	} else {
-		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_WARNING, "LCR lookup failed for %s using profile %s\n", caller_profile ? caller_profile->destination_number : "unknown", caller_profile ? caller_profile->context : "unknown");
+		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_WARNING, "LCR lookup failed for %s using profile %s\n",
+						  caller_profile->destination_number, caller_profile->context);
 	}
 
 end:
 	lcr_destroy(routes.head);
-	if (event) {
-		switch_event_destroy(&event);
-	}
 	if (!session) {
 		switch_core_destroy_memory_pool(&pool);
 	}
@@ -1691,7 +1681,7 @@ SWITCH_STANDARD_APP(lcr_app_function)
 	switch_caller_profile_t *caller_profile = NULL;
 	callback_t routes = { 0 };
 	lcr_route cur_route = { 0 };
-	switch_memory_pool_t *pool;
+	switch_memory_pool_t *pool = switch_core_session_get_pool(session);
 	switch_event_t *event;
 	const char *intra = NULL;
 	const char *lrn = NULL;
@@ -1700,17 +1690,8 @@ SWITCH_STANDARD_APP(lcr_app_function)
 		return;
 	}
 
-	if (session) {
-		pool = switch_core_session_get_pool(session);
-		routes.session = session;
-	} else {
-		switch_core_new_memory_pool(&pool);
-		switch_event_create(&event, SWITCH_EVENT_MESSAGE);
-		routes.event = event;
-	}
-
+	routes.session = session;
 	routes.pool = pool;
-
 
 	lrn = switch_channel_get_variable(channel, "lrn");
 	routes.lrn_number = (char *) lrn;

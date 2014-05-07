@@ -79,7 +79,7 @@
 #include "spandsp/private/v22bis.h"
 
 #if defined(SPANDSP_USE_FIXED_POINT)
-#define FP_SCALE(x)                     FP_Q_6_10(x)
+#define FP_SCALE(x)                     FP_Q6_10(x)
 #define FP_SHIFT_FACTOR                 10
 #else
 #define FP_SCALE(x)                     (x)
@@ -136,14 +136,6 @@ static const uint8_t phase_steps[4] =
     1, 0, 2, 3
 };
 
-static const uint8_t ones[] =
-{
-    0, 1, 1, 2,
-    1, 2, 2, 3,
-    1, 2, 2, 3,
-    2, 3, 3, 4
-};
-
 SPAN_DECLARE(float) v22bis_rx_carrier_frequency(v22bis_state_t *s)
 {
     return dds_frequencyf(s->rx.carrier_phase_rate);
@@ -193,7 +185,7 @@ void v22bis_equalizer_coefficient_reset(v22bis_state_t *s)
 {
     /* Start with an equalizer based on everything being perfect */
 #if defined(SPANDSP_USE_FIXED_POINT)
-    static const complexi16_t x = {FP_Q_6_10(3.0f), FP_Q_6_10(0.0f)};
+    static const complexi16_t x = {FP_Q6_10(3.0f), FP_Q6_10(0.0f)};
 
     cvec_zeroi16(s->rx.eq_coeff, V22BIS_EQUALIZER_LEN);
     s->rx.eq_coeff[V22BIS_EQUALIZER_PRE_LEN] = x;
@@ -386,7 +378,7 @@ static __inline__ void symbol_sync(v22bis_state_t *s)
     complexi16_t a;
     complexi16_t b;
     complexi16_t c;
-    static const complexi16_t x = {FP_Q_1_15(0.894427f), FP_Q_1_15(0.44721f)};
+    static const complexi16_t x = {FP_Q1_15(0.894427f), FP_Q1_15(0.44721f)};
 #else
     float p;
     float q;
@@ -461,7 +453,7 @@ static __inline__ void process_half_baud(v22bis_state_t *s, const complexf_t *sa
     complexi16_t z;
     complexi16_t zz;
     const complexi16_t *target;
-    static const complexi16_t x = {FP_Q_1_15(0.894427f), FP_Q_1_15(0.44721f)};
+    static const complexi16_t x = {FP_Q1_15(0.894427f), FP_Q1_15(0.44721f)};
 #else
     complexf_t z;
     complexf_t zz;
@@ -495,8 +487,8 @@ static __inline__ void process_half_baud(v22bis_state_t *s, const complexf_t *sa
     if (s->rx.sixteen_way_decisions)
     {
 #if defined(SPANDSP_USE_FIXED_POINT)
-        re = (z.re + FP_Q_6_10(3.0f)) >> FP_SHIFT_FACTOR;
-        im = (z.im + FP_Q_6_10(3.0f)) >> FP_SHIFT_FACTOR;
+        re = (z.re + FP_Q6_10(3.0f)) >> FP_SHIFT_FACTOR;
+        im = (z.im + FP_Q6_10(3.0f)) >> FP_SHIFT_FACTOR;
 #else
         re = (int) (z.re + 3.0f);
         im = (int) (z.im + 3.0f);
@@ -799,6 +791,7 @@ SPAN_DECLARE_NONSTD(int) v22bis_rx(v22bis_state_t *s, const int16_t amp[], int l
     float ii;
     float qq;
 #endif
+    int32_t root_power;
     int32_t power;
 
     for (i = 0;  i < len;  i++)
@@ -860,10 +853,12 @@ SPAN_DECLARE_NONSTD(int) v22bis_rx(v22bis_state_t *s, const int16_t amp[], int l
             if (s->rx.training == V22BIS_RX_TRAINING_STAGE_SYMBOL_ACQUISITION)
             {
                 /* Only AGC during the initial symbol acquisition, and then lock the gain. */
+                if ((root_power = fixed_sqrt32(power)) == 0)
+                    root_power = 1;
 #if defined(SPANDSP_USE_FIXED_POINT)
-                s->rx.agc_scaling = saturate16(((int32_t) (FP_SCALE(0.18f)*FP_SCALE(3.60f)))/fixed_sqrt32(power));
+                s->rx.agc_scaling = saturate16(((int32_t) (FP_SCALE(0.18f)*FP_SCALE(3.60f)))/root_power);
 #else
-                s->rx.agc_scaling = FP_SCALE(0.18f)*FP_SCALE(3.60f)/fixed_sqrt32(power);
+                s->rx.agc_scaling = FP_SCALE(0.18f)*FP_SCALE(3.60f)/root_power;
 #endif
             }
             /* Pulse shape while still at the carrier frequency, using a quadrature

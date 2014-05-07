@@ -4154,7 +4154,6 @@ static void conference_loop_output(conference_member_t *member)
 	samples = switch_samples_per_packet(member->conference->rate, interval);
 	//csamples = samples;
 	tsamples = member->orig_read_impl.samples_per_packet;
-	flush_len = 0;
 	low_count = 0;
 	bytes = samples * 2;
 	call_list = NULL;
@@ -4516,14 +4515,13 @@ static void *SWITCH_THREAD_FUNC conference_record_thread_run(switch_thread_t *th
 	int lead_in = 20;
 	switch_size_t len = 0;
 
-	data_buf_len = samples * sizeof(int16_t);
-
-	switch_zmalloc(data_buf, data_buf_len);
-
 	if (switch_thread_rwlock_tryrdlock(conference->rwlock) != SWITCH_STATUS_SUCCESS) {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "Read Lock Fail\n");
 		return NULL;
 	}
+
+	data_buf_len = samples * sizeof(int16_t);
+	switch_zmalloc(data_buf, data_buf_len);
 
 	switch_mutex_lock(globals.hash_mutex);
 	globals.threads++;
@@ -6251,13 +6249,13 @@ static void conference_xlist(conference_obj_t *conference, switch_xml_t x_confer
 		switch_xml_set_txt_d(x_tag, switch_test_flag(member, MFLAG_GHOST) ? "true" : "false");
 
 		switch_snprintf(tmp, sizeof(tmp), "%d", member->volume_out_level);
-		x_tag = add_x_tag(x_member, "output-volume", tmp, toff++);
+		add_x_tag(x_member, "output-volume", tmp, toff++);
 
 		switch_snprintf(tmp, sizeof(tmp), "%d", member->agc_volume_in_level ? member->agc_volume_in_level : member->volume_in_level);
-		x_tag = add_x_tag(x_member, "input-volume", tmp, toff++);
+		add_x_tag(x_member, "input-volume", tmp, toff++);
 
 		switch_snprintf(tmp, sizeof(tmp), "%d", member->agc_volume_in_level);
-		x_tag = add_x_tag(x_member, "auto-adjusted-input-volume", tmp, toff++);
+		add_x_tag(x_member, "auto-adjusted-input-volume", tmp, toff++);
 
 	}
 
@@ -8714,7 +8712,6 @@ SWITCH_STANDARD_APP(conference_function)
 
 	if (locked) {
 		switch_mutex_unlock(globals.setup_mutex);
-		locked = 0;
 	}
 
 	if (member.read_resampler) {

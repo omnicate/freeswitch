@@ -341,18 +341,21 @@ static void daemonize(int *fds)
 	}
 	/* redirect std* to null */
 	fd = open("/dev/null", O_RDONLY);
+	switch_assert( fd >= 0 );
 	if (fd != 0) {
 		dup2(fd, 0);
 		close(fd);
 	}
 
 	fd = open("/dev/null", O_WRONLY);
+	switch_assert( fd >= 0 );
 	if (fd != 1) {
 		dup2(fd, 1);
 		close(fd);
 	}
 
 	fd = open("/dev/null", O_WRONLY);
+	switch_assert( fd >= 0 );
 	if (fd != 2) {
 		dup2(fd, 2);
 		close(fd);
@@ -1137,7 +1140,7 @@ int main(int argc, char *argv[])
 
 	if (switch_file_open(&fd, pid_path, SWITCH_FOPEN_READ, SWITCH_FPROT_UREAD | SWITCH_FPROT_UWRITE, pool) == SWITCH_STATUS_SUCCESS) {
 
-		old_pid_len = sizeof(old_pid_buffer);
+		old_pid_len = sizeof(old_pid_buffer) -1;
 		switch_file_read(fd, old_pid_buffer, &old_pid_len);
 		switch_file_close(fd);
 	}
@@ -1200,14 +1203,13 @@ int main(int argc, char *argv[])
 		int j = 0;
 
 		switch_sleep(1000000);
-		ret = (int) execv(argv[0], argv);
-		fprintf(stderr, "Restart Failed [%s] resorting to plan b\n", strerror(errno));
-
-		for (j = 0; j < argc; j++) {
-			switch_snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), "%s ", argv[j]);
+		if (execv(argv[0], argv) == -1) {
+			fprintf(stderr, "Restart Failed [%s] resorting to plan b\n", strerror(errno));
+			for (j = 0; j < argc; j++) {
+				switch_snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), "%s ", argv[j]);
+			}
+			ret = system(buf);
 		}
-
-		ret = system(buf);
 	}
 
 	return ret;

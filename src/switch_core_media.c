@@ -3038,22 +3038,16 @@ SWITCH_DECLARE(uint8_t) switch_core_media_negotiate_sdp(switch_core_session_t *s
 		switch_channel_set_variable(session->channel, "media_audio_mode", NULL);
 	}
 
-
-	if (switch_media_handle_test_media_flag(smh, SCMF_DISABLE_HOLD) ||
-		((val = switch_channel_get_variable(session->channel, "rtp_disable_hold")) && switch_true(val))) {
-		sendonly = 0;
-	} else {
-
-		if (!smh->mparams->hold_laps) {
-			smh->mparams->hold_laps++;
-			if (switch_core_media_toggle_hold(session, sendonly)) {
-				reneg = switch_media_handle_test_media_flag(smh, SCMF_RENEG_ON_HOLD);
-				
-				if ((val = switch_channel_get_variable(session->channel, "rtp_renegotiate_codec_on_hold"))) {
-					reneg = switch_true(val);
-				}
+	if (!(switch_media_handle_test_media_flag(smh, SCMF_DISABLE_HOLD)
+		  || ((val = switch_channel_get_variable(session->channel, "rtp_disable_hold"))
+			  && switch_true(val)))
+		&& !smh->mparams->hold_laps) {
+		smh->mparams->hold_laps++;
+		if (switch_core_media_toggle_hold(session, sendonly)) {
+			reneg = switch_media_handle_test_media_flag(smh, SCMF_RENEG_ON_HOLD);
+			if ((val = switch_channel_get_variable(session->channel, "rtp_renegotiate_codec_on_hold"))) {
+				reneg = switch_true(val);
 			}
-			
 		}
 	}
 
@@ -7742,6 +7736,13 @@ SWITCH_DECLARE(switch_status_t) switch_core_media_receive_message(switch_core_se
 		}
 		goto end;
 
+	case SWITCH_MESSAGE_INDICATE_MEDIA:
+		{
+			if (session->track_duration) {
+				switch_core_session_enable_heartbeat(session, session->track_duration);
+			}
+		}
+		break;
 	case SWITCH_MESSAGE_INDICATE_NOMEDIA:
 		{
 			const char *uuid;
@@ -7779,6 +7780,10 @@ SWITCH_DECLARE(switch_status_t) switch_core_media_receive_message(switch_core_se
 
 			if (!smh->mparams->local_sdp_str) {
 				switch_core_media_absorb_sdp(session);
+			}
+
+			if (session->track_duration) {
+				switch_core_session_enable_heartbeat(session, session->track_duration);
 			}
 
 		}

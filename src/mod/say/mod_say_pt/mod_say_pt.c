@@ -39,7 +39,7 @@
  * 
  * Anthony Minessale II <anthm@freeswitch.org>
  * Michael B. Murdock <mike@mmurdock.org>
- * António Silva <asilva@wirelessmundi.com>
+ * AntÃ³nio Silva <asilva@wirelessmundi.com>
  *
  * mod_say_pt.c -- Say for Portuguese
  *
@@ -184,7 +184,7 @@ static switch_status_t pt_say_general_count(switch_core_session_t *session,	char
 		switch (say_args->method) {
 		case SSM_COUNTED:
 		case SSM_PRONOUNCED:
-			/* specific case, one million => um milhão */
+			/* specific case, one million => um milhÃ£o */
 			if (!places[8] && !places[7] && (places[6] == 1)) {
 				say_file("digits/1.wav");
 				say_file("digits/million.wav");
@@ -233,9 +233,7 @@ static switch_status_t pt_say_time(switch_core_session_t *session, char *tosay, 
 				if ((p = strchr(tme, ':'))) {
 					*p++ = '\0';
 					minutes = atoi(p);
-					if (tme) {
-						hours = atoi(tme);
-					}
+					hours = atoi(tme);
 				} else {
 					minutes = atoi(tme);
 				}
@@ -428,7 +426,7 @@ static switch_status_t pt_say_money(switch_core_session_t *session, char *tosay,
 	char *dollars = NULL;
 	char *cents = NULL;
 
-	if (strlen(tosay) > 15 || !(tosay = switch_strip_nonnumerics(tosay, sbuf, sizeof(sbuf)-1))) {
+	if (strlen(tosay) > 15 || !switch_strip_nonnumerics(tosay, sbuf, sizeof(sbuf)-1)) {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Parse Error!\n");
 		return SWITCH_STATUS_GENERR;
 	}

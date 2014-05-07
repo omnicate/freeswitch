@@ -88,7 +88,6 @@ static switch_status_t load_config(void)
 
 					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Replace number matching [%s] with [%s]\n", regex, replace);
 					if (rules_list == NULL) {
-						rules_list = switch_core_alloc(globals.pool, sizeof(translate_rule_t));
 						switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "starting with an empty list\n");
 						rules_list = this_rule;
 					} else {
@@ -227,6 +226,8 @@ SWITCH_STANDARD_APP(translate_app_function)
 	switch_memory_pool_t *pool;
 	switch_event_t *event = NULL;
 
+	switch_assert(session);
+
 	if (!(mydata = switch_core_session_strdup(session, data))) {
 		goto end;
 	}
@@ -256,11 +257,10 @@ SWITCH_STANDARD_APP(translate_app_function)
 	}
 
 end:
-	if (!session) {
-		if (pool) {
-			switch_core_destroy_memory_pool(&pool);
-		}
+	if (pool) {
+		switch_core_destroy_memory_pool(&pool);
 	}
+
 	return;
 }
 

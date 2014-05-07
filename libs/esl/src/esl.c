@@ -736,7 +736,6 @@ ESL_DECLARE(esl_status_t) esl_listen(const char *host, esl_port_t port, esl_list
 
 	if (server_sock != ESL_SOCK_INVALID) {
 		closesocket(server_sock);
-		server_sock = ESL_SOCK_INVALID;
 	}
 
 	return status;
@@ -805,7 +804,6 @@ ESL_DECLARE(esl_status_t) esl_listen_threaded(const char *host, esl_port_t port,
 
 	if (server_sock != ESL_SOCK_INVALID) {
 		closesocket(server_sock);
-		server_sock = ESL_SOCK_INVALID;
 	}
 
 	return status;
@@ -1370,6 +1368,7 @@ ESL_DECLARE(esl_status_t) esl_recv_event(esl_handle_t *handle, int check_q, esl_
 				if (r < 0) {
 					if (!(strerror_r(handle->errnum, handle->err, sizeof(handle->err))))
 						*(handle->err)=0;
+					free(body);
 					goto fail;
 				} else if (r == 0) {
 					continue;

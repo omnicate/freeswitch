@@ -208,9 +208,7 @@ static switch_status_t en_say_time(switch_say_file_handle_t *sh, char *tosay, sw
 				if ((p = strchr(tme, ':'))) {
 					*p++ = '\0';
 					minutes = atoi(p);
-					if (tme) {
-						hours = atoi(tme);
-					}
+					hours = atoi(tme);
 				} else {
 					minutes = atoi(tme);
 				}
@@ -308,6 +306,15 @@ static switch_status_t en_say_time(switch_say_file_handle_t *sh, char *tosay, sw
 		break;
 	case SST_SHORT_DATE_TIME:
 		say_time = 1;
+		//Time is in the future
+		if ((tm.tm_year > tm_now.tm_year) || 
+		    (tm.tm_year == tm_now.tm_year && tm.tm_mon > tm_now.tm_mon) || 
+		    (tm.tm_year == tm_now.tm_year && tm.tm_mon == tm_now.tm_mon && tm.tm_mday > tm_now.tm_mday))
+		{
+			say_date = 1;
+			break;
+		}
+		//Time is today or earlier
 		if (tm.tm_year != tm_now.tm_year) {
 			say_date = 1;
 			break;
@@ -402,7 +409,7 @@ static switch_status_t en_say_money(switch_say_file_handle_t *sh, char *tosay, s
 	char *dollars = NULL;
 	char *cents = NULL;
 
-	if (strlen(tosay) > 15 || !(tosay = switch_strip_nonnumerics(tosay, sbuf, sizeof(sbuf)-1))) {
+	if (strlen(tosay) > 15 || !switch_strip_nonnumerics(tosay, sbuf, sizeof(sbuf)-1)) {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Parse Error!\n");
 		return SWITCH_STATUS_GENERR;
 	}

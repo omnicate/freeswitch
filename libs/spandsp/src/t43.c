@@ -110,6 +110,7 @@ static __inline__ uint32_t pack_32(const uint8_t *s)
 }
 /*- End of function --------------------------------------------------------*/
 
+#if 0
 static __inline__ int unpack_16(uint8_t *s, uint16_t value)
 {
     s[0] = (value >> 8) & 0xFF;
@@ -247,6 +248,7 @@ static int t43_create_header(t43_encode_state_t *s, uint8_t data[], size_t len)
     return pos;
 }
 /*- End of function --------------------------------------------------------*/
+#endif
 
 SPAN_DECLARE(void) t43_encode_set_options(t43_encode_state_t *s,
                                           uint32_t l0,
@@ -379,7 +381,7 @@ SPAN_DECLARE(int) t43_encode_free(t43_encode_state_t *s)
 {
     int ret;
 
-    t85_encode_free(&s->t85);
+    t85_encode_release(&s->t85);
     ret = t43_encode_release(s);
     span_free(s);
     return ret;
@@ -766,8 +768,6 @@ SPAN_DECLARE(int) t43_decode_put(t43_decode_state_t *s, const uint8_t data[], si
     result = 0;
     while (s->current_bit_plane < s->t85.bit_planes)
     {
-        j = s->current_bit_plane;
-
         result = t85_decode_put(&s->t85, data, len);
         if (result != T4_DECODE_OK)
         {
@@ -781,10 +781,10 @@ SPAN_DECLARE(int) t43_decode_put(t43_decode_state_t *s, const uint8_t data[], si
 
         /* Start the next plane */
         s->bit_plane_mask >>= 1;
-        s->current_bit_plane++;
         s->ptr = 0;
         s->row = 0;
         s->plane_ptr = 0;
+        s->current_bit_plane++;
         t85_decode_new_plane(&s->t85);
     }
     /* Apply the colour map, and produce the RGB data from the collected bit-planes */

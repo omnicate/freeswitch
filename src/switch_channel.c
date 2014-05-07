@@ -721,6 +721,7 @@ SWITCH_DECLARE(void) switch_channel_perform_presence(switch_channel_t *channel, 
 
 	if (!status) {
 		type = SWITCH_EVENT_PRESENCE_OUT;
+		status = "idle";
 	}
 
 	if (!id) {
@@ -3335,7 +3336,6 @@ SWITCH_DECLARE(void) switch_channel_check_zrtp(switch_channel_t *channel)
 SWITCH_DECLARE(switch_status_t) switch_channel_perform_mark_pre_answered(switch_channel_t *channel, const char *file, const char *func, int line)
 {
 	switch_event_t *event;
-	const char *var = NULL;
 
 	if (!switch_channel_test_flag(channel, CF_EARLY_MEDIA) && !switch_channel_test_flag(channel, CF_ANSWERED)) {
 		const char *uuid;
@@ -3376,7 +3376,7 @@ SWITCH_DECLARE(switch_status_t) switch_channel_perform_mark_pre_answered(switch_
 		switch_channel_api_on(channel, SWITCH_CHANNEL_API_ON_PRE_ANSWER_VARIABLE);
 		switch_channel_api_on(channel, SWITCH_CHANNEL_API_ON_MEDIA_VARIABLE);
 
-		if ((var = switch_channel_get_variable(channel, SWITCH_PASSTHRU_PTIME_MISMATCH_VARIABLE))) {
+		if (switch_true(switch_channel_get_variable(channel, SWITCH_PASSTHRU_PTIME_MISMATCH_VARIABLE))) {
 			switch_channel_set_flag(channel, CF_PASSTHRU_PTIME_MISMATCH);
 		}
 
@@ -3630,7 +3630,7 @@ SWITCH_DECLARE(switch_status_t) switch_channel_perform_mark_answered(switch_chan
 		switch_core_session_rwunlock(other_session);
 	}
 
-	if ((var = switch_channel_get_variable(channel, SWITCH_PASSTHRU_PTIME_MISMATCH_VARIABLE))) {
+	if (switch_true(switch_channel_get_variable(channel, SWITCH_PASSTHRU_PTIME_MISMATCH_VARIABLE))) {
 		switch_channel_set_flag(channel, CF_PASSTHRU_PTIME_MISMATCH);
 	}
 
@@ -3657,7 +3657,7 @@ SWITCH_DECLARE(switch_status_t) switch_channel_perform_mark_answered(switch_chan
 					  channel->name);
 
 
-	if ((var = switch_channel_get_variable(channel, "absolute_codec_string"))) {
+	if (switch_channel_get_variable(channel, "absolute_codec_string")) {
 		/* inherit_codec == true will implicitly clear the absolute_codec_string 
 		   variable if used since it was the reason it was set in the first place and is no longer needed */
 		if (switch_true(switch_channel_get_variable(channel, "inherit_codec"))) {
@@ -3919,8 +3919,6 @@ SWITCH_DECLARE(char *) switch_channel_expand_variables_check(switch_channel_t *c
 						idx = atoi(ptr);
 					}
 					
-					if (!sub_val) sub_val = vname;
-
 					if ((sub_val = (char *) switch_channel_get_variable_dup(channel, vname, SWITCH_TRUE, idx))) {
 						if (var_list && !switch_event_check_permission_list(var_list, vname)) {
 							sub_val = "<Variable Expansion Permission Denied>";
@@ -4014,7 +4012,6 @@ SWITCH_DECLARE(char *) switch_channel_expand_variables_check(switch_channel_t *c
 				switch_safe_free(expanded_sub_val);
 				sub_val = NULL;
 				vname = NULL;
-				vtype = 0;
 				br = 0;
 			}
 			if (len + 1 >= olen) {
@@ -4215,7 +4212,7 @@ SWITCH_DECLARE(switch_status_t) switch_channel_set_timestamps(switch_channel_t *
 {
 	switch_status_t status = SWITCH_STATUS_SUCCESS;
 	const char *cid_buf = NULL;
-	switch_caller_profile_t *caller_profile, *ocp;
+	switch_caller_profile_t *caller_profile;
 	switch_app_log_t *app_log, *ap;
 	char *last_app = NULL, *last_arg = NULL;
 	char start[80] = "", resurrect[80] = "", answer[80] = "", hold[80], 
@@ -4250,10 +4247,6 @@ SWITCH_DECLARE(switch_status_t) switch_channel_set_timestamps(switch_channel_t *
 		for (ap = app_log; ap && ap->next; ap = ap->next);
 		last_app = ap->app;
 		last_arg = ap->arg;
-	}
-
-	if (!(ocp = switch_channel_get_originatee_caller_profile(channel))) {
-		ocp = switch_channel_get_originator_caller_profile(channel);
 	}
 
 	if (!zstr(caller_profile->caller_id_name)) {
@@ -4873,7 +4866,7 @@ static void process_device_hup(switch_channel_t *channel)
 
 		if (!node->hold_record) {
 			node->hold_record = newhr;
-		} else {
+		} else if (last) {
 			last->next = newhr;
 		}
 

@@ -602,12 +602,16 @@ PLATFORM_CORE_LDFLAGS=
 PLATFORM_CORE_LIBS=
 
 path_remove () {
-  echo "$1" | sed 's/:/\n/g' | grep -Fxv "$2" | tr '\n' ':' | sed 's/:$/\n/'
+  echo "$1" | tr ':' '\n' | grep -Fxv "$2" | tr '\n' ':' | sed 's/:$//'
 }
 path_push_unique () {
   x="$(eval echo \$$1)"
   x="$(path_remove "$x" "$2")"
-  eval export $1="$2:$x"
+  if test -z "$x"; then
+    eval export $1="$2"
+  else
+    eval export $1="$2:$x"
+  fi
 }
 
 # tweak platform specific flags
@@ -1118,8 +1122,14 @@ case $host in
    *-darwin*)
         path_push_unique PKG_CONFIG_PATH /usr/local/opt/curl/lib/pkgconfig
         path_push_unique PKG_CONFIG_PATH /usr/local/opt/sqlite/lib/pkgconfig/
+        path_push_unique PKG_CONFIG_PATH /usr/local/opt/ldns/lib/pkgconfig/
        ;;
 esac
+
+# temporary workaround for Debian libldns-dev package bug
+if test "$cross_compiling" != "yes" && test -f /usr/lib/pkg-config/libldns.pc; then
+  path_push_unique PKG_CONFIG_PATH /usr/lib/pkg-config
+fi
 
 PKG_CHECK_MODULES([SQLITE], [sqlite3 >= 3.6.20])
 PKG_CHECK_MODULES([CURL], [libcurl >= 7.19])
@@ -1128,6 +1138,12 @@ PKG_CHECK_MODULES([SPEEX], [speex >= 1.2rc1 speexdsp >= 1.2rc1])
 PKG_CHECK_MODULES([YAML], [yaml-0.1 >= 0.1.4],[
   AM_CONDITIONAL([HAVE_YAML],[true])],[
   AC_MSG_RESULT([no]); AM_CONDITIONAL([HAVE_YAML],[false])])
+PKG_CHECK_MODULES([LDNS], [libldns >= 1.6.6],[
+  AM_CONDITIONAL([HAVE_LDNS],[true])],[
+  AC_CHECK_LIB([ldns], [ldns_str2rdf_a], [LDNS_LIBS=-lldns])
+  AS_IF([test -z "$LDNS_LIBS"],[
+    AC_MSG_RESULT([no]); AM_CONDITIONAL([HAVE_LDNS],[false])],[
+    AM_CONDITIONAL([HAVE_LDNS],[true])])])
 
 PKG_CHECK_MODULES([MEMCACHED], [libmemcached >= 0.31],[
   AM_CONDITIONAL([HAVE_MEMCACHED],[true])
@@ -1611,7 +1627,6 @@ AC_CONFIG_SUBDIRS([libs/libdingaling])
 AC_CONFIG_SUBDIRS([libs/libsndfile])
 AC_CONFIG_SUBDIRS([libs/sofia-sip])
 AC_CONFIG_SUBDIRS([libs/portaudio])
-AC_CONFIG_SUBDIRS([libs/openzap])
 AC_CONFIG_SUBDIRS([libs/freetdm])
 AC_CONFIG_SUBDIRS([libs/unimrcp])
 AC_CONFIG_SUBDIRS([libs/tiff-4.0.2])

@@ -993,7 +993,6 @@ SWITCH_DECLARE(void) switch_core_runtime_loop(int bg)
 	char path[256] = "";
 #endif
 	if (bg) {
-		bg = 0;
 #ifdef WIN32
 		switch_snprintf(path, sizeof(path), "Global\\Freeswitch.%d", getpid());
 		shutdown_event = CreateEvent(NULL, FALSE, FALSE, path);
@@ -1357,6 +1356,10 @@ SWITCH_DECLARE(void) switch_load_network_lists(switch_bool_t reload)
 
 						switch_event_destroy(&my_params);
 
+						if ((ut = switch_xml_child(x_domain, "users"))) {
+							x_domain = ut;
+						}
+
 						for (ut = switch_xml_child(x_domain, "user"); ut; ut = ut->next) {
 							const char *user_cidr = switch_xml_attr(ut, "cidr");
 							const char *id = switch_xml_attr(ut, "id");
@@ -1538,12 +1541,10 @@ static void switch_core_set_serial(void)
 			bytes = write(write_fd, buf, sizeof(buf));
 			bytes++;
 			close(write_fd);
-			write_fd = -1;
 		}
 	} else {
 		bytes = read(fd, buf, sizeof(buf));
 		close(fd);
-		fd = -1;
 	}
 
 	switch_core_set_variable("switch_serial", buf);

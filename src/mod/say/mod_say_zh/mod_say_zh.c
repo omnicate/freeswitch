@@ -221,9 +221,7 @@ static switch_status_t zh_say_time(switch_core_session_t *session, char *tosay, 
 				if ((p = strchr(tme, ':'))) {
 					*p++ = '\0';
 					minutes = atoi(p);
-					if (tme) {
-						hours = atoi(tme);
-					}
+					hours = atoi(tme);
 				} else {
 					minutes = atoi(tme);
 				}
@@ -390,7 +388,7 @@ static switch_status_t zh_say_money(switch_core_session_t *session, char *tosay,
 	char *dollars = NULL;
 	char *cents = NULL;
 
-	if (strlen(tosay) > 15 || !(tosay = switch_strip_nonnumerics(tosay, sbuf, sizeof(sbuf)-1))) {
+	if (strlen(tosay) > 15 || !switch_strip_nonnumerics(tosay, sbuf, sizeof(sbuf)-1)) {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Parse Error!\n");
 		return SWITCH_STATUS_GENERR;
 	}
@@ -438,7 +436,7 @@ static switch_status_t zh_CN_say_money(switch_core_session_t *session, char *tos
 	char *rest = NULL;
 	int i;
 
-	if (strlen(tosay) > 15 || !(tosay = switch_strip_nonnumerics(tosay, sbuf, sizeof(sbuf)-1))) {
+	if (strlen(tosay) > 15 || !switch_strip_nonnumerics(tosay, sbuf, sizeof(sbuf)-1)) {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Parse Error!\n");
 		return SWITCH_STATUS_GENERR;
 	}
