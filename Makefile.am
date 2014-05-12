@@ -32,7 +32,9 @@ AM_LDFLAGS  = $(SWITCH_AM_LDFLAGS) $(AM_LIBAPR_LDFLAGS) $(AM_LIBAPU_LDFLAGS)
 
 DEFAULT_SOUNDS=en-us-callie-8000
 
-.DEFAULT: $(switch_builddir)/modules.conf
+.INTERMEDIATE: -ldl -liconv -lpthread
+
+.DEFAULT: $(switch_builddir)/modules.conf src/mod/modules.inc
 	@target=`echo $@ | sed -e 's|^.*-||'`; \
 	 target_prefix=`echo $@ | sed -e 's|-.*$$||'`; \
 	 sound_perfix=`echo $@ | sed -e 's|-.*||'`; \
@@ -43,19 +45,20 @@ DEFAULT_SOUNDS=en-us-callie-8000
 	 sounds_version=`grep $$base_sound_dir $(switch_srcdir)/build/sounds_version.txt | cut -d ' '  -f2`;\
 	 soundfile=`echo freeswitch-sounds-$$full_sound_dir-$$moh_version.tar.gz`; \
 	 echo $$full_sound_dir | grep  music  >/dev/null || soundfile=`echo freeswitch-sounds-$$full_sound_dir-$$sounds_version.tar.gz`; \
-         if test "$$target_prefix" = "sounds"; then \
-	   if test "$$target" = "install"; then \
-	      $(GETSOUNDS) $$soundfile $(DESTDIR)$(soundsdir)/;\
+	 args="$@"; if test -z "$$args" || test "$${args#-l*}" = "$$args"; then \
+	   if test "$$target_prefix" = "sounds"; then \
+	     if test "$$target" = "install"; then \
+	        $(GETSOUNDS) $$soundfile $(DESTDIR)$(soundsdir)/;\
+	     else \
+	        $(GETSOUNDS) $$soundfile ; \
+	     fi; \
 	   else \
-	      $(GETSOUNDS) $$soundfile ; \
-	   fi; \
-	 else \
-	   if test "$$target" = "install"; then \
-	      $(MAKE) $(AM_MAKEFLAGS) core_install && cd src/mod && $(MAKE) $(AM_MAKEFLAGS) $@ ; \
-	   else \
-	      $(MAKE) $(AM_MAKEFLAGS) core && cd src/mod && $(MAKE) $(AM_MAKEFLAGS) $@ ;\
-	   fi; \
-	 fi
+	     if test "$$target" = "install"; then \
+	        $(MAKE) $(AM_MAKEFLAGS) core_install && cd src/mod && $(MAKE) $(AM_MAKEFLAGS) $@ ; \
+	     else \
+	        $(MAKE) $(AM_MAKEFLAGS) core && cd src/mod && $(MAKE) $(AM_MAKEFLAGS) $@ ;\
+	     fi; \
+	   fi; fi
 
 sounds: sounds-en-us-callie-8000
 sounds-install: sounds-en-us-callie-8000-install
@@ -131,7 +134,7 @@ endif
 
 MOD_LINK      = $(switch_srcdir)/libfreeswitch.la
 CLEANFILES    = src/include/switch_version.h src/include/switch_swigable_cpp.h
-BUILT_SOURCES = src/include/switch_version.h src/include/switch_swigable_cpp.h
+BUILT_SOURCES = src/mod/modules.inc src/include/switch_version.h src/include/switch_swigable_cpp.h 
 
 if HAVE_ODBC
 CORE_CFLAGS += -DSWITCH_HAVE_ODBC $(ODBC_INC_FLAGS)
@@ -149,9 +152,9 @@ libfreeswitch_spandsp_la_SOURCES = libs/spandsp/src/plc.c libs/spandsp/src/alloc
 libfreeswitch_spandsp_la_CFLAGS  = -Ilibs/spandsp/src $(CORE_CFLAGS) $(AM_CFLAGS)
 CORE_LIBS+=libfreeswitch_spandsp.la
 lib_LTLIBRARIES	         = libfreeswitch.la
-libfreeswitch_la_CFLAGS  = $(CORE_CFLAGS) $(SQLITE_CFLAGS) $(CURL_CFLAGS) $(PCRE_CFLAGS) $(SPEEX_CFLAGS) $(LIBEDIT_CFLAGS) $(AM_CFLAGS)
+libfreeswitch_la_CFLAGS  = $(CORE_CFLAGS) $(SQLITE_CFLAGS) $(CURL_CFLAGS) $(PCRE_CFLAGS) $(SPEEX_CFLAGS) $(LIBEDIT_CFLAGS) $(openssl_CFLAGS) $(AM_CFLAGS)
 libfreeswitch_la_LDFLAGS = -version-info 1:0:0 $(AM_LDFLAGS) $(PLATFORM_CORE_LDFLAGS) -no-undefined
-libfreeswitch_la_LIBADD  = $(CORE_LIBS) $(APR_LIBS) $(SQLITE_LIBS) $(CURL_LIBS) $(PCRE_LIBS) $(SPEEX_LIBS) $(LIBEDIT_LIBS) $(PLATFORM_CORE_LIBS)
+libfreeswitch_la_LIBADD  = $(CORE_LIBS) $(APR_LIBS) $(SQLITE_LIBS) $(CURL_LIBS) $(PCRE_LIBS) $(SPEEX_LIBS) $(LIBEDIT_LIBS) $(openssl_LIBS) $(PLATFORM_CORE_LIBS)
 libfreeswitch_la_DEPENDENCIES = $(BUILT_SOURCES)
 
 if HAVE_ODBC
@@ -411,7 +414,17 @@ pkgconfig_DATA = build/freeswitch.pc
 $(switch_builddir)/modules.conf:
 	if test -f $@; then touch $@; else cp $(switch_srcdir)/build/modules.conf.in $@ ;fi
 
-$(OUR_MODULES): $(switch_builddir)/modules.conf libfreeswitch.la
+src/mod/modules.inc: $(switch_builddir)/modules.conf
+	@echo "OUR_MODULES=$(OUR_MODS)" > $(switch_builddir)/src/mod/modules.inc
+	@echo "OUR_CLEAN_MODULES=$(OUR_CLEAN_MODS)" >> $(switch_builddir)/src/mod/modules.inc
+	@echo "OUR_INSTALL_MODULES=$(OUR_INSTALL_MODS)" >> $(switch_builddir)/src/mod/modules.inc
+	@echo "OUR_UNINSTALL_MODULES=$(OUR_UNINSTALL_MODS)" >> $(switch_builddir)/src/mod/modules.inc
+	@echo "OUR_DISABLED_MODULES=$(OUR_DISABLED_MODS)" >> $(switch_builddir)/src/mod/modules.inc
+	@echo "OUR_DISABLED_CLEAN_MODULES=$(OUR_DISABLED_CLEAN_MODS)" >> $(switch_builddir)/src/mod/modules.inc
+	@echo "OUR_DISABLED_INSTALL_MODULES=$(OUR_DISABLED_INSTALL_MODS)" >> $(switch_builddir)/src/mod/modules.inc
+	@echo "OUR_DISABLED_UNINSTALL_MODULES=$(OUR_DISABLED_UNINSTALL_MODS)" >> $(switch_builddir)/src/mod/modules.inc
+
+$(OUR_MODULES): $(switch_builddir)/modules.conf libfreeswitch.la src/mod/modules.inc
 	@set fnord $$MAKEFLAGS; amf=$$2; \
 	(cd src/mod && $(MAKE) $(AM_MAKEFLAGS) $@) \
 	   || case "$$amf" in *=*) exit 1;; *k*) fail=yes;; *) exit 1;; esac; \
@@ -684,20 +697,20 @@ speedy-current: update-clean is-scm
 
 wayclean: clean
 
-modules: libfreeswitch.la $(switch_builddir)/modules.conf 
+modules: libfreeswitch.la $(switch_builddir)/modules.conf src/mod/modules.inc
 	@cd src/mod && $(MAKE) $(AM_MAKEFLAGS)
 
-install_mod: libfreeswitch.la $(switch_builddir)/modules.conf
+install_mod: libfreeswitch.la $(switch_builddir)/modules.conf src/mod/modules.inc
 	@cd src/mod && $(MAKE) $(AM_MAKEFLAGS) install
 
 mod_install: install_mod
 
-uninstall_mod: $(switch_builddir)/modules.conf
+uninstall_mod: $(switch_builddir)/modules.conf src/mod/modules.inc
 	@cd src/mod && $(MAKE) $(AM_MAKEFLAGS) uninstall
 
 mod_uninstall: uninstall_mod
 
-modclean: $(switch_builddir)/modules.conf
+modclean: $(switch_builddir)/modules.conf src/mod/modules.inc
 	@cd src/mod && $(MAKE) $(AM_MAKEFLAGS) clean
 
 modwipe:
