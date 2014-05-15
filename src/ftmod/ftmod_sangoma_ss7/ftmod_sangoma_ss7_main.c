@@ -51,6 +51,13 @@ static sng_isup_event_interface_t sng_event;
 static ftdm_io_interface_t g_ftdm_sngss7_interface;
 ftdm_sngss7_data_t g_ftdm_sngss7_data;
 ftdm_sngss7_opr_mode g_ftdm_operating_mode;
+ftdm_sngss7_call_queue_t *sngss7_queue_front;
+ftdm_sngss7_call_queue_t *sngss7_queue_rear;
+uint32_t sngss7_rmtCongLvl;
+uint32_t sngss7_lclCongLvl;
+uint32_t queue_size;
+uint32_t ss7_call_qsize;
+uint32_t call_dequeue_rate;
 
 /******************************************************************************/
 
@@ -358,6 +365,34 @@ static void handle_hw_alarm(ftdm_event_t *e)
 	}
 }
 
+/* Dequeue calls at a particular rate when remote is in congested */
+static void *app_sngss7_call_queue_handler(ftdm_thread_t * me, void *obj)
+{
+	ftdm_channel_t *ftdmchan;
+	while (ftdm_running()) {
+		ftdmchan = NULL;
+		/* ftdm_sleep(dequeue_time); */
+
+		ftdm_sleep(10000);
+		ftdm_log (FTDM_LOG_DEBUG, "PUSHKAR : Queue Size is = %d\n", queue_size);
+		printf("PUSHKAR: Queue Size is %d\n", queue_size);
+		if ((queue_size == ss7_call_qsize)  && sngss7_rmtCongLvl) {
+			/* Dequeue message form ss7 call queue and start processing the dequeued call */
+			ftdmchan = sngss7_dequeueCall();
+
+			SS7_DEBUG_CHAN(ftdmchan, "Sending outgoing call from \"%s\" to \"%s\" to LibSngSS7\n",
+					ftdmchan->caller_data.ani.digits,
+					ftdmchan->caller_data.dnis.digits);
+
+			/*call sangoma_ss7_dial to make outgoing call */
+			ft_to_sngss7_iam(ftdmchan);
+
+			ftdm_channel_complete_state(ftdmchan);
+		}
+	}
+
+	return NULL;
+}
 
 static void check_span_oob_events(ftdm_span_t *ftdmspan)
 {
@@ -399,6 +434,13 @@ static void *ftdm_sangoma_ss7_run(ftdm_thread_t * me, void *obj)
 
 	/* set IN_THREAD flag so that we know this thread is running */
 	ftdm_set_flag (ftdmspan, FTDM_SPAN_IN_THREAD);
+
+	/* Create a global Call handling queue.
+	 * The app event handler is allowed to run FreeTDM api commands directly */
+	if (ftdm_thread_create_detached(app_sngss7_call_queue_handler, NULL) != FTDM_SUCCESS) {
+		ftdm_log(FTDM_LOG_ERROR, "Failed to create message queue handler thread. \n");
+		goto ftdm_sangoma_ss7_run_exit;
+	}
 
 	/* get an interrupt queue for this span for channel state changes */
 	if (ftdm_queue_get_interrupt (ftdmspan->pendingchans, &ftdm_sangoma_ss7_int[0]) != FTDM_SUCCESS) {
@@ -1380,6 +1422,29 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 			break;
 		}
 
+		/* PUSHKAR CHANGES */
+		/* check if remote exchange is congested then queue the call in to the congestion queue
+		 * if queue is full the drop the call */
+		if (sngss7_rmtCongLvl) {
+			/* Start queuing the call i.e. ftdmchan containg all information w.r.t. call if queue is not full */
+			if ((queue_size + 1) > ss7_call_qsize) {
+
+				SS7_DEBUG_CHAN(ftdmchan, "Hanging up call! as remote is congested having Congestion Lvl as: %d\n", sngss7_rmtCongLvl);
+				ftdmchan->caller_data.hangup_cause = FTDM_CAUSE_SWITCH_CONGESTION;
+
+				/* set the flag to indicate this hangup is started from the local side */
+				sngss7_set_ckt_flag (sngss7_info, FLAG_LOCAL_REL);
+
+				/* end the call */
+				state_flag = 0;
+
+				/* SNG_ACC: ADD ANOTHER STATE */
+				ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_HANGUP_COMPLETE);
+			} else {
+				sngss7_enqueueCall(ftdmchan);
+			}
+			break;
+		}
 		SS7_DEBUG_CHAN(ftdmchan, "Sending outgoing call from \"%s\" to \"%s\" to LibSngSS7\n",
 					   ftdmchan->caller_data.ani.digits,
 					   ftdmchan->caller_data.dnis.digits);
@@ -1533,6 +1598,14 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 		break;
 	/**************************************************************************/
 	case FTDM_CHANNEL_STATE_HANGUP:	/*call is hung up locally */
+
+		if (queue_size) {
+			if (sngss7_check_call(ftdmchan) == FTDM_SUCCESS) {
+				SS7_DEBUG_CHAN(ftdmchan,"Call found in the queue thus removing it from queue and Queue size is = %d\n", queue_size);
+			} else {
+				SS7_DEBUG_CHAN(ftdmchan,"No Call found in the queue!%s\n", "");
+			}
+		}
 
 		if (ftdmchan->last_state == FTDM_CHANNEL_STATE_SUSPENDED) {
 			SS7_DEBUG("re-entering state from processing block/unblock request ... do nothing\n");
@@ -2721,9 +2794,22 @@ static FIO_SIG_LOAD_FUNCTION(ftdm_sangoma_ss7_init)
 	/* default the global structure */
 	memset (&g_ftdm_sngss7_data, 0x0, sizeof (ftdm_sngss7_data_t));
 
-	sngss7_id = 0;
+	/* initializing Call queue members */
+	sngss7_queue_front = NULL;
+	sngss7_queue_rear = NULL;
 
+	/* initializing global variables */
+	sngss7_id = 0;
 	cmbLinkSetId = 0;
+	/* use to store the Congestion Level of remote and self exchange
+	 * by default Congestion Level is zero */
+	sngss7_rmtCongLvl = 0;
+	sngss7_lclCongLvl = 0;
+
+	/* initializing queue size to 0 */
+	queue_size = 0;
+	ss7_call_qsize = 0;
+	call_dequeue_rate = 0;
 
 	/* initalize the global gen_config flag */
 	g_ftdm_sngss7_data.gen_config = 0;
@@ -2754,7 +2840,7 @@ static FIO_SIG_LOAD_FUNCTION(ftdm_sangoma_ss7_init)
 	sng_event.sm.sng_mtp1_alarm = handle_sng_mtp1_alarm;
 	sng_event.sm.sng_mtp2_alarm = handle_sng_mtp2_alarm;
 	sng_event.sm.sng_mtp3_alarm = handle_sng_mtp3_alarm;
-    sng_event.sm.sng_mtp3_li_alarm = handle_sng_mtp3_li_alarm;
+	sng_event.sm.sng_mtp3_li_alarm = handle_sng_mtp3_li_alarm;
 	sng_event.sm.sng_isup_alarm = handle_sng_isup_alarm;
 	sng_event.sm.sng_cc_alarm = handle_sng_cc_alarm;
 	sng_event.sm.sng_relay_alarm = handle_sng_relay_alarm;
@@ -2763,15 +2849,15 @@ static FIO_SIG_LOAD_FUNCTION(ftdm_sangoma_ss7_init)
 	sng_event.sm.sng_tucl_alarm = handle_sng_tucl_alarm;
 	sng_event.sm.sng_sctp_alarm = handle_sng_sctp_alarm;
 
-    /* MTP2 API sng ss7 call backs */
-    sng_event.ap.sng_ap_dat_ind     = sngss7_mtp2api_dat_ind;
-    sng_event.ap.sng_ap_dat_cfm     = sngss7_mtp2api_dat_cfm;
-    sng_event.ap.sng_ap_con_cfm     = sngss7_mtp2api_con_cfm;
-    sng_event.ap.sng_ap_disc_ind    = sngss7_mtp2api_disc_ind;
-    sng_event.ap.sng_ap_sta_ind     = sngss7_mtp2api_sta_ind;
-    sng_event.ap.sng_ap_sta_cfm     = sngss7_mtp2api_sta_cfm;
-    sng_event.ap.sng_ap_flc_ind     = sngss7_mtp2api_flc_ind;
-    sng_event.ap.is_mtp2api_enable  = sngss7_is_mtp2api_enable;
+	/* MTP2 API sng ss7 call backs */
+	sng_event.ap.sng_ap_dat_ind     = sngss7_mtp2api_dat_ind;
+	sng_event.ap.sng_ap_dat_cfm     = sngss7_mtp2api_dat_cfm;
+	sng_event.ap.sng_ap_con_cfm     = sngss7_mtp2api_con_cfm;
+	sng_event.ap.sng_ap_disc_ind    = sngss7_mtp2api_disc_ind;
+	sng_event.ap.sng_ap_sta_ind     = sngss7_mtp2api_sta_ind;
+	sng_event.ap.sng_ap_sta_cfm     = sngss7_mtp2api_sta_cfm;
+	sng_event.ap.sng_ap_flc_ind     = sngss7_mtp2api_flc_ind;
+	sng_event.ap.is_mtp2api_enable  = sngss7_is_mtp2api_enable;
 
 
 	/* initalize sng_ss7 library */
@@ -2888,7 +2974,102 @@ static FIO_IO_LOAD_FUNCTION(ftdm_sangoma_ss7_io_init)
 }
 
 /******************************************************************************/
+ftdm_status_t sngss7_enqueueCall(ftdm_channel_t *ftdmchan)
+{
+	ftdm_sngss7_call_queue_t *temp = NULL;
+	temp = ftdm_malloc(sizeof(*temp));
 
+	if (temp == NULL) {
+		/* OUT OF MEMORY */
+		return FTDM_FAIL;
+	}
+
+	temp->data = ftdmchan;
+	temp->next = NULL;
+	if (sngss7_queue_front == NULL) {
+		sngss7_queue_front = temp;
+		sngss7_queue_rear = sngss7_queue_front;
+	} else {
+		sngss7_queue_rear->next = temp;
+		sngss7_queue_rear = temp;
+	}
+
+	queue_size++;
+
+	return FTDM_SUCCESS;
+}
+
+/******************************************************************************/
+ftdm_channel_t* sngss7_dequeueCall()
+{
+	ftdm_sngss7_call_queue_t *temp;
+	ftdm_channel_t *ftdmchan = NULL;
+
+	if (sngss7_queue_front == NULL) {
+		return NULL;
+	} else {
+		temp = sngss7_queue_front;
+		ftdmchan = sngss7_queue_front->data;
+		if (temp->next  == NULL) {
+			sngss7_queue_rear = NULL;
+			sngss7_queue_front = NULL;
+		} else {
+			sngss7_queue_front= sngss7_queue_front->next;
+		}
+
+		queue_size--;
+		ftdm_free(temp);
+	}
+
+	return ftdmchan;
+}
+
+/******************************************************************************/
+ftdm_status_t sngss7_check_call(ftdm_channel_t *ftdmchan)
+{
+	ftdm_sngss7_call_queue_t *curr;
+	ftdm_sngss7_call_queue_t *prev;
+	ftdm_sngss7_call_queue_t *next;
+
+	ftdm_channel_t *chan = NULL;
+
+	if (sngss7_queue_front == NULL) {
+		return FTDM_FAIL;
+	} else {
+		curr = sngss7_queue_front;
+		next = curr->next;
+		chan = curr->data;
+
+		if ((chan->span_id == ftdmchan->span_id) && (chan->chan_id == ftdmchan->chan_id)) {
+			sngss7_queue_front = next;
+			queue_size--;
+			ftdm_free(curr);
+			return FTDM_SUCCESS;
+		}
+
+		while (curr->next != NULL) {
+			prev = curr;
+			curr = curr->next;
+			if (curr->next != NULL) {
+				next = curr->next;
+			} else {
+				next = NULL;
+			}
+
+			chan = curr->data;
+			if ((chan->span_id == ftdmchan->span_id) && (chan->chan_id == ftdmchan->chan_id)) {
+				prev->next = next;
+				queue_size--;
+				ftdm_free(curr);
+				return FTDM_SUCCESS;
+			}
+		}
+	}
+
+	return FTDM_FAIL;
+}
+
+/******************************************************************************/
 
 /* START **********************************************************************/
 ftdm_module_t ftdm_module = {

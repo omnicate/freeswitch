@@ -1758,6 +1758,10 @@ static int ftmod_ss7_parse_isup_interface(ftdm_conf_node_t *isup_interface)
 				sng_isap.ssf = sng_ssf_type_map[ret].tril_type;
 				SS7_DEBUG("Found an isup ssf = %s\n", sng_ssf_type_map[ret].sng_type);
 			}
+		} else if (!strcasecmp(parm->var, "acc_q_size")) {
+			ss7_call_qsize = atoi(parm->val);
+		} else if (!strcasecmp(parm->var, "acc_dequeue_rate")) {
+			call_dequeue_rate = atoi(parm->val);
 		} else if (!strcasecmp(parm->var, "isup.t1")) {
 			sng_isap.t1 = atoi(parm->val);
 			SS7_DEBUG("Found isup t1 = %d\n",sng_isap.t1);
@@ -1885,6 +1889,12 @@ static int ftmod_ss7_parse_isup_interface(ftdm_conf_node_t *isup_interface)
 			SS7_ERROR("Found an invalid parameter %s!Ignoring it.\n", parm->var);
 		}
 	} 
+
+	/* check if ss7_call_qsize is till zero the assign default value to 15 */
+	ss7_call_qsize = 15;
+
+	/* check if call_dequeue_rate is still zero then assign default value 1000ms */
+	call_dequeue_rate = 1000;
 
 	/* default the interface to paused state */
 	sngss7_set_flag(&sng_isup, SNGSS7_PAUSED);

@@ -547,6 +547,11 @@ typedef struct ftdm_sngss7_data {
 	int					stack_logging_enable;
 } ftdm_sngss7_data_t;
 
+typedef struct ftdm_sngss7_call_queue {
+	ftdm_channel_t *data;
+	struct ftdm_sngss7_call_queue* next;
+} ftdm_sngss7_call_queue_t;
+
 typedef enum{
 	SNG_SS7_OPR_MODE_NONE,
 	SNG_SS7_OPR_MODE_M2UA_SG,
@@ -859,17 +864,28 @@ extern ftdm_sngss7_opr_mode		g_ftdm_operating_mode;
 extern sng_ssf_type_t			sng_ssf_type_map[];
 extern sng_switch_type_t		sng_switch_type_map[];
 extern sng_link_type_t			sng_link_type_map[];
-extern sng_mtp2_error_type_t	sng_mtp2_error_type_map[];
-extern sng_cic_cntrl_type_t 	sng_cic_cntrl_type_map[];
-extern uint32_t					sngss7_id;
-extern ftdm_sched_t				*sngss7_sched;
-extern int						cmbLinkSetId;
+extern sng_mtp2_error_type_t		sng_mtp2_error_type_map[];
+extern sng_cic_cntrl_type_t 		sng_cic_cntrl_type_map[];
+extern uint32_t				sngss7_id;
+extern ftdm_sched_t			*sngss7_sched;
+extern int				cmbLinkSetId;
+/* variables w.r.t ACC feature */
+extern ftdm_sngss7_call_queue_t		*sngss7_queue_front;
+extern ftdm_sngss7_call_queue_t 	*sngss7_queue_rear;
+extern uint32_t 			queue_size;
+extern uint32_t 			ss7_call_qsize;
+extern uint32_t 			call_dequeue_rate;
+extern uint32_t                         sngss7_lclCongLvl;
+extern uint32_t                         sngss7_rmtCongLvl;
 
 /******************************************************************************/
 
 /* PROTOTYPES *****************************************************************/
 /* in ftmod_sangoma_ss7_main.c */
 ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan);
+ftdm_status_t sngss7_enqueueCall(ftdm_channel_t *ftdmchan);
+ftdm_channel_t* sngss7_dequeueCall(void);
+ftdm_status_t sngss7_check_call(ftdm_channel_t *ftdmchan);
 
 /* in ftmod_sangoma_ss7_logger.c */
 void handle_sng_log(uint8_t level, char *fmt,...);

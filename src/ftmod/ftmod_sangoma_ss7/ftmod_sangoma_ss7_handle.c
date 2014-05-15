@@ -773,6 +773,15 @@ ftdm_status_t handle_rel_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 	}
 	ftdm_mutex_lock(ftdmchan->mutex);
 
+	SS7_INFO_CHAN(ftdmchan,"PUSHKAR: Right now remote exchange congestion level is: %d\n", sngss7_rmtCongLvl);
+	if (siRelEvnt->autoCongLvl.eh.pres) {
+		if (siRelEvnt->autoCongLvl.auCongLvl.pres) {
+			sngss7_rmtCongLvl = siRelEvnt->autoCongLvl.auCongLvl.val;
+			SS7_INFO_CHAN(ftdmchan,"PUSHKAR: Got automatic congestion on remote server having level as: %d\n", sngss7_rmtCongLvl);
+			/* Start T29 & T30 timer */
+		}
+	}
+
 	SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Rx REL cause=%d\n",
 							sngss7_info->circuit->cic, 
 							siRelEvnt->causeDgn.causeVal.val);
@@ -1258,7 +1267,20 @@ ftdm_status_t handle_reattempt(uint32_t suInstId, uint32_t spInstId, uint32_t ci
 	SS7_INFO_CHAN(ftdmchan, "[CIC:%d]Rx %s\n", g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic, DECODE_LCC_EVENT(evntType));
 	ftdm_mutex_lock(ftdmchan->mutex);
 
-	if (sngss7_test_ckt_flag(sngss7_info, FLAG_GLARE)) {
+	/* PUSHKAR CHANGES */
+	/* Reject the call if self exchange is congested */
+	if (siStaEvnt->causeDgn.causeVal.val == SIT_CCSWTCHCONG) {
+		/* PUSHKAR CHANGES */
+		/* hangup the call if the circuit is in congested state */
+		SS7_DEBUG_CHAN(ftdmchan, "Hanging up call! as remote is congested having Congestion Lvl as: %d\n", sngss7_rmtCongLvl);
+		ftdmchan->caller_data.hangup_cause = FTDM_CAUSE_SWITCH_CONGESTION;
+
+		/* set the flag to indicate this hangup is started from the local side */
+		sngss7_set_ckt_flag (sngss7_info, FLAG_LOCAL_REL);
+
+		/* end the call */
+		ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_CANCEL);
+	} else if (sngss7_test_ckt_flag(sngss7_info, FLAG_GLARE)) {
 		/* the glare flag is already up so it was caught ... do nothing */
 		SS7_DEBUG_CHAN(ftdmchan, "Glare flag is already up...nothing to do!%s\n", " ");
 	} else {
