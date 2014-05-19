@@ -1354,6 +1354,7 @@ uint8_t sofia_reg_handle_register_token(nua_t *nua, sofia_profile_t *profile, nu
 		if (sip->sip_path) {
 			if ((path_val = sip_header_as_string(nua_handle_home(nh), (void *) sip->sip_path))) {
 				char *path_stripped = sofia_glue_get_url_from_contact(path_val, SWITCH_TRUE);
+				su_free(nua_handle_home(nh), path_val);
 				path_val = path_stripped;
 				path_encoded_len = (int)(strlen(path_val) * 3) + 1;
 				switch_zmalloc(path_encoded, path_encoded_len);
@@ -2581,21 +2582,21 @@ auth_res_t sofia_reg_parse_auth(sofia_profile_t *profile,
 						*p = '\0';
 					}
 
-					if (!strcasecmp(var, "username")) {
+					if (!strcasecmp(var, "username") && !username) {
 						username = strdup(val);
-					} else if (!strcasecmp(var, "realm")) {
+					} else if (!strcasecmp(var, "realm") && !realm) {
 						realm = strdup(val);
-					} else if (!strcasecmp(var, "nonce")) {
+					} else if (!strcasecmp(var, "nonce") && !nonce) {
 						nonce = strdup(val);
-					} else if (!strcasecmp(var, "uri")) {
+					} else if (!strcasecmp(var, "uri") && !uri) {
 						uri = strdup(val);
-					} else if (!strcasecmp(var, "qop")) {
+					} else if (!strcasecmp(var, "qop") && !qop) {
 						qop = strdup(val);
-					} else if (!strcasecmp(var, "cnonce")) {
+					} else if (!strcasecmp(var, "cnonce") && !cnonce) {
 						cnonce = strdup(val);
-					} else if (!strcasecmp(var, "response")) {
+					} else if (!strcasecmp(var, "response") && !response) {
 						response = strdup(val);
-					} else if (!strcasecmp(var, "nc")) {
+					} else if (!strcasecmp(var, "nc") && !nc) {
 						nc = strdup(val);
 					}
 				}

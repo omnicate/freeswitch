@@ -120,10 +120,7 @@ static switch_status_t select_url(const char *user,
 	}
 
 	switch_safe_free(sql);
-
-	if (db) {
-		switch_cache_db_release_db_handle(&db);
-	}
+	switch_cache_db_release_db_handle(&db);
 
 	return SWITCH_STATUS_SUCCESS;
 }
@@ -852,7 +849,7 @@ SWITCH_STANDARD_API(timer_test_function)
 
 	switch_yield(250000);
 
-	stream->write_function(stream, "Avg: %0.3fms Total Time: %0.3fms\n", (float) ((float) (total / (x > 1 ? x - 1 : 1)) / 1000),
+	stream->write_function(stream, "Avg: %0.3fms Total Time: %0.3fms\n", (float) ((float) (total / (x - 1)) / 1000),
 						   (float) ((float) (end - start) / 1000));
 
   end:
@@ -1076,7 +1073,7 @@ SWITCH_STANDARD_API(group_call_function)
 
 SWITCH_STANDARD_API(in_group_function)
 {
-	switch_xml_t x_domain, xml = NULL, x_user = NULL, x_group;
+	switch_xml_t x_domain, xml = NULL, x_group;
 	int argc;
 	char *mydata = NULL, *argv[2], *user, *domain, *dup_domain = NULL;
 	char delim = ',';
@@ -1110,7 +1107,7 @@ SWITCH_STANDARD_API(in_group_function)
 	if (switch_xml_locate_group(group, domain, &xml, &x_domain, &x_group, params) == SWITCH_STATUS_SUCCESS) {
 		switch_xml_t x_users;
 		if ((x_users = switch_xml_child(x_group, "users"))) {
-			if ((x_user = switch_xml_find_child(x_users, "user", "id", user))) {
+			if (switch_xml_find_child(x_users, "user", "id", user)) {
 				rval = "true";
 			}
 		}
@@ -1420,6 +1417,7 @@ SWITCH_STANDARD_API(expand_function)
 
 	if (zstr(mycmd)) {
 		stream->write_function(stream, "-ERR No input\n");
+		switch_safe_free(dup);
 		return SWITCH_STATUS_SUCCESS;
 	}
 
@@ -1618,7 +1616,6 @@ SWITCH_STANDARD_API(xml_locate_function)
 	switch_event_t *params = NULL;
 	char *xmlstr;
 	char delim = ' ';
-	char *host = NULL;
 	const char *err = NULL;
 
 	stream_format format = { 0 };
@@ -1679,11 +1676,7 @@ SWITCH_STANDARD_API(xml_locate_function)
 
   end:
 	if (err) {
-		if (host) {
-			stream->write_function(stream, "<error>%s</error>\n", err);
-		} else {
-			stream->write_function(stream, "-ERR %s\n", err);
-		}
+		stream->write_function(stream, "-ERR %s\n", err);
 	}
 
 	if (obj) {
@@ -2115,7 +2108,7 @@ SWITCH_STANDARD_API(status_function)
 
 	if (html) {
 		/* don't bother cli with heading and timestamp */
-		stream->write_function(stream, "%sFreeSWITCH Status%s", html?"<h1>":"", html?"</h1>\n":"\n");
+		stream->write_function(stream, "%sFreeSWITCH Status%s", "<h1>", "</h1>\n");
 		stream->write_function(stream, "%s%s", switch_event_get_header(stream->param_event,"Event-Date-Local"), nl);
 	}
 
@@ -4259,7 +4252,6 @@ SWITCH_STANDARD_API(originate_function)
 	char *aleg, *exten, *dp, *context, *cid_name, *cid_num;
 	uint32_t timeout = 60;
 	switch_call_cause_t cause = SWITCH_CAUSE_NORMAL_CLEARING;
-	uint8_t machine = 1;
 	switch_status_t status = SWITCH_STATUS_SUCCESS;
 
 	if (zstr(cmd)) {
@@ -4287,11 +4279,6 @@ SWITCH_STANDARD_API(originate_function)
 		}
 	}
 
-	if (argv[0] && !strcasecmp(argv[0], "machine")) {
-		machine = 1;
-		i++;
-	}
-
 	aleg = argv[i++];
 	exten = argv[i++];
 	dp = argv[i++];
@@ -4313,11 +4300,7 @@ SWITCH_STANDARD_API(originate_function)
 
 	if (switch_ivr_originate(NULL, &caller_session, &cause, aleg, timeout, NULL, cid_name, cid_num, NULL, NULL, SOF_NONE, NULL) != SWITCH_STATUS_SUCCESS
 		|| !caller_session) {
-		if (machine) {
 			stream->write_function(stream, "-ERR %s\n", switch_channel_cause2str(cause));
-		} else {
-			stream->write_function(stream, "-ERR Cannot create outgoing channel! [%s] cause: %s\n", aleg, switch_channel_cause2str(cause));
-		}
 		goto done;
 	}
 
@@ -4347,11 +4330,7 @@ SWITCH_STANDARD_API(originate_function)
 		switch_ivr_session_transfer(caller_session, exten, dp, context);
 	}
 
-	if (machine) {
-		stream->write_function(stream, "+OK %s\n", switch_core_session_get_uuid(caller_session));
-	} else {
-		stream->write_function(stream, "+OK Created session: %s\n", switch_core_session_get_uuid(caller_session));
-	}
+	stream->write_function(stream, "+OK %s\n", switch_core_session_get_uuid(caller_session));
 
 	switch_core_session_rwunlock(caller_session);
 
@@ -5166,10 +5145,7 @@ SWITCH_STANDARD_API(show_function)
   end:
 
 	switch_safe_free(mydata);
-
-	if (db) {
-		switch_cache_db_release_db_handle(&db);
-	}
+	switch_cache_db_release_db_handle(&db);
 
 	return status;
 }

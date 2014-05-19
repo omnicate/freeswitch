@@ -1302,7 +1302,8 @@ static void conference_event_channel_handler(const char *event_channel, cJSON *j
 	conference_obj_t *conference = NULL;
 	cJSON *data, *reply = NULL, *conf_desc = NULL;
 	const char *action = NULL;
-	
+	char *dup = NULL;
+
 	if ((data = cJSON_GetObjectItem(json, "data"))) {
 		action = cJSON_GetObjectCstr(data, "action");
 	}
@@ -1313,9 +1314,9 @@ static void conference_event_channel_handler(const char *event_channel, cJSON *j
 	cJSON_DeleteItemFromObject(reply, "data");
 
 	if ((name = strchr(event_channel, '.'))) {
-		char *tmp = strdup(name + 1);
-		switch_assert(tmp);
-		name = tmp;
+		dup = strdup(name + 1);
+		switch_assert(dup);
+		name = dup;
 
 		if ((domain = strchr(name, '@'))) {
 			*domain++ = '\0';
@@ -1341,8 +1342,9 @@ static void conference_event_channel_handler(const char *event_channel, cJSON *j
 	
 	cJSON_AddItemToObject(reply, "data", conf_desc);
 
+	switch_safe_free(dup);
+
 	switch_event_channel_broadcast(event_channel, &reply, modname, globals.event_channel_id);
-	
 }
 
 
@@ -4295,10 +4297,9 @@ static void conference_loop_output(conference_member_t *member)
 				char *from = switch_event_get_header(event, "from");
 				char *to = switch_event_get_header(event, "to");
 				char *body = switch_event_get_body(event);
-				char *p;
 
 				if (to && from && body) {
-					if ((p = strchr(to, '+')) && strncmp(to, CONF_CHAT_PROTO, strlen(CONF_CHAT_PROTO))) {
+					if (strchr(to, '+') && strncmp(to, CONF_CHAT_PROTO, strlen(CONF_CHAT_PROTO))) {
 						switch_event_del_header(event, "to");
 						switch_event_add_header(event, SWITCH_STACK_BOTTOM,
 												"to", "%s+%s@%s", CONF_CHAT_PROTO, member->conference->name, member->conference->domain);
@@ -9095,7 +9096,7 @@ static conference_obj_t *conference_new(char *name, conf_xml_cfg_t cfg, switch_c
 			char buf[128] = "";
 			char *p;
 
-			if ((p = strchr(var, '_'))) {
+			if (strchr(var, '_')) {
 				switch_copy_string(buf, var, sizeof(buf));
 				for (p = buf; *p; p++) {
 					if (*p == '_') {

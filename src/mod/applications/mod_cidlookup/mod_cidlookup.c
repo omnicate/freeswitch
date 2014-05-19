@@ -183,7 +183,7 @@ static switch_bool_t cidlookup_execute_sql_callback(char *sql, switch_core_db_ca
 			retval = SWITCH_TRUE;
 		}
 	} else {
-		*err = switch_core_sprintf(cbt->pool, "Unable to get database handle.  dsn: %s, dbh is %s\n", globals.odbc_dsn, dbh ? "not null" : "null");
+		*err = switch_core_sprintf(cbt->pool, "Unable to get database handle.  dsn: [%s]\n", switch_str_nil(globals.odbc_dsn));
 	}
 
 	switch_cache_db_release_db_handle(&dbh);
@@ -657,11 +657,7 @@ SWITCH_STANDARD_APP(cidlookup_app_function)
 	switch_bool_t skipurl = SWITCH_FALSE;
 	switch_bool_t skipcitystate = SWITCH_FALSE;
 
-	if (session) {
-		pool = switch_core_session_get_pool(session);
-	} else {
-		switch_core_new_memory_pool(&pool);
-	}
+	pool = switch_core_session_get_pool(session);
 	switch_event_create(&event, SWITCH_EVENT_MESSAGE);
 
 	if (!(mydata = switch_core_session_strdup(session, data))) {
@@ -689,13 +685,13 @@ SWITCH_STANDARD_APP(cidlookup_app_function)
 		cid = do_lookup(pool, event, number, skipurl, skipcitystate);
 	}
 
-	if (switch_string_var_check_const(cid->name)) {
-		switch_log_printf(SWITCH_CHANNEL_CHANNEL_LOG(channel), SWITCH_LOG_CRIT, "Invalid CID data {%s} contains a variable\n", cid->name);
-		goto done;
-	}
-
 	if (cid && channel) {
 		switch_event_t *event;
+
+		if (switch_string_var_check_const(cid->name)) {
+			switch_log_printf(SWITCH_CHANNEL_CHANNEL_LOG(channel), SWITCH_LOG_CRIT, "Invalid CID data {%s} contains a variable\n", cid->name);
+			goto done;
+		}
 
 		switch_channel_set_variable(channel, "original_caller_id_name", switch_core_strdup(pool, profile->caller_id_name));
 		if (!zstr(cid->src)) {

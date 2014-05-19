@@ -330,7 +330,7 @@ static int score_voice(struct voice *voice, struct ssml_node *cur_node, int lang
 static struct voice *find_voice(struct ssml_node *cur_node, switch_hash_t *map, char *type, int lang_required)
 {
 	switch_hash_index_t *hi = NULL;
-	struct voice *voice = (struct voice *)switch_core_hash_find(map, cur_node->name);
+	struct voice *voice = NULL;
 	char *lang_name_gender = NULL;
 	int best_score = 0;
 
@@ -616,10 +616,10 @@ static int tag_hook(void *user_data, char *name, char **atts, int type)
 {
 	int result = IKS_OK;
 	struct ssml_parser *parsed_data = (struct ssml_parser *)user_data;
-	struct ssml_node *new_node = malloc(sizeof *new_node);
 	struct ssml_node *parent_node = parsed_data->cur_node;
 
 	if (type == IKS_OPEN || type == IKS_SINGLE) {
+		struct ssml_node *new_node = malloc(sizeof *new_node);
 		if (parent_node) {
 			/* inherit parent attribs */
 			*new_node = *parent_node;

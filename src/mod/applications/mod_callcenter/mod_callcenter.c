@@ -474,7 +474,7 @@ static void queue_rwunlock(cc_queue_t *queue)
 	}
 }
 
-static void destroy_queue(const char *queue_name, switch_bool_t block)
+static void destroy_queue(const char *queue_name)
 {
 	cc_queue_t *queue = NULL;
 	switch_mutex_lock(globals.mutex);
@@ -488,17 +488,12 @@ static void destroy_queue(const char *queue_name, switch_bool_t block)
 		return;
 	}
 
-	if (block) {
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "[%s] Waiting for write lock\n", queue->name);
-		switch_thread_rwlock_wrlock(queue->rwlock);
-	} else {
-		if (switch_thread_rwlock_trywrlock(queue->rwlock) != SWITCH_STATUS_SUCCESS) {
-			/* Lock failed, set the destroy flag so it'll be destroyed whenever its not in use anymore */
-			switch_set_flag(queue, PFLAG_DESTROY);
-			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "[%s] queue is in use, memory will be freed whenever its no longer in use\n",
-					queue->name);
-			return;
-		}
+	if (switch_thread_rwlock_trywrlock(queue->rwlock) != SWITCH_STATUS_SUCCESS) {
+		/* Lock failed, set the destroy flag so it'll be destroyed whenever its not in use anymore */
+		switch_set_flag(queue, PFLAG_DESTROY);
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "[%s] queue is in use, memory will be freed whenever its no longer in use\n",
+				queue->name);
+		return;
 	}
 
 	free_queue(queue);
@@ -1425,20 +1420,30 @@ end:
 	return status;
 }
 
-static void playback_array(switch_core_session_t *session, const char *str) {
+static switch_status_t playback_array(switch_core_session_t *session, const char *str) {
+	switch_status_t status = SWITCH_STATUS_FALSE;
 	if (str && !strncmp(str, "ARRAY::", 7)) {
 		char *i = (char*) str + 7, *j = i;
 		while (1) {
 			if ((j = strstr(i, "::"))) {
 				*j = 0;
 			}
-			switch_ivr_play_file(session, NULL, i, NULL);
+			status = switch_ivr_play_file(session, NULL, i, NULL);
+			if (status == SWITCH_STATUS_FALSE /* Invalid Recording */ && SWITCH_READ_ACCEPTABLE(status)) {
+				/* Sadly, there doesn't seem to be a return to switch_ivr_play_file that tell you the file wasn't found.  FALSE also mean that the channel got switch to BRAKE state, so we check for read acceptable */
+				switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_WARNING, "Couldn't play file '%s'\n", i);
+			} else if (!SWITCH_READ_ACCEPTABLE(status)) {
+				break;
+			}
+
 			if (!j) break;
 			i = j + 2;
 		}
 	} else {
-		switch_ivr_play_file(session, NULL, str, NULL);
+		status = switch_ivr_play_file(session, NULL, str, NULL);
 	}
+
+	return status;
 }
 
 static void *SWITCH_THREAD_FUNC outbound_agent_thread_run(switch_thread_t *thread, void *obj)
@@ -3171,7 +3176,7 @@ SWITCH_STANDARD_API(cc_config_api_function)
 				goto done;
 			} else {
 				const char *queue_name = argv[0 + initial_argc];
-				destroy_queue(queue_name, SWITCH_FALSE);
+				destroy_queue(queue_name);
 				stream->write_function(stream, "%s", "+OK\n");
 
 			}
@@ -3183,7 +3188,7 @@ SWITCH_STANDARD_API(cc_config_api_function)
 			} else {
 				const char *queue_name = argv[0 + initial_argc];
 				cc_queue_t *queue = NULL;
-				destroy_queue(queue_name, SWITCH_FALSE);
+				destroy_queue(queue_name);
 				if ((queue = get_queue(queue_name))) {
 					queue_rwunlock(queue);
 					stream->write_function(stream, "%s", "+OK\n");
