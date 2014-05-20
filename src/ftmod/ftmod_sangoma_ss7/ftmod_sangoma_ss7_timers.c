@@ -149,6 +149,80 @@ void handle_isup_t39(void *userdata)
 	SS7_FUNC_TRACE_EXIT(__FUNCTION__);
 }
 
+/* Changes w.r.t. ACC feature */
+void handle_isup_t29(void *userdata)
+{
+	SS7_FUNC_TRACE_ENTER(__FUNCTION__);
+
+	sngss7_timer_data_t *timer = userdata;
+	sngss7_chan_data_t  *sngss7_info = timer->sngss7_info;
+	ftdm_channel_t      *ftdmchan = sngss7_info->ftdmchan;
+
+	ftdm_channel_lock(ftdmchan);
+
+	SS7_DEBUG("Timer 29 expired.....\n");
+
+	ftdm_channel_unlock(ftdmchan);
+
+	SS7_FUNC_TRACE_EXIT(__FUNCTION__);
+}
+
+void handle_isup_t30(void *userdata)
+{
+	SS7_FUNC_TRACE_ENTER(__FUNCTION__);
+
+	sngss7_timer_data_t *timer = userdata;
+	sngss7_chan_data_t  *sngss7_info = timer->sngss7_info;
+	ftdm_channel_t      *ftdmchan = sngss7_info->ftdmchan;
+	ftdm_channel_t 	    *tmp_ftdmchan = NULL;
+
+	ftdm_channel_lock(ftdmchan);
+
+	SS7_DEBUG("Timer 30 expired.....\n");
+
+	if (sngss7_rmtCongLvl) {
+		sngss7_rmtCongLvl--;
+	}
+
+	if (sngss7_rmtCongLvl) {
+		/* Restart Timer 29 & Timer 30 */
+		if (ftdm_sched_timer (sngss7_info->t29.sched,
+					"t39",
+					sngss7_info->t29.beat,
+					sngss7_info->t29.callback,
+					&sngss7_info->t29,
+					&sngss7_info->t29.hb_timer_id)) {
+			SS7_ERROR ("Unable to schedule timer T29\n");
+			goto end;
+		}
+
+		if (ftdm_sched_timer (sngss7_info->t30.sched,
+					"t30",
+					sngss7_info->t30.beat,
+					sngss7_info->t30.callback,
+					&sngss7_info->t30,
+					&sngss7_info->t30.hb_timer_id)) {
+			SS7_ERROR ("Unable to schedule timer T30\n");
+		}
+
+	} else {
+		/* Start Releasing traffic normally i.e. empty SS7 Call Queue */
+		while ((tmp_ftdmchan = sngss7_dequeueCall())) {
+			SS7_DEBUG_CHAN(tmp_ftdmchan, "Sending outgoing call from \"%s\" to \"%s\" to LibSngSS7\n",
+					tmp_ftdmchan->caller_data.ani.digits,
+					tmp_ftdmchan->caller_data.dnis.digits);
+
+			/*call sangoma_ss7_dial to make outgoing call */
+			ft_to_sngss7_iam(tmp_ftdmchan);
+		}
+	}
+
+end:
+	ftdm_channel_unlock(ftdmchan);
+
+	SS7_FUNC_TRACE_EXIT(__FUNCTION__);
+}
+
 void handle_wait_bla_timeout(void *userdata)
 {
 	sngss7_timer_data_t *timer = userdata;

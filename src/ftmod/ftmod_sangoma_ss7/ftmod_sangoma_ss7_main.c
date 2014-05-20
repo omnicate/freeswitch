@@ -51,13 +51,12 @@ static sng_isup_event_interface_t sng_event;
 static ftdm_io_interface_t g_ftdm_sngss7_interface;
 ftdm_sngss7_data_t g_ftdm_sngss7_data;
 ftdm_sngss7_opr_mode g_ftdm_operating_mode;
-ftdm_sngss7_call_queue_t *sngss7_queue_front;
-ftdm_sngss7_call_queue_t *sngss7_queue_rear;
-uint32_t sngss7_rmtCongLvl;
-uint32_t sngss7_lclCongLvl;
-uint32_t queue_size;
-uint32_t ss7_call_qsize;
-uint32_t call_dequeue_rate;
+ftdm_sngss7_call_queue_t *sngss7_queue_front;	/* first member in queue */
+ftdm_sngss7_call_queue_t *sngss7_queue_rear;	/* last member in queue */
+uint32_t sngss7_rmtCongLvl;			/* remote congestion level */
+uint32_t queue_size;				/* current queue size */
+uint32_t ss7_call_qsize;			/* Maximum queue size */
+uint32_t call_dequeue_rate;			/* call dequeue rate */
 
 /******************************************************************************/
 
@@ -374,8 +373,7 @@ static void *app_sngss7_call_queue_handler(ftdm_thread_t * me, void *obj)
 		/* ftdm_sleep(dequeue_time); */
 
 		ftdm_sleep(10000);
-		ftdm_log (FTDM_LOG_DEBUG, "PUSHKAR : Queue Size is = %d\n", queue_size);
-		printf("PUSHKAR: Queue Size is %d\n", queue_size);
+		ftdm_log (FTDM_LOG_DEBUG, "Queue Size is = %d\n", queue_size);
 		if ((queue_size == ss7_call_qsize)  && sngss7_rmtCongLvl) {
 			/* Dequeue message form ss7 call queue and start processing the dequeued call */
 			ftdmchan = sngss7_dequeueCall();
@@ -1422,14 +1420,13 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 			break;
 		}
 
-		/* PUSHKAR CHANGES */
 		/* check if remote exchange is congested then queue the call in to the congestion queue
 		 * if queue is full the drop the call */
 		if (sngss7_rmtCongLvl) {
 			/* Start queuing the call i.e. ftdmchan containg all information w.r.t. call if queue is not full */
 			if ((queue_size + 1) > ss7_call_qsize) {
 
-				SS7_DEBUG_CHAN(ftdmchan, "Hanging up call! as remote is congested having Congestion Lvl as: %d\n", sngss7_rmtCongLvl);
+				SS7_DEBUG_CHAN(ftdmchan, "Hanging up call! as remote is congested having Congestion Lvl as: %d and call queue is full\n", sngss7_rmtCongLvl);
 				ftdmchan->caller_data.hangup_cause = FTDM_CAUSE_SWITCH_CONGESTION;
 
 				/* set the flag to indicate this hangup is started from the local side */
@@ -2804,7 +2801,6 @@ static FIO_SIG_LOAD_FUNCTION(ftdm_sangoma_ss7_init)
 	/* use to store the Congestion Level of remote and self exchange
 	 * by default Congestion Level is zero */
 	sngss7_rmtCongLvl = 0;
-	sngss7_lclCongLvl = 0;
 
 	/* initializing queue size to 0 */
 	queue_size = 0;

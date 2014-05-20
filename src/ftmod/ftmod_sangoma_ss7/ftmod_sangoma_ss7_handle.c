@@ -773,15 +773,57 @@ ftdm_status_t handle_rel_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 	}
 	ftdm_mutex_lock(ftdmchan->mutex);
 
-	SS7_INFO_CHAN(ftdmchan,"PUSHKAR: Right now remote exchange congestion level is: %d\n", sngss7_rmtCongLvl);
+	/* Check if remote exchange is congested */
 	if (siRelEvnt->autoCongLvl.eh.pres) {
 		if (siRelEvnt->autoCongLvl.auCongLvl.pres) {
-			sngss7_rmtCongLvl = siRelEvnt->autoCongLvl.auCongLvl.val;
-			SS7_INFO_CHAN(ftdmchan,"PUSHKAR: Got automatic congestion on remote server having level as: %d\n", sngss7_rmtCongLvl);
+			/* * Check is remote congestion is already known and t29 timer is already running then do nothing & release call
+			 *   normally.
+			 * * If remote congestion is already known & t29 timer is not running & t30 timer is in running state & remote
+			 *   congestion level is less than 2 then increase the remote congestion level value by 1 & restart t29 & t30
+			 *   timers  and then release the call.
+			 * * If remote congestion is not known at all then mark remote congestion level value and start t29 & t30 timers
+			 *   and then release the call. */
+			if (!sngss7_rmtCongLvl) {
+				sngss7_rmtCongLvl = siRelEvnt->autoCongLvl.auCongLvl.val;
+				SS7_INFO_CHAN(ftdmchan,"Received automatic congestion on remote server with congestion level as: %d\n", sngss7_rmtCongLvl);
+			} else {
+				if (sngss7_info->t29.hb_timer_id) {
+					goto carry_on;
+				} else if ((sngss7_info->t30.hb_timer_id) && (sngss7_rmtCongLvl < 2)) {
+					sngss7_rmtCongLvl++;
+				}
+			}
+
+			SS7_INFO_CHAN(ftdmchan,"Starting T29 Timer due to remote congestion with level as: %d\n", sngss7_rmtCongLvl);
 			/* Start T29 & T30 timer */
+			if (ftdm_sched_timer (sngss7_info->t29.sched,
+						"t29",
+						sngss7_info->t29.beat,
+						sngss7_info->t29.callback,
+						&sngss7_info->t29,
+						&sngss7_info->t29.hb_timer_id)) {
+				SS7_ERROR ("Unable to schedule timer T29\n");
+				goto carry_on;
+			}
+
+			SS7_INFO_CHAN(ftdmchan,"Starting T30 Timer due to remote congestion with level as: %d\n", sngss7_rmtCongLvl);
+			if (ftdm_sched_timer (sngss7_info->t30.sched,
+						"t30",
+						sngss7_info->t30.beat,
+						sngss7_info->t30.callback,
+						&sngss7_info->t30,
+						&sngss7_info->t30.hb_timer_id)) {
+				SS7_ERROR ("Unable to schedule timer T30. Thus, stopping T29 Timer also.\n");
+
+				/* Kill t29 timer if active */
+				if (sngss7_info->t29.hb_timer_id) {
+					ftdm_sched_cancel_timer (sngss7_info->t29.sched, sngss7_info->t29.hb_timer_id);
+				}
+			}
 		}
 	}
 
+carry_on:
 	SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Rx REL cause=%d\n",
 							sngss7_info->circuit->cic, 
 							siRelEvnt->causeDgn.causeVal.val);
@@ -1267,10 +1309,8 @@ ftdm_status_t handle_reattempt(uint32_t suInstId, uint32_t spInstId, uint32_t ci
 	SS7_INFO_CHAN(ftdmchan, "[CIC:%d]Rx %s\n", g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic, DECODE_LCC_EVENT(evntType));
 	ftdm_mutex_lock(ftdmchan->mutex);
 
-	/* PUSHKAR CHANGES */
 	/* Reject the call if self exchange is congested */
 	if (siStaEvnt->causeDgn.causeVal.val == SIT_CCSWTCHCONG) {
-		/* PUSHKAR CHANGES */
 		/* hangup the call if the circuit is in congested state */
 		SS7_DEBUG_CHAN(ftdmchan, "Hanging up call! as remote is congested having Congestion Lvl as: %d\n", sngss7_rmtCongLvl);
 		ftdmchan->caller_data.hangup_cause = FTDM_CAUSE_SWITCH_CONGESTION;

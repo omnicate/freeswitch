@@ -422,6 +422,8 @@ typedef struct sng_isup_ckt {
 	uint16_t		t15;
 	uint16_t		t16;
 	uint16_t		t17;
+	uint32_t 		t29;
+	uint32_t 		t30;
 	uint32_t		t35;
 	uint32_t		t39;
 	uint16_t		tval;
@@ -621,6 +623,8 @@ typedef struct sngss7_chan_data {
 	sngss7_glare_data_t		glare;
 	sngss7_timer_data_t		t35;
 	sngss7_timer_data_t		t10;
+	sngss7_timer_data_t 		t29;
+	sngss7_timer_data_t 		t30;
 	sngss7_timer_data_t		t39;
 	
 	sngss7_timer_data_t		t_waiting_bla;
@@ -875,7 +879,6 @@ extern ftdm_sngss7_call_queue_t 	*sngss7_queue_rear;
 extern uint32_t 			queue_size;
 extern uint32_t 			ss7_call_qsize;
 extern uint32_t 			call_dequeue_rate;
-extern uint32_t                         sngss7_lclCongLvl;
 extern uint32_t                         sngss7_rmtCongLvl;
 
 /******************************************************************************/
@@ -1179,6 +1182,8 @@ int ftmod_ss7_get_mtp2_id_by_mtp1_id(int mtp1_cfg_id);
 void handle_isup_t35(void *userdata);
 void handle_isup_t10(void *userdata);
 void handle_isup_t39(void *userdata);
+void handle_isup_t29(void *userdata);
+void handle_isup_t30(void *userdata);
 void handle_wait_bla_timeout(void *userdata);
 void handle_wait_uba_timeout(void *userdata);
 void handle_tx_ubl_on_rx_bla_timer(void *userdata);

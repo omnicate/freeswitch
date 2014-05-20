@@ -149,6 +149,9 @@ typedef struct sng_ccSpan
 	uint32_t		t35;
 	uint32_t		t39;
 	uint32_t		tval;
+	/* Timers required for implementing ACC feature */
+	uint32_t 		t29;
+	uint32_t 		t30;
 } sng_ccSpan_t;
 
 int cmbLinkSetId;
@@ -2161,6 +2164,16 @@ static int ftmod_ss7_parse_cc_span(ftdm_conf_node_t *cc_span)
 			sng_ccSpan.t17 = atoi(parm->val);
 			SS7_DEBUG("Found isup t17 = %d\n", sng_ccSpan.t17);
 		/**********************************************************************/
+		} else if (!strcasecmp(parm->var, "isup.t29")) {
+		/**********************************************************************/
+			sng_ccSpan.t29 = atoi(parm->val);
+			SS7_DEBUG("Found isup t29 = %d\n",sng_ccSpan.t29);
+		/**********************************************************************/
+		} else if (!strcasecmp(parm->var, "isup.t30")) {
+		/**********************************************************************/
+			sng_ccSpan.t30 = atoi(parm->val);
+			SS7_DEBUG("Found isup t30 = %d\n",sng_ccSpan.t30);
+		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isup.t35")) {
 		/**********************************************************************/
 			sng_ccSpan.t35 = atoi(parm->val);
@@ -3182,6 +3195,18 @@ static int ftmod_ss7_fill_in_ccSpan(sng_ccSpan_t *ccSpan)
 		} else {
 			g_ftdm_sngss7_data.cfg.isupCkt[x].t17		= ccSpan->t17;
 		}
+		/* Timer for ACC Feature in ms can be 300-600ms */
+		if (ccSpan->t29 == 0) {
+			g_ftdm_sngss7_data.cfg.isupCkt[x].t29		= 3;
+		} else {
+			g_ftdm_sngss7_data.cfg.isupCkt[x].t29		= ccSpan->t29;
+		}
+		/* Timer ofr implementing ACC Feature in sec can be 5-10sec*/
+		if (ccSpan->t30 == 0) {
+			g_ftdm_sngss7_data.cfg.isupCkt[x].t30		= 50;
+		} else {
+			g_ftdm_sngss7_data.cfg.isupCkt[x].t30		= ccSpan->t30;
+		}
 		if (ccSpan->t35 == 0) {
 			/* Q.764 2.2.5 Address incomplete (T35 is 15-20 seconds according to Table A.1/Q.764) */
 			g_ftdm_sngss7_data.cfg.isupCkt[x].t35		= 170;
@@ -3304,6 +3329,20 @@ static int ftmod_ss7_fill_in_circuits(sng_span_t *sngSpan)
 		ss7_info->t39.beat		= (isupCkt->t39) * 100; /* beat is in ms, t39 is in 100ms */
 		ss7_info->t39.callback		= handle_isup_t39;
 		ss7_info->t39.sngss7_info	= ss7_info;
+
+		/* prepare the timer structures */
+		ss7_info->t29.sched		= ((sngss7_span_data_t *)(ftdmspan->signal_data))->sched;
+		ss7_info->t29.counter		= 1;
+		ss7_info->t29.beat		= (isupCkt->t29) * 100;	/* beat is in ms, t29 is in 100ms */
+		ss7_info->t29.callback		= handle_isup_t29;
+		ss7_info->t29.sngss7_info	= ss7_info;
+
+		/* prepare the timer structures */
+		ss7_info->t30.sched		= ((sngss7_span_data_t *)(ftdmspan->signal_data))->sched;
+		ss7_info->t30.counter		= 1;
+		ss7_info->t30.beat		= (isupCkt->t30) * 100; /* beat is in ms, t30 is in 100ms */
+		ss7_info->t30.callback		= handle_isup_t30;
+		ss7_info->t30.sngss7_info	= ss7_info;
 
 		/* Set up timer for blo re-transmission. 
 		   If not receiving BLA in 5 seconds after sending out BLO, 
