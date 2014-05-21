@@ -57,6 +57,7 @@ uint32_t sngss7_rmtCongLvl;			/* remote congestion level */
 uint32_t queue_size;				/* current queue size */
 uint32_t ss7_call_qsize;			/* Maximum queue size */
 uint32_t call_dequeue_rate;			/* call dequeue rate */
+int g_num_threads = 0;				/* number of threads running */
 
 /******************************************************************************/
 
@@ -372,9 +373,8 @@ static void *app_sngss7_call_queue_handler(ftdm_thread_t * me, void *obj)
 		ftdmchan = NULL;
 		/* ftdm_sleep(dequeue_time); */
 
-		ftdm_sleep(10000);
-		ftdm_log (FTDM_LOG_DEBUG, "Queue Size is = %d\n", queue_size);
-		if ((queue_size == ss7_call_qsize)  && sngss7_rmtCongLvl) {
+		ftdm_sleep(call_dequeue_rate);
+		if ((queue_size != 0)  && (sngss7_rmtCongLvl)) {
 			/* Dequeue message form ss7 call queue and start processing the dequeued call */
 			ftdmchan = sngss7_dequeueCall();
 
@@ -424,6 +424,8 @@ static void *ftdm_sangoma_ss7_run(ftdm_thread_t * me, void *obj)
 	ftdm_channel_t 		*ftdmchan = NULL;
 	sngss7_event_data_t     *sngss7_event = NULL;
 	sngss7_span_data_t	*sngss7_span = (sngss7_span_data_t *)ftdmspan->signal_data;
+
+	int max_wait = 20;
 
 	int b_alarm_test = 1;
 	sngss7_chan_data_t *ss7_info=NULL;
@@ -602,6 +604,13 @@ static void *ftdm_sangoma_ss7_run(ftdm_thread_t * me, void *obj)
 	}
 ftdm_sangoma_ss7_stop:
 
+	/* Stop all threads */
+	ftdm_sleep(1000);
+
+	while (g_num_threads && (max_wait-- > 0)) {
+		fprintf(stderr, "Waiting for all threads to finish (%d)\n", g_num_threads);
+		ftdm_sleep(100);
+	}
 	/* clear the IN_THREAD flag so that we know the thread is done */
 	ftdm_clear_flag (ftdmspan, FTDM_SPAN_IN_THREAD);
 
@@ -612,6 +621,13 @@ ftdm_sangoma_ss7_stop:
 
 ftdm_sangoma_ss7_run_exit:
 
+	/* Stop all threads */
+	ftdm_sleep(1000);
+
+	while (g_num_threads && (max_wait-- > 0)) {
+		fprintf(stderr, "Waiting for all threads to finish (%d)\n", g_num_threads);
+		ftdm_sleep(100);
+	}
 	/* clear the IN_THREAD flag so that we know the thread is done */
 	ftdm_clear_flag (ftdmspan, FTDM_SPAN_IN_THREAD);
 
