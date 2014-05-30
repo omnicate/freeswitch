@@ -134,6 +134,7 @@ static ftdm_status_t ftdm_channel_sig_indicate(ftdm_channel_t *ftdmchan, ftdm_ch
 static const char *ftdm_val2str(unsigned long long val, val_str_t *val_str_table, ftdm_size_t array_size, const char *default_str);
 static unsigned long long ftdm_str2val(const char *str, val_str_t *val_str_table, ftdm_size_t array_size, unsigned long long default_val);
 static int ftdm_get_new_span_id (void);
+/*static int ftdm_get_cpu_usage(void);*/
 
 
 static int time_is_init = 0;
@@ -6429,6 +6430,28 @@ done:
 	UNREFERENCED_PARAMETER(me);
 #endif
 }
+
+#if 0
+static int ftdm_get_cpu_usage()
+{
+	struct ftdm_cpu_monitor_stats *cpu_stats = ftdm_new_cpu_monitor();
+
+	if (!cpu_stats) {
+		return FTDM_SUCCESS;
+	}
+
+		double idle_time = 0.0;
+		int cpu_usage = 0;
+
+		if (ftdm_cpu_get_system_idle_time(cpu_stats, &idle_time)) {
+			return FTDM_SUCCESS;
+		}
+
+		cpu_usage = (int)(100 - idle_time);
+
+		return cpu_usage;
+}
+#endif
 
 static ftdm_status_t ftdm_cpu_monitor_start(void)
 {

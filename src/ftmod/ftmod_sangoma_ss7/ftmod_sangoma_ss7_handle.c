@@ -1331,8 +1331,9 @@ ftdm_status_t handle_reattempt(uint32_t suInstId, uint32_t spInstId, uint32_t ci
 		/* set the flag to indicate this hangup is started from the local side */
 		sngss7_set_ckt_flag (sngss7_info, FLAG_LOCAL_REL);
 
-		/* end the call */
-		ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_CANCEL);
+		/* Moving state to DOWN as IAM is not being sent to remote-exchange due to
+		 * local congestion. End call */
+		ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_DOWN);
 	} else if (sngss7_test_ckt_flag(sngss7_info, FLAG_GLARE)) {
 		/* the glare flag is already up so it was caught ... do nothing */
 		SS7_DEBUG_CHAN(ftdmchan, "Glare flag is already up...nothing to do!%s\n", " ");

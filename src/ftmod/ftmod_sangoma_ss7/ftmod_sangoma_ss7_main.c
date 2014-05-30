@@ -243,7 +243,8 @@ ftdm_state_map_t sangoma_ss7_state_map = {
 	 FTDM_CHANNEL_STATE_CANCEL, FTDM_CHANNEL_STATE_TERMINATING,
 	 FTDM_CHANNEL_STATE_HANGUP, FTDM_CHANNEL_STATE_PROGRESS,
 	 FTDM_CHANNEL_STATE_RINGING,
-	 FTDM_CHANNEL_STATE_PROGRESS_MEDIA ,FTDM_CHANNEL_STATE_UP, FTDM_END}
+	 FTDM_CHANNEL_STATE_PROGRESS_MEDIA ,FTDM_CHANNEL_STATE_UP,
+	 FTDM_CHANNEL_STATE_DOWN, FTDM_END}
 	},
    {
 	ZSD_OUTBOUND,
@@ -1437,7 +1438,25 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 			SS7_DEBUG("re-entering state from processing block/unblock request ... do nothing\n");
 			break;
 		}
+#if 0
+		if (!cpu_stats) {
+			goto check;
+		}
 
+		/* check if cpu usgae is more than that it is expected */
+		if ((cpu_usage = ftdm_cpu_get_system_idle_time(cpu_state, &idle_time)) < (100 - max_cpu_usage)) {
+			SS7_DEBUG_CHAN(ftdmchan, "Hanging up call! CPU has a high usage of %d\n", cpu_usage);
+			/* set the flag to indicate this hangup is started from the local side */
+			sngss7_set_ckt_flag (sngss7_info, FLAG_LOCAL_REL);
+
+			state_flag = 0;
+
+			/* change state to DOWN as there is a CPU is Congested */
+			ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_DOWN);
+		}
+
+check:
+#endif
 		/* check if remote exchange is congested then queue the call in to the congestion queue
 		 * if queue is full the drop the call */
 		if (sngss7_rmtCongLvl) {
@@ -1452,8 +1471,9 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 				/* end the call */
 				state_flag = 0;
 
-				/* SNG_ACC: ADD ANOTHER STATE */
-				ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_HANGUP_COMPLETE);
+				/* change state to Down as we are not sending IAM to remote ex-change as remote itself
+				 * is congested */
+				ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_DOWN);
 			}
 			break;
 		}
@@ -1715,6 +1735,13 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 				SS7_DEBUG_CHAN(ftdmchan,"Down came from SUSPEND - break %s\n", "");
 				break;
 			}
+		}
+
+		if (ftdmchan->last_state == FTDM_CHANNEL_STATE_DIALING) {
+			SS7_DEBUG_CHAN(ftdmchan,"Down came from DIALING due to Local Congestion%s\n", "");
+			/*this state is set when the line is hanging up */
+			sngss7_send_signal(sngss7_info, FTDM_SIGEVENT_STOP);
+			break;
 		}
 
 		/* check if there is a reset response that needs to be sent */
