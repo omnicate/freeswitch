@@ -758,42 +758,33 @@ ftdm_status_t handle_con_cfm(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 }
 
 /******************************************************************************/
-ftdm_status_t handle_rel_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circuit, SiRelEvnt *siRelEvnt)
+ftdm_status_t ftdm_check_acc(sngss7_chan_data_t *sngss7_info, SiRelEvnt *siRelEvnt)
 {
-	SS7_FUNC_TRACE_ENTER(__FUNCTION__);
-
-	sngss7_chan_data_t  *sngss7_info ;
-	ftdm_channel_t	  *ftdmchan;
-	
-	ftdm_running_return(FTDM_FAIL);
-	if (extract_chan_data(circuit, &sngss7_info, &ftdmchan)) {
-		SS7_ERROR("Failed to extract channel data for circuit = %d!\n", circuit);
-		SS7_FUNC_TRACE_EXIT(__FUNCTION__);
-		return FTDM_FAIL;
-	}
-	ftdm_mutex_lock(ftdmchan->mutex);
-
 	/* Check if remote exchange is congested */
 	if (siRelEvnt->autoCongLvl.eh.pres) {
 		if (siRelEvnt->autoCongLvl.auCongLvl.pres) {
-			/* * Check is remote congestion is already known and t29 timer is already running then do nothing & release call
-			 *   normally.
-			 * * If remote congestion is already known & t29 timer is not running & t30 timer is in running state & remote
-			 *   congestion level is less than 2 then increase the remote congestion level value by 1 & restart t29 & t30
-			 *   timers  and then release the call.
-			 * * If remote congestion is not known at all then mark remote congestion level value and start t29 & t30 timers
+			/* * If remote congestion is not known at all then mark remote congestion level value and start t29 & t30 timers
 			 *   and then release the call. */
 			if (!sngss7_rmtCongLvl) {
 				sngss7_rmtCongLvl = siRelEvnt->autoCongLvl.auCongLvl.val;
 				SS7_INFO_CHAN(ftdmchan,"Received automatic congestion on remote server with congestion level as: %d\n", sngss7_rmtCongLvl);
 			} else {
+				/* * Check If remote congestion is already known and t29 timer is already running then do nothing & release call
+				 *   normally. */
 				if (sngss7_info->t29.hb_timer_id) {
-					goto carry_on;
+					return FTDM_SUCCESS;
 				} else if ((sngss7_info->t30.hb_timer_id) && (sngss7_rmtCongLvl < 2)) {
+
+					/*
+					 * * If remote congestion is already known & t29 timer is not running & t30 timer is in running state & remote
+					 *   congestion level is less than 2 then increase the remote congestion level value by 1 & restart t29 & t30
+					 *   timers  and then release the call.
+					 */
 					sngss7_rmtCongLvl++;
 				}
 			}
 
+			/* Restart T29/T30 if we received REL in congested state */
 			SS7_INFO_CHAN(ftdmchan,"Starting T29 Timer due to remote congestion with level as: %d\n", sngss7_rmtCongLvl);
 			/* Start T29 & T30 timer */
 			if (ftdm_sched_timer (sngss7_info->t29.sched,
@@ -803,7 +794,7 @@ ftdm_status_t handle_rel_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 						&sngss7_info->t29,
 						&sngss7_info->t29.hb_timer_id)) {
 				SS7_ERROR ("Unable to schedule timer T29\n");
-				goto carry_on;
+				return FTDM_SUCCESS;
 			}
 
 			SS7_INFO_CHAN(ftdmchan,"Starting T30 Timer due to remote congestion with level as: %d\n", sngss7_rmtCongLvl);
@@ -822,8 +813,27 @@ ftdm_status_t handle_rel_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 			}
 		}
 	}
+	return FTDM_SUCCESS;
+}
+/******************************************************************************/
+ftdm_status_t handle_rel_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circuit, SiRelEvnt *siRelEvnt)
+{
+	SS7_FUNC_TRACE_ENTER(__FUNCTION__);
 
-carry_on:
+	sngss7_chan_data_t  *sngss7_info ;
+	ftdm_channel_t	  *ftdmchan;
+	
+	ftdm_running_return(FTDM_FAIL);
+	if (extract_chan_data(circuit, &sngss7_info, &ftdmchan)) {
+		SS7_ERROR("Failed to extract channel data for circuit = %d!\n", circuit);
+		SS7_FUNC_TRACE_EXIT(__FUNCTION__);
+		return FTDM_FAIL;
+	}
+	ftdm_mutex_lock(ftdmchan->mutex);
+
+	/* check for Automatic Congestion level */
+	ftdm_check_acc(sngss7_info, siRelEvnt);
+
 	SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Rx REL cause=%d\n",
 							sngss7_info->circuit->cic, 
 							siRelEvnt->causeDgn.causeVal.val);
