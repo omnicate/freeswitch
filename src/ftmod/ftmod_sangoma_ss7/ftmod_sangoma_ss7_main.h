@@ -73,6 +73,8 @@
 #define SNGSS7_SWITCHTYPE_ANSI(switchtype)	(switchtype == LSI_SW_ANS88) || \
 											(switchtype == LSI_SW_ANS92) || \
 											(switchtype == LSI_SW_ANS95)
+#define ACC_QUEUE_SIZE 		15
+#define ACC_DEQUEUE_RATE 	1000
 
 #define sngss7_flush_queue(queue) \
 			do { \
@@ -550,8 +552,9 @@ typedef struct ftdm_sngss7_data {
 } ftdm_sngss7_data_t;
 
 typedef struct ftdm_sngss7_call_queue {
-	ftdm_channel_t *data;
-	struct ftdm_sngss7_call_queue* next;
+	ftdm_queue_t 	*sngss7_call_queue;
+	uint32_t 	ss7_call_qsize;
+	uint32_t	call_dequeue_rate;
 } ftdm_sngss7_call_queue_t;
 
 typedef enum{
@@ -874,11 +877,7 @@ extern uint32_t				sngss7_id;
 extern ftdm_sched_t			*sngss7_sched;
 extern int				cmbLinkSetId;
 /* variables w.r.t ACC feature */
-extern ftdm_sngss7_call_queue_t		*sngss7_queue_front;
-extern ftdm_sngss7_call_queue_t 	*sngss7_queue_rear;
-extern uint32_t 			queue_size;
-extern uint32_t 			ss7_call_qsize;
-extern uint32_t 			call_dequeue_rate;
+extern ftdm_sngss7_call_queue_t		sngss7_queue;
 extern uint32_t                         sngss7_rmtCongLvl;
 
 /******************************************************************************/
@@ -886,9 +885,6 @@ extern uint32_t                         sngss7_rmtCongLvl;
 /* PROTOTYPES *****************************************************************/
 /* in ftmod_sangoma_ss7_main.c */
 ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan);
-ftdm_status_t sngss7_enqueueCall(ftdm_channel_t *ftdmchan);
-ftdm_channel_t* sngss7_dequeueCall(void);
-ftdm_status_t sngss7_check_call(ftdm_channel_t *ftdmchan);
 
 /* in ftmod_sangoma_ss7_logger.c */
 void handle_sng_log(uint8_t level, char *fmt,...);

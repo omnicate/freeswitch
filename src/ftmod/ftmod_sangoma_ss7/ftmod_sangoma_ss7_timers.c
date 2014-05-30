@@ -174,7 +174,7 @@ void handle_isup_t30(void *userdata)
 	sngss7_timer_data_t *timer = userdata;
 	sngss7_chan_data_t  *sngss7_info = timer->sngss7_info;
 	ftdm_channel_t      *ftdmchan = sngss7_info->ftdmchan;
-	ftdm_channel_t 	    *tmp_ftdmchan = NULL;
+	ftdm_channel_t 	    *fchan = NULL;
 
 	ftdm_channel_lock(ftdmchan);
 
@@ -207,13 +207,18 @@ void handle_isup_t30(void *userdata)
 
 	} else {
 		/* Start Releasing traffic normally i.e. empty SS7 Call Queue */
-		while ((tmp_ftdmchan = sngss7_dequeueCall())) {
-			SS7_DEBUG_CHAN(tmp_ftdmchan, "Sending outgoing call from \"%s\" to \"%s\" to LibSngSS7\n",
-					tmp_ftdmchan->caller_data.ani.digits,
-					tmp_ftdmchan->caller_data.dnis.digits);
+		while ((fchan = ftdm_queue_dequeue(sngss7_queue.sngss7_call_queue))) {
+			if (fchan->state == FTDM_CHANNEL_STATE_DIALING) {
+				SS7_DEBUG_CHAN(fchan, "Sending outgoing call from \"%s\" to \"%s\" to LibSngSS7\n",
+						fchan->caller_data.ani.digits,
+						fchan->caller_data.dnis.digits);
 
-			/*call sangoma_ss7_dial to make outgoing call */
-			ft_to_sngss7_iam(tmp_ftdmchan);
+				/*call sangoma_ss7_dial to make outgoing call */
+				ft_to_sngss7_iam(fchan);
+				ftdm_channel_complete_state(fchan);
+			} else {
+				SS7_DEBUG_CHAN(fchan, "Got Queue Member span %d and chan %dbut already hanged\n", fchan->span_id, fchan->chan_id);
+			}
 		}
 	}
 
