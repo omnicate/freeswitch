@@ -160,6 +160,10 @@ void handle_isup_t29(void *userdata)
 
 	ftdm_channel_lock(ftdmchan);
 
+	if (sngss7_info->t29.hb_timer_id) {
+		sngss7_info->t29.hb_timer_id = 0;
+	}
+
 	SS7_DEBUG("Timer 29 expired.....\n");
 
 	ftdm_channel_unlock(ftdmchan);
@@ -180,6 +184,9 @@ void handle_isup_t30(void *userdata)
 
 	SS7_DEBUG("Timer 30 expired.....\n");
 
+	if (sngss7_info->t30.hb_timer_id) {
+		sngss7_info->t30.hb_timer_id = 0;
+	}
 	if (sngss7_rmtCongLvl) {
 		sngss7_rmtCongLvl--;
 	}
@@ -187,7 +194,7 @@ void handle_isup_t30(void *userdata)
 	if (sngss7_rmtCongLvl) {
 		/* Restart Timer 29 & Timer 30 */
 		if (ftdm_sched_timer (sngss7_info->t29.sched,
-					"t39",
+					"t29",
 					sngss7_info->t29.beat,
 					sngss7_info->t29.callback,
 					&sngss7_info->t29,

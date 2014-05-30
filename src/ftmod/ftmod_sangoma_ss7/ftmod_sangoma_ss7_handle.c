@@ -1325,7 +1325,7 @@ ftdm_status_t handle_reattempt(uint32_t suInstId, uint32_t spInstId, uint32_t ci
 	/* Reject the call if self exchange is congested */
 	if (siStaEvnt->causeDgn.causeVal.val == SIT_CCSWTCHCONG) {
 		/* hangup the call if the circuit is in congested state */
-		SS7_DEBUG_CHAN(ftdmchan, "Hanging up call! as remote is congested having Congestion Lvl as: %d\n", sngss7_rmtCongLvl);
+		SS7_DEBUG_CHAN(ftdmchan, "Hanging up call! due to Local Congestion.%s\n", " ");
 		ftdmchan->caller_data.hangup_cause = FTDM_CAUSE_SWITCH_CONGESTION;
 
 		/* set the flag to indicate this hangup is started from the local side */
