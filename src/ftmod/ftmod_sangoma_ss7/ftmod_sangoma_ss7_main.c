@@ -1210,6 +1210,7 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 	sng_isup_inf_t *isup_intf = NULL;
 	int state_flag = 1; 
 	int i = 0;
+	int cpu_usage = 0;
 
 	SS7_DEBUG_CHAN(ftdmchan, "ftmod_sangoma_ss7 processing state %s: ckt=0x%X, blk=0x%X\n", 
 						ftdm_channel_state2str (ftdmchan->state),
@@ -1438,25 +1439,27 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 			SS7_DEBUG("re-entering state from processing block/unblock request ... do nothing\n");
 			break;
 		}
-#if 0
-		if (!cpu_stats) {
-			goto check;
-		}
 
-		/* check if cpu usgae is more than that it is expected */
-		if ((cpu_usage = ftdm_cpu_get_system_idle_time(cpu_state, &idle_time)) < (100 - max_cpu_usage)) {
+		cpu_usage = ftdm_get_cpu_usage();
+
+		SS7_DEBUG_CHAN(ftdmchan, "Have a CPU usage = %d\n", cpu_usage);
+		/* check if cpu usgae is more than that it is expected by user */
+		if (cpu_usage > g_ftdm_sngss7_data.cfg.max_cpu_usage) {
+			ftdm_mutex_lock(ftdmchan->mutex);
 			SS7_DEBUG_CHAN(ftdmchan, "Hanging up call! CPU has a high usage of %d\n", cpu_usage);
+			ftdmchan->caller_data.hangup_cause = FTDM_CAUSE_SWITCH_CONGESTION;
+
 			/* set the flag to indicate this hangup is started from the local side */
 			sngss7_set_ckt_flag (sngss7_info, FLAG_LOCAL_REL);
 
 			state_flag = 0;
 
-			/* change state to DOWN as there is a CPU is Congested */
+			/* change state to DOWN as there is a CPU usage is high */
 			ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_DOWN);
+			ftdm_mutex_unlock(ftdmchan->mutex);
+			break;
 		}
 
-check:
-#endif
 		/* check if remote exchange is congested then queue the call in to the congestion queue
 		 * if queue is full the drop the call */
 		if (sngss7_rmtCongLvl) {

@@ -505,25 +505,26 @@ typedef struct sng_sctp_cfg {
 
 
 typedef struct sng_ss7_cfg {
-	uint32_t			spc;
-	uint32_t			procId;
-	char				license[MAX_SNGSS7_PATH];
-	char				signature[MAX_SNGSS7_PATH];
-	uint32_t			transparent_iam_max_size;
-	uint32_t			flags;
-	sng_relay_t			relay[MAX_RELAY_CHANNELS+1];
+	uint32_t		spc;
+	uint32_t		procId;
+	char			license[MAX_SNGSS7_PATH];
+	char			signature[MAX_SNGSS7_PATH];
+	uint32_t		transparent_iam_max_size;
+	uint32_t		flags;
+	uint32_t 		max_cpu_usage;
+	sng_relay_t		relay[MAX_RELAY_CHANNELS+1];
 	sng_mtp1_link_t		mtp1Link[MAX_MTP_LINKS+1];
 	sng_mtp2_link_t		mtp2Link[MAX_MTP_LINKS+1];
 	sng_mtp3_link_t		mtp3Link[MAX_MTP_LINKS+1];
-    sng_mtp3_li_link_t  mtp3LiLink[MAX_MTP_LINKS+1];
+	sng_mtp3_li_link_t  	mtp3LiLink[MAX_MTP_LINKS+1];
 	sng_link_set_t		mtpLinkSet[MAX_MTP_LINKSETS+1];
-	sng_route_t			mtpRoute[MAX_MTP_ROUTES+1];
+	sng_route_t		mtpRoute[MAX_MTP_ROUTES+1];
 	sng_isup_inf_t		isupIntf[MAX_ISUP_INFS+1];
 	sng_isup_ckt_t		isupCkt[10000]; 	/* KONRAD - only need 2000 ( and 0-1000 aren't used) since other servers are registerd else where */
-	sng_nsap_t			nsap[MAX_NSAPS+1];
-	sng_isap_t			isap[MAX_ISAPS+1];	
+	sng_nsap_t		nsap[MAX_NSAPS+1];
+	sng_isap_t		isap[MAX_ISAPS+1];
 	sng_glare_resolution	glareResolution;
-	uint32_t				force_inr;
+	uint32_t		force_inr;
 	sng_m2ua_gbl_cfg_t 	g_m2ua_cfg;
 	sng_sctp_cfg_t		sctpCfg;
 } sng_ss7_cfg_t;

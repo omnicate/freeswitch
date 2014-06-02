@@ -1859,6 +1859,9 @@ FT_DECLARE(const char *) ftdm_channel_get_state_str(const ftdm_channel_t *channe
 /*! \brief For display debugging purposes you can display this string which describes the last channel internal state */
 FT_DECLARE(const char *) ftdm_channel_get_last_state_str(const ftdm_channel_t *channel);
 
+/*! \brief Get the current cpu usage */
+FT_DECLARE(int) ftdm_get_cpu_usage(void);
+
 /*! \brief For display debugging purposes you can display this string which describes the history of the channel 
  *  \param channel The channel to get the history from
  *  \return History string for the channel. You must free the string with ftdm_free

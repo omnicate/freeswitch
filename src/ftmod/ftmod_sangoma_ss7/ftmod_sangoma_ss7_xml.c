@@ -687,17 +687,20 @@ static int ftmod_ss7_parse_sng_gen(ftdm_conf_node_t *sng_gen, char* operating_mo
 				g_ftdm_sngss7_data.cfg.force_inr = 0;
 			}
 			SS7_DEBUG("Found INR force configuration = %s\n", parm->val);
-        } else if (!strcasecmp(parm->var, "operating_mode")) {
-                strcpy(operating_mode, parm->val);
-        } else if (!strcasecmp(parm->var, "stack-logging-enable")) {
-            if (ftdm_true(parm->val)) {
-                g_ftdm_sngss7_data.stack_logging_enable = 1;
-            } else {
-                g_ftdm_sngss7_data.stack_logging_enable = 0;
-            }
+		} else if (!strcasecmp(parm->var, "operating_mode")) {
+			strcpy(operating_mode, parm->val);
+		} else if (!strcasecmp(parm->var, "stack-logging-enable")) {
+			if (ftdm_true(parm->val)) {
+				g_ftdm_sngss7_data.stack_logging_enable = 1;
+			} else {
+				g_ftdm_sngss7_data.stack_logging_enable = 0;
+			}
 			SS7_DEBUG("SS7 Stack Initial Logging [%s] \n", 
-            (g_ftdm_sngss7_data.stack_logging_enable)?"ENABLE":"DISABLE");
-        } else {
+					(g_ftdm_sngss7_data.stack_logging_enable)?"ENABLE":"DISABLE");
+		} else if (!strcasecmp(parm->var, "max_cpu_usage")) {
+			g_ftdm_sngss7_data.cfg.max_cpu_usage = atoi(parm->val);
+			SS7_DEBUG("Found maximum cpu usage limit = %d\n", g_ftdm_sngss7_data.cfg.max_cpu_usage);
+		} else {
 			SS7_ERROR("Found an invalid parameter \"%s\"!\n", parm->var);
 			return FTDM_FAIL;
 		}
@@ -705,6 +708,11 @@ static int ftmod_ss7_parse_sng_gen(ftdm_conf_node_t *sng_gen, char* operating_mo
 		/* move to the next parmeter */
 		parm = parm + 1;
 	} /* for (i = 0; i < num_parms; i++) */
+
+	if (!g_ftdm_sngss7_data.cfg.max_cpu_usage) {
+		g_ftdm_sngss7_data.cfg.max_cpu_usage = 80;
+		SS7_DEBUG("Assigning default value to maximum cpu usage limit = %d\n", g_ftdm_sngss7_data.cfg.max_cpu_usage);
+	}
 
 	return FTDM_SUCCESS;
 }
