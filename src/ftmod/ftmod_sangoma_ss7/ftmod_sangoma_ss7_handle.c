@@ -1325,15 +1325,13 @@ ftdm_status_t handle_reattempt(uint32_t suInstId, uint32_t spInstId, uint32_t ci
 	/* Reject the call if self exchange is congested */
 	if (siStaEvnt->causeDgn.causeVal.val == SIT_CCSWTCHCONG) {
 		/* hangup the call if the circuit is in congested state */
-		SS7_DEBUG_CHAN(ftdmchan, "Hanging up call! due to Local Congestion.%s\n", " ");
 		ftdmchan->caller_data.hangup_cause = FTDM_CAUSE_SWITCH_CONGESTION;
-
-		/* set the flag to indicate this hangup is started from the local side */
-		sngss7_set_ckt_flag (sngss7_info, FLAG_LOCAL_REL);
-
-		/* Moving state to DOWN as IAM is not being sent to remote-exchange due to
-		 * local congestion. End call */
-		ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_DOWN);
+		/* set flag to indicate this hangup is started due to congestion */
+		sngss7_set_call_flag (sngss7_info, FLAG_CONG_REL);
+		if (ftdm_queue_enqueue(sngss7_reject_queue.sngss7_call_rej_queue, ftdmchan)) {
+			SS7_DEBUG_CHAN(ftdmchan, "Hanging up call due to Local Congestion! and Call reject queue is full!%s\n", "");
+			ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_HANGUP);
+		}
 	} else if (sngss7_test_ckt_flag(sngss7_info, FLAG_GLARE)) {
 		/* the glare flag is already up so it was caught ... do nothing */
 		SS7_DEBUG_CHAN(ftdmchan, "Glare flag is already up...nothing to do!%s\n", " ");

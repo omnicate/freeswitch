@@ -74,7 +74,7 @@
 											(switchtype == LSI_SW_ANS92) || \
 											(switchtype == LSI_SW_ANS95)
 #define ACC_QUEUE_SIZE 		15
-#define ACC_DEQUEUE_RATE 	1000
+#define ACC_DEQUEUE_RATE 	200
 
 #define sngss7_flush_queue(queue) \
 			do { \
@@ -558,6 +558,11 @@ typedef struct ftdm_sngss7_call_queue {
 	uint32_t	call_dequeue_rate;
 } ftdm_sngss7_call_queue_t;
 
+typedef struct ftdm_sngss7_call_reject_queue {
+	ftdm_queue_t    *sngss7_call_rej_queue;
+	uint32_t        ss7_call_rej_qsize;
+} ftdm_sngss7_call_reject_queue_t;
+
 typedef enum{
 	SNG_SS7_OPR_MODE_NONE,
 	SNG_SS7_OPR_MODE_M2UA_SG,
@@ -620,6 +625,7 @@ typedef struct sngss7_chan_data {
 	uint8_t					globalFlg;
 	uint32_t					ckt_flags;
 	uint32_t					blk_flags;
+	uint32_t					call_flags;
 	uint32_t					cmd_pending_flags;
 	ftdm_hash_t*				variables;		/* send on next sigevent */
 	ftdm_size_t				raw_data_len;
@@ -690,6 +696,15 @@ typedef enum {
 	FLAG_CMD_UBL_DUMB					= (1<<2),
 	FLAG_CMD_BLO_DUMB					= (1<<3)
 } sng_cmd_pending_flags_t;
+
+typedef enum {
+	FLAG_CONG_REL			= (1 << 0),  /* Releasing call due to congestion */
+} sng_call_flag_t;
+
+#define CALL_FLAGS_STRING \
+	"CONG_REL",
+FTDM_STR2ENUM_P(ftmod_ss7_call_state2flag, ftmod_ss7_call_flag2str, sng_call_flag_t)
+
 
 typedef enum {
 	FLAG_RESET_RX			= (1 << 0),
@@ -879,6 +894,7 @@ extern ftdm_sched_t			*sngss7_sched;
 extern int				cmbLinkSetId;
 /* variables w.r.t ACC feature */
 extern ftdm_sngss7_call_queue_t		sngss7_queue;
+extern ftdm_sngss7_call_reject_queue_t 	sngss7_reject_queue;
 extern uint32_t                         sngss7_rmtCongLvl;
 
 /******************************************************************************/
@@ -1335,6 +1351,10 @@ if (ftdmchan->state == new_state) { \
 #define sngss7_test_ckt_flag(obj, flag)  ((obj)->ckt_flags & flag)
 #define sngss7_clear_ckt_flag(obj, flag) ((obj)->ckt_flags &= ~(flag))
 #define sngss7_set_ckt_flag(obj, flag)   ((obj)->ckt_flags |= (flag))
+
+#define sngss7_test_call_flag(obj, flag)  ((obj)->call_flags & flag)
+#define sngss7_clear_call_flag(obj, flag) ((obj)->call_flags &= ~(flag))
+#define sngss7_set_call_flag(obj, flag)   ((obj)->call_flags |= (flag))
 
 #define sngss7_test_ckt_blk_flag(obj, flag)  ((obj)->blk_flags & flag)
 #define sngss7_clear_ckt_blk_flag(obj, flag) ((obj)->blk_flags &= ~(flag))

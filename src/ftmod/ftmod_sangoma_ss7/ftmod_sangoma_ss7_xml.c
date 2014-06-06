@@ -700,6 +700,10 @@ static int ftmod_ss7_parse_sng_gen(ftdm_conf_node_t *sng_gen, char* operating_mo
 		} else if (!strcasecmp(parm->var, "max_cpu_usage")) {
 			g_ftdm_sngss7_data.cfg.max_cpu_usage = atoi(parm->val);
 			SS7_DEBUG("Found maximum cpu usage limit = %d\n", g_ftdm_sngss7_data.cfg.max_cpu_usage);
+		} else if (!strcasecmp(parm->var, "acc_q_size")) {
+			sngss7_queue.ss7_call_qsize = atoi(parm->val);
+		} else if (!strcasecmp(parm->var, "acc_dequeue_rate")) {
+			sngss7_queue.call_dequeue_rate = atoi(parm->val);
 		} else {
 			SS7_ERROR("Found an invalid parameter \"%s\"!\n", parm->var);
 			return FTDM_FAIL;
@@ -712,6 +716,16 @@ static int ftmod_ss7_parse_sng_gen(ftdm_conf_node_t *sng_gen, char* operating_mo
 	if (!g_ftdm_sngss7_data.cfg.max_cpu_usage) {
 		g_ftdm_sngss7_data.cfg.max_cpu_usage = 80;
 		SS7_DEBUG("Assigning default value to maximum cpu usage limit = %d\n", g_ftdm_sngss7_data.cfg.max_cpu_usage);
+	}
+
+	if (!sngss7_queue.ss7_call_qsize) {
+		/* set call queue size to default value i.e. ACC_QUEUE_SIZE */
+		sngss7_queue.ss7_call_qsize = ACC_QUEUE_SIZE;
+	}
+
+	if (!sngss7_queue.call_dequeue_rate) {
+		/* set call dequeue rate to default value i.e. ACC_DEQUEUE_RATE in ms */
+		sngss7_queue.call_dequeue_rate = ACC_DEQUEUE_RATE;
 	}
 
 	return FTDM_SUCCESS;
@@ -1769,10 +1783,6 @@ static int ftmod_ss7_parse_isup_interface(ftdm_conf_node_t *isup_interface)
 				sng_isap.ssf = sng_ssf_type_map[ret].tril_type;
 				SS7_DEBUG("Found an isup ssf = %s\n", sng_ssf_type_map[ret].sng_type);
 			}
-		} else if (!strcasecmp(parm->var, "acc_q_size")) {
-			sngss7_queue.ss7_call_qsize = atoi(parm->val);
-		} else if (!strcasecmp(parm->var, "acc_dequeue_rate")) {
-			sngss7_queue.call_dequeue_rate = atoi(parm->val);
 		} else if (!strcasecmp(parm->var, "isup.t1")) {
 			sng_isap.t1 = atoi(parm->val);
 			SS7_DEBUG("Found isup t1 = %d\n",sng_isap.t1);
@@ -1900,16 +1910,6 @@ static int ftmod_ss7_parse_isup_interface(ftdm_conf_node_t *isup_interface)
 			SS7_ERROR("Found an invalid parameter %s!Ignoring it.\n", parm->var);
 		}
 	} 
-
-	if (!sngss7_queue.ss7_call_qsize) {
-		/* set call queue size to default value i.e. ACC_QUEUE_SIZE */
-		sngss7_queue.ss7_call_qsize = ACC_QUEUE_SIZE;
-	}
-
-	if (!sngss7_queue.call_dequeue_rate) {
-		/* set call dequeue rate to default value i.e. ACC_DEQUEUE_RATE in ms */
-		sngss7_queue.call_dequeue_rate = ACC_DEQUEUE_RATE;
-	}
 
 	/* default the interface to paused state */
 	sngss7_set_flag(&sng_isup, SNGSS7_PAUSED);

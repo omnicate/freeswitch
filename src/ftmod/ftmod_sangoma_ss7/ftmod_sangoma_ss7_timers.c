@@ -224,7 +224,7 @@ void handle_isup_t30(void *userdata)
 				ft_to_sngss7_iam(fchan);
 				ftdm_channel_complete_state(fchan);
 			} else {
-				SS7_DEBUG_CHAN(fchan, "Got Queue Member span %d and chan %dbut already hanged\n", fchan->span_id, fchan->chan_id);
+				SS7_DEBUG_CHAN(fchan, "Wrong call state [%d] for span[%d] and chan [%d]\n", fchan->state,fchan->span_id, fchan->chan_id);
 			}
 		}
 	}
