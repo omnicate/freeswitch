@@ -1634,6 +1634,9 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 		}
 
 
+		/* set the flag to indicate this hangup is started from the remote side */
+		sngss7_set_ckt_flag (sngss7_info, FLAG_REMOTE_REL);
+
 		/*this state is set when the line is hanging up */
 		sngss7_send_signal(sngss7_info, FTDM_SIGEVENT_STOP);
 
@@ -2828,7 +2831,6 @@ static FIO_CONFIGURE_SPAN_SIGNALING_FUNCTION(ftdm_sangoma_ss7_span_config)
 	/* create global SS7 ACC Call queue */
 	if (ftdm_queue_create(&init_queue->sngss7_call_queue, sngss7_queue.ss7_call_qsize) != FTDM_SUCCESS) {
 		ftdm_log(FTDM_LOG_ERROR, "Failed to create global SS7 ACC queue!\n");
-		ftdm_log(FTDM_LOG_CRIT, "Failed to configure LibSngSS7!\n");
 		ftdm_sleep(100);
 		return FTDM_FAIL;
 	}
@@ -2839,8 +2841,7 @@ static FIO_CONFIGURE_SPAN_SIGNALING_FUNCTION(ftdm_sangoma_ss7_span_config)
 	if (ftdm_queue_create(&reject_queue->sngss7_call_rej_queue, sngss7_reject_queue.ss7_call_rej_qsize) != FTDM_SUCCESS) {
 		ftdm_queue_destroy(&init_queue->sngss7_call_queue);
 		init_queue = NULL;
-		ftdm_log(FTDM_LOG_ERROR, "Failed to create global SS7 ACC queue!\n");
-		ftdm_log(FTDM_LOG_CRIT, "Failed to configure LibSngSS7!\n");
+		ftdm_log(FTDM_LOG_ERROR, "Failed to create global SS7 ACC Call reject queue!\n");
 		ftdm_sleep(100);
 		return FTDM_FAIL;
 	}
@@ -2874,6 +2875,7 @@ static FIO_SIG_LOAD_FUNCTION(ftdm_sangoma_ss7_init)
 
 	/* initializing global ACC queue structure */
 	memset(&sngss7_queue, 0, sizeof(sngss7_queue));
+	memset(&sngss7_reject_queue, 0, sizeof(sngss7_reject_queue));
 
 	/* initalize the global gen_config flag */
 	g_ftdm_sngss7_data.gen_config = 0;
