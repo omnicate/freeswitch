@@ -629,10 +629,9 @@ int ftmod_ss7_mtp3_gen_config(void)
 	cfg.t.cfg.s.snGen.extCmbndLnkst	= FALSE;			/* enbale extended combined linkset feature */
 
 #if (defined(LSNV3) || defined(SN_MULTIPLE_NETWORK_RESTART))
-
 #else
-	cfg.t.cfg.s.snGen.rstReq		= LSN_NO_RST;		/* restarting procedure required */
-	cfg.t.cfg.s.snGen.tfrReq		= FALSE;			/* TFR procedure required or not */
+	cfg.t.cfg.s.snGen.rstReq		= LSN_ITU92_RST;		/* restarting procedure required */
+	cfg.t.cfg.s.snGen.tfrReq		= TRUE;			/* TFR procedure required or not */
 	cfg.t.cfg.s.snGen.tmr.t15.enb	= TRUE;				/* t15 - waiting to start route set congestion test */
 	cfg.t.cfg.s.snGen.tmr.t15.val	= 30;
 	cfg.t.cfg.s.snGen.tmr.t16.enb	= TRUE;				/* t16 - waiting for route set congestion status update */
@@ -1226,7 +1225,7 @@ int ftmod_ss7_mtp3_route_config(int id)
 	cfg.hdr.elmId.elmntInst1 			= k->id;
 
 	cfg.t.cfg.s.snRout.dpc				= k->dpc;					/* destination postatic int code */
-	cfg.t.cfg.s.snRout.spType			= LSN_TYPE_SP;				/* signalling postatic int type */
+	cfg.t.cfg.s.snRout.spType			= k->isSTP;/*LSN_TYPE_SP;*/				/* signalling postatic int type */
 	cfg.t.cfg.s.snRout.swtchType		= k->linkType;				/* switch type */
 	cfg.t.cfg.s.snRout.upSwtch			= k->switchType;			/* user part switch type */
 	cfg.t.cfg.s.snRout.cmbLnkSetId		= k->cmbLinkSetId;			/* combined link set ID */
@@ -1263,7 +1262,7 @@ int ftmod_ss7_mtp3_route_config(int id)
 # endif  
 #endif  
 #if (defined(LSNV3) || defined(SN_MULTIPLE_NETWORK_RESTART))
-	cfg.t.cfg.s.snRout.tfrReq			=;							/* TFR procedure required or not */
+	cfg.t.cfg.s.snRout.tfrReq			= TRUE;							/* TFR procedure required or not */
 #endif
 	cfg.t.cfg.s.snRout.tmr.t6.enb		= TRUE;
 	cfg.t.cfg.s.snRout.tmr.t6.val		= k->t6;
