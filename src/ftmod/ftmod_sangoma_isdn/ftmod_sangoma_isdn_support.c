@@ -913,6 +913,33 @@ ftdm_status_t set_calling_subaddr(ftdm_channel_t *ftdmchan, CgPtySad *cgPtySad)
 	return FTDM_SUCCESS;
 }
 
+ftdm_status_t set_user_user_ie(ftdm_channel_t *ftdmchan, UsrUsr *usrUsr)
+{
+
+	const char *val = NULL;
+
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "isdn.user-user");
+	if (ftdm_strlen_zero(val)) {
+		usrUsr->eh.pres 	= NOTPRSNT;
+		usrUsr->usrInfo.pres    = NOTPRSNT;
+	}
+	else {
+		char *val_dec = NULL;
+		ftdm_size_t val_len = strlen (val);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found isdn.user-user IE encoded : %s\n", val);
+
+		usrUsr->eh.pres				= PRSNT_NODEF;
+		usrUsr->usrInfo.pres			= PRSNT_NODEF;
+
+		val_dec = ftdm_strdup(val);
+		ftdm_url_decode(val_dec, (ftdm_size_t*)&val_len);
+		memcpy((char*)usrUsr->usrInfo.val, val_dec, val_len);
+		usrUsr->usrInfo.len = val_len;
+		ftdm_safe_free(val_dec);
+	}
+	return FTDM_SUCCESS;
+}
+
 ftdm_status_t set_facility_ie(ftdm_channel_t *ftdmchan, FacilityStr *facilityStr)
 {
 	ftdm_status_t status;

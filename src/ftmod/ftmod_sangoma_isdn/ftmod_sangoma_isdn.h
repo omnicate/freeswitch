@@ -517,6 +517,7 @@ ftdm_status_t set_network_specific_fac(ftdm_channel_t *ftdmchan, NetFac *netFac)
 ftdm_status_t set_chan_id_ie(ftdm_channel_t *ftdmchan, ChanId *chanId);
 ftdm_status_t set_restart_ind_ie(ftdm_channel_t *ftdmchan, RstInd *rstInd);
 ftdm_status_t set_facility_ie(ftdm_channel_t *ftdmchan, FacilityStr *facilityStr);
+ftdm_status_t set_user_user_ie(ftdm_channel_t *ftdmchan, UsrUsr *usrUser);
 ftdm_status_t set_facility_ie_str(ftdm_channel_t *ftdmchan, uint8_t *data, uint8_t *data_len);
 ftdm_status_t set_user_to_user_ie(ftdm_channel_t *ftdmchan, UsrUsr *usrUsr);
 ftdm_status_t set_cause_ie(ftdm_channel_t *ftdmchan, CauseDgn *causeDgn);
