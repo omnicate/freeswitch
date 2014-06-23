@@ -149,6 +149,7 @@ ftdm_status_t copy_cgPtyNum_to_sngss7(ftdm_channel_t *ftdmchan, SiCgPtyNum *cgPt
 {
 	const char *val = NULL;
 	const char *clg_nadi = NULL;
+	const char *clg_numplan = NULL;
 	char *clg_numb= NULL;
 
 	sngss7_chan_data_t *sngss7_info = ftdmchan->call_data;
@@ -158,6 +159,8 @@ ftdm_status_t copy_cgPtyNum_to_sngss7(ftdm_channel_t *ftdmchan, SiCgPtyNum *cgPt
 	
 	cgPtyNum->natAddrInd.pres   = PRSNT_NODEF;
 	cgPtyNum->natAddrInd.val = g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].clg_nadi;
+
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Calling Party Nature of Address Indicator %d\n", cgPtyNum->natAddrInd.val);
 
 	
 	cgPtyNum->scrnInd.pres	  = PRSNT_NODEF;
@@ -179,10 +182,30 @@ ftdm_status_t copy_cgPtyNum_to_sngss7(ftdm_channel_t *ftdmchan, SiCgPtyNum *cgPt
 	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Calling Party Number Presentation Ind %d\n", cgPtyNum->presRest.val);
 
 	cgPtyNum->numPlan.pres	  = PRSNT_NODEF;
-	cgPtyNum->numPlan.val	   = 0x01;
+	clg_numplan = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_clg_numplan");
+	if (!ftdm_strlen_zero(clg_numplan)) {
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found user supplied Calling Number Plan value \"%s\"\n", clg_numplan);
+		cgPtyNum->numPlan.val = atoi(clg_nadi);
+	}
+	else 
+	{
+		cgPtyNum->numPlan.val = 0x01; /* Default value */
+	}
+	/* TODO - Need to hardcode value to 1 if not configured in XML file .. need to see how we can differentiate not-present or setting 0 value*/
+#if 0
+	if (g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].clg_numplan)
+	{
+		cgPtyNum->numPlan.pres	  = PRSNT_NODEF;
+		cgPtyNum->numPlan.val	  = g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].clg_numplan;
+	}
+#endif
+
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Calling Party Number Plan %d\n", cgPtyNum->numPlan.val);
 
 	cgPtyNum->niInd.pres		= PRSNT_NODEF;
 	cgPtyNum->niInd.val		 = 0x00;
+
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Calling Party Number Incomplete Indicator %d\n", cgPtyNum->niInd.val);
 
 	/* check if the user would like a custom NADI value for the calling Pty Num */
 	clg_nadi = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_clg_nadi");
@@ -196,6 +219,18 @@ ftdm_status_t copy_cgPtyNum_to_sngss7(ftdm_channel_t *ftdmchan, SiCgPtyNum *cgPt
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found user supplied Calling Number value \"%s\"\n", clg_numb);
 		ftdm_set_string(caller_data->cid_num.digits, clg_numb);
 	}
+
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Calling Party Number %s\n", caller_data->cid_num.digits); 
+	
+	cgPtyNum->oddEven.pres = PRSNT_NODEF;
+	cgPtyNum->oddEven.val  = 0x00;
+
+	cgPtyNum->addrSig.pres = NOTPRSNT;
+
+	/* TODO - Need to add Calling party digit present or not configuration option*/
+	/* This could possible that we need to send all other parameters except
+	 * cg pty digits, hence needs configurable flag */
+
 	return copy_tknStr_to_sngss7(caller_data->cid_num.digits, &cgPtyNum->addrSig, &cgPtyNum->oddEven);
 }
 

@@ -128,6 +128,7 @@ typedef struct sng_ccSpan
 	uint32_t		switchType;
 	uint32_t		ssf;
 	uint32_t		clg_nadi;
+	uint32_t		clg_numplan;
 	uint32_t		cld_nadi;
 	uint32_t		rdnis_nadi;
 	uint32_t		loc_nadi;
@@ -2072,6 +2073,12 @@ static int ftmod_ss7_parse_cc_span(ftdm_conf_node_t *cc_span)
 			flag_clg_nadi = 1;
 			sng_ccSpan.clg_nadi = atoi(parm->val);
 			SS7_DEBUG("Found default CLG_NADI parm->value = %d\n", sng_ccSpan.clg_nadi);
+		} else if (!strcasecmp(parm->var, "clg_numplan")) {
+		/**********************************************************************/
+			/* throw the flag so that we know we got this optional parameter */
+			sng_ccSpan.clg_numplan = atoi(parm->val);
+			SS7_DEBUG("Found default CLG_NUM_PLAN parm->value = %d\n", sng_ccSpan.clg_numplan);
+
 		} else if (!strcasecmp(parm->var, "cld_nadi")) {
 			/* throw the flag so that we know we got this optional parameter */
 			flag_cld_nadi = 1;
@@ -3120,6 +3127,7 @@ static int ftmod_ss7_fill_in_ccSpan(sng_ccSpan_t *ccSpan)
 		g_ftdm_sngss7_data.cfg.isupCkt[x].ssf						= ccSpan->ssf;
 		g_ftdm_sngss7_data.cfg.isupCkt[x].cld_nadi					= ccSpan->cld_nadi;
 		g_ftdm_sngss7_data.cfg.isupCkt[x].clg_nadi					= ccSpan->clg_nadi;
+		g_ftdm_sngss7_data.cfg.isupCkt[x].clg_numplan					= ccSpan->clg_numplan;
 		g_ftdm_sngss7_data.cfg.isupCkt[x].rdnis_nadi					= ccSpan->rdnis_nadi;
 		g_ftdm_sngss7_data.cfg.isupCkt[x].loc_nadi					= ccSpan->loc_nadi;
 		g_ftdm_sngss7_data.cfg.isupCkt[x].options					= ccSpan->options;
