@@ -303,6 +303,7 @@ void sngisdn_process_con_cfm (sngisdn_event_data_t *sngisdn_event)
 #endif
 				get_prog_ind_ie(ftdmchan, &cnStEvnt->progInd);
 				get_facility_ie(ftdmchan, &cnStEvnt->facilityStr);
+				get_user_to_user(ftdmchan, &cnStEvnt->usrUsr);
 				ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_UP);
 				break;
 			case FTDM_CHANNEL_STATE_HANGUP_COMPLETE:
@@ -381,6 +382,7 @@ void sngisdn_process_cnst_ind (sngisdn_event_data_t *sngisdn_event)
 #endif
 			get_prog_ind_ie(ftdmchan, &cnStEvnt->progInd);
 			get_facility_ie(ftdmchan, &cnStEvnt->facilityStr);
+			get_user_to_user(ftdmchan, &cnStEvnt->usrUsr);
 
 			if (sngisdn_cause_val_requires_disconnect(ftdmchan, &cnStEvnt->causeDgn[0]) == FTDM_SUCCESS) {
 				ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Cause requires disconnect (cause:%d)\n", cnStEvnt->causeDgn[0].causeVal.val);
@@ -545,6 +547,7 @@ void sngisdn_process_disc_ind (sngisdn_event_data_t *sngisdn_event)
 		case FTDM_CHANNEL_STATE_PROGRESS_MEDIA:
 		case FTDM_CHANNEL_STATE_UP:
 			get_facility_ie(ftdmchan, &discEvnt->facilityStr);
+			get_user_to_user(ftdmchan, &discEvnt->usrUsr);
 
 			if (discEvnt->causeDgn[0].eh.pres && discEvnt->causeDgn[0].causeVal.pres) {
 				ftdmchan->caller_data.hangup_cause = discEvnt->causeDgn[0].causeVal.val;
@@ -640,6 +643,7 @@ void sngisdn_process_rel_ind (sngisdn_event_data_t *sngisdn_event)
 									((sngisdn_chan_data_t*)ftdmchan->call_data)->spInstId == spInstId) {
 
 				get_facility_ie(ftdmchan, &relEvnt->facilityStr);
+				get_user_to_user(ftdmchan, &relEvnt->usrUsr);
 				
 				if (relEvnt->causeDgn[0].eh.pres && relEvnt->causeDgn[0].causeVal.pres) {
 					ftdmchan->caller_data.hangup_cause = relEvnt->causeDgn[0].causeVal.val;

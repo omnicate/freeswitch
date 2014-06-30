@@ -172,6 +172,7 @@ void sngisdn_snd_proceed(ftdm_channel_t *ftdmchan, ftdm_sngisdn_progind_t prog_i
 	}
 	set_prog_ind_ie(ftdmchan, &cnStEvnt.progInd, prog_ind);
 	set_facility_ie(ftdmchan, &cnStEvnt.facilityStr);
+	set_user_user_ie(ftdmchan, &cnStEvnt.usrUsr);
 
 	ftdm_log_chan(ftdmchan, FTDM_LOG_INFO, "Sending PROCEED (suId:%d suInstId:%u spInstId:%u dchan:%d ces:%d)\n", signal_data->cc_id, sngisdn_info->suInstId, sngisdn_info->spInstId, signal_data->dchan_id, sngisdn_info->ces);
 
@@ -204,6 +205,7 @@ void sngisdn_snd_progress(ftdm_channel_t *ftdmchan, ftdm_sngisdn_progind_t prog_
 	memset(&cnStEvnt, 0, sizeof(cnStEvnt));	
 	set_prog_ind_ie(ftdmchan, &cnStEvnt.progInd, prog_ind);
 	set_facility_ie(ftdmchan, &cnStEvnt.facilityStr);
+	set_user_user_ie(ftdmchan, &cnStEvnt.usrUsr);
 
 	ftdm_log_chan(ftdmchan, FTDM_LOG_INFO, "Sending PROGRESS (suId:%d suInstId:%u spInstId:%u dchan:%d ces:%d)\n", signal_data->cc_id, sngisdn_info->suInstId, sngisdn_info->spInstId, signal_data->dchan_id, sngisdn_info->ces);
 	if(sng_isdn_con_status(signal_data->cc_id, sngisdn_info->suInstId, sngisdn_info->spInstId,&cnStEvnt, MI_PROGRESS, signal_data->dchan_id, sngisdn_info->ces)) {
@@ -230,6 +232,7 @@ void sngisdn_snd_alert(ftdm_channel_t *ftdmchan, ftdm_sngisdn_progind_t prog_ind
 
 	set_prog_ind_ie(ftdmchan, &cnStEvnt.progInd, prog_ind);
 	set_facility_ie(ftdmchan, &cnStEvnt.facilityStr);
+	set_user_user_ie(ftdmchan, &cnStEvnt.usrUsr);
 
 	ftdm_log_chan(ftdmchan, FTDM_LOG_INFO, "Sending ALERT (suId:%d suInstId:%u spInstId:%u dchan:%d ces:%d)\n", signal_data->cc_id, sngisdn_info->suInstId, sngisdn_info->spInstId, signal_data->dchan_id, sngisdn_info->ces);
 
@@ -266,6 +269,7 @@ void sngisdn_snd_connect(ftdm_channel_t *ftdmchan)
 	}
 	set_prog_ind_ie(ftdmchan, &cnStEvnt.progInd, prog_ind);
 	set_facility_ie(ftdmchan, &cnStEvnt.facilityStr);
+	set_user_user_ie(ftdmchan, &cnStEvnt.usrUsr);
 
 	ftdm_log_chan(ftdmchan, FTDM_LOG_INFO, "Sending CONNECT (suId:%d suInstId:%u spInstId:%u dchan:%d ces:%d)\n", signal_data->cc_id, sngisdn_info->suInstId, sngisdn_info->spInstId, signal_data->dchan_id, sngisdn_info->ces);
 	if (sng_isdn_con_response(signal_data->cc_id, sngisdn_info->suInstId, sngisdn_info->spInstId, &cnStEvnt, signal_data->dchan_id, sngisdn_info->ces)) {
@@ -397,7 +401,7 @@ void sngisdn_snd_disconnect(ftdm_channel_t *ftdmchan)
 
 	set_cause_ie(ftdmchan, &discEvnt.causeDgn[0]);
 	set_facility_ie(ftdmchan, &discEvnt.facilityStr);
-	set_user_to_user_ie(ftdmchan, &discEvnt.usrUsr);
+	set_user_user_ie(ftdmchan, &discEvnt.usrUsr);
 
 	ftdm_log_chan(ftdmchan, FTDM_LOG_INFO, "Sending DISCONNECT (suId:%d suInstId:%u spInstId:%u)\n", signal_data->cc_id, sngisdn_info->suInstId, sngisdn_info->spInstId);
 	if (sng_isdn_disc_request(signal_data->cc_id, sngisdn_info->suInstId, sngisdn_info->spInstId, &discEvnt)) {
@@ -445,6 +449,7 @@ void sngisdn_snd_release(ftdm_channel_t *ftdmchan, uint8_t glare)
 	}
 
 	set_facility_ie(ftdmchan, &relEvnt.facilityStr);
+	set_user_user_ie(ftdmchan, &relEvnt.usrUsr);
 	
 	ftdm_log_chan(ftdmchan, FTDM_LOG_INFO, "Sending RELEASE/RELEASE COMPLETE (suId:%d suInstId:%u spInstId:%u)\n", signal_data->cc_id, suInstId, spInstId);
 
