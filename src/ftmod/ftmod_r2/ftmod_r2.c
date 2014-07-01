@@ -449,6 +449,7 @@ static __inline openr2_calling_party_category_t ftdm_r2_ftdm_cpc_to_openr2_cpc(f
 		return OR2_CALLING_PARTY_CATEGORY_COLLECT_CALL;
 
 	case FTDM_CPC_INVALID:
+	case FTDM_CPC_CHINA:
 		return OR2_CALLING_PARTY_CATEGORY_UNKNOWN;
 	}
 	return OR2_CALLING_PARTY_CATEGORY_UNKNOWN;

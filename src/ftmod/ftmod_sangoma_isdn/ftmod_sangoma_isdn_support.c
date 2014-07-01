@@ -447,6 +447,7 @@ ftdm_status_t get_calling_name(ftdm_channel_t *ftdmchan, ConEvnt *conEvnt)
 ftdm_status_t get_calling_subaddr(ftdm_channel_t *ftdmchan, CgPtySad *cgPtySad)
 {
 	char subaddress[100];
+	char val[100];
 	
 	if (cgPtySad->eh.pres != PRSNT_NODEF) {
 		return FTDM_FAIL;
@@ -456,10 +457,82 @@ ftdm_status_t get_calling_subaddr(ftdm_channel_t *ftdmchan, CgPtySad *cgPtySad)
 		ftdm_log_chan(ftdmchan, FTDM_LOG_WARNING, "Calling Party Subaddress exceeds local size limit (len:%d max:%d)\n", cgPtySad->sadInfo.len, sizeof(subaddress));
 		cgPtySad->sadInfo.len = sizeof(subaddress)-1;
 	}
+
+	/* calling party subaddress is raw hex dump so can not be considered as string */
+	/* transmit this as URL encoded format */
+	ftdm_url_encode((char*)cgPtySad->sadInfo.val, subaddress, cgPtySad->sadInfo.len);
 		
-	memcpy(subaddress, (char*)cgPtySad->sadInfo.val, cgPtySad->sadInfo.len);
-	subaddress[cgPtySad->sadInfo.len] = '\0';
-	sngisdn_add_var((sngisdn_chan_data_t*)ftdmchan->call_data, "isdn.calling_subaddr", subaddress);
+	sngisdn_add_var((sngisdn_chan_data_t*)ftdmchan->call_data, "isdn.calling_subaddr_addr", subaddress);
+
+	snprintf(val, sizeof(val), "%d", cgPtySad->oddEvenInd.val); 
+	sngisdn_add_var((sngisdn_chan_data_t*)ftdmchan->call_data, "isdn.calling_subaddr_oe_ind", val);
+
+	snprintf(val, sizeof(val), "%d", cgPtySad->typeSad.val);
+	sngisdn_add_var((sngisdn_chan_data_t*)ftdmchan->call_data, "isdn.calling_subaddr_type", val);
+
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Received Encoded calling party subaddress [ %s]\n", subaddress);
+
+	return FTDM_SUCCESS;
+}
+
+ftdm_status_t get_called_subaddr(ftdm_channel_t *ftdmchan, CdPtySad *cdPtySad)
+{
+	char subaddress[100];
+	char val[100];
+	
+	if (cdPtySad->eh.pres != PRSNT_NODEF) {
+		return FTDM_FAIL;
+	}
+	memset(subaddress, 0, sizeof(subaddress));
+	if(cdPtySad->sadInfo.len >= sizeof(subaddress)) {
+		ftdm_log_chan(ftdmchan, FTDM_LOG_WARNING, "Calling Party Subaddress exceeds local size limit (len:%d max:%d)\n", cdPtySad->sadInfo.len, sizeof(subaddress));
+		cdPtySad->sadInfo.len = sizeof(subaddress)-1;
+	}
+
+	/* calling party subaddress is raw hex dump so can not be considered as string */
+	/* transmit this as URL encoded format */
+	ftdm_url_encode((char*)cdPtySad->sadInfo.val, subaddress, cdPtySad->sadInfo.len);
+		
+	sngisdn_add_var((sngisdn_chan_data_t*)ftdmchan->call_data, "isdn.called_subaddr_addr", subaddress);
+
+	snprintf(val, sizeof(val), "%d", cdPtySad->typeSad.val);
+	sngisdn_add_var((sngisdn_chan_data_t*)ftdmchan->call_data, "isdn.called_subaddr_type", val);
+
+	snprintf(val, sizeof(val), "%d", cdPtySad->oddEvenInd.val); 
+	sngisdn_add_var((sngisdn_chan_data_t*)ftdmchan->call_data, "isdn.called_subaddr_oe_ind", val);
+
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Received Encoded called party subaddress [ %s]\n", subaddress);
+
+	return FTDM_SUCCESS;
+}
+
+ftdm_status_t get_user_to_user(ftdm_channel_t *ftdmchan, UsrUsr *usrUsr)
+{
+	char val[255];
+
+	if (usrUsr->eh.pres != PRSNT_NODEF) {
+		return FTDM_FAIL;
+	}
+	memset(val, 0, sizeof(val));
+
+	if (usrUsr->usrInfo.pres != PRSNT_NODEF) {
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "User Info[%d] not present in User-User IE \n", usrUsr->usrInfo.pres);
+		return FTDM_FAIL;
+	}
+
+	ftdm_url_encode((char*)usrUsr->usrInfo.val, val, usrUsr->usrInfo.len);
+
+	sngisdn_add_var((sngisdn_chan_data_t*)ftdmchan->call_data, "isdn.user-user", val);
+
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Received Encoded User-User Information [ %s]\n", val);
+
+	if (usrUsr->protocolDisc.pres == PRSNT_NODEF)
+	{
+		snprintf(val, sizeof(val), "%d", usrUsr->protocolDisc.val);
+		sngisdn_add_var((sngisdn_chan_data_t*)ftdmchan->call_data, "isdn.user-user-pd", val);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Received User-User IE : Protocol Discriminator [ %s]\n", val);
+	}
+
 	return FTDM_SUCCESS;
 }
 
@@ -843,6 +916,40 @@ ftdm_status_t set_calling_subaddr(ftdm_channel_t *ftdmchan, CgPtySad *cgPtySad)
 		cgPtySad->sadInfo.pres = 1;
 		cgPtySad->sadInfo.len = len;
 		memcpy(cgPtySad->sadInfo.val, clg_subaddr, len);
+	}
+	return FTDM_SUCCESS;
+}
+
+ftdm_status_t set_user_user_ie(ftdm_channel_t *ftdmchan, UsrUsr *usrUsr)
+{
+
+	const char *val = NULL;
+
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "isdn.user-user");
+	if (ftdm_strlen_zero(val)) {
+		usrUsr->eh.pres 	= NOTPRSNT;
+		usrUsr->protocolDisc.pres = NOTPRSNT;
+		usrUsr->usrInfo.pres    = NOTPRSNT;
+	}
+	else {
+		char *val_dec = NULL;
+		ftdm_size_t val_len = strlen (val);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found isdn.user-user IE encoded : %s\n", val);
+
+		usrUsr->eh.pres				= PRSNT_NODEF;
+		usrUsr->usrInfo.pres			= PRSNT_NODEF;
+
+		val_dec = ftdm_strdup(val);
+		ftdm_url_decode(val_dec, (ftdm_size_t*)&val_len);
+		memcpy((char*)usrUsr->usrInfo.val, val_dec, val_len);
+		usrUsr->usrInfo.len = val_len;
+		ftdm_safe_free(val_dec);
+
+		val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "isdn.user-user-pd");
+		if (!ftdm_strlen_zero(val)) {
+			usrUsr->protocolDisc.pres = PRSNT_NODEF;
+			usrUsr->protocolDisc.val = atoi(val);
+		}
 	}
 	return FTDM_SUCCESS;
 }

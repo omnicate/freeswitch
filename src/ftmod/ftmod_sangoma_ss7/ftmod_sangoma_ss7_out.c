@@ -152,6 +152,7 @@ void ft_to_sngss7_iam (ftdm_channel_t * ftdmchan)
 			copy_access_transport_to_sngss7(ftdmchan, &iam.accTrnspt);
 			copy_numPortFwdInfo_to_sngss7(ftdmchan, &iam.numPortFwdInfo);
 			copy_hopCounter_to_sngss7(ftdmchan, &iam.hopCounter);
+			copy_usr2UsrInfo_to_sngss7(ftdmchan, &iam.usr2UsrInfo);
 		}
 	} else if (sngss7_info->circuit->transparent_iam &&
 		sngss7_retrieve_iam(ftdmchan, &iam) == FTDM_SUCCESS) {
@@ -180,6 +181,7 @@ void ft_to_sngss7_iam (ftdm_channel_t * ftdmchan)
 		copy_NatureOfConnection_to_sngss7(ftdmchan, &iam.natConInd);
 		copy_numPortFwdInfo_to_sngss7(ftdmchan, &iam.numPortFwdInfo);
 		copy_hopCounter_to_sngss7(ftdmchan, &iam.hopCounter);
+		copy_usr2UsrInfo_to_sngss7(ftdmchan, &iam.usr2UsrInfo);
 	} else {
 		/* Nature of Connection Indicators */
 		copy_natConInd_to_sngss7(ftdmchan, &iam.natConInd);
@@ -232,6 +234,7 @@ void ft_to_sngss7_iam (ftdm_channel_t * ftdmchan)
 		copy_NatureOfConnection_to_sngss7(ftdmchan, &iam.natConInd);
 		copy_numPortFwdInfo_to_sngss7(ftdmchan, &iam.numPortFwdInfo);
 		copy_hopCounter_to_sngss7(ftdmchan, &iam.hopCounter);
+		copy_usr2UsrInfo_to_sngss7(ftdmchan, &iam.usr2UsrInfo);
 
 		SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Tx IAM clg = \"%s\" (NADI=%d), cld = \"%s\" (NADI=%d), loc = %s (NADI=%d)\n",
 									sngss7_info->circuit->cic,
@@ -251,13 +254,12 @@ void ft_to_sngss7_iam (ftdm_channel_t * ftdmchan)
 						0);
 
 	if (native_going_up) {
-		/* 
-	      Note that this function (ft_to_sngss7_iam) is run within the main SS7 processing loop in
-		  response to the DIALING state handler, we can set the state to UP here and that will
-		  implicitly complete the DIALING state, but we *MUST* also advance the state handler
-		  right away for a native bridge, otherwise, the processing state function (ftdm_sangoma_ss7_process_state_change)
-		  will complete the state without having executed the handler for FTDM_CHANNEL_STATE_UP, and we won't notify
-		  the user sending FTDM_SIGEVENT_UP which can cause the application to misbehave (ie, no audio) */
+		/* Note that this function (ft_to_sngss7_iam) is run within the main SS7 processing loop in
+		   response to the DIALING state handler, we can set the state to UP here and that will
+		   implicitly complete the DIALING state, but we *MUST* also advance the state handler
+		   right away for a native bridge, otherwise, the processing state function (ftdm_sangoma_ss7_process_state_change)
+		   will complete the state without having executed the handler for FTDM_CHANNEL_STATE_UP, and we won't notify
+		   the user sending FTDM_SIGEVENT_UP which can cause the application to misbehave (ie, no audio) */
 		ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_UP);
 		ftdm_channel_advance_states(ftdmchan);
 	}

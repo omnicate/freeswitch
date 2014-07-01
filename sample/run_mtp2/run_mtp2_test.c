@@ -289,7 +289,8 @@ void *mtp2_chan_run (void* chan_ptr)
 void verify_receive_data(chan_data_t *chan, void *vdata, uint32_t datalen)
 {
 
-	uint32_t rx_span_id, rx_chan_id, rx_datalen;
+	//uint32_t rx_span_id;
+	uint32_t rx_chan_id, rx_datalen;
 	uint8_t *data = (uint8_t *)vdata;
 	uint8_t rx_seq;
 	
@@ -299,7 +300,7 @@ void verify_receive_data(chan_data_t *chan, void *vdata, uint32_t datalen)
 		return;
 	}
 
-	rx_span_id = data[0];
+//	rx_span_id = data[0];
 	rx_chan_id = data[1];
 	rx_datalen = data[2];
 	rx_datalen |= ((data[3] & 0xFF) << 8);

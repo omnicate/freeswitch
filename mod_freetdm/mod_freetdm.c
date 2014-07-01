@@ -1658,6 +1658,11 @@ static switch_call_cause_t channel_outgoing_channel(switch_core_session_t *sessi
 		if (sipvar) {
 			ftdm_log(FTDM_LOG_INFO, "Got hop counter value as [%s] recieved in X-header\n", sipvar);
 			ftdm_usrmsg_add_var(&usrmsg, "ss7_hopCounter_val", sipvar);
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-UUI");
+		if (sipvar) {
+			ftdm_log(FTDM_LOG_INFO, "Got user to user information value as [%s] recieved in X-header\n", sipvar);
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_usr2UsrInfo_val", sipvar);
 		}
 	}
 
@@ -1719,6 +1724,12 @@ static switch_call_cause_t channel_outgoing_channel(switch_core_session_t *sessi
 	ftdm_set_string(caller_data.cid_num.digits, switch_str_nil(callerid_num));
 
 	memset(&hunting, 0, sizeof(hunting));
+	hunting.even_only = FTDM_FALSE;
+	if ((var = channel_get_variable(session, var_event, "freetdm_hunt_even_only")) && switch_true(var)) {
+		hunting.even_only = FTDM_TRUE;
+
+		ftdm_log(FTDM_LOG_DEBUG, "hunting.even_only TRUE \n");
+	}
 
 	if (group_id >= 0) {
 		hunting.mode = FTDM_HUNT_GROUP;
@@ -2142,6 +2153,46 @@ ftdm_status_t ftdm_channel_from_event(ftdm_sigmsg_t *sigmsg, switch_core_session
 		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_hopCounter_val");
 		if (!ftdm_strlen_zero(var_value)) {
 			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-hopCounter", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_usr2UsrInfo_val");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-UUI", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "isdn.calling_subaddr_addr");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-CgPty-SubAddr", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "isdn.calling_subaddr_type");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-CgPty-SubAddr-Type", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "isdn.calling_subaddr_oe_ind");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-CgPty-SubAdr-OEIndicator", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "isdn.called_subaddr_addr");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-CdPty-SubAddr", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "isdn.called_subaddr_type");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-CdPty-SubAddr-Type", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "isdn.called_subaddr_oe_ind");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-CdPty-SubAddr-OEIndicator", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "isdn.user-user");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-User-User", "%s", var_value);
 		}
 	}
 

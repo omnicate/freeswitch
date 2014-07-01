@@ -73,6 +73,8 @@
 #define SNGSS7_SWITCHTYPE_ANSI(switchtype)	(switchtype == LSI_SW_ANS88) || \
 											(switchtype == LSI_SW_ANS92) || \
 											(switchtype == LSI_SW_ANS95)
+#define ACC_QUEUE_SIZE 		15
+#define ACC_DEQUEUE_RATE 	200
 
 #define sngss7_flush_queue(queue) \
 			do { \
@@ -422,6 +424,8 @@ typedef struct sng_isup_ckt {
 	uint16_t		t15;
 	uint16_t		t16;
 	uint16_t		t17;
+	uint32_t 		t29;
+	uint32_t 		t30;
 	uint32_t		t35;
 	uint32_t		t39;
 	uint16_t		tval;
@@ -501,25 +505,26 @@ typedef struct sng_sctp_cfg {
 
 
 typedef struct sng_ss7_cfg {
-	uint32_t			spc;
-	uint32_t			procId;
-	char				license[MAX_SNGSS7_PATH];
-	char				signature[MAX_SNGSS7_PATH];
-	uint32_t			transparent_iam_max_size;
-	uint32_t			flags;
-	sng_relay_t			relay[MAX_RELAY_CHANNELS+1];
+	uint32_t		spc;
+	uint32_t		procId;
+	char			license[MAX_SNGSS7_PATH];
+	char			signature[MAX_SNGSS7_PATH];
+	uint32_t		transparent_iam_max_size;
+	uint32_t		flags;
+	uint32_t 		max_cpu_usage;
+	sng_relay_t		relay[MAX_RELAY_CHANNELS+1];
 	sng_mtp1_link_t		mtp1Link[MAX_MTP_LINKS+1];
 	sng_mtp2_link_t		mtp2Link[MAX_MTP_LINKS+1];
 	sng_mtp3_link_t		mtp3Link[MAX_MTP_LINKS+1];
-    sng_mtp3_li_link_t  mtp3LiLink[MAX_MTP_LINKS+1];
+	sng_mtp3_li_link_t  	mtp3LiLink[MAX_MTP_LINKS+1];
 	sng_link_set_t		mtpLinkSet[MAX_MTP_LINKSETS+1];
-	sng_route_t			mtpRoute[MAX_MTP_ROUTES+1];
+	sng_route_t		mtpRoute[MAX_MTP_ROUTES+1];
 	sng_isup_inf_t		isupIntf[MAX_ISUP_INFS+1];
 	sng_isup_ckt_t		isupCkt[10000]; 	/* KONRAD - only need 2000 ( and 0-1000 aren't used) since other servers are registerd else where */
-	sng_nsap_t			nsap[MAX_NSAPS+1];
-	sng_isap_t			isap[MAX_ISAPS+1];	
+	sng_nsap_t		nsap[MAX_NSAPS+1];
+	sng_isap_t		isap[MAX_ISAPS+1];
 	sng_glare_resolution	glareResolution;
-	uint32_t				force_inr;
+	uint32_t		force_inr;
 	sng_m2ua_gbl_cfg_t 	g_m2ua_cfg;
 	sng_sctp_cfg_t		sctpCfg;
 } sng_ss7_cfg_t;
@@ -546,6 +551,17 @@ typedef struct ftdm_sngss7_data {
 	fio_signal_cb_t		sig_cb;
 	int					stack_logging_enable;
 } ftdm_sngss7_data_t;
+
+typedef struct ftdm_sngss7_call_queue {
+	ftdm_queue_t 	*sngss7_call_queue;
+	uint32_t 	ss7_call_qsize;
+	uint32_t	call_dequeue_rate;
+} ftdm_sngss7_call_queue_t;
+
+typedef struct ftdm_sngss7_call_reject_queue {
+	ftdm_queue_t    *sngss7_call_rej_queue;
+	uint32_t        ss7_call_rej_qsize;
+} ftdm_sngss7_call_reject_queue_t;
 
 typedef enum{
 	SNG_SS7_OPR_MODE_NONE,
@@ -609,6 +625,7 @@ typedef struct sngss7_chan_data {
 	uint8_t					globalFlg;
 	uint32_t					ckt_flags;
 	uint32_t					blk_flags;
+	uint32_t					call_flags;
 	uint32_t					cmd_pending_flags;
 	ftdm_hash_t*				variables;		/* send on next sigevent */
 	ftdm_size_t				raw_data_len;
@@ -616,6 +633,8 @@ typedef struct sngss7_chan_data {
 	sngss7_glare_data_t		glare;
 	sngss7_timer_data_t		t35;
 	sngss7_timer_data_t		t10;
+	sngss7_timer_data_t 		t29;
+	sngss7_timer_data_t 		t30;
 	sngss7_timer_data_t		t39;
 	
 	sngss7_timer_data_t		t_waiting_bla;
@@ -677,6 +696,15 @@ typedef enum {
 	FLAG_CMD_UBL_DUMB					= (1<<2),
 	FLAG_CMD_BLO_DUMB					= (1<<3)
 } sng_cmd_pending_flags_t;
+
+typedef enum {
+	FLAG_CONG_REL			= (1 << 0),  /* Releasing call due to congestion */
+} sng_call_flag_t;
+
+#define CALL_FLAGS_STRING \
+	"CONG_REL",
+FTDM_STR2ENUM_P(ftmod_ss7_call_state2flag, ftmod_ss7_call_flag2str, sng_call_flag_t)
+
 
 typedef enum {
 	FLAG_RESET_RX			= (1 << 0),
@@ -859,11 +887,15 @@ extern ftdm_sngss7_opr_mode		g_ftdm_operating_mode;
 extern sng_ssf_type_t			sng_ssf_type_map[];
 extern sng_switch_type_t		sng_switch_type_map[];
 extern sng_link_type_t			sng_link_type_map[];
-extern sng_mtp2_error_type_t	sng_mtp2_error_type_map[];
-extern sng_cic_cntrl_type_t 	sng_cic_cntrl_type_map[];
-extern uint32_t					sngss7_id;
-extern ftdm_sched_t				*sngss7_sched;
-extern int						cmbLinkSetId;
+extern sng_mtp2_error_type_t		sng_mtp2_error_type_map[];
+extern sng_cic_cntrl_type_t 		sng_cic_cntrl_type_map[];
+extern uint32_t				sngss7_id;
+extern ftdm_sched_t			*sngss7_sched;
+extern int				cmbLinkSetId;
+/* variables w.r.t ACC feature */
+extern ftdm_sngss7_call_queue_t		sngss7_queue;
+extern ftdm_sngss7_call_reject_queue_t 	sngss7_reject_queue;
+extern uint32_t                         sngss7_rmtCongLvl;
 
 /******************************************************************************/
 
@@ -1019,6 +1051,7 @@ ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 ftdm_status_t handle_con_sta(uint32_t suInstId, uint32_t spInstId, uint32_t circuit, SiCnStEvnt *siCnStEvnt, uint8_t evntType);
 ftdm_status_t handle_con_cfm(uint32_t suInstId, uint32_t spInstId, uint32_t circuit, SiConEvnt *siConEvnt);
 ftdm_status_t handle_rel_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circuit, SiRelEvnt *siRelEvnt);
+ftdm_status_t ftdm_check_acc(sngss7_chan_data_t *sngss7_info, SiRelEvnt *siRelEvnt, ftdm_channel_t *ftdmchan);
 ftdm_status_t handle_rel_cfm(uint32_t suInstId, uint32_t spInstId, uint32_t circuit, SiRelEvnt *siRelEvnt);
 ftdm_status_t handle_dat_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circuit, SiInfoEvnt *siInfoEvnt);
 ftdm_status_t handle_fac_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circuit, uint8_t evntType, SiFacEvnt *siFacEvnt);
@@ -1102,6 +1135,8 @@ ftdm_status_t copy_numPortFwdInfo_to_sngss7(ftdm_channel_t *ftdmchan, SiNumPortF
 ftdm_status_t copy_numPortFwdInfo_from_sngss7(ftdm_channel_t *ftdmchan, SiNumPortFwdInfo *numPortFwdInfo);
 ftdm_status_t copy_optBckCallInd_to_sngss7(ftdm_channel_t *ftdmchan, SiOptBckCalInd *optBckCalInd);
 ftdm_status_t copy_redirectionNumber_to_sngss7(ftdm_channel_t *ftdmchan, SiCdPtyNum *redirNum);
+ftdm_status_t copy_usr2UsrInfo_to_sngss7(ftdm_channel_t *ftdmchan, SiUsr2UsrInfo *usr2UsrInfo);
+ftdm_status_t copy_usr2UsrInfo_from_sngss7(ftdm_channel_t *ftdmchan, SiUsr2UsrInfo *usr2UsrInfo);
 
 ftdm_status_t copy_hopCounter_to_sngss7(ftdm_channel_t *ftdmchan, SiHopCounter *hopCounter);
 ftdm_status_t copy_hopCounter_from_sngss7(ftdm_channel_t *ftdmchan, SiHopCounter *hopCounter);
@@ -1162,6 +1197,8 @@ int ftmod_ss7_get_mtp2_id_by_mtp1_id(int mtp1_cfg_id);
 void handle_isup_t35(void *userdata);
 void handle_isup_t10(void *userdata);
 void handle_isup_t39(void *userdata);
+void handle_isup_t29(void *userdata);
+void handle_isup_t30(void *userdata);
 void handle_wait_bla_timeout(void *userdata);
 void handle_wait_uba_timeout(void *userdata);
 void handle_tx_ubl_on_rx_bla_timer(void *userdata);
@@ -1315,6 +1352,10 @@ if (ftdmchan->state == new_state) { \
 #define sngss7_test_ckt_flag(obj, flag)  ((obj)->ckt_flags & flag)
 #define sngss7_clear_ckt_flag(obj, flag) ((obj)->ckt_flags &= ~(flag))
 #define sngss7_set_ckt_flag(obj, flag)   ((obj)->ckt_flags |= (flag))
+
+#define sngss7_test_call_flag(obj, flag)  ((obj)->call_flags & flag)
+#define sngss7_clear_call_flag(obj, flag) ((obj)->call_flags &= ~(flag))
+#define sngss7_set_call_flag(obj, flag)   ((obj)->call_flags |= (flag))
 
 #define sngss7_test_ckt_blk_flag(obj, flag)  ((obj)->blk_flags & flag)
 #define sngss7_clear_ckt_blk_flag(obj, flag) ((obj)->blk_flags &= ~(flag))

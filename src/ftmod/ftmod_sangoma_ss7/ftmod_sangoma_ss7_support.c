@@ -106,6 +106,8 @@ ftdm2trillium_t cpc_codes[] = {
 	{FTDM_CPC_DATA,				CAT_DATA},
 	{FTDM_CPC_TEST,				CAT_TEST},
 	{FTDM_CPC_PAYPHONE,			CAT_PAYPHONE},
+	{FTDM_CPC_CHINA,			CAT_ORDSUBS},
+	{FTDM_CPC_INVALID,			CAT_UNKNOWN},
 };
 
 ftdm2trillium_t  bc_cap_codes[] = {
@@ -122,6 +124,10 @@ static uint8_t get_trillium_val(ftdm2trillium_t *vals, uint8_t ftdm_val, uint8_t
 {
 	ftdm2trillium_t *val = vals;
 	while(val++) {
+		if (val->ftdm_val == FTDM_CPC_INVALID) {
+			return default_val;
+		}
+
 		if (val->ftdm_val == ftdm_val) {
 			return val->trillium_val;
 		}
@@ -133,6 +139,10 @@ static uint8_t get_ftdm_val(ftdm2trillium_t *vals, uint8_t trillium_val, uint8_t
 {
 	ftdm2trillium_t *val = vals;
 	while(val++) {
+		if (val->ftdm_val == FTDM_CPC_INVALID) {
+			return default_val;
+		}
+
 		if (val->trillium_val == trillium_val) {
 			return val->ftdm_val;
 		}
@@ -725,6 +735,7 @@ ftdm_status_t copy_access_transport_from_sngss7(ftdm_channel_t *ftdmchan, SiAccT
 	
 	return FTDM_SUCCESS;
 }
+
 ftdm_status_t copy_access_transport_to_sngss7(ftdm_channel_t *ftdmchan, SiAccTrnspt *accTrnspt)
 {
 	const char *val = NULL;
@@ -746,6 +757,48 @@ ftdm_status_t copy_access_transport_to_sngss7(ftdm_channel_t *ftdmchan, SiAccTrn
 		ftdm_url_decode(val_dec, (ftdm_size_t*)&val_len);
 		memcpy (accTrnspt->infoElmts.val, val_dec, val_len);
 		accTrnspt->infoElmts.len = val_len;
+		ftdm_safe_free(val_dec);
+	}
+	return FTDM_SUCCESS;
+}
+
+/* Copy user to user information message from ss7 */
+ftdm_status_t copy_usr2UsrInfo_from_sngss7(ftdm_channel_t *ftdmchan, SiUsr2UsrInfo *usr2UsrInfo)
+{
+	char val[MAX_SI_USER_2_USER_LEN];
+	sngss7_chan_data_t *sngss7_info = ftdmchan->call_data;
+
+	if (usr2UsrInfo && 
+			(usr2UsrInfo->eh.pres == PRSNT_NODEF) &&
+			(usr2UsrInfo->info.pres == PRSNT_NODEF)) {
+		ftdm_log_chan_msg(ftdmchan, FTDM_LOG_DEBUG, "User to User information present in incoming IAM \n");
+		ftdm_url_encode((char*)usr2UsrInfo->info.val, val,usr2UsrInfo->info.len);
+		sngss7_add_var(sngss7_info, "ss7_usr2UsrInfo_val", val);
+	}
+
+	return FTDM_SUCCESS;
+}
+
+/* Copy user to user information message to ss7 */
+ftdm_status_t copy_usr2UsrInfo_to_sngss7(ftdm_channel_t *ftdmchan, SiUsr2UsrInfo *usr2UsrInfo)
+{
+	const char *val = NULL;
+
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_usr2UsrInfo_val");
+	if (ftdm_strlen_zero(val)) {
+		usr2UsrInfo->eh.pres = NOTPRSNT;
+		usr2UsrInfo->info.pres = NOTPRSNT;
+	} else {
+		char *val_dec = NULL;
+		ftdm_size_t val_len = strlen (val);
+
+		usr2UsrInfo->eh.pres = PRSNT_NODEF;
+		usr2UsrInfo->info.pres = PRSNT_NODEF;
+		val_dec = ftdm_strdup(val);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found user to user Information encoded : %s\n", val);
+		ftdm_url_decode(val_dec, (ftdm_size_t*)&val_len);
+		memcpy (usr2UsrInfo->info.val, val_dec, val_len);
+		usr2UsrInfo->info.len = val_len;
 		ftdm_safe_free(val_dec);
 	}
 	return FTDM_SUCCESS;

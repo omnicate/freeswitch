@@ -1012,10 +1012,10 @@ static ftdm_status_t handle_print_usage(ftdm_stream_handle_t *stream)
 	stream->write_function(stream, "\n");
     
 	stream->write_function(stream, "ftmod_sangoma_ss7 link control:\n");
-	/*
+
 	stream->write_function(stream, "ftdm ss7 inhibit link X\n");
 	stream->write_function(stream, "ftdm ss7 uninhibit link X\n");
-	*/
+
 	stream->write_function(stream, "ftdm ss7 activate link X\n");
 	stream->write_function(stream, "ftdm ss7 deactivate link X\n");
 	stream->write_function(stream, "ftdm ss7 activate linkset X\n");

@@ -317,9 +317,10 @@ typedef enum {
 	FTDM_CPC_DATA,
 	FTDM_CPC_TEST,
 	FTDM_CPC_PAYPHONE,
+	FTDM_CPC_CHINA,
 	FTDM_CPC_INVALID
 } ftdm_calling_party_category_t;
-#define CALLING_PARTY_CATEGORY_STRINGS "unknown", "operator", "operator-french", "operator-english", "operator-german", "operator-russian", "operator-spanish", "ordinary", "priority", "data-call", "test-call", "payphone", "invalid"
+#define CALLING_PARTY_CATEGORY_STRINGS "unknown", "operator", "operator-french", "operator-english", "operator-german", "operator-russian", "operator-spanish", "ordinary", "priority", "data-call", "test-call", "payphone", "china", "invalid"
 FTDM_STR2ENUM_P(ftdm_str2ftdm_calling_party_category, ftdm_calling_party_category2str, ftdm_calling_party_category_t)
 
 /*! Network responses to transfer requests */
@@ -431,6 +432,7 @@ typedef struct {
 		ftdm_group_hunt_t group;
 		ftdm_chan_hunt_t chan;
 	} mode_data;
+	ftdm_bool_t even_only; /* Only hunt even channels */
 	ftdm_hunt_result_cb_t result_cb; 
 } ftdm_hunting_scheme_t;
 
@@ -1856,6 +1858,9 @@ FT_DECLARE(const char *) ftdm_channel_get_state_str(const ftdm_channel_t *channe
 
 /*! \brief For display debugging purposes you can display this string which describes the last channel internal state */
 FT_DECLARE(const char *) ftdm_channel_get_last_state_str(const ftdm_channel_t *channel);
+
+/*! \brief Get the current cpu usage */
+FT_DECLARE(int) ftdm_get_cpu_usage(void);
 
 /*! \brief For display debugging purposes you can display this string which describes the history of the channel 
  *  \param channel The channel to get the history from
