@@ -1071,6 +1071,7 @@ ftdm_status_t ftdm_sngss7_handle_cli_cmd(ftdm_stream_handle_t *stream, const cha
 /* in ftmod_sangoma_ss7_support.c */
 ftdm_status_t copy_cgPtyNum_from_sngss7(ftdm_channel_t *ftdmchan, SiCgPtyNum *cgPtyNum);
 ftdm_status_t copy_cgPtyNum_to_sngss7(ftdm_channel_t *ftdmchan, SiCgPtyNum *cgPtyNum);
+ftdm_status_t is_clip_disable(ftdm_channel_t *ftdmchan);
 ftdm_status_t copy_cdPtyNum_from_sngss7(ftdm_channel_t *ftdmchan, SiCdPtyNum *cdPtyNum);
 ftdm_status_t copy_cdPtyNum_to_sngss7(ftdm_channel_t *ftdmchan, SiCdPtyNum *cdPtyNum, char *digit);
 ftdm_status_t copy_redirgNum_to_sngss7(ftdm_channel_t *ftdmchan, SiRedirNum *redirgNum);

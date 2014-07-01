@@ -3127,7 +3127,6 @@ static int ftmod_ss7_fill_in_ccSpan(sng_ccSpan_t *ccSpan)
 		g_ftdm_sngss7_data.cfg.isupCkt[x].ssf						= ccSpan->ssf;
 		g_ftdm_sngss7_data.cfg.isupCkt[x].cld_nadi					= ccSpan->cld_nadi;
 		g_ftdm_sngss7_data.cfg.isupCkt[x].clg_nadi					= ccSpan->clg_nadi;
-		g_ftdm_sngss7_data.cfg.isupCkt[x].clg_numplan					= ccSpan->clg_numplan;
 		g_ftdm_sngss7_data.cfg.isupCkt[x].rdnis_nadi					= ccSpan->rdnis_nadi;
 		g_ftdm_sngss7_data.cfg.isupCkt[x].loc_nadi					= ccSpan->loc_nadi;
 		g_ftdm_sngss7_data.cfg.isupCkt[x].options					= ccSpan->options;
