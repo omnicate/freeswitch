@@ -1716,6 +1716,7 @@ static switch_call_cause_t channel_outgoing_channel(switch_core_session_t *sessi
 	caller_data.rdnis.plan = outbound_profile->rdnis_numplan;
 
 	ftdm_set_string(caller_data.cid_name, outbound_profile->caller_id_name);
+	ftdm_set_string(caller_data.cid_num.digits, switch_str_nil(callerid_num));
 
 	memset(&hunting, 0, sizeof(hunting));
 

@@ -59,14 +59,14 @@ void handle_sng_relay_alarm(Pst *pst, RyMngmt *sta);
 
 void handle_sng_log(uint8_t level, char *fmt,...)
 {
-	char	*data;
+	char	*data = NULL;
 	int		ret;
 	va_list	ap;
 
 	va_start(ap, fmt);
 	ret = vasprintf(&data, fmt, ap);
 	if (ret == -1) {
-		return;
+		goto end;
 	}
 
 	switch (level) {
@@ -93,6 +93,9 @@ void handle_sng_log(uint8_t level, char *fmt,...)
 		break;
 	}
 
+end:
+	ftdm_safe_free(data);
+	va_end(ap);
 	return;
 }
 

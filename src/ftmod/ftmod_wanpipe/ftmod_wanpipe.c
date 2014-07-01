@@ -54,6 +54,7 @@
 #include <sys/socket.h>
 #endif
 #include "libsangoma.h"
+#include "ftmod_wanpipe_defines.h"
 
 #if defined(__WINDOWS__)
 /*! Backward compatible defines - current code is all using the old names*/ 
@@ -1433,7 +1434,7 @@ static FIO_GET_ALARMS_FUNCTION(wanpipe_get_alarms)
 	}
 
 	if (alarms) {
-		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Unmapped wanpipe alarms: %d\n", alarms);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Unmapped wanpipe alarm(0x%x): %s\n", alarms, DECODE_WAN_ALARM(alarms));
 	}
 
 	return FTDM_SUCCESS;
@@ -1585,7 +1586,8 @@ static __inline__ ftdm_status_t wanpipe_channel_process_event(ftdm_channel_t *fc
 	case WP_API_EVENT_ALARM:
 		{
 			if (tdm_api->wp_tdm_cmd.event.wp_api_event_alarm) {
-				ftdm_log_chan(fchan, FTDM_LOG_DEBUG, "Got Wanpipe alarms %d\n", tdm_api->wp_tdm_cmd.event.wp_api_event_alarm);
+				ftdm_log_chan(fchan, FTDM_LOG_DEBUG, "Got wanpipe alarm (0x%x): %s\n", tdm_api->wp_tdm_cmd.event.wp_api_event_alarm,
+						DECODE_WAN_ALARM(tdm_api->wp_tdm_cmd.event.wp_api_event_alarm));
 				*event_id = FTDM_OOB_ALARM_TRAP;
 			} else {
 				ftdm_log_chan_msg(fchan, FTDM_LOG_DEBUG, "Wanpipe alarms cleared\n");
@@ -1630,7 +1632,8 @@ FIO_CHANNEL_NEXT_EVENT_FUNCTION(wanpipe_channel_next_event)
 		return FTDM_FAIL;
 	}
 
-	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "read wanpipe event %d\n", tdm_api.wp_tdm_cmd.event.wp_tdm_api_event_type);
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Wanpipe event(%d): %s\n", tdm_api.wp_tdm_cmd.event.wp_tdm_api_event_type,
+			DECODE_WAN_EVENT(tdm_api.wp_tdm_cmd.event.wp_tdm_api_event_type));
 	status = wanpipe_channel_process_event(ftdmchan, &event_id, &tdm_api);
 	if (status == FTDM_BREAK) {
 		ftdm_log_chan_msg(ftdmchan, FTDM_LOG_ERROR, "Ignoring event for now\n");
@@ -1706,7 +1709,8 @@ FIO_SPAN_NEXT_EVENT_FUNCTION(wanpipe_span_next_event)
 				ftdm_log_chan(span->channels[i], FTDM_LOG_ERROR, "read wanpipe event got error: %s\n", strerror(errno));
 				return FTDM_FAIL;
 			}
-			ftdm_log_chan(span->channels[i], FTDM_LOG_DEBUG, "read wanpipe event %d\n", tdm_api.wp_tdm_cmd.event.wp_tdm_api_event_type);
+			ftdm_log_chan(span->channels[i], FTDM_LOG_DEBUG, "Wanpipe event(%d): %s\n", tdm_api.wp_tdm_cmd.event.wp_tdm_api_event_type,
+					DECODE_WAN_EVENT(tdm_api.wp_tdm_cmd.event.wp_tdm_api_event_type));
 
 			ftdm_channel_lock(ftdmchan);
 			status = wanpipe_channel_process_event(ftdmchan, &event_id, &tdm_api);
