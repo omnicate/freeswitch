@@ -343,6 +343,9 @@ typedef struct sng_route {
 	uint32_t		t21;
 	uint32_t		t25;
 	uint32_t		t26;
+	uint32_t		lsetSel;
+	uint32_t		slsLnk;
+	uint32_t		tfrReq;
 } sng_route_t;
 
 typedef struct sng_isup_intf {

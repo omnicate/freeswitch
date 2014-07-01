@@ -207,7 +207,7 @@ ftdm_status_t copy_cgPtyNum_to_sngss7(ftdm_channel_t *ftdmchan, SiCgPtyNum *cgPt
 	clg_numplan = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_clg_numplan");
 	if (!ftdm_strlen_zero(clg_numplan)) {
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found user supplied Calling Number Plan value \"%s\"\n", clg_numplan);
-		cgPtyNum->numPlan.val  = atoi(clg_nadi);
+		cgPtyNum->numPlan.val  = atoi(clg_numplan);
 
 		/* value 0 means not present, ITU spec has CLI test case where we dont have to send this field, hence having this configurable option */
 		if (cgPtyNum->numPlan.val == 0) {
