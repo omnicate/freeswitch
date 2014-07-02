@@ -263,6 +263,44 @@ ftdm_status_t copy_cdPtyNum_to_sngss7(ftdm_channel_t *ftdmchan, SiCdPtyNum *cdPt
 	}
 }
 
+#ifdef SS7_UK
+ftdm_status_t copy_nfci_to_sngss7(ftdm_channel_t *ftdmchan, SiNatFwdCalInd *nfci)
+{
+        nfci->eh.pres = PRSNT_NODEF;
+
+        /* Call Indicator */
+        nfci->cliBlkInd.pres = PRSNT_NODEF;
+	if (ftdm_strlen_zero(ftdmchan->caller_data.cid_num.digits)) {
+		nfci->cliBlkInd.val = NUMB_NOTDISC;     /* Netowork Number not disclosed to the called user */
+	} else {
+		nfci->cliBlkInd.val = NUMB_MAYDISC;     /* Netowork Number may(subject to CLIR) disclosed to the called user */
+	}
+
+        /* Network Translated Address Indicator */
+        nfci->nwTransAddrInd.pres = PRSNT_NODEF;
+        nfci->nwTransAddrInd.val  = NO_INF;             /* No Information */
+        //nfci->nwTransAddrInd.val  = NWTRANS_CDADDR;     /* Network translation of the called adddress has occurred */
+
+        /* Priority Access Indicator */
+        nfci->priorAccessInd.pres = PRSNT_NODEF;
+        nfci->priorAccessInd.val = NO_INF;
+        //nfci->priorAccessInd.val = PRIORACCSCALL_IUP;
+
+        /* Protection Indicator */
+        nfci->protectionInd.pres = PRSNT_NODEF;
+        nfci->protectionInd.val  = NO_INF;
+        //nfci->protectionInd.val  = PROTCALL_IUP;
+	//
+        nfci->spare.pres = PRSNT_NODEF;
+        nfci->spare.val  = 0x00;
+
+        ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "SS7-UK: Setting NFCI- Blocking Ind[%d], Network Ind[%d], Priority Ind[%d], Protection Ind[%d]\n",
+                        nfci->cliBlkInd.val, nfci->nwTransAddrInd.val, nfci->priorAccessInd.val, nfci->protectionInd.val);
+        return FTDM_SUCCESS;
+}
+#endif
+
+
 ftdm_status_t copy_locPtyNum_from_sngss7(ftdm_channel_t *ftdmchan, SiCgPtyNum *locPtyNum)
 {
 	return FTDM_SUCCESS;
