@@ -228,6 +228,7 @@ void ft_to_sngss7_iam (ftdm_channel_t * ftdmchan)
 		SS7_INFO_CHAN(ftdmchan,"Tx IAM : SwitchType[%d]\n", g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].switchType);
 		if (g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].switchType == LSI_SW_UK) {
 			copy_nfci_to_sngss7(ftdmchan, &iam.natFwdCalInd);
+			copy_paramcompatibility_to_sngss7(ftdmchan, &iam.parmCom);
 		}
 #endif
 

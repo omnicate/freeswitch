@@ -298,6 +298,42 @@ ftdm_status_t copy_nfci_to_sngss7(ftdm_channel_t *ftdmchan, SiNatFwdCalInd *nfci
                         nfci->cliBlkInd.val, nfci->nwTransAddrInd.val, nfci->priorAccessInd.val, nfci->protectionInd.val);
         return FTDM_SUCCESS;
 }
+
+ftdm_status_t copy_paramcompatibility_to_sngss7(ftdm_channel_t *ftdmchan, SiParmCompInfo *parmCom)
+{
+	parmCom->eh.pres = PRSNT_NODEF;
+
+	/* upgraded parm 1 */
+	parmCom->upgrPar1.pres = PRSNT_NODEF;
+	parmCom->upgrPar1.val  = 244;  /* National Forward Call Indicator */
+
+	/* transit exchange indicator */
+	parmCom->tranXInd1.pres = PRSNT_NODEF;
+	parmCom->tranXInd1.val  = 1; /* End node Interpretation */ 
+
+	/* release call indicator */	
+	parmCom->relCllInd1.pres = PRSNT_NODEF;
+	parmCom->relCllInd1.val  = 0; /* Do Not Release call */ 
+
+	/* send notification indicator */	
+	parmCom->sndNotInd1.pres = PRSNT_NODEF;
+	parmCom->sndNotInd1.val  = 0; /* Do not send notification indicator */
+
+	/* discard message indicator */	
+	parmCom->dcrdMsgInd1.pres = PRSNT_NODEF;
+	parmCom->dcrdMsgInd1.val  = 0; /* Do not discard message (pass on) */ 
+
+	/* discard parameter indicator */
+	parmCom->dcrdParInd1.pres = PRSNT_NODEF;
+	parmCom->dcrdParInd1.val  = 1;	/* Discard parameter */ 
+
+	/* pass not possible indicator */	
+	parmCom->passNtPoss1.pres = PRSNT_NODEF;
+	parmCom->passNtPoss1.val  = 2;	/* Discard parameter */ 
+
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "SS7-UK: Setting Parameter Compatibility information for NFCI %s\n",""); 
+	return FTDM_SUCCESS;
+}
 #endif
 
 

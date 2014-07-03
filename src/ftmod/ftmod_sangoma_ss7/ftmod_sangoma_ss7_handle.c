@@ -100,6 +100,7 @@ ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 	sngss7_chan_data_t *sngss7_info = NULL;
 	ftdm_channel_t *ftdmchan = NULL;
 	char var[FTDM_DIGITS_LIMIT];
+	int pres_restrict = 0x00;
 	
 	memset(var, '\0', sizeof(var));
 
@@ -184,10 +185,21 @@ ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 			/* fill in calling party information */
 			if (siConEvnt->cgPtyNum.eh.pres) {
 				if (siConEvnt->cgPtyNum.addrSig.pres) {
-					/* fill in cid_num */
-					copy_tknStr_from_sngss7(siConEvnt->cgPtyNum.addrSig,
-											ftdmchan->caller_data.cid_num.digits, 
-											siConEvnt->cgPtyNum.oddEven);
+					
+					/* BT HACK - If presentation is restricted then dont add digits 
+					 * TODO - this can be controlled by channel variable.. so this code
+					 * is temp for testing purpose, will remove asap.*/	
+					if (siConEvnt->cgPtyNum.presRest.pres &&  (siConEvnt->cgPtyNum.presRest.val == PRSNT_RESTRIC)) {
+						SS7_INFO_CHAN(ftdmchan," Presentation Restriction =%d not allowed.%s\n",siConEvnt->cgPtyNum.presRest.val,"");
+						pres_restrict = 1;
+					}
+
+					if (!pres_restrict) {
+						/* fill in cid_num */
+						copy_tknStr_from_sngss7(siConEvnt->cgPtyNum.addrSig,
+								ftdmchan->caller_data.cid_num.digits, 
+								siConEvnt->cgPtyNum.oddEven);
+					}
 
 					/* fill in cid Name */
 					ftdm_set_string(ftdmchan->caller_data.cid_name, ftdmchan->caller_data.cid_num.digits);
@@ -208,6 +220,10 @@ ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 				}
 
 				if (siConEvnt->cgPtyNum.presRest.pres) {
+
+					/* add any special variables for the dialplan */
+					sprintf(var, "%d", siConEvnt->cgPtyNum.presRest.val);
+					sngss7_add_var(sngss7_info, "ss7_pres_ind", var);
 					/* fill in the presentation value */
 					ftdmchan->caller_data.pres = siConEvnt->cgPtyNum.presRest.val;
 				}	
