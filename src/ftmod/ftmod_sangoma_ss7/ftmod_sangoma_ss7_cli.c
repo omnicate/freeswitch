@@ -67,6 +67,10 @@ static ftdm_status_t handle_show_inreset(ftdm_stream_handle_t *stream, int span,
 static ftdm_status_t handle_show_flags(ftdm_stream_handle_t *stream, int span, int chan, int verbose);
 static ftdm_status_t handle_show_blocks(ftdm_stream_handle_t *stream, int span, int chan, int verbose);
 static ftdm_status_t handle_show_status(ftdm_stream_handle_t *stream, int span, int chan, int verbose);
+/* Show Automatic Congestion Control Status */
+static ftdm_status_t handle_show_acc_status(ftdm_stream_handle_t *stream, char *name);
+static ftdm_status_t handle_show_acc_config(ftdm_stream_handle_t *stream, char *name);
+
 static ftdm_status_t handle_show_stack_status(ftdm_stream_handle_t *stream, char* span, int verbose);
 static ftdm_status_t handle_status_isup_ckt(ftdm_stream_handle_t *stream, char *id_name);
 static ftdm_status_t handle_status_isup_ckt_with_id(ftdm_stream_handle_t *stream, int id);
@@ -403,8 +407,37 @@ ftdm_status_t ftdm_sngss7_handle_cli_cmd(ftdm_stream_handle_t *stream, const cha
 			handle_show_procId(stream);
 
 		/**********************************************************************/
-		} else{ 
-	    /**********************************************************************/
+		} else if (!strcasecmp(argv[c], "acc")) {
+		/**********************************************************************/
+			if ((check_arg_count(argc, 3)) || (!check_arg_count(argc, 4))) {
+				stream->write_function(stream, "Invalid CLI command.\"Proper command is:\" ftdm ss7 show acc [config|status]\n");
+			} else {
+				c++;
+				/**********************************************************************/
+				if (!strcasecmp(argv[c], "config")) {
+				/**********************************************************************/
+					if (g_ftdm_sngss7_data.cfg.sng_acc) {
+						handle_show_acc_config(stream, argv[c]);
+					} else {
+						stream->write_function(stream, "Unknown \"show acc command.\" Expected values are [config|status]\n");
+						goto handle_cli_error;
+					}
+				/**********************************************************************/
+				} else if (!strcasecmp(argv[c], "status")) {
+				/**********************************************************************/
+					if (g_ftdm_sngss7_data.cfg.sng_acc) {
+						handle_show_acc_status(stream, argv[c]);
+					} else {
+						stream->write_function(stream, "Unknown \"show acc command.\" Expected values are [config|status]\n");
+						goto handle_cli_error;
+					}
+				} else {
+					stream->write_function(stream, "Invalid CLI command.\"Proper command is:\" ftdm ss7 show acc [config|status]\n");
+				}
+			}
+	        /**********************************************************************/
+		} else {
+	        /**********************************************************************/
 			stream->write_function(stream, "Unknown \"show\" command\n");
 			goto handle_cli_error;
 		}
@@ -1033,6 +1066,10 @@ static ftdm_status_t handle_print_usage(ftdm_stream_handle_t *stream)
 
 	stream->write_function(stream, "ftmod_sangoma_ss7 logging:\n");
 	stream->write_function(stream, "ftdm ss7 logging [ISUP|MTP3|MTP2] [enable|disable] \n");
+	if (g_ftdm_sngss7_data.cfg.sng_acc) {
+		stream->write_function(stream, "ftdm ss7 show acc config\n");
+		stream->write_function(stream, "ftdm ss7 show acc status \n");
+	}
     } /* (SNG_SS7_OPR_MODE_M2UA_SG != g_ftdm_operating_mode) */
 
 	if ((SNG_SS7_OPR_MODE_M2UA_ASP == g_ftdm_operating_mode) ||
@@ -1624,6 +1661,70 @@ static ftdm_status_t handle_show_status(ftdm_stream_handle_t *stream, int span, 
 			}
 		}
 	}
+
+	return FTDM_SUCCESS;
+}
+
+/******************************************************************************/
+static ftdm_status_t handle_show_acc_status(ftdm_stream_handle_t *stream, char *name)
+{
+	ftdm_hash_iterator_t *i = NULL;
+	const void *key = NULL;
+	void *val = NULL;
+	ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong = NULL;
+
+	for (i = hashtable_first(ss7_rmtcong_lst); i; i = hashtable_next(i)) {
+		hashtable_this(i, &key, NULL, &val);
+		if (!key || !val) {
+			break;
+		}
+
+		sngss7_rmt_cong = val;
+		/* Check if any entry is present in ACC hastable */
+		if(sngss7_rmt_cong) {
+			stream->write_function(stream, "| DPC=%2d | Congestion Level=%2d | T29 Timer Status= %s | T30 Timer Status= %s |",
+					sngss7_rmt_cong->dpc,
+					sngss7_rmt_cong->sngss7_rmtCongLvl,
+					SNGSS7_DECODE_ACC_STATUS(sngss7_rmt_cong->t29.tmr_running),
+					SNGSS7_DECODE_ACC_STATUS(sngss7_rmt_cong->t30.tmr_running));
+			}
+	}
+	stream->write_function(stream, "\n");
+
+	return FTDM_SUCCESS;
+}
+
+/******************************************************************************/
+static ftdm_status_t handle_show_acc_config(ftdm_stream_handle_t *stream, char *name)
+{
+	ftdm_hash_iterator_t *i = NULL;
+	const void *key = NULL;
+	void *val = NULL;
+	ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong = NULL;
+
+	for (i = hashtable_first(ss7_rmtcong_lst); i; i = hashtable_next(i)) {
+		hashtable_this(i, &key, NULL, &val);
+		if (!key || !val) {
+			break;
+		}
+
+		sngss7_rmt_cong = val;
+		/* Check if any entry is present in ACC hastable */
+		if(sngss7_rmt_cong) {
+			stream->write_function(stream, "***************************************************************************************************************************\n");
+			stream->write_function(stream, "                                        Automatic Congestion Control Configuration                                         \n");
+			stream->write_function(stream, "***************************************************************************************************************************\n");
+			stream->write_function(stream, "| Max Cpu Usage = %d| ACC Call Queue Size = %d| Call Dequeue Rate = %dmsec| T29 Timer Value = %dmsec| T30 Timer Value = %dmsec|",
+					g_ftdm_sngss7_data.cfg.max_cpu_usage,
+					sngss7_queue.ss7_call_qsize,
+					sngss7_queue.call_dequeue_rate,
+					sngss7_rmt_cong->t29.beat,
+					sngss7_rmt_cong->t30.beat);
+
+			break;
+		}
+	}
+	stream->write_function(stream, "\n");
 
 	return FTDM_SUCCESS;
 }

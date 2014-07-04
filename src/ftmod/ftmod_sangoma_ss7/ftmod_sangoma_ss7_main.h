@@ -75,6 +75,7 @@
 											(switchtype == LSI_SW_ANS95)
 #define ACC_QUEUE_SIZE 		15
 #define ACC_DEQUEUE_RATE 	200
+#define MAX_DPC_CONFIGURED 	25
 
 #define sngss7_flush_queue(queue) \
 			do { \
@@ -152,6 +153,11 @@ typedef enum {
 	SNG_GEN_CFG_STATUS_PENDING = 1,
 	SNG_GEN_CFG_STATUS_DONE    = 2
 } nsg_gen_cfg_type_t;
+
+#define SNGSS7_DECODE_ACC_STATUS(status) \
+((status == 0))		?"INACTIVE" : \
+((status == 1))		?"ACTIVE" :\
+"Unknown Automatic Congestion Control Timer Status"
 
 typedef struct sng_mtp2_error_type {
 	int	init;
@@ -343,6 +349,9 @@ typedef struct sng_route {
 	uint32_t		t21;
 	uint32_t		t25;
 	uint32_t		t26;
+	/* Timers per DPC basis for Automatic Congestion Control */
+	uint32_t 		t29;
+	uint32_t 		t30;
 } sng_route_t;
 
 typedef struct sng_isup_intf {
@@ -527,6 +536,7 @@ typedef struct sng_ss7_cfg {
 	uint32_t		force_inr;
 	sng_m2ua_gbl_cfg_t 	g_m2ua_cfg;
 	sng_sctp_cfg_t		sctpCfg;
+	int 			sng_acc;
 } sng_ss7_cfg_t;
 
 typedef struct sng_ss7_mtp2api_data {
@@ -542,14 +552,14 @@ typedef struct sngss7_api_data {
 
 typedef struct ftdm_sngss7_data {
 	sng_ss7_cfg_t		cfg;
-	int					gen_config;
-	int					function_trace;
-	int					function_trace_level;
-	int					message_trace;
-	int					message_trace_level;
-    sng_ss7_mtp2api_data_t  mtp2api;
+	int			gen_config;
+	int			function_trace;
+	int			function_trace_level;
+	int			message_trace;
+	int			message_trace_level;
+    sng_ss7_mtp2api_data_t  	mtp2api;
 	fio_signal_cb_t		sig_cb;
-	int					stack_logging_enable;
+	int			stack_logging_enable;
 } ftdm_sngss7_data_t;
 
 typedef struct ftdm_sngss7_call_queue {
@@ -562,6 +572,23 @@ typedef struct ftdm_sngss7_call_reject_queue {
 	ftdm_queue_t    *sngss7_call_rej_queue;
 	uint32_t        ss7_call_rej_qsize;
 } ftdm_sngss7_call_reject_queue_t;
+
+typedef struct sng_acc_tmr {
+	ftdm_sched_t 		*tmr_sched;
+	ftdm_timer_id_t 	tmr_id;
+	int 			beat;
+	int 			counter;
+	ftdm_sched_callback_t   callback;
+	int 			tmr_running;
+	void  			*sngss7_rmt_cong;
+} sng_acc_tmr_t;
+
+typedef struct ftdm_sngss7_rmt_cong {
+	uint32_t       	  sngss7_rmtCongLvl;
+	uint32_t       	  dpc;
+	sng_acc_tmr_t     t29;
+	sng_acc_tmr_t     t30;
+} ftdm_sngss7_rmt_cong_t;
 
 typedef enum{
 	SNG_SS7_OPR_MODE_NONE,
@@ -594,11 +621,11 @@ typedef ftdm_sngss7_operating_modes_e ftdm_sngss7_opr_mode;
 
 typedef struct sngss7_timer_data {
 	ftdm_timer_id_t			hb_timer_id;
-	int						beat;
-	int						counter;
-	ftdm_sched_callback_t	callback;
+	int				beat;
+	int				counter;
+	ftdm_sched_callback_t		callback;
 	ftdm_sched_t			*sched;
-	void					*sngss7_info;
+	void				*sngss7_info;
 } sngss7_timer_data_t;
 
 typedef struct sngss7_glare_data {
@@ -633,8 +660,6 @@ typedef struct sngss7_chan_data {
 	sngss7_glare_data_t		glare;
 	sngss7_timer_data_t		t35;
 	sngss7_timer_data_t		t10;
-	sngss7_timer_data_t 		t29;
-	sngss7_timer_data_t 		t30;
 	sngss7_timer_data_t		t39;
 	
 	sngss7_timer_data_t		t_waiting_bla;
@@ -895,13 +920,16 @@ extern int				cmbLinkSetId;
 /* variables w.r.t ACC feature */
 extern ftdm_sngss7_call_queue_t		sngss7_queue;
 extern ftdm_sngss7_call_reject_queue_t 	sngss7_reject_queue;
-extern uint32_t                         sngss7_rmtCongLvl;
+extern ftdm_hash_t 			*ss7_rmtcong_lst;
 
 /******************************************************************************/
 
 /* PROTOTYPES *****************************************************************/
 /* in ftmod_sangoma_ss7_main.c */
 ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan);
+/* To get the Local/Remote congestion Status
+ * Only enable in case ACC feature is enabled */
+ftdm_status_t ftdm_sangoma_ss7_get_congestion_status(ftdm_channel_t *ftdmchan);
 
 /* in ftmod_sangoma_ss7_logger.c */
 void handle_sng_log(uint8_t level, char *fmt,...);
@@ -1196,8 +1224,8 @@ int ftmod_ss7_get_mtp2_id_by_mtp1_id(int mtp1_cfg_id);
 void handle_isup_t35(void *userdata);
 void handle_isup_t10(void *userdata);
 void handle_isup_t39(void *userdata);
-void handle_isup_t29(void *userdata);
-void handle_isup_t30(void *userdata);
+void handle_route_t29(void *userdata);
+void handle_route_t30(void *userdata);
 void handle_wait_bla_timeout(void *userdata);
 void handle_wait_uba_timeout(void *userdata);
 void handle_tx_ubl_on_rx_bla_timer(void *userdata);

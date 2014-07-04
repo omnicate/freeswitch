@@ -68,9 +68,19 @@ int ftmod_ss7_isup_isap_config(int id);
 int ftmod_ss7_cc_isap_config(int id);
 
 int ftmod_ss7_relay_chan_config(int id);
+void ftmod_ss7_enable_isup_logging(void);
 /******************************************************************************/
 
 /* FUNCTIONS ******************************************************************/
+void ftmod_ss7_enable_isup_logging(void) {
+
+	/* Enable DEBUGs*/
+	ftmod_ss7_isup_debug(AENA);
+	ftmod_ss7_mtp3_debug(AENA);
+	ftmod_ss7_mtp2_debug(AENA);
+}
+/******************************************************************************/
+
 int  ft_to_sngss7_cfg_all(void)
 {
 	int x = 0;
@@ -220,6 +230,12 @@ int  ft_to_sngss7_cfg_all(void)
 	if (g_ftdm_sngss7_data.gen_config != SNG_GEN_CFG_STATUS_DONE) {
 			SS7_CRITICAL("General configuration FAILED!\n");
 			return 1;
+	}
+
+	if (!(sngss7_test_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_RY_PRESENT))) {
+		if (g_ftdm_sngss7_data.stack_logging_enable) {
+			ftmod_ss7_enable_isup_logging();
+		}
 	}
 
 	x = 1;
@@ -727,6 +743,12 @@ int ftmod_ss7_isup_gen_config(void)
 #ifdef SI_SUPPRESS_CFN
 	cfg.t.cfg.s.siGen.suppressCfn		= TRUE;					/* Flag used for 'suppress CFN' feature */
 #endif
+
+	if (g_ftdm_sngss7_data.cfg.sng_acc) {
+		cfg.t.cfg.s.siGen.autoCong_enable = TRUE;
+	} else {
+		cfg.t.cfg.s.siGen.autoCong_enable = FALSE;
+	}
 
 	return(sng_cfg_isup(&pst, &cfg));
 

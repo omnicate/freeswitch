@@ -149,9 +149,6 @@ typedef struct sng_ccSpan
 	uint32_t		t35;
 	uint32_t		t39;
 	uint32_t		tval;
-	/* Timers required for implementing ACC feature */
-	uint32_t 		t29;
-	uint32_t 		t30;
 } sng_ccSpan_t;
 
 int cmbLinkSetId;
@@ -160,7 +157,7 @@ int cmbLinkSetId;
 /* PROTOTYPES *****************************************************************/
 int ftmod_ss7_parse_xml(ftdm_conf_parameter_t *ftdm_parameters, ftdm_span_t *span);
 
-static int ftmod_ss7_parse_sng_isup(ftdm_conf_node_t *sng_isup, const char* operating_mode);
+static int ftmod_ss7_parse_sng_isup(ftdm_conf_node_t *sng_isup, const char* operating_mode, ftdm_span_t *span);
 
 static int ftmod_ss7_parse_sng_gen(ftdm_conf_node_t *sng_gen, char* operating_mode);
 
@@ -179,8 +176,8 @@ static int ftmod_ss7_parse_mtp3_link(ftdm_conf_node_t *mtp3_link);
 static int ftmod_ss7_parse_mtp_linksets(ftdm_conf_node_t *mtp_linksets);
 static int ftmod_ss7_parse_mtp_linkset(ftdm_conf_node_t *mtp_linkset);
 
-static int ftmod_ss7_parse_mtp_routes(ftdm_conf_node_t *mtp_routes);
-static int ftmod_ss7_parse_mtp_route(ftdm_conf_node_t *mtp_route);
+static int ftmod_ss7_parse_mtp_routes(ftdm_conf_node_t *mtp_routes, ftdm_span_t *span);
+static int ftmod_ss7_parse_mtp_route(ftdm_conf_node_t *mtp_route, ftdm_span_t *span);
 
 static int ftmod_ss7_parse_isup_interfaces(ftdm_conf_node_t *isup_interfaces);
 static int ftmod_ss7_parse_isup_interface(ftdm_conf_node_t *isup_interface);
@@ -195,6 +192,8 @@ static int ftmod_ss7_fill_in_mtp3_link(sng_mtp3_link_t *mtp1Link);
 static int ftmod_ss7_fill_in_mtpLinkSet(sng_link_set_t *mtpLinkSet);
 static int ftmod_ss7_fill_in_mtp3_route(sng_route_t *mtp3_route);
 static int ftmod_ss7_fill_in_nsap(sng_route_t *mtp3_route);
+/* Fill in ACC Timer */
+static int ftmod_ss7_fill_in_acc_timer(sng_route_t *mtp3_route, ftdm_span_t *span);
 static int ftmod_ss7_fill_in_isup_interface(sng_isup_inf_t *sng_isup);
 static int ftmod_ss7_fill_in_isap(sng_isap_t *sng_isap);
 static int ftmod_ss7_fill_in_ccSpan(sng_ccSpan_t *ccSpan);
@@ -282,9 +281,9 @@ int ftmod_ss7_parse_xml(ftdm_conf_parameter_t *ftdm_parameters, ftdm_span_t *spa
     /* if operating mode present in sng_gen and span then span has to take priority */
 
 	/* confirm that the first parameter is the "operating-mode" */
-    if (!strcasecmp(var, "operating-mode")) {
-        operating_mode = val;
-        i++;
+	if (!strcasecmp(var, "operating-mode")) {
+		operating_mode = val;
+		i++;
 	}
 
     var = ftdm_parameters[i].var;
@@ -294,7 +293,7 @@ int ftmod_ss7_parse_xml(ftdm_conf_parameter_t *ftdm_parameters, ftdm_span_t *spa
 	/* confirm that the 2nd parameter is the "confnode" */
 	if (!strcasecmp(var, "confnode")) {
 		/* parse the confnode and fill in the global libsng_ss7 config structure */
-		if (ftmod_ss7_parse_sng_isup(ptr, operating_mode)) {
+		if (ftmod_ss7_parse_sng_isup(ptr, operating_mode, span)) {
 			SS7_ERROR("Failed to parse the \"confnode\"!\n");
 			goto ftmod_ss7_parse_xml_error;
 		}
@@ -344,7 +343,7 @@ ftmod_ss7_parse_xml_error:
 }
 
 /******************************************************************************/
-static int ftmod_ss7_parse_sng_isup(ftdm_conf_node_t *sng_isup, const char* span_opr_mode)
+static int ftmod_ss7_parse_sng_isup(ftdm_conf_node_t *sng_isup, const char* span_opr_mode, ftdm_span_t *span)
 {
 	ftdm_conf_node_t	*gen_config = NULL;
 	ftdm_conf_node_t	*relay_channels = NULL;
@@ -361,9 +360,9 @@ static int ftmod_ss7_parse_sng_isup(ftdm_conf_node_t *sng_isup, const char* span
 	ftdm_conf_node_t	*m2ua_peer_ifaces = NULL;
 	ftdm_conf_node_t	*m2ua_clust_ifaces = NULL;
 	ftdm_conf_node_t	*sctp_ifaces = NULL;
-    char                 sng_gen_opr_mode[128];
+	char                 	sng_gen_opr_mode[128];
 
-    memset(&sng_gen_opr_mode[0], 0, sizeof(sng_gen_opr_mode));
+	memset(&sng_gen_opr_mode[0], 0, sizeof(sng_gen_opr_mode));
 
 	/* confirm that we are looking at sng_isup */
 	if (strcasecmp(sng_isup->name, "sng_isup")) {
@@ -580,7 +579,7 @@ static int ftmod_ss7_parse_sng_isup(ftdm_conf_node_t *sng_isup, const char* span
 			return FTDM_FAIL;
 		}
 
-		if (ftmod_ss7_parse_mtp_routes(mtp_routes)) {	
+		if (ftmod_ss7_parse_mtp_routes(mtp_routes, span)) {
 			SS7_ERROR("Failed to parse \"mtp_routes\"!\n");
 			return FTDM_FAIL;
 		}
@@ -660,6 +659,9 @@ static int ftmod_ss7_parse_sng_gen(ftdm_conf_node_t *sng_gen, char* operating_mo
 	g_ftdm_sngss7_data.cfg.transparent_iam_max_size=800;
 	g_ftdm_sngss7_data.cfg.force_inr = 0;
 
+	/* By default automatic congestion control will be False */
+	g_ftdm_sngss7_data.cfg.sng_acc = 0;
+
 	/* extract all the information from the parameters */
 	for (i = 0; i < num_parms; i++) {
 		if (!strcasecmp(parm->var, "procId")) {
@@ -697,12 +699,19 @@ static int ftmod_ss7_parse_sng_gen(ftdm_conf_node_t *sng_gen, char* operating_mo
 			}
 			SS7_DEBUG("SS7 Stack Initial Logging [%s] \n", 
 					(g_ftdm_sngss7_data.stack_logging_enable)?"ENABLE":"DISABLE");
-		} else if (!strcasecmp(parm->var, "max_cpu_usage")) {
+		} else if (!strcasecmp(parm->var, "max-cpu-usage")) {
 			g_ftdm_sngss7_data.cfg.max_cpu_usage = atoi(parm->val);
 			SS7_DEBUG("Found maximum cpu usage limit = %d\n", g_ftdm_sngss7_data.cfg.max_cpu_usage);
-		} else if (!strcasecmp(parm->var, "acc_q_size")) {
+		} else if (!strcasecmp(parm->var, "auto-congestion-control")) {
+			if (ftdm_true(parm->val)) {
+				g_ftdm_sngss7_data.cfg.sng_acc = 1;
+			} else {
+				g_ftdm_sngss7_data.cfg.sng_acc = 0;
+			}
+			SS7_DEBUG("Found Automatic Congestion Control configuration = %s\n", parm->val);
+		} else if (!strcasecmp(parm->var, "acc-q-size")) {
 			sngss7_queue.ss7_call_qsize = atoi(parm->val);
-		} else if (!strcasecmp(parm->var, "acc_dequeue_rate")) {
+		} else if (!strcasecmp(parm->var, "acc-dequeue-rate")) {
 			sngss7_queue.call_dequeue_rate = atoi(parm->val);
 		} else {
 			SS7_ERROR("Found an invalid parameter \"%s\"!\n", parm->var);
@@ -1551,7 +1560,7 @@ static int ftmod_ss7_parse_mtp_linkset(ftdm_conf_node_t *mtp_linkset)
 }
 
 /******************************************************************************/
-static int ftmod_ss7_parse_mtp_routes(ftdm_conf_node_t *mtp_routes)
+static int ftmod_ss7_parse_mtp_routes(ftdm_conf_node_t *mtp_routes, ftdm_span_t *span)
 {
 	ftdm_conf_node_t	*mtp_route = NULL;
 
@@ -1568,7 +1577,7 @@ static int ftmod_ss7_parse_mtp_routes(ftdm_conf_node_t *mtp_routes)
 
 	while (mtp_route != NULL) {
 		/* parse the found mtp_route */
-		if (ftmod_ss7_parse_mtp_route(mtp_route)) {
+		if (ftmod_ss7_parse_mtp_route(mtp_route, span)) {
 			SS7_ERROR("Failed to parse \"mtp_route\"\n");
 			return FTDM_FAIL;
 		}
@@ -1581,7 +1590,7 @@ static int ftmod_ss7_parse_mtp_routes(ftdm_conf_node_t *mtp_routes)
 }
 
 /******************************************************************************/
-static int ftmod_ss7_parse_mtp_route(ftdm_conf_node_t *mtp_route)
+static int ftmod_ss7_parse_mtp_route(ftdm_conf_node_t *mtp_route, ftdm_span_t *span)
 {
 	sng_route_t		 	mtpRoute;
 	ftdm_conf_parameter_t	*parm = mtp_route->parameters;
@@ -1654,6 +1663,12 @@ static int ftmod_ss7_parse_mtp_route(ftdm_conf_node_t *mtp_route)
 		} else if (!strcasecmp(parm->var, "mtp3.t26")) {
 			mtpRoute.t26 = atoi(parm->val);
 			SS7_DEBUG("Found an mtp3 t26 = %d\n",mtpRoute.t26);
+		} else if (!strcasecmp(parm->var, "dpc.t29")) {
+			mtpRoute.t29 = atoi(parm->val);
+			SS7_DEBUG("Found ACC t29 Timer = %d\n",mtpRoute.t29);
+		} else if (!strcasecmp(parm->var, "dpc.t30")) {
+			mtpRoute.t30 = atoi(parm->val);
+			SS7_DEBUG("Found ACC t30 Timer = %d\n",mtpRoute.t30);
 		} else {
 			SS7_WARN("Found an invalid parameter \"%s\"!Ignoring it.\n", parm->var);
 		}
@@ -1703,6 +1718,10 @@ static int ftmod_ss7_parse_mtp_route(ftdm_conf_node_t *mtp_route)
 	ftmod_ss7_fill_in_mtp3_route(&mtpRoute);
 	ftmod_ss7_fill_in_nsap(&mtpRoute);
 
+	/* If automatic congestion is enable then only check fill in acc timer */
+	if (g_ftdm_sngss7_data.cfg.sng_acc) {
+		ftmod_ss7_fill_in_acc_timer(&mtpRoute, span);
+	}
 	return FTDM_SUCCESS;
 }
 
@@ -2175,16 +2194,6 @@ static int ftmod_ss7_parse_cc_span(ftdm_conf_node_t *cc_span)
 		/**********************************************************************/
 			sng_ccSpan.t17 = atoi(parm->val);
 			SS7_DEBUG("Found isup t17 = %d\n", sng_ccSpan.t17);
-		/**********************************************************************/
-		} else if (!strcasecmp(parm->var, "isup.t29")) {
-		/**********************************************************************/
-			sng_ccSpan.t29 = atoi(parm->val);
-			SS7_DEBUG("Found isup t29 = %d\n",sng_ccSpan.t29);
-		/**********************************************************************/
-		} else if (!strcasecmp(parm->var, "isup.t30")) {
-		/**********************************************************************/
-			sng_ccSpan.t30 = atoi(parm->val);
-			SS7_DEBUG("Found isup t30 = %d\n",sng_ccSpan.t30);
 		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "isup.t35")) {
 		/**********************************************************************/
@@ -3207,18 +3216,7 @@ static int ftmod_ss7_fill_in_ccSpan(sng_ccSpan_t *ccSpan)
 		} else {
 			g_ftdm_sngss7_data.cfg.isupCkt[x].t17		= ccSpan->t17;
 		}
-		/* Timer for ACC Feature in ms can be 300-600ms */
-		if (ccSpan->t29 == 0) {
-			g_ftdm_sngss7_data.cfg.isupCkt[x].t29		= 3;
-		} else {
-			g_ftdm_sngss7_data.cfg.isupCkt[x].t29		= ccSpan->t29;
-		}
-		/* Timer ofr implementing ACC Feature in sec can be 5-10sec*/
-		if (ccSpan->t30 == 0) {
-			g_ftdm_sngss7_data.cfg.isupCkt[x].t30		= 50;
-		} else {
-			g_ftdm_sngss7_data.cfg.isupCkt[x].t30		= ccSpan->t30;
-		}
+
 		if (ccSpan->t35 == 0) {
 			/* Q.764 2.2.5 Address incomplete (T35 is 15-20 seconds according to Table A.1/Q.764) */
 			g_ftdm_sngss7_data.cfg.isupCkt[x].t35		= 170;
@@ -3341,20 +3339,6 @@ static int ftmod_ss7_fill_in_circuits(sng_span_t *sngSpan)
 		ss7_info->t39.beat		= (isupCkt->t39) * 100; /* beat is in ms, t39 is in 100ms */
 		ss7_info->t39.callback		= handle_isup_t39;
 		ss7_info->t39.sngss7_info	= ss7_info;
-
-		/* prepare the timer structures */
-		ss7_info->t29.sched		= ((sngss7_span_data_t *)(ftdmspan->signal_data))->sched;
-		ss7_info->t29.counter		= 1;
-		ss7_info->t29.beat		= (isupCkt->t29) * 100;	/* beat is in ms, t29 is in 100ms */
-		ss7_info->t29.callback		= handle_isup_t29;
-		ss7_info->t29.sngss7_info	= ss7_info;
-
-		/* prepare the timer structures */
-		ss7_info->t30.sched		= ((sngss7_span_data_t *)(ftdmspan->signal_data))->sched;
-		ss7_info->t30.counter		= 1;
-		ss7_info->t30.beat		= (isupCkt->t30) * 100; /* beat is in ms, t30 is in 100ms */
-		ss7_info->t30.callback		= handle_isup_t30;
-		ss7_info->t30.sngss7_info	= ss7_info;
 
 		/* Set up timer for blo re-transmission. 
 		   If not receiving BLA in 5 seconds after sending out BLO, 
@@ -3614,6 +3598,82 @@ int ftmod_ss7_get_mtp2_id_by_mtp1_id(int mtp1Id)
     return mtp2_cfg_id;
 }
 
+/******************************************************************************/
+static int ftmod_ss7_fill_in_acc_timer(sng_route_t *mtp3_route, ftdm_span_t *span)
+{
+	uint32_t t29_val = 0;
+	uint32_t t30_val = 0;
+	ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong = NULL;
+	char dpc[MAX_DPC_CONFIGURED];
+	char *dpc_key=NULL;
+
+	memset(dpc, 0 , sizeof(dpc));
+
+	sngss7_rmt_cong = ftdm_calloc(sizeof(*sngss7_rmt_cong), 1);
+
+	if (!sngss7_rmt_cong) {
+		SS7_DEBUG("Unable to allocate memory\n");
+		return FTDM_FAIL;
+	}
+
+	if (!mtp3_route->dpc) {
+		SS7_DEBUG("DPC not found in route configuration\n");
+		ftdm_safe_free(sngss7_rmt_cong);
+		return FTDM_FAIL;
+	}
+
+	/* prepare automatic congestion control structure */
+	sngss7_rmt_cong->sngss7_rmtCongLvl = 0;
+	sngss7_rmt_cong->dpc = mtp3_route->dpc;
+
+	sprintf(dpc, "%d", sngss7_rmt_cong->dpc);
+	if (hashtable_search(ss7_rmtcong_lst, (void *)dpc)) {
+		SS7_DEBUG("DPC[%d] is already inserted in the hash tablearsing\n", mtp3_route->dpc);
+		ftdm_safe_free(sngss7_rmt_cong);
+		return FTDM_SUCCESS;
+	}
+
+	/* Timer for ACC Feature in ms can be 300-600ms */
+	if (mtp3_route->t29 == 0) {
+		t29_val	= 3;
+	} else {
+		t29_val = mtp3_route->t29;
+	}
+
+	/* Timer ofr implementing ACC Feature in sec can be 5-10sec*/
+	if (mtp3_route->t30 == 0) {
+		t30_val	= 50;
+	} else {
+		t30_val	= mtp3_route->t30;
+	}
+
+	/* prepare the timer structures */
+	sngss7_rmt_cong->t29.tmr_sched	= ((sngss7_span_data_t *)(span->signal_data))->sched;
+	sngss7_rmt_cong->t29.counter	= 1;
+	sngss7_rmt_cong->t29.beat	= (t29_val) * 100;	/* beat is in ms, t29 is in 100ms */
+	sngss7_rmt_cong->t29.callback	= handle_route_t29;
+	sngss7_rmt_cong->t29.tmr_running = 0x00;
+	sngss7_rmt_cong->t29.sngss7_rmt_cong = sngss7_rmt_cong;
+
+	/* prepare the timer structures */
+	sngss7_rmt_cong->t30.tmr_sched	= ((sngss7_span_data_t *)(span->signal_data))->sched;
+	sngss7_rmt_cong->t30.counter	= 1;
+	sngss7_rmt_cong->t30.beat	= (t30_val) * 100; /* beat is in ms, t30 is in 100ms */
+	sngss7_rmt_cong->t30.callback	= handle_route_t30;
+	sngss7_rmt_cong->t30.tmr_running = 0x00;
+	sngss7_rmt_cong->t30.sngss7_rmt_cong = sngss7_rmt_cong;
+
+	memset(dpc, 0 , sizeof(dpc));
+	sprintf(dpc, "%d", sngss7_rmt_cong->dpc);
+
+	dpc_key = ftdm_strdup(dpc);
+
+	/* Insert the same in ACC hash list */
+	hashtable_insert(ss7_rmtcong_lst, (void *)dpc_key, sngss7_rmt_cong, HASHTABLE_FLAG_FREE_KEY);
+	SS7_DEBUG("DPC[%d] successfully inserted in ACC hash list\n", sngss7_rmt_cong->dpc);
+
+	return FTDM_SUCCESS;
+}
 /******************************************************************************/
 
 /******************************************************************************/
