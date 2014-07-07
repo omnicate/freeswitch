@@ -766,13 +766,13 @@ int ftmod_ss7_isup_gen_config(void)
 		cfg.t.cfg.s.siGen.autoCongEn = FALSE;
 	}
 
-	cfg.t.cfg.s.siGen.msgPrior_enable = g_ftdm_sngss7_data.cfg.msg_priority;
+	cfg.t.cfg.s.siGen.msgPriorEn = g_ftdm_sngss7_data.cfg.msg_priority;
 	/* Setting up ISUP message priority */
-	if (cfg.t.cfg.s.siGen.msgPrior_enable) {
+	if (cfg.t.cfg.s.siGen.msgPriorEn) {
 		/* Setting up priority level values of ISUP messages */
-		cfg.t.cfg.s.siGen.msg_priority = g_ftdm_sngss7_data.cfg.set_msg_priority;
+		cfg.t.cfg.s.siGen.msgPrior = g_ftdm_sngss7_data.cfg.set_msg_priority;
 	} else {
-		cfg.t.cfg.s.siGen.msg_priority = DEFAULT_MSG_PRIORITY;
+		cfg.t.cfg.s.siGen.msgPrior = DEFAULT_MSG_PRIORITY;
 	}
 
 
