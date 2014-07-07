@@ -68,13 +68,13 @@ int ftmod_ss7_isup_isap_config(int id);
 int ftmod_ss7_cc_isap_config(int id);
 
 int ftmod_ss7_relay_chan_config(int id);
+/* To enable stack logging */
 void ftmod_ss7_enable_isup_logging(void);
 /******************************************************************************/
 
 /* FUNCTIONS ******************************************************************/
 void ftmod_ss7_enable_isup_logging(void) {
-
-	/* Enable DEBUGs*/
+	/* Enable Stack Logs */
 	ftmod_ss7_isup_debug(AENA);
 	ftmod_ss7_mtp3_debug(AENA);
 	ftmod_ss7_mtp2_debug(AENA);
@@ -149,6 +149,19 @@ int  ft_to_sngss7_cfg_all(void)
 			} else {
 				SS7_INFO("CC General configuration DONE\n");
 			}
+			x= 1;
+			if (!(g_ftdm_sngss7_data.cfg.isap[x].id != 0 &&
+					(!(g_ftdm_sngss7_data.cfg.isap[x].flags & SNGSS7_CONFIGURED)))) {
+				if (sngss7_test_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_RY_PRESENT)) {
+					if (ftmod_ss7_cc_isap_config(x)) {
+						SS7_CRITICAL("CC ISAP configuration FAILED!\n");
+						return 1;
+					} else {
+						x = 0;
+						SS7_INFO("CC ISAP configuration DONE for relay!\n");
+					}
+				}
+			}
 		} /* if (sngss7_test_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_CC)) */
 
 		if (sngss7_test_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_ISUP_PRESENT)) {
@@ -222,7 +235,11 @@ int  ft_to_sngss7_cfg_all(void)
 
 		g_ftdm_sngss7_data.gen_config = SNG_GEN_CFG_STATUS_DONE;
 
-		/* ftmod_ss7_isup_debug(AENA); */
+		if (!(sngss7_test_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_RY_PRESENT))) {
+			if (g_ftdm_sngss7_data.stack_logging_enable) {
+				ftmod_ss7_enable_isup_logging();
+			}
+		}
 
 	} /* if (!(g_ftdm_sngss7_data.gen_config)) */
 
@@ -384,7 +401,7 @@ int  ft_to_sngss7_cfg_all(void)
 			/* check if this link has been configured already */
 			if ((g_ftdm_sngss7_data.cfg.isap[x].id != 0) &&
 				(!(g_ftdm_sngss7_data.cfg.isap[x].flags & SNGSS7_CONFIGURED))) {
-				
+
 				if (ftmod_ss7_isup_isap_config(x)) {
 					SS7_CRITICAL("ISUP ISAP %d configuration FAILED!\n", x);
 					return 1;
@@ -401,7 +418,7 @@ int  ft_to_sngss7_cfg_all(void)
 				/* set the SNGSS7_CONFIGURED flag */
 				g_ftdm_sngss7_data.cfg.isap[x].flags |= SNGSS7_CONFIGURED;
 			} /* if !SNGSS7_CONFIGURED */
-			
+
 			x++;
 		} /* while (x < (MAX_ISAPS)) */
 
@@ -645,7 +662,6 @@ int ftmod_ss7_mtp3_gen_config(void)
 	cfg.t.cfg.s.snGen.extCmbndLnkst	= FALSE;			/* enbale extended combined linkset feature */
 
 #if (defined(LSNV3) || defined(SN_MULTIPLE_NETWORK_RESTART))
-
 #else
 	cfg.t.cfg.s.snGen.rstReq		= LSN_NO_RST;		/* restarting procedure required */
 	cfg.t.cfg.s.snGen.tfrReq		= FALSE;			/* TFR procedure required or not */
@@ -1285,17 +1301,21 @@ int ftmod_ss7_mtp3_route_config(int id)
 	} else {
 		cfg.t.cfg.s.snRout.slsRange		= LSN_ANSI_5BIT_SLS_RANGE;	/* max value of SLS for this DPC */
 	}
-	cfg.t.cfg.s.snRout.lsetSel			= 0x1;						/* linkset selection bit in SLS for STP */
+	if (k->lsetSel) {
+		cfg.t.cfg.s.snRout.lsetSel			= k->lsetSel;		/* linkset selection bit in SLS for STP */
+	} else {
+		cfg.t.cfg.s.snRout.lsetSel			= 0x1;			/* linkset selection bit in SLS for STP */
+	}
 	cfg.t.cfg.s.snRout.multiMsgPrior	= TRUE;					/* TRUE if multiple cong priorities of messages */
 	cfg.t.cfg.s.snRout.rctReq			= TRUE;					/* route set congestion test required or not */
-	cfg.t.cfg.s.snRout.slsLnk			= FALSE;
+	cfg.t.cfg.s.snRout.slsLnk			= k->slsLnk;
 #ifdef LSNV2
 # if (SS7_NTT || defined(TDS_ROLL_UPGRADE_SUPPORT))
 	cfg.t.cfg.s.snRout.destSpec			=;							/* destination specfication A or B*/ 
 # endif  
 #endif  
 #if (defined(LSNV3) || defined(SN_MULTIPLE_NETWORK_RESTART))
-	cfg.t.cfg.s.snRout.tfrReq			=;							/* TFR procedure required or not */
+	cfg.t.cfg.s.snRout.tfrReq			= k->tfrReq;							/* TFR procedure required or not */
 #endif
 	cfg.t.cfg.s.snRout.tmr.t6.enb		= TRUE;
 	cfg.t.cfg.s.snRout.tmr.t6.val		= k->t6;
@@ -1460,7 +1480,7 @@ int ftmod_ss7_isup_intf_config(int id)
 
 #endif
 #if (LSIV4 || LSIV5)
-	cfg.t.cfg.s.siIntfCb.lnkSelOpt				= LSI_LINSEK_CIC;		/* link select option */
+	cfg.t.cfg.s.siIntfCb.lnkSelOpt				= LSI_LNKSEL_CIC;		/* link select option */
 # if (SS7_ANS88 || SS7_ANS92 || SS7_ANS95 || SS7_BELL)
 	cfg.t.cfg.s.siIntfCb.lnkSelBits				= LSI_LNKSEL_8BITS;		/* number of bits for link selection */
 # endif

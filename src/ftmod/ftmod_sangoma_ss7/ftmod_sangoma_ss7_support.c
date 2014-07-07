@@ -155,21 +155,37 @@ ftdm_status_t copy_cgPtyNum_from_sngss7(ftdm_channel_t *ftdmchan, SiCgPtyNum *cg
 	return FTDM_SUCCESS;
 }
 
+ftdm_status_t is_clip_disable(ftdm_channel_t *ftdmchan)
+{
+	const char *val = NULL;
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_clip_disable");
+	if (!ftdm_strlen_zero(val)) {
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "CLIP Disable %s\n","");
+		return FTDM_SUCCESS;
+	} else {
+		return FTDM_FAIL;
+	}
+}
+
 ftdm_status_t copy_cgPtyNum_to_sngss7(ftdm_channel_t *ftdmchan, SiCgPtyNum *cgPtyNum)
 {
 	const char *val = NULL;
 	const char *clg_nadi = NULL;
+	const char *clg_numplan = NULL;
 	char *clg_numb= NULL;
+	char *clg_digits_presence= NULL;
 
 	sngss7_chan_data_t *sngss7_info = ftdmchan->call_data;
 	ftdm_caller_data_t *caller_data = &ftdmchan->caller_data;
 
 	cgPtyNum->eh.pres		   = PRSNT_NODEF;
-	
+
 	cgPtyNum->natAddrInd.pres   = PRSNT_NODEF;
 	cgPtyNum->natAddrInd.val = g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].clg_nadi;
 
-	
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Calling Party Nature of Address Indicator %d\n", cgPtyNum->natAddrInd.val);
+
+
 	cgPtyNum->scrnInd.pres	  = PRSNT_NODEF;
 	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_screen_ind");
 	if (!ftdm_strlen_zero(val)) {
@@ -178,7 +194,7 @@ ftdm_status_t copy_cgPtyNum_to_sngss7(ftdm_channel_t *ftdmchan, SiCgPtyNum *cgPt
 		cgPtyNum->scrnInd.val	= caller_data->screen;
 	}
 	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Calling Party Number Screening Ind %d\n", cgPtyNum->scrnInd.val);
-	
+
 	cgPtyNum->presRest.pres	 = PRSNT_NODEF;
 	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_pres_ind");
 	if (!ftdm_strlen_zero(val)) {
@@ -188,11 +204,29 @@ ftdm_status_t copy_cgPtyNum_to_sngss7(ftdm_channel_t *ftdmchan, SiCgPtyNum *cgPt
 	}
 	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Calling Party Number Presentation Ind %d\n", cgPtyNum->presRest.val);
 
-	cgPtyNum->numPlan.pres	  = PRSNT_NODEF;
-	cgPtyNum->numPlan.val	   = 0x01;
+	clg_numplan = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_clg_numplan");
+	if (!ftdm_strlen_zero(clg_numplan)) {
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found user supplied Calling Number Plan value \"%s\"\n", clg_numplan);
+		cgPtyNum->numPlan.val  = atoi(clg_numplan);
+
+		/* value 0 means not present, ITU spec has CLI test case where we dont have to send this field, hence having this configurable option */
+		if (cgPtyNum->numPlan.val == 0) {
+			cgPtyNum->numPlan.pres = NOTPRSNT;
+		} else {
+			cgPtyNum->numPlan.pres = PRSNT_NODEF;
+		}
+	} else {
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "User supplied Calling Number Plan value Not found, setting to 1\"%s\"\n","");
+		cgPtyNum->numPlan.pres	  = PRSNT_NODEF;
+		cgPtyNum->numPlan.val     = 0x01; /* Default value */
+	}
+
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Calling Party Number Plan %d\n", cgPtyNum->numPlan.val);
 
 	cgPtyNum->niInd.pres		= PRSNT_NODEF;
 	cgPtyNum->niInd.val		 = 0x00;
+
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Calling Party Number Incomplete Indicator %d\n", cgPtyNum->niInd.val);
 
 	/* check if the user would like a custom NADI value for the calling Pty Num */
 	clg_nadi = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_clg_nadi");
@@ -206,6 +240,25 @@ ftdm_status_t copy_cgPtyNum_to_sngss7(ftdm_channel_t *ftdmchan, SiCgPtyNum *cgPt
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found user supplied Calling Number value \"%s\"\n", clg_numb);
 		ftdm_set_string(caller_data->cid_num.digits, clg_numb);
 	}
+
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Calling Party Number %s\n", caller_data->cid_num.digits); 
+
+	cgPtyNum->oddEven.pres = PRSNT_NODEF;
+	cgPtyNum->oddEven.val  = 0x00;
+
+	cgPtyNum->addrSig.pres = NOTPRSNT;
+
+	/* Adding Calling party digit present or not configuration option */
+	/* This could possible that we need to send all other parameters except
+	 * cg pty digits, hence needs configurable flag */
+
+	clg_digits_presence = (char*)ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_rem_clg_digits");
+
+	if (!ftdm_strlen_zero(clg_digits_presence)) {
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found ss7_rem_clg_digits presence, hence not adding calling party digits %s\n",""); 
+		return FTDM_SUCCESS;
+	}
+
 	return copy_tknStr_to_sngss7(caller_data->cid_num.digits, &cgPtyNum->addrSig, &cgPtyNum->oddEven);
 }
 
@@ -1339,7 +1392,15 @@ ftdm_status_t copy_hopCounter_from_sngss7(ftdm_channel_t *ftdmchan, SiHopCounter
 
 	if (hopCounter->eh.pres == PRSNT_NODEF &&
 	    hopCounter->hopCounter.pres == PRSNT_NODEF) {
+		hopCounter->hopCounter.val = (hopCounter->hopCounter.val)?(hopCounter->hopCounter.val -1):0;
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Hop Counter = %d\n", hopCounter->hopCounter.val);
+	}
+	else {
+		/* If no hop counter received in IAM then set to default SIP max-forward */
+		hopCounter->hopCounter.val = 70;
+	}
+
+	if (hopCounter->hopCounter.val) {
 		sprintf(var, "%d",  hopCounter->hopCounter.val);
 		sngss7_add_var(sngss7_info, "ss7_hopCounter_val", var);
 	}
@@ -1349,21 +1410,31 @@ ftdm_status_t copy_hopCounter_from_sngss7(ftdm_channel_t *ftdmchan, SiHopCounter
 
 ftdm_status_t copy_hopCounter_to_sngss7(ftdm_channel_t *ftdmchan, SiHopCounter *hopCounter)
 {
-        const char *val = NULL;
-        if(!hopCounter) {
+	const char *val = NULL;
+	int temp = 0x00;
+	if(!hopCounter) {
 		SS7_ERROR ("Wrong Hop Counter pointer \n");
-                return FTDM_FAIL;
-        }
+		return FTDM_FAIL;
+	}
 
-        val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_hopCounter_val");
-        if (!ftdm_strlen_zero(val)) {
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_hopCounter_val");
+	if (!ftdm_strlen_zero(val)) {
 		hopCounter->eh.pres = PRSNT_NODEF;
 		hopCounter->hopCounter.pres = PRSNT_NODEF;
-		hopCounter->hopCounter.val = (int)atoi(val);
+		temp = (int)atoi(val);
+		if (temp > 31 ) {
+			/* SS7 has max value of hop counter 31, if max forward is more then 31 then reset to 31 */
+			temp = 31;
+		}
+		else {
+			/* reduce counter by 1 to consider this node */
+			temp = (temp)?(temp-1):0;
+		}
+		hopCounter->hopCounter.val = temp;
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "ss7_hopCounter_val = %s\n", val);
-        } else {
+	} else {
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "No user supplied Hop Counter parameters %s\n", " ");
-        }
+	}
 	return FTDM_SUCCESS;
 }
 
