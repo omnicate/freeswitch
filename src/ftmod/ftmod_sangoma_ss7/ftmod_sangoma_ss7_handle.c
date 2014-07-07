@@ -101,6 +101,7 @@ ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 	ftdm_channel_t *ftdmchan = NULL;
 	char var[FTDM_DIGITS_LIMIT];
 	ftdm_status_t status = FTDM_FAIL;
+	int skip_acc = 0;
 	
 	memset(var, '\0', sizeof(var));
 
@@ -247,13 +248,18 @@ ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 			/* Check for self congestion or remote congestion */
 			if (g_ftdm_sngss7_data.cfg.sng_acc) {
 				if ((siConEvnt->cgPtyCat.eh.pres == PRSNT_NODEF) &&
-						(siConEvnt->cgPtyCat.cgPtyCat.pres == PRSNT_NODEF)) {
+					(siConEvnt->cgPtyCat.cgPtyCat.pres == PRSNT_NODEF)) {
 
-					if (ftdmchan->caller_data.cpc != FTDM_CPC_PRIORITY) {
-						status = ftdm_sangoma_ss7_get_congestion_status(ftdmchan);
-						if ((status == FTDM_SUCCESS) || (status == FTDM_BREAK)) {
-							break;
-						}
+					if (ftdmchan->caller_data.cpc == FTDM_CPC_PRIORITY) {
+						skip_acc = 1;
+
+					}
+				}
+
+				if (!skip_acc) {
+					status = ftdm_sangoma_ss7_get_congestion_status(ftdmchan);
+					if ((status == FTDM_SUCCESS) || (status == FTDM_BREAK)) {
+						break;
 					}
 				}
 			}

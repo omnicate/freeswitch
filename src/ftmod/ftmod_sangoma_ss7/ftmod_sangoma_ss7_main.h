@@ -76,6 +76,7 @@
 #define ACC_QUEUE_SIZE 		15
 #define ACC_DEQUEUE_RATE 	200
 #define MAX_DPC_CONFIGURED 	25
+#define DEFAULT_MSG_PRIORITY    7
 
 #define sngss7_flush_queue(queue) \
 			do { \
@@ -537,6 +538,8 @@ typedef struct sng_ss7_cfg {
 	sng_m2ua_gbl_cfg_t 	g_m2ua_cfg;
 	sng_sctp_cfg_t		sctpCfg;
 	int 			sng_acc;
+	int 			msg_priority;
+	uint32_t 		set_msg_priority;
 } sng_ss7_cfg_t;
 
 typedef struct sng_ss7_mtp2api_data {

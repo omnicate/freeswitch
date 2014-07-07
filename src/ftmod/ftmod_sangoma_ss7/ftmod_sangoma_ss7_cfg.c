@@ -745,10 +745,20 @@ int ftmod_ss7_isup_gen_config(void)
 #endif
 
 	if (g_ftdm_sngss7_data.cfg.sng_acc) {
-		cfg.t.cfg.s.siGen.autoCong_enable = TRUE;
+		cfg.t.cfg.s.siGen.autoCongEn = TRUE;
 	} else {
-		cfg.t.cfg.s.siGen.autoCong_enable = FALSE;
+		cfg.t.cfg.s.siGen.autoCongEn = FALSE;
 	}
+
+	cfg.t.cfg.s.siGen.msgPrior_enable = g_ftdm_sngss7_data.cfg.msg_priority;
+	/* Setting up ISUP message priority */
+	if (cfg.t.cfg.s.siGen.msgPrior_enable) {
+		/* Setting up priority level values of ISUP messages */
+		cfg.t.cfg.s.siGen.msg_priority = g_ftdm_sngss7_data.cfg.set_msg_priority;
+	} else {
+		cfg.t.cfg.s.siGen.msg_priority = DEFAULT_MSG_PRIORITY;
+	}
+
 
 	return(sng_cfg_isup(&pst, &cfg));
 

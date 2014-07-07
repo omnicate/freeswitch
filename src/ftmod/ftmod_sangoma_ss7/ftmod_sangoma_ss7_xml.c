@@ -662,6 +662,10 @@ static int ftmod_ss7_parse_sng_gen(ftdm_conf_node_t *sng_gen, char* operating_mo
 	/* By default automatic congestion control will be False */
 	g_ftdm_sngss7_data.cfg.sng_acc = 0;
 
+	/* By default message priority is default */
+	g_ftdm_sngss7_data.cfg.msg_priority = 0;
+	g_ftdm_sngss7_data.cfg.set_msg_priority = DEFAULT_MSG_PRIORITY;
+
 	/* extract all the information from the parameters */
 	for (i = 0; i < num_parms; i++) {
 		if (!strcasecmp(parm->var, "procId")) {
@@ -713,6 +717,16 @@ static int ftmod_ss7_parse_sng_gen(ftdm_conf_node_t *sng_gen, char* operating_mo
 			sngss7_queue.ss7_call_qsize = atoi(parm->val);
 		} else if (!strcasecmp(parm->var, "acc-dequeue-rate")) {
 			sngss7_queue.call_dequeue_rate = atoi(parm->val);
+		} else if (!strcasecmp(parm->var, "enable-user-message-priority")) {
+			if (ftdm_true(parm->val)) {
+				g_ftdm_sngss7_data.cfg.msg_priority = 1;
+				SS7_DEBUG("User message priority enable\n");
+			} else {
+				g_ftdm_sngss7_data.cfg.msg_priority = 0;
+			}
+		} else if (!strcasecmp(parm->var, "set-isup-message-priority")) {
+			g_ftdm_sngss7_data.cfg.set_msg_priority	= atoi(parm->val);
+			SS7_DEBUG("ISUP message prioriy = %d\n", g_ftdm_sngss7_data.cfg.set_msg_priority);
 		} else {
 			SS7_ERROR("Found an invalid parameter \"%s\"!\n", parm->var);
 			return FTDM_FAIL;
