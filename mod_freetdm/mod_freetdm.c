@@ -1653,6 +1653,12 @@ static switch_call_cause_t channel_outgoing_channel(switch_core_session_t *sessi
 			ftdm_usrmsg_add_var(&usrmsg, "ss7_iam_nature_connection_hex", sipvar);
 		}
 
+		/* for ftmod_sangoma_ss7 use only in order to set hopCounter as recieved */
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-hopCounter");
+		if (sipvar) {
+			ftdm_log(FTDM_LOG_INFO, "Got hop counter value as [%s] recieved in X-header\n", sipvar);
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_hopCounter_val", sipvar);
+
 		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-UUI");
 		if (sipvar) {
 			ftdm_log(FTDM_LOG_INFO, "Got user to user information value as [%s] recieved in X-header\n", sipvar);
