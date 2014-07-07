@@ -68,9 +68,18 @@ int ftmod_ss7_isup_isap_config(int id);
 int ftmod_ss7_cc_isap_config(int id);
 
 int ftmod_ss7_relay_chan_config(int id);
+/* To enable stack logging */
+void ftmod_ss7_enable_isup_logging(void);
 /******************************************************************************/
 
 /* FUNCTIONS ******************************************************************/
+void ftmod_ss7_enable_isup_logging(void) {
+	/* Enable Stack Logs */
+	ftmod_ss7_isup_debug(AENA);
+	ftmod_ss7_mtp3_debug(AENA);
+	ftmod_ss7_mtp2_debug(AENA);
+}
+
 int  ft_to_sngss7_cfg_all(void)
 {
 	int x = 0;
@@ -138,6 +147,19 @@ int  ft_to_sngss7_cfg_all(void)
 				return 1;
 			} else {
 				SS7_INFO("CC General configuration DONE\n");
+			}
+			x= 1;
+			if (!(g_ftdm_sngss7_data.cfg.isap[x].id != 0 &&
+					(!(g_ftdm_sngss7_data.cfg.isap[x].flags & SNGSS7_CONFIGURED)))) {
+				if (sngss7_test_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_RY_PRESENT)) {
+					if (ftmod_ss7_cc_isap_config(x)) {
+						SS7_CRITICAL("CC ISAP configuration FAILED!\n");
+						return 1;
+					} else {
+						x = 0;
+						SS7_INFO("CC ISAP configuration DONE for relay!\n");
+					}
+				}
 			}
 		} /* if (sngss7_test_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_CC)) */
 
@@ -212,7 +234,11 @@ int  ft_to_sngss7_cfg_all(void)
 
 		g_ftdm_sngss7_data.gen_config = SNG_GEN_CFG_STATUS_DONE;
 
-		/* ftmod_ss7_isup_debug(AENA); */
+		if (!(sngss7_test_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_RY_PRESENT))) {
+			if (g_ftdm_sngss7_data.stack_logging_enable) {
+				ftmod_ss7_enable_isup_logging();
+			}
+		}
 
 	} /* if (!(g_ftdm_sngss7_data.gen_config)) */
 
@@ -368,7 +394,7 @@ int  ft_to_sngss7_cfg_all(void)
 			/* check if this link has been configured already */
 			if ((g_ftdm_sngss7_data.cfg.isap[x].id != 0) &&
 				(!(g_ftdm_sngss7_data.cfg.isap[x].flags & SNGSS7_CONFIGURED))) {
-				
+
 				if (ftmod_ss7_isup_isap_config(x)) {
 					SS7_CRITICAL("ISUP ISAP %d configuration FAILED!\n", x);
 					return 1;
@@ -385,7 +411,7 @@ int  ft_to_sngss7_cfg_all(void)
 				/* set the SNGSS7_CONFIGURED flag */
 				g_ftdm_sngss7_data.cfg.isap[x].flags |= SNGSS7_CONFIGURED;
 			} /* if !SNGSS7_CONFIGURED */
-			
+
 			x++;
 		} /* while (x < (MAX_ISAPS)) */
 
