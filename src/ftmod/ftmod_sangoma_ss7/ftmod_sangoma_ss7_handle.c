@@ -93,6 +93,7 @@ ftdm_status_t handle_olm_msg(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 
 #define ftdm_running_return(var) if (!ftdm_running()) { SS7_ERROR("Error: ftdm_running is not set! Ignoring\n"); return var; } 
 
+
 ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circuit, SiConEvnt *siConEvnt)
 {
 	SS7_FUNC_TRACE_ENTER(__FUNCTION__);
@@ -182,6 +183,18 @@ ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 			sngss7_info->suInstId = get_unique_id();
 			sngss7_info->spInstId = spInstId;
 
+#ifdef SS7_UK
+			/* Check for National Forward Call Indicator */
+			if (g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].switchType == LSI_SW_UK) {
+				if (siConEvnt->natFwdCalInd.eh.pres && 
+						siConEvnt->natFwdCalInd.cliBlkInd.pres &&
+						siConEvnt->natFwdCalInd.cliBlkInd.val == NUMB_NOTDISC ) {
+						SS7_INFO_CHAN(ftdmchan," NFCI: CLI Blocking Indicator true %s\n",""); 
+						pres_restrict = 1;
+				}
+			}
+#endif
+
 			/* fill in calling party information */
 			if (siConEvnt->cgPtyNum.eh.pres) {
 				if (siConEvnt->cgPtyNum.addrSig.pres) {
@@ -269,6 +282,21 @@ ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 			} else {
 				SS7_DEBUG_CHAN(ftdmchan,"No TMR/Bearer Cap information in IAM!%s\n", " ");
 			}
+
+			/* TODO - Ideally we should have configured list of supported bearer capability against which we 
+				  compare the received bearer capability */
+#ifdef SS7_UK
+			if (g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].switchType == LSI_SW_UK) {
+				/* If bearer capability is not supported then reject call */
+				if (sngss7_is_bearer_capability_supported(ftdmchan->caller_data.bearer_capability) == FTDM_FAIL) {
+					SS7_DEBUG_CHAN(ftdmchan,"Received bearar capability[%d] unsupported %s \n",ftdmchan->caller_data.bearer_capability,"");
+					ftdmchan->caller_data.hangup_cause = 88;	/* SIT_CCINCOMPDEST - Incompatible Destination */
+					sngss7_set_ckt_flag (sngss7_info, FLAG_LOCAL_REL);
+					ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_CANCEL);
+					break;
+				}
+			}
+#endif
 
 			/* add any special variables for the dialplan */
 			sprintf(var, "%d", siConEvnt->cgPtyNum.natAddrInd.val);

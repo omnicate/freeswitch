@@ -1112,6 +1112,7 @@ ftdm_status_t copy_redirgInfo_from_sngss7(ftdm_channel_t *ftdmchan, SiRedirInfo 
 ftdm_status_t copy_redirgInfo_to_sngss7(ftdm_channel_t *ftdmchan, SiRedirInfo *redirInfo);
 ftdm_status_t copy_ocn_to_sngss7(ftdm_channel_t *ftdmchan, SiOrigCdNum *origCdNum);
 ftdm_status_t copy_ocn_from_sngss7(ftdm_channel_t *ftdmchan, SiOrigCdNum *origCdNum);
+ftdm_status_t sngss7_is_bearer_capability_supported(int bearcap);
 
 ftdm_status_t copy_access_transport_from_sngss7(ftdm_channel_t *ftdmchan, SiAccTrnspt *accTrnspt);
 ftdm_status_t copy_access_transport_to_sngss7(ftdm_channel_t *ftdmchan, SiAccTrnspt *accTrnspt);

@@ -741,6 +741,7 @@ ftdm_status_t copy_redirgInfo_to_sngss7(ftdm_channel_t *ftdmchan, SiRedirInfo *r
 	return FTDM_SUCCESS;
 }
 
+
 ftdm_status_t copy_access_transport_from_sngss7(ftdm_channel_t *ftdmchan, SiAccTrnspt *accTrnspt)
 {
 	char val[3*((MF_SIZE_TKNSTRE + 7) & 0xff8)];
@@ -756,6 +757,22 @@ ftdm_status_t copy_access_transport_from_sngss7(ftdm_channel_t *ftdmchan, SiAccT
 	
 	return FTDM_SUCCESS;
 }
+
+#ifdef SS7_UK
+ftdm_status_t sngss7_is_bearer_capability_supported(int bearcap)
+{
+	switch (bearcap)
+	{
+		case TMR_SPEECH:
+		case TMR_31KHZ:
+		case TMR_384KBITS:
+			return FTDM_SUCCESS;
+		default:
+			return FTDM_FAIL;
+	}
+	return FTDM_SUCCESS;
+}
+#endif
 
 ftdm_status_t copy_access_transport_to_sngss7(ftdm_channel_t *ftdmchan, SiAccTrnspt *accTrnspt)
 {
