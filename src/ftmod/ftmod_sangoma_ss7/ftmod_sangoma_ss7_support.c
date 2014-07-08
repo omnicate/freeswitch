@@ -356,6 +356,13 @@ ftdm_status_t copy_locPtyNum_to_sngss7(ftdm_channel_t *ftdmchan, SiCgPtyNum *loc
 		return FTDM_SUCCESS;
 	}
 
+	/* Channel variable to enable/disable location number in case of ss7 to ss7 calls */
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_loc_digits");
+	if (!ftdm_strlen_zero(val) && !strcasecmp(val, "NULL")) {
+		pres_val = NOTPRSNT;
+		return FTDM_SUCCESS;
+	} 
+
         locPtyNum->eh.pres = pres_val;
         locPtyNum->natAddrInd.pres = pres_val;
         locPtyNum->natAddrInd.val = g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].loc_nadi;
