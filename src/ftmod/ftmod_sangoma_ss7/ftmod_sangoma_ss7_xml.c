@@ -1783,6 +1783,13 @@ static int ftmod_ss7_parse_isup_interface(ftdm_conf_node_t *isup_interface)
 				sng_isap.ssf = sng_ssf_type_map[ret].tril_type;
 				SS7_DEBUG("Found an isup ssf = %s\n", sng_ssf_type_map[ret].sng_type);
 			}
+		} else if (!strcasecmp(parm->var, "pauseAction")) {
+			sng_isup.pauseAction = atoi(parm->val);
+			if ((SI_PAUSE_CLRDFLT == sng_isup.pauseAction ) || 
+					(SI_PAUSE_CLRTRAN == sng_isup.pauseAction) || 
+					(SI_PAUSE_CLRTMOUT == sng_isup.pauseAction)) {
+				SS7_DEBUG("Found isup pauseAction = %d\n",sng_isup.pauseAction);
+			}
 		} else if (!strcasecmp(parm->var, "isup.t1")) {
 			sng_isap.t1 = atoi(parm->val);
 			SS7_DEBUG("Found isup t1 = %d\n",sng_isap.t1);
@@ -2813,6 +2820,11 @@ static int ftmod_ss7_fill_in_isup_interface(sng_isup_inf_t *sng_isup)
 	g_ftdm_sngss7_data.cfg.isupIntf[i].ssf			= sng_isup->ssf;
 	g_ftdm_sngss7_data.cfg.isupIntf[i].isap			= sng_isup->isap;
 	g_ftdm_sngss7_data.cfg.isupIntf[i].options		= sng_isup->options;
+	if (sng_isup->pauseAction != 0) {
+		g_ftdm_sngss7_data.cfg.isupIntf[i].pauseAction	= sng_isup->pauseAction;
+	} else {
+		g_ftdm_sngss7_data.cfg.isupIntf[i].pauseAction	= SI_PAUSE_CLRTRAN ;
+	}
 	if (sng_isup->t4 != 0) {
 		g_ftdm_sngss7_data.cfg.isupIntf[i].t4		= sng_isup->t4;
 	} else {

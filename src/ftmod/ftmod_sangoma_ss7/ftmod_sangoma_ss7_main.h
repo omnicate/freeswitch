@@ -355,6 +355,7 @@ typedef struct sng_isup_intf {
 	uint32_t		switchType;
 	uint32_t		nwId;
 	uint32_t		mtpRouteId;
+	uint32_t		pauseAction;
 	uint32_t		ssf;
 	uint32_t		isap;
 	uint16_t		t4;
