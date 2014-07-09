@@ -1900,6 +1900,16 @@ ftdm_status_t handle_rsc_req(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 		ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_IDLE);
 		break;
 
+	/* If call is active (or in-progress) then ignore RSC 
+	 * as it could possible that during the ringing/active call 
+	 * state SS7 link might have gone down or come up again..
+	 * so ignore RSC as we need to keep call active */
+	case FTDM_CHANNEL_STATE_RINGING:
+	case FTDM_CHANNEL_STATE_UP:
+	case FTDM_CHANNEL_STATE_PROGRESS_MEDIA:
+		SS7_INFO_CHAN(ftdmchan, "[CIC:%d]Rx %s when call is up..ignoring..\n", g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic, DECODE_LCC_EVENT(evntType));
+		break;
+
 	default:
 		/* set the state of the channel to restart...the rest is done by the chan monitor */
 		sngss7_set_ckt_flag(sngss7_info, FLAG_REMOTE_REL);

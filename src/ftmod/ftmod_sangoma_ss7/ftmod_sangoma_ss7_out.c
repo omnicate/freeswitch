@@ -386,6 +386,16 @@ void ft_to_sngss7_acm (ftdm_channel_t * ftdmchan)
 	acm.bckCallInd.cadPtyStatInd.val	= 0x01;
 	acm.bckCallInd.cadPtyCatInd.pres	= PRSNT_NODEF;
 	acm.bckCallInd.cadPtyCatInd.val		= CADCAT_ORDSUBS;
+	backwardInd = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "acm_bi_cpc");
+	if (!ftdm_strlen_zero(backwardInd)) {
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found user supplied backward indicator Called Party Category ACM, value \"%s\"\n", backwardInd);
+		/* CPC valid values 0/1/2 , considering only 0/2 as 1 is already assigned by-def */
+		if (!strcasecmp(backwardInd, "NULL")) {
+			acm.bckCallInd.cadPtyCatInd.val		= CADCAT_NOIND;
+		} else if (atoi(backwardInd) == 2 ) {
+			acm.bckCallInd.cadPtyCatInd.val		= CADCAT_PAYPHONE; 
+		}
+	}
 	acm.bckCallInd.end2EndMethInd.pres	= PRSNT_NODEF;
 	acm.bckCallInd.end2EndMethInd.val	= E2EMTH_NOMETH;
 	acm.bckCallInd.intInd.pres			= PRSNT_NODEF;
