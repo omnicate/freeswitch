@@ -2463,10 +2463,13 @@ ftdm_status_t check_for_res_sus_flag(ftdm_span_t *ftdmspan)
 			while (ftdm_test_flag (ftdmchan, FTDM_CHANNEL_STATE_CHANGE)) {
 				ftdm_sangoma_ss7_process_state_change (ftdmchan);
 			}
-			
-			/* throw the channel into SUSPENDED to process the flag */
-			/* after doing this once the sig status will be down */
-			ftdm_set_state (ftdmchan, FTDM_CHANNEL_STATE_SUSPENDED);
+
+			/* Do not touch transiant calls on receiving PAUSE */
+			if ((ftdmchan->state == FTDM_CHANNEL_STATE_DOWN)) {
+				/* throw the channel into SUSPENDED to process the flag */
+				/* after doing this once the sig status will be down */
+				ftdm_set_state (ftdmchan, FTDM_CHANNEL_STATE_SUSPENDED);
+			}
 		}
 
 		/* if the RESUME flag is up go to SUSPENDED to process the flag */
@@ -2478,8 +2481,11 @@ ftdm_status_t check_for_res_sus_flag(ftdm_span_t *ftdmspan)
 				ftdm_sangoma_ss7_process_state_change (ftdmchan);
 			}
 
+			if ((ftdmchan->state == FTDM_CHANNEL_STATE_DOWN) || 
+					(ftdmchan->state == FTDM_CHANNEL_STATE_RESTART)) {
 			/* got SUSPENDED state to clear the flag */
 			ftdm_set_state (ftdmchan, FTDM_CHANNEL_STATE_SUSPENDED);
+			}
 		}
 
 		/* unlock the channel */
