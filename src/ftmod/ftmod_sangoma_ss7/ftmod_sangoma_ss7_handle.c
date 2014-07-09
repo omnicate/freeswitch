@@ -271,6 +271,24 @@ ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 			copy_cgPtyCat_from_sngss7(ftdmchan, &siConEvnt->cgPtyCat);
 			copy_cdPtyNum_from_sngss7(ftdmchan, &siConEvnt->cdPtyNum);
 			copy_usr2UsrInfo_from_sngss7(ftdmchan, &siConEvnt->usr2UsrInfo);
+			copy_hopCounter_from_sngss7(ftdmchan, &siConEvnt->hopCounter);
+
+			if (siConEvnt->hopCounter.eh.pres == PRSNT_NODEF &&
+					siConEvnt->hopCounter.hopCounter.pres == PRSNT_NODEF) {
+
+				/* If IAM received with Hop counter value 1 then reject the call as
+				 * no point of sending call to SIP with max forward = 0 */
+				if (!siConEvnt->hopCounter.hopCounter.val) {
+					/* setup the hangup cause */
+					ftdmchan->caller_data.hangup_cause = 25;	/* CCEXCHRTGERR  exchange routing error */
+					/* move the state of the channel to Terminating to end the call
+					   in TERMINATING state, the release cause is set to REMOTE_REL
+					   in any means. So we don't have to set the release reason here.
+					   */
+					ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_HANGUP);
+					break;
+				}
+			}
 
 
 			/* fill in the TMR/bearer capability */

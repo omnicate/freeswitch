@@ -1624,6 +1624,33 @@ static int ftmod_ss7_parse_mtp_route(ftdm_conf_node_t *mtp_route)
 		} else if (!strcasecmp(parm->var, "mtp3.t6")) {
 			mtpRoute.t6 = atoi(parm->val);
 			SS7_DEBUG("Found an mtp3 t6 = %d\n",mtpRoute.t6);
+		} else if (!strcasecmp(parm->var, "sls-bit-sel")) {
+			/* possible values 1/2/4/8 */
+			if ((mtpRoute.lsetSel == 1) || (mtpRoute.lsetSel == 2) || 
+					(mtpRoute.lsetSel == 4) || (mtpRoute.lsetSel == 8) ) {
+				SS7_DEBUG("Found an mtp3 lsetSel = %d\n",mtpRoute.lsetSel);
+				mtpRoute.lsetSel = atoi(parm->val);
+			} else {
+				SS7_DEBUG("Found an Invalid mtp3 lsetSel = %d..possible values [1|2|4|8]\n",mtpRoute.lsetSel);
+			}
+		} else if (!strcasecmp(parm->var, "sls-link")) {
+			/* When enabled, indicate that SLS mapping in ITU is done by equal distribution of SLS among links across linksets 
+			 * Has to be true for Belgacom */
+			if (ftdm_true(parm->val)) {
+				mtpRoute.slsLnk = 1;
+			} else {
+				mtpRoute.slsLnk = 0;
+			}
+			SS7_DEBUG("Found an mtp3 slsLnk = %d\n",mtpRoute.slsLnk);
+		} else if (!strcasecmp(parm->var, "tfr-req")) {
+			/* Transfer Restrict Required flag */ 
+			 /* Has to be true for Belgacom */
+			if (ftdm_true(parm->val)) {
+				mtpRoute.tfrReq = 1;
+			} else {
+				mtpRoute.tfrReq = 0;
+			}
+			SS7_DEBUG("Found an mtp3 tfrReq = %d\n",mtpRoute.tfrReq);
 		} else if (!strcasecmp(parm->var, "mtp3.t8")) {
 			mtpRoute.t8 = atoi(parm->val);
 			SS7_DEBUG("Found an mtp3 t8 = %d\n",mtpRoute.t8);

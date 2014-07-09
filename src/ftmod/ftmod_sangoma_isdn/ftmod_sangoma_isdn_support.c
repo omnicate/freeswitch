@@ -524,7 +524,14 @@ ftdm_status_t get_user_to_user(ftdm_channel_t *ftdmchan, UsrUsr *usrUsr)
 
 	sngisdn_add_var((sngisdn_chan_data_t*)ftdmchan->call_data, "isdn.user-user", val);
 
-	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Received Encoded User-User subaddress [ %s]\n", val);
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Received Encoded User-User Information [ %s]\n", val);
+
+	if (usrUsr->protocolDisc.pres == PRSNT_NODEF)
+	{
+		snprintf(val, sizeof(val), "%d", usrUsr->protocolDisc.val);
+		sngisdn_add_var((sngisdn_chan_data_t*)ftdmchan->call_data, "isdn.user-user-pd", val);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Received User-User IE : Protocol Discriminator [ %s]\n", val);
+	}
 
 	return FTDM_SUCCESS;
 }
@@ -921,6 +928,7 @@ ftdm_status_t set_user_user_ie(ftdm_channel_t *ftdmchan, UsrUsr *usrUsr)
 	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "isdn.user-user");
 	if (ftdm_strlen_zero(val)) {
 		usrUsr->eh.pres 	= NOTPRSNT;
+		usrUsr->protocolDisc.pres = NOTPRSNT;
 		usrUsr->usrInfo.pres    = NOTPRSNT;
 	}
 	else {
@@ -936,6 +944,12 @@ ftdm_status_t set_user_user_ie(ftdm_channel_t *ftdmchan, UsrUsr *usrUsr)
 		memcpy((char*)usrUsr->usrInfo.val, val_dec, val_len);
 		usrUsr->usrInfo.len = val_len;
 		ftdm_safe_free(val_dec);
+
+		val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "isdn.user-user-pd");
+		if (!ftdm_strlen_zero(val)) {
+			usrUsr->protocolDisc.pres = PRSNT_NODEF;
+			usrUsr->protocolDisc.val = atoi(val);
+		}
 	}
 	return FTDM_SUCCESS;
 }

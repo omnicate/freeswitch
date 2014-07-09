@@ -199,9 +199,12 @@ void ft_to_sngss7_iam (ftdm_channel_t * ftdmchan)
 		
 		/* Called Number information */
 		copy_cdPtyNum_to_sngss7(ftdmchan, &iam.cdPtyNum, NULL);
-		
-		/* Calling Number information */
-		copy_cgPtyNum_to_sngss7(ftdmchan, &iam.cgPtyNum);
+		/* If flag true then dont fill cgpty into IAM 
+		 * Q.785 - 3.6.3 test case*/
+		if (is_clip_disable(ftdmchan) == FTDM_FAIL) {
+			/* Calling Number information */
+			copy_cgPtyNum_to_sngss7(ftdmchan, &iam.cgPtyNum);
+		}
 
 		/* Location Number information */
 		copy_locPtyNum_to_sngss7(ftdmchan, &iam.cgPtyNum1);
@@ -305,12 +308,18 @@ void ft_to_sngss7_inf(ftdm_channel_t *ftdmchan, SiCnStEvnt *inr)
 		if ((inr->infoReqInd.malCaIdReqInd.pres ==  PRSNT_NODEF) && (inr->infoReqInd.malCaIdReqInd.val == CHRGINFO_REQ)) {
 			SS7_DEBUG_CHAN(ftdmchan,"[CIC:%d]Received INR requesting malicious call id. Malicious call id is not supported in INF.\n", sngss7_info->circuit->cic);
 		}
-		
-		if ((inr->infoReqInd.cgPtyAdReqInd.pres ==  PRSNT_NODEF) && (inr->infoReqInd.cgPtyAdReqInd.val == CGPRTYADDREQ_REQ)) {
-			evnt.infoInd.cgPtyAddrRespInd.val=CGPRTYADDRESP_INCL;
-			copy_cgPtyNum_to_sngss7 (ftdmchan, &evnt.cgPtyNum);
-		} else {
-			evnt.infoInd.cgPtyAddrRespInd.val=CGPRTYADDRESP_NOTINCL;
+
+		/* Q.785 - 3.6.3 : Add flag to forcefully avoid filling calling party number i.e. set to CGPRTYADDRESP_NOTAVAIL */
+		if (is_clip_disable(ftdmchan) == FTDM_SUCCESS) {
+			evnt.infoInd.cgPtyAddrRespInd.val=CGPRTYADDRESP_NOTAVAIL;
+		}
+		else {
+			if ((inr->infoReqInd.cgPtyAdReqInd.pres ==  PRSNT_NODEF) && (inr->infoReqInd.cgPtyAdReqInd.val == CGPRTYADDREQ_REQ)) {
+				evnt.infoInd.cgPtyAddrRespInd.val=CGPRTYADDRESP_INCL;
+				copy_cgPtyNum_to_sngss7 (ftdmchan, &evnt.cgPtyNum);
+			} else {
+				evnt.infoInd.cgPtyAddrRespInd.val=CGPRTYADDRESP_NOTINCL;
+			}
 		}
 		
 		if ((inr->infoReqInd.cgPtyCatReqInd.pres ==  PRSNT_NODEF) && (inr->infoReqInd.cgPtyCatReqInd.val == CGPRTYCATREQ_REQ)) {
