@@ -1025,7 +1025,19 @@ static switch_status_t channel_receive_message_b(switch_core_session_t *session,
 	switch (msg->message_id) {
 	case SWITCH_MESSAGE_INDICATE_RINGING:
 		{
-			ftdm_channel_call_indicate(tech_pvt->ftdmchan, FTDM_CHANNEL_INDICATE_RINGING);
+			/* fill ISUP - ACM related dialplan variables */
+			const char *var = NULL;
+			ftdm_usrmsg_t usrmsg;
+			memset(&usrmsg, 0, sizeof(usrmsg));
+			var = switch_channel_get_variable(channel, "acm_bi_cpc");
+			if (var) {
+				ftdm_usrmsg_add_var(&usrmsg, "acm_bi_cpc", var);
+			}
+			var   = switch_channel_get_variable(channel, "acm_bi_iup");
+			if (var) {
+				ftdm_usrmsg_add_var(&usrmsg, "acm_bi_iup", var);
+			}
+			ftdm_channel_call_indicate_ex(tech_pvt->ftdmchan, FTDM_CHANNEL_INDICATE_RINGING, &usrmsg);
 		}
 		break;
 	case SWITCH_MESSAGE_INDICATE_PROGRESS:
