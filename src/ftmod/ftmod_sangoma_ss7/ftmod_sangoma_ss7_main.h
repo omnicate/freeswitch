@@ -419,6 +419,7 @@ typedef struct sng_isup_ckt {
 	uint8_t			cpg_on_progress_media;
 	uint8_t			cpg_on_progress;
 	uint8_t			itx_auto_reply;
+	uint8_t			bearcap_check;
 	void			*obj;
 	uint16_t		t3;
 	uint32_t		t10;
@@ -1106,7 +1107,7 @@ int ftmod_ss7_parse_xml(ftdm_conf_parameter_t *ftdm_parameters, ftdm_span_t *spa
 ftdm_status_t ftdm_sngss7_handle_cli_cmd(ftdm_stream_handle_t *stream, const char *data);
 
 /* in ftmod_sangoma_ss7_support.c */
-ftdm_status_t copy_cgPtyNum_from_sngss7(ftdm_channel_t *ftdmchan, SiCgPtyNum *cgPtyNum);
+ftdm_status_t copy_cgPtyNum_from_sngss7(ftdm_channel_t *ftdmchan, SiConEvnt *siConEvnt, sngss7_chan_data_t* sngss7_info); 
 ftdm_status_t copy_cgPtyNum_to_sngss7(ftdm_channel_t *ftdmchan, SiCgPtyNum *cgPtyNum);
 ftdm_status_t is_clip_disable(ftdm_channel_t *ftdmchan);
 ftdm_status_t copy_cdPtyNum_from_sngss7(ftdm_channel_t *ftdmchan, SiCdPtyNum *cdPtyNum);

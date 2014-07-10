@@ -101,7 +101,6 @@ ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 	sngss7_chan_data_t *sngss7_info = NULL;
 	ftdm_channel_t *ftdmchan = NULL;
 	char var[FTDM_DIGITS_LIMIT];
-	int pres_restrict = 0x00;
 	
 	memset(var, '\0', sizeof(var));
 
@@ -183,70 +182,23 @@ ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 			sngss7_info->suInstId = get_unique_id();
 			sngss7_info->spInstId = spInstId;
 
-#ifdef SS7_UK
-			/* Check for National Forward Call Indicator */
-			if (g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].switchType == LSI_SW_UK) {
-				if (siConEvnt->natFwdCalInd.eh.pres && 
-						siConEvnt->natFwdCalInd.cliBlkInd.pres &&
-						siConEvnt->natFwdCalInd.cliBlkInd.val == NUMB_NOTDISC ) {
-						SS7_INFO_CHAN(ftdmchan," NFCI: CLI Blocking Indicator true %s\n",""); 
-						pres_restrict = 1;
-				}
-			}
-#endif
+			copy_cgPtyNum_from_sngss7(ftdmchan, siConEvnt, sngss7_info);
 
-			/* fill in calling party information */
-			if (siConEvnt->cgPtyNum.eh.pres) {
-				if (siConEvnt->cgPtyNum.addrSig.pres) {
-					
-					/* BT HACK - If presentation is restricted then dont add digits 
-					 * TODO - this can be controlled by channel variable.. so this code
-					 * is temp for testing purpose, will remove asap.*/	
-					if (siConEvnt->cgPtyNum.presRest.pres &&  (siConEvnt->cgPtyNum.presRest.val == PRSNT_RESTRIC)) {
-						SS7_INFO_CHAN(ftdmchan," Presentation Restriction =%d not allowed.%s\n",siConEvnt->cgPtyNum.presRest.val,"");
-						pres_restrict = 1;
-					}
+			if (ftdm_strlen_zero(ftdmchan->caller_data.cid_num.digits)) {
 
-					if (!pres_restrict) {
-						/* fill in cid_num */
-						copy_tknStr_from_sngss7(siConEvnt->cgPtyNum.addrSig,
-								ftdmchan->caller_data.cid_num.digits, 
-								siConEvnt->cgPtyNum.oddEven);
-					}
-
-					/* fill in cid Name */
-					ftdm_set_string(ftdmchan->caller_data.cid_name, ftdmchan->caller_data.cid_num.digits);
-
-					/* fill in ANI */
-					ftdm_set_string(ftdmchan->caller_data.ani.digits, ftdmchan->caller_data.cid_num.digits);
-				}
-				else {
-					if (g_ftdm_sngss7_data.cfg.force_inr) {
-						sngss7_set_ckt_flag(sngss7_info, FLAG_INR_TX);
-						sngss7_clear_ckt_flag(sngss7_info, FLAG_INR_SENT);
-					}
-				}
-
-				if (siConEvnt->cgPtyNum.scrnInd.pres) {
-					/* fill in the screening indication value */
-					ftdmchan->caller_data.screen = siConEvnt->cgPtyNum.scrnInd.val;
-				}
-
-				if (siConEvnt->cgPtyNum.presRest.pres) {
-
-					/* add any special variables for the dialplan */
-					sprintf(var, "%d", siConEvnt->cgPtyNum.presRest.val);
-					sngss7_add_var(sngss7_info, "ss7_pres_ind", var);
-					/* fill in the presentation value */
-					ftdmchan->caller_data.pres = siConEvnt->cgPtyNum.presRest.val;
-				}	
-			} else {
 				if (g_ftdm_sngss7_data.cfg.force_inr) {
 					sngss7_set_ckt_flag(sngss7_info, FLAG_INR_TX);
 					sngss7_clear_ckt_flag(sngss7_info, FLAG_INR_SENT);
 				}
 
 				SS7_INFO_CHAN(ftdmchan,"No Calling party (ANI) information in IAM!%s\n", " ");
+			} else {
+				SS7_INFO_CHAN(ftdmchan,"Calling party (ANI) information [%s]  present in IAM!%s\n", ftdmchan->caller_data.cid_num.digits," ");
+				/* fill in cid Name */
+				ftdm_set_string(ftdmchan->caller_data.cid_name, ftdmchan->caller_data.cid_num.digits);
+
+				/* fill in ANI */
+				ftdm_set_string(ftdmchan->caller_data.ani.digits, ftdmchan->caller_data.cid_num.digits);
 			}
 
 			/* fill in called party infomation */
@@ -304,7 +256,8 @@ ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 			/* TODO - Ideally we should have configured list of supported bearer capability against which we 
 				  compare the received bearer capability */
 #ifdef SS7_UK
-			if (g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].switchType == LSI_SW_UK) {
+			if ((g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].switchType == LSI_SW_UK) && 
+				       (g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].bearcap_check)) {
 				/* If bearer capability is not supported then reject call */
 				if (sngss7_is_bearer_capability_supported(ftdmchan->caller_data.bearer_capability) == FTDM_FAIL) {
 					SS7_DEBUG_CHAN(ftdmchan,"Received bearar capability[%d] unsupported %s \n",ftdmchan->caller_data.bearer_capability,"");

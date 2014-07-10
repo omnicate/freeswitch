@@ -138,6 +138,7 @@ typedef struct sng_ccSpan
 	uint8_t         cpg_on_progress_media;
 	uint8_t         cpg_on_progress;
 	uint8_t			itx_auto_reply;
+	uint8_t			bearcap_check;
 	uint32_t		t3;
 	uint32_t		t10;
 	uint32_t		t12;
@@ -2126,6 +2127,11 @@ static int ftmod_ss7_parse_cc_span(ftdm_conf_node_t *cc_span)
 			sng_ccSpan.min_digits = atoi(parm->val);
 			SS7_DEBUG("Found a min_digits = %d\n",sng_ccSpan.min_digits);
 		/**********************************************************************/
+		} else if (!strcasecmp(parm->var, "bearcap_check_enable")) {
+		/**********************************************************************/
+			sng_ccSpan.bearcap_check = ftdm_true(parm->val); 
+			SS7_DEBUG("Found a bearcap_check_enable = %d\n",sng_ccSpan.bearcap_check);
+		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "clg_nadi")) {
 		/**********************************************************************/
 			/* throw the flag so that we know we got this optional parameter */
@@ -3200,6 +3206,7 @@ static int ftmod_ss7_fill_in_ccSpan(sng_ccSpan_t *ccSpan)
 		g_ftdm_sngss7_data.cfg.isupCkt[x].options					= ccSpan->options;
 		g_ftdm_sngss7_data.cfg.isupCkt[x].switchType					= ccSpan->switchType;
 		g_ftdm_sngss7_data.cfg.isupCkt[x].min_digits					= ccSpan->min_digits;
+		g_ftdm_sngss7_data.cfg.isupCkt[x].bearcap_check					= ccSpan->bearcap_check;
 		g_ftdm_sngss7_data.cfg.isupCkt[x].itx_auto_reply				= ccSpan->itx_auto_reply;
 		g_ftdm_sngss7_data.cfg.isupCkt[x].transparent_iam				= ccSpan->transparent_iam;
 		g_ftdm_sngss7_data.cfg.isupCkt[x].transparent_iam_max_size		= ccSpan->transparent_iam_max_size;

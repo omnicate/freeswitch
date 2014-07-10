@@ -150,8 +150,72 @@ static uint8_t get_ftdm_val(ftdm2trillium_t *vals, uint8_t trillium_val, uint8_t
 	return default_val;
 }
 
-ftdm_status_t copy_cgPtyNum_from_sngss7(ftdm_channel_t *ftdmchan, SiCgPtyNum *cgPtyNum)
+ftdm_status_t copy_cgPtyNum_from_sngss7(ftdm_channel_t *ftdmchan, SiConEvnt *siConEvnt, sngss7_chan_data_t* sngss7_info)
 {
+	int pres_restrict = 0x00;
+	int clid_found = 0x00;
+	char var[FTDM_DIGITS_LIMIT];
+#ifdef SS7_UK
+	/* If presentation IE available then use that instead of calling party IE */
+	if (g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].switchType == LSI_SW_UK) {
+		/* Check for National Forward Call Indicator */
+		if (siConEvnt->natFwdCalInd.eh.pres && 
+				siConEvnt->natFwdCalInd.cliBlkInd.pres &&
+				siConEvnt->natFwdCalInd.cliBlkInd.val == NUMB_NOTDISC ) {
+			SS7_INFO_CHAN(ftdmchan," NFCI: CLI Blocking Indicator true %s\n",""); 
+			pres_restrict = 1;
+		}
+
+		if (!pres_restrict && siConEvnt->presntNum.eh.pres && 
+				siConEvnt->presntNum.addrSig.pres ) {
+
+			if (siConEvnt->presntNum.presRest.pres &&  (siConEvnt->presntNum.presRest.val == PRSNT_RESTRIC)) {
+				SS7_INFO_CHAN(ftdmchan," SS7-UK: Presentation Restriction =%d not allowed.%s\n",siConEvnt->cgPtyNum.presRest.val,"");
+				/* TODO - Need to see if we have to complete avoid calling party or skip "Presentation IE" and jump to CGPTY */
+				goto cgpty_cli;
+			}
+
+			/* fill in cid_num */
+			copy_tknStr_from_sngss7(siConEvnt->presntNum.addrSig,
+					ftdmchan->caller_data.cid_num.digits, 
+					siConEvnt->presntNum.oddEven);
+			SS7_INFO_CHAN(ftdmchan," SS7-UK:  Presentation number present [%s]\n", ftdmchan->caller_data.cid_num.digits);
+			/* enable flag to avoid filling cid_num from calling party digits */
+			clid_found = 0x01;
+		}
+		/* TODO - Not sure if we need to consider screening/presentation indicator from this IE */
+	}
+#endif
+cgpty_cli:
+	/* fill in calling party information */
+	if (siConEvnt->cgPtyNum.eh.pres) {
+		if (!pres_restrict && siConEvnt->cgPtyNum.addrSig.pres) {
+			/* If presentation is restricted then dont add digits  */
+			if (siConEvnt->cgPtyNum.presRest.pres &&  (siConEvnt->cgPtyNum.presRest.val == PRSNT_RESTRIC)) {
+				SS7_INFO_CHAN(ftdmchan," Presentation Restriction =%d not allowed.%s\n",siConEvnt->cgPtyNum.presRest.val,"");
+			} else if (!clid_found) {
+				/* fill in cid_num */
+				copy_tknStr_from_sngss7(siConEvnt->cgPtyNum.addrSig,
+						ftdmchan->caller_data.cid_num.digits, 
+						siConEvnt->cgPtyNum.oddEven);
+			}
+		}
+
+		if (siConEvnt->cgPtyNum.scrnInd.pres) {
+			/* fill in the screening indication value */
+			ftdmchan->caller_data.screen = siConEvnt->cgPtyNum.scrnInd.val;
+		}
+
+		if (siConEvnt->cgPtyNum.presRest.pres) {
+
+			/* add any special variables for the dialplan */
+			sprintf(var, "%d", siConEvnt->cgPtyNum.presRest.val);
+			sngss7_add_var(sngss7_info, "ss7_pres_ind", var);
+			/* fill in the presentation value */
+			ftdmchan->caller_data.pres = siConEvnt->cgPtyNum.presRest.val;
+		}
+	}
+
 	return FTDM_SUCCESS;
 }
 
