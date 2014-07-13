@@ -422,7 +422,7 @@ ftdm_status_t copy_paramcompatibility_to_sngss7(ftdm_channel_t *ftdmchan, SiParm
 
 	/* upgraded parm 1 */
 	parmCom->upgrPar1.pres = PRSNT_NODEF;
-	parmCom->upgrPar1.val  = 244;  /* National Forward Call Indicator */
+	parmCom->upgrPar1.val  = 254;  /* National Forward Call Indicator */
 
 	/* transit exchange indicator */
 	parmCom->tranXInd1.pres = PRSNT_NODEF;
