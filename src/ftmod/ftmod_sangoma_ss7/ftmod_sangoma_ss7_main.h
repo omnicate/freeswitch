@@ -474,6 +474,7 @@ typedef struct sng_isap {
 	uint32_t		tect;
 	uint32_t		trelrsp;
 	uint32_t		tfnlrelrsp;
+	uint32_t		defRelLocation;
 } sng_isap_t;
 
 typedef struct sng_relay {

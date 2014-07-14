@@ -1774,6 +1774,7 @@ static int ftmod_ss7_parse_isup_interface(ftdm_conf_node_t *isup_interface)
 	int						num_parms = isup_interface->n_parameters;
 	int						i;
 	int						ret;
+	int						flag_def_rel_loc = 0;
 
 	/* initalize the isup intf and isap structure */
 	memset(&sng_isup, 0x0, sizeof(sng_isup));
@@ -1818,6 +1819,10 @@ static int ftmod_ss7_parse_isup_interface(ftdm_conf_node_t *isup_interface)
 					(SI_PAUSE_CLRTMOUT == sng_isup.pauseAction)) {
 				SS7_DEBUG("Found isup pauseAction = %d\n",sng_isup.pauseAction);
 			}
+		} else if (!strcasecmp(parm->var, "defRelLocation")) {
+			flag_def_rel_loc = 1;
+			sng_isap.defRelLocation = atoi(parm->val);
+			SS7_DEBUG("Found isup defRelLocation = %d\n",sng_isap.defRelLocation);
 		} else if (!strcasecmp(parm->var, "isup.t1")) {
 			sng_isap.t1 = atoi(parm->val);
 			SS7_DEBUG("Found isup t1 = %d\n",sng_isap.t1);
@@ -1963,6 +1968,11 @@ static int ftmod_ss7_parse_isup_interface(ftdm_conf_node_t *isup_interface)
 
 		lnkSet = lnkSet->next;
 	} 
+
+	if (!flag_def_rel_loc) {
+		/* Add default value of release location */
+		sng_isap.defRelLocation = ILOC_PRIVNETLU; 
+	}
 
 	/* pull values from the lower levels */
 	sng_isap.switchType = g_ftdm_sngss7_data.cfg.mtpRoute[sng_isup.mtpRouteId].switchType;
@@ -2998,6 +3008,7 @@ static int ftmod_ss7_fill_in_isap(sng_isap_t *sng_isap)
 	g_ftdm_sngss7_data.cfg.isap[i].spId			= sng_isap->id;
 	g_ftdm_sngss7_data.cfg.isap[i].switchType	= sng_isap->switchType;
 	g_ftdm_sngss7_data.cfg.isap[i].ssf			= sng_isap->ssf;
+	g_ftdm_sngss7_data.cfg.isap[i].defRelLocation		= sng_isap->defRelLocation;
 
 	if (sng_isap->t1 != 0) {
 		g_ftdm_sngss7_data.cfg.isap[i].t1		= sng_isap->t1;
