@@ -383,14 +383,21 @@ ftdm_status_t copy_cdPtyNum_to_sngss7(ftdm_channel_t *ftdmchan, SiCdPtyNum *cdPt
 #ifdef SS7_UK
 ftdm_status_t copy_nfci_to_sngss7(ftdm_channel_t *ftdmchan, SiNatFwdCalInd *nfci)
 {
+	const char *val = NULL;
         nfci->eh.pres = PRSNT_NODEF;
 
         /* Call Indicator */
         nfci->cliBlkInd.pres = PRSNT_NODEF;
-	if (ftdm_strlen_zero(ftdmchan->caller_data.cid_num.digits)) {
-		nfci->cliBlkInd.val = NUMB_NOTDISC;     /* Netowork Number not disclosed to the called user */
+
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_cli_blocking_ind");
+	if (!ftdm_strlen_zero(val)) {
+		nfci->cliBlkInd.val = atoi(val); 
 	} else {
-		nfci->cliBlkInd.val = NUMB_MAYDISC;     /* Netowork Number may(subject to CLIR) disclosed to the called user */
+		if (ftdm_strlen_zero(ftdmchan->caller_data.cid_num.digits)) {
+			nfci->cliBlkInd.val = NUMB_NOTDISC;     /* Netowork Number not disclosed to the called user */
+		} else {
+			nfci->cliBlkInd.val = NUMB_MAYDISC;     /* Netowork Number may(subject to CLIR) disclosed to the called user */
+		}
 	}
 
         /* Network Translated Address Indicator */
