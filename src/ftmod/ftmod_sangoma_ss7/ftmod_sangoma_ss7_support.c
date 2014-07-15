@@ -423,6 +423,17 @@ ftdm_status_t copy_nfci_to_sngss7(ftdm_channel_t *ftdmchan, SiNatFwdCalInd *nfci
         return FTDM_SUCCESS;
 }
 
+/* API to return success if link failure action configured RELEASE CALLS */
+ftdm_status_t ftdm_ss7_release_calls()
+{
+	if (SNGSS7_ACTION_RELEASE_CALLS == g_ftdm_sngss7_data.cfg.link_failure_action) {
+		return FTDM_SUCCESS;
+	} else {
+		return FTDM_FAIL;
+	}
+	return FTDM_SUCCESS;
+}
+
 ftdm_status_t copy_paramcompatibility_to_sngss7(ftdm_channel_t *ftdmchan, SiParmCompInfo *parmCom)
 {
 	parmCom->eh.pres = PRSNT_NODEF;
@@ -2607,7 +2618,7 @@ ftdm_status_t check_for_res_sus_flag(ftdm_span_t *ftdmspan)
 			}
 
 			/* Do not touch transiant calls on receiving PAUSE */
-			if ((ftdmchan->state == FTDM_CHANNEL_STATE_DOWN)) {
+			if ((FTDM_SUCCESS == ftdm_ss7_release_calls()) || (ftdmchan->state == FTDM_CHANNEL_STATE_DOWN)) {
 				/* throw the channel into SUSPENDED to process the flag */
 				/* after doing this once the sig status will be down */
 				ftdm_set_state (ftdmchan, FTDM_CHANNEL_STATE_SUSPENDED);
@@ -2623,10 +2634,11 @@ ftdm_status_t check_for_res_sus_flag(ftdm_span_t *ftdmspan)
 				ftdm_sangoma_ss7_process_state_change (ftdmchan);
 			}
 
-			if ((ftdmchan->state == FTDM_CHANNEL_STATE_DOWN) || 
+			if ((FTDM_SUCCESS == ftdm_ss7_release_calls()) || 
+					(ftdmchan->state == FTDM_CHANNEL_STATE_DOWN) || 
 					(ftdmchan->state == FTDM_CHANNEL_STATE_RESTART)) {
-			/* got SUSPENDED state to clear the flag */
-			ftdm_set_state (ftdmchan, FTDM_CHANNEL_STATE_SUSPENDED);
+				/* got SUSPENDED state to clear the flag */
+				ftdm_set_state (ftdmchan, FTDM_CHANNEL_STATE_SUSPENDED);
 			}
 		}
 

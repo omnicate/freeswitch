@@ -705,6 +705,16 @@ static int ftmod_ss7_parse_sng_gen(ftdm_conf_node_t *sng_gen, char* operating_mo
 			sngss7_queue.ss7_call_qsize = atoi(parm->val);
 		} else if (!strcasecmp(parm->var, "acc_dequeue_rate")) {
 			sngss7_queue.call_dequeue_rate = atoi(parm->val);
+		} else if (!strcasecmp(parm->var, "link_failure_action")) {
+			g_ftdm_sngss7_data.cfg.link_failure_action = atoi(parm->val);
+			if ((g_ftdm_sngss7_data.cfg.link_failure_action == SNGSS7_ACTION_RELEASE_CALLS) || 
+					(g_ftdm_sngss7_data.cfg.link_failure_action == SNGSS7_ACTION_KEEP_CALLS)) {
+				SS7_DEBUG("Found link_failure_action  = %d\n", g_ftdm_sngss7_data.cfg.link_failure_action);
+			} else {
+				SS7_DEBUG("Found invalid link_failure_action  = %d\n", g_ftdm_sngss7_data.cfg.link_failure_action);
+				/* default value release calls (for backward compatibility) */
+				g_ftdm_sngss7_data.cfg.link_failure_action = SNGSS7_ACTION_RELEASE_CALLS;
+			}
 		} else {
 			SS7_ERROR("Found an invalid parameter \"%s\"!\n", parm->var);
 			return FTDM_FAIL;

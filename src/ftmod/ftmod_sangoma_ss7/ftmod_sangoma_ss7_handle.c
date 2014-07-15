@@ -1878,8 +1878,11 @@ ftdm_status_t handle_rsc_req(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 	case FTDM_CHANNEL_STATE_RINGING:
 	case FTDM_CHANNEL_STATE_UP:
 	case FTDM_CHANNEL_STATE_PROGRESS_MEDIA:
-		SS7_INFO_CHAN(ftdmchan, "[CIC:%d]Rx %s when call is up..ignoring..\n", g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic, DECODE_LCC_EVENT(evntType));
-		break;
+		if (FTDM_FAIL == ftdm_ss7_release_calls()) {
+			SS7_INFO_CHAN(ftdmchan, "[CIC:%d]Rx %s when call is up..ignoring..\n", g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic, DECODE_LCC_EVENT(evntType));
+			break;
+		}
+		/* fall down to release the calls */
 
 	default:
 		/* set the state of the channel to restart...the rest is done by the chan monitor */

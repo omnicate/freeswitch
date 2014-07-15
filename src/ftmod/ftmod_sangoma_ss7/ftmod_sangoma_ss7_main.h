@@ -533,6 +533,7 @@ typedef struct sng_ss7_cfg {
 	uint32_t		force_inr;
 	sng_m2ua_gbl_cfg_t 	g_m2ua_cfg;
 	sng_sctp_cfg_t		sctpCfg;
+	int			link_failure_action;
 } sng_ss7_cfg_t;
 
 typedef struct sng_ss7_mtp2api_data {
@@ -544,6 +545,12 @@ typedef struct sngss7_api_data {
     int16_t     mtp1_id;
     int16_t     mtp2_id;
 } sngss7_api_data_t;
+
+typedef enum {
+	SNGSS7_ACTION_RELEASE_CALLS = 0,
+	SNGSS7_ACTION_KEEP_CALLS,
+	SNGSS7_ACTION_INVALID
+} sng_link_failure_action;
 
 
 typedef struct ftdm_sngss7_data {
@@ -1150,6 +1157,7 @@ ftdm_status_t copy_usr2UsrInfo_from_sngss7(ftdm_channel_t *ftdmchan, SiUsr2UsrIn
 ftdm_status_t copy_hopCounter_to_sngss7(ftdm_channel_t *ftdmchan, SiHopCounter *hopCounter);
 ftdm_status_t copy_hopCounter_from_sngss7(ftdm_channel_t *ftdmchan, SiHopCounter *hopCounter);
 
+ftdm_status_t ftdm_ss7_release_calls(void);
 
 ftdm_status_t copy_tknStr_from_sngss7(TknStr str, char *ftdm, TknU8 oddEven);
 ftdm_status_t append_tknStr_from_sngss7(TknStr str, char *ftdm, TknU8 oddEven);
