@@ -249,12 +249,6 @@ int  ft_to_sngss7_cfg_all(void)
 			return 1;
 	}
 
-	if (!(sngss7_test_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_RY_PRESENT))) {
-		if (g_ftdm_sngss7_data.stack_logging_enable) {
-			ftmod_ss7_enable_isup_logging();
-		}
-	}
-
 	x = 1;
 	while (x < (MAX_MTP_LINKS)) {
 		/* check if this link has been configured already */
