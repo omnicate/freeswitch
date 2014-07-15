@@ -1025,7 +1025,19 @@ static switch_status_t channel_receive_message_b(switch_core_session_t *session,
 	switch (msg->message_id) {
 	case SWITCH_MESSAGE_INDICATE_RINGING:
 		{
-			ftdm_channel_call_indicate(tech_pvt->ftdmchan, FTDM_CHANNEL_INDICATE_RINGING);
+			/* fill ISUP - ACM related dialplan variables */
+			const char *var = NULL;
+			ftdm_usrmsg_t usrmsg;
+			memset(&usrmsg, 0, sizeof(usrmsg));
+			var = switch_channel_get_variable(channel, "acm_bi_cpc");
+			if (var) {
+				ftdm_usrmsg_add_var(&usrmsg, "acm_bi_cpc", var);
+			}
+			var   = switch_channel_get_variable(channel, "acm_bi_iup");
+			if (var) {
+				ftdm_usrmsg_add_var(&usrmsg, "acm_bi_iup", var);
+			}
+			ftdm_channel_call_indicate_ex(tech_pvt->ftdmchan, FTDM_CHANNEL_INDICATE_RINGING, &usrmsg);
 		}
 		break;
 	case SWITCH_MESSAGE_INDICATE_PROGRESS:
@@ -1599,6 +1611,11 @@ static switch_call_cause_t channel_outgoing_channel(switch_core_session_t *sessi
 			ftdm_usrmsg_add_var(&usrmsg, "ss7_pres_ind", sipvar);
 		}
 
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-CLI-BlockingInd");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_cli_blocking_ind", sipvar);
+		}
+
 		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-CPC");
 		if (sipvar) {
 			ftdm_set_calling_party_category(sipvar, (uint8_t *)&caller_data.cpc);
@@ -2099,6 +2116,11 @@ ftdm_status_t ftdm_channel_from_event(ftdm_sigmsg_t *sigmsg, switch_core_session
 		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_opc");
 		if (!ftdm_strlen_zero(var_value)) {
 			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-OPC", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_cli_blocking_ind");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-CLI-BlockingInd", "%s", var_value);
 		}
 
 		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_loc_digits");

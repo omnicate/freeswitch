@@ -1443,7 +1443,7 @@ int ftmod_ss7_isup_intf_config(int id)
 	cfg.t.cfg.s.siIntfCb.phyDpc					= k->dpc;				/* physical destination postatic int code */
 	cfg.t.cfg.s.siIntfCb.swtch					= k->switchType;		/* Protocol Switch */
 	cfg.t.cfg.s.siIntfCb.ssf					= k->ssf;				/* subsystem service information */
-	cfg.t.cfg.s.siIntfCb.pauseActn				= SI_PAUSE_CLRTRAN;		/* call clearing behavior upon rx. PAUSE */
+	cfg.t.cfg.s.siIntfCb.pauseActn			= k->pauseAction;		/* call clearing behavior upon rx. PAUSE */
 	cfg.t.cfg.s.siIntfCb.dpcCbTmr.t4.enb		= TRUE;					/* t4 timer - user part test sent */
 	cfg.t.cfg.s.siIntfCb.dpcCbTmr.t4.val		= k->t4;
 	cfg.t.cfg.s.siIntfCb.dpcCbTmr.tPAUSE.enb	= TRUE;					/* waiting for PAUSE to be effective */
@@ -1645,7 +1645,7 @@ int ftmod_ss7_isup_isap_config(int id)
 	cfg.t.cfg.s.siSap.allCallMod			= TRUE;						/* call modification allowed flag */
 	cfg.t.cfg.s.siSap.maxLenU2U				= MAX_SI_USER_2_USER_LEN;	/* Max length of user to user messages */
 	cfg.t.cfg.s.siSap.passOnFlag			= TRUE;						/* flag for passing unknown par/msg */
-	cfg.t.cfg.s.siSap.relLocation			= ILOC_PRIVNETLU;			/* release location indicator in cause val */
+	cfg.t.cfg.s.siSap.relLocation			= k->defRelLocation; 			/* release location indicator in cause val */
 	cfg.t.cfg.s.siSap.prior					= PRIOR0;					/* priority */
 	cfg.t.cfg.s.siSap.route					= RTESPEC;					/* route */
 	cfg.t.cfg.s.siSap.selector				= 0;						/* selector */

@@ -150,8 +150,72 @@ static uint8_t get_ftdm_val(ftdm2trillium_t *vals, uint8_t trillium_val, uint8_t
 	return default_val;
 }
 
-ftdm_status_t copy_cgPtyNum_from_sngss7(ftdm_channel_t *ftdmchan, SiCgPtyNum *cgPtyNum)
+ftdm_status_t copy_cgPtyNum_from_sngss7(ftdm_channel_t *ftdmchan, SiConEvnt *siConEvnt, sngss7_chan_data_t* sngss7_info)
 {
+	int pres_restrict = 0x00;
+	int clid_found = 0x00;
+	char var[FTDM_DIGITS_LIMIT];
+#ifdef SS7_UK
+	/* If presentation IE available then use that instead of calling party IE */
+	if (g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].switchType == LSI_SW_UK) {
+		/* Check for National Forward Call Indicator */
+		if (siConEvnt->natFwdCalInd.eh.pres && 
+				siConEvnt->natFwdCalInd.cliBlkInd.pres &&
+				siConEvnt->natFwdCalInd.cliBlkInd.val == NUMB_NOTDISC ) {
+			SS7_INFO_CHAN(ftdmchan," NFCI: CLI Blocking Indicator true %s\n",""); 
+			pres_restrict = 1;
+		}
+
+		if (!pres_restrict && siConEvnt->presntNum.eh.pres && 
+				siConEvnt->presntNum.addrSig.pres ) {
+
+			if (siConEvnt->presntNum.presRest.pres &&  (siConEvnt->presntNum.presRest.val == PRSNT_RESTRIC)) {
+				SS7_INFO_CHAN(ftdmchan," SS7-UK: Presentation Restriction =%d not allowed.%s\n",siConEvnt->cgPtyNum.presRest.val,"");
+				/* TODO - Need to see if we have to complete avoid calling party or skip "Presentation IE" and jump to CGPTY */
+				goto cgpty_cli;
+			}
+
+			/* fill in cid_num */
+			copy_tknStr_from_sngss7(siConEvnt->presntNum.addrSig,
+					ftdmchan->caller_data.cid_num.digits, 
+					siConEvnt->presntNum.oddEven);
+			SS7_INFO_CHAN(ftdmchan," SS7-UK:  Presentation number present [%s]\n", ftdmchan->caller_data.cid_num.digits);
+			/* enable flag to avoid filling cid_num from calling party digits */
+			clid_found = 0x01;
+		}
+		/* TODO - Not sure if we need to consider screening/presentation indicator from this IE */
+	}
+#endif
+cgpty_cli:
+	/* fill in calling party information */
+	if (siConEvnt->cgPtyNum.eh.pres) {
+		if (!pres_restrict && siConEvnt->cgPtyNum.addrSig.pres) {
+			/* If presentation is restricted then dont add digits  */
+			if (siConEvnt->cgPtyNum.presRest.pres &&  (siConEvnt->cgPtyNum.presRest.val == PRSNT_RESTRIC)) {
+				SS7_INFO_CHAN(ftdmchan," Presentation Restriction =%d not allowed.%s\n",siConEvnt->cgPtyNum.presRest.val,"");
+			} else if (!clid_found) {
+				/* fill in cid_num */
+				copy_tknStr_from_sngss7(siConEvnt->cgPtyNum.addrSig,
+						ftdmchan->caller_data.cid_num.digits, 
+						siConEvnt->cgPtyNum.oddEven);
+			}
+		}
+
+		if (siConEvnt->cgPtyNum.scrnInd.pres) {
+			/* fill in the screening indication value */
+			ftdmchan->caller_data.screen = siConEvnt->cgPtyNum.scrnInd.val;
+		}
+
+		if (siConEvnt->cgPtyNum.presRest.pres) {
+
+			/* add any special variables for the dialplan */
+			sprintf(var, "%d", siConEvnt->cgPtyNum.presRest.val);
+			sngss7_add_var(sngss7_info, "ss7_pres_ind", var);
+			/* fill in the presentation value */
+			ftdmchan->caller_data.pres = siConEvnt->cgPtyNum.presRest.val;
+		}
+	}
+
 	return FTDM_SUCCESS;
 }
 
@@ -316,6 +380,98 @@ ftdm_status_t copy_cdPtyNum_to_sngss7(ftdm_channel_t *ftdmchan, SiCdPtyNum *cdPt
 	}
 }
 
+#ifdef SS7_UK
+ftdm_status_t copy_nfci_to_sngss7(ftdm_channel_t *ftdmchan, SiNatFwdCalInd *nfci)
+{
+	const char *val = NULL;
+        nfci->eh.pres = PRSNT_NODEF;
+
+        /* Call Indicator */
+        nfci->cliBlkInd.pres = PRSNT_NODEF;
+
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_cli_blocking_ind");
+	if (!ftdm_strlen_zero(val)) {
+		nfci->cliBlkInd.val = atoi(val); 
+	} else {
+		if (ftdm_strlen_zero(ftdmchan->caller_data.cid_num.digits)) {
+			nfci->cliBlkInd.val = NUMB_NOTDISC;     /* Netowork Number not disclosed to the called user */
+		} else {
+			nfci->cliBlkInd.val = NUMB_MAYDISC;     /* Netowork Number may(subject to CLIR) disclosed to the called user */
+		}
+	}
+
+        /* Network Translated Address Indicator */
+        nfci->nwTransAddrInd.pres = PRSNT_NODEF;
+        nfci->nwTransAddrInd.val  = NO_INF;             /* No Information */
+        //nfci->nwTransAddrInd.val  = NWTRANS_CDADDR;     /* Network translation of the called adddress has occurred */
+
+        /* Priority Access Indicator */
+        nfci->priorAccessInd.pres = PRSNT_NODEF;
+        nfci->priorAccessInd.val = NO_INF;
+        //nfci->priorAccessInd.val = PRIORACCSCALL_IUP;
+
+        /* Protection Indicator */
+        nfci->protectionInd.pres = PRSNT_NODEF;
+        nfci->protectionInd.val  = NO_INF;
+        //nfci->protectionInd.val  = PROTCALL_IUP;
+	//
+        nfci->spare.pres = PRSNT_NODEF;
+        nfci->spare.val  = 0x00;
+
+        ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "SS7-UK: Setting NFCI- Blocking Ind[%d], Network Ind[%d], Priority Ind[%d], Protection Ind[%d]\n",
+                        nfci->cliBlkInd.val, nfci->nwTransAddrInd.val, nfci->priorAccessInd.val, nfci->protectionInd.val);
+        return FTDM_SUCCESS;
+}
+
+/* API to return success if link failure action configured RELEASE CALLS */
+ftdm_status_t ftdm_ss7_release_calls()
+{
+	if (SNGSS7_ACTION_RELEASE_CALLS == g_ftdm_sngss7_data.cfg.link_failure_action) {
+		return FTDM_SUCCESS;
+	} else {
+		return FTDM_FAIL;
+	}
+	return FTDM_SUCCESS;
+}
+
+ftdm_status_t copy_paramcompatibility_to_sngss7(ftdm_channel_t *ftdmchan, SiParmCompInfo *parmCom)
+{
+	parmCom->eh.pres = PRSNT_NODEF;
+
+	/* upgraded parm 1 */
+	parmCom->upgrPar1.pres = PRSNT_NODEF;
+	parmCom->upgrPar1.val  = 254;  /* National Forward Call Indicator */
+
+	/* transit exchange indicator */
+	parmCom->tranXInd1.pres = PRSNT_NODEF;
+	parmCom->tranXInd1.val  = 1; /* End node Interpretation */ 
+
+	/* release call indicator */	
+	parmCom->relCllInd1.pres = PRSNT_NODEF;
+	parmCom->relCllInd1.val  = 0; /* Do Not Release call */ 
+
+	/* send notification indicator */	
+	parmCom->sndNotInd1.pres = PRSNT_NODEF;
+	parmCom->sndNotInd1.val  = 0; /* Do not send notification indicator */
+
+	/* discard message indicator */	
+	parmCom->dcrdMsgInd1.pres = PRSNT_NODEF;
+	parmCom->dcrdMsgInd1.val  = 0; /* Do not discard message (pass on) */ 
+
+	/* discard parameter indicator */
+	parmCom->dcrdParInd1.pres = PRSNT_NODEF;
+	parmCom->dcrdParInd1.val  = 1;	/* Discard parameter */ 
+
+	/* pass not possible indicator */	
+	parmCom->passNtPoss1.pres = PRSNT_NODEF;
+	parmCom->passNtPoss1.val  = 2;	/* Discard parameter */ 
+
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "SS7-UK: Setting Parameter Compatibility information for NFCI %s\n",""); 
+	return FTDM_SUCCESS;
+}
+#endif
+
+
 ftdm_status_t copy_locPtyNum_from_sngss7(ftdm_channel_t *ftdmchan, SiCgPtyNum *locPtyNum)
 {
 	return FTDM_SUCCESS;
@@ -334,6 +490,13 @@ ftdm_status_t copy_locPtyNum_to_sngss7(ftdm_channel_t *ftdmchan, SiCgPtyNum *loc
 		pres_val = NOTPRSNT;
 		return FTDM_SUCCESS;
 	}
+
+	/* Channel variable to enable/disable location number in case of ss7 to ss7 calls */
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_loc_digits");
+	if (!ftdm_strlen_zero(val) && !strcasecmp(val, "NULL")) {
+		pres_val = NOTPRSNT;
+		return FTDM_SUCCESS;
+	} 
 
         locPtyNum->eh.pres = pres_val;
         locPtyNum->natAddrInd.pres = pres_val;
@@ -720,6 +883,7 @@ ftdm_status_t copy_redirgInfo_to_sngss7(ftdm_channel_t *ftdmchan, SiRedirInfo *r
 	return FTDM_SUCCESS;
 }
 
+
 ftdm_status_t copy_access_transport_from_sngss7(ftdm_channel_t *ftdmchan, SiAccTrnspt *accTrnspt)
 {
 	char val[3*((MF_SIZE_TKNSTRE + 7) & 0xff8)];
@@ -735,6 +899,22 @@ ftdm_status_t copy_access_transport_from_sngss7(ftdm_channel_t *ftdmchan, SiAccT
 	
 	return FTDM_SUCCESS;
 }
+
+#ifdef SS7_UK
+ftdm_status_t sngss7_is_bearer_capability_supported(int bearcap)
+{
+	switch (bearcap)
+	{
+		case TMR_SPEECH:
+		case TMR_31KHZ:
+		case TMR_384KBITS:
+			return FTDM_SUCCESS;
+		default:
+			return FTDM_FAIL;
+	}
+	return FTDM_SUCCESS;
+}
+#endif
 
 ftdm_status_t copy_access_transport_to_sngss7(ftdm_channel_t *ftdmchan, SiAccTrnspt *accTrnspt)
 {
@@ -2435,10 +2615,13 @@ ftdm_status_t check_for_res_sus_flag(ftdm_span_t *ftdmspan)
 			while (ftdm_test_flag (ftdmchan, FTDM_CHANNEL_STATE_CHANGE)) {
 				ftdm_sangoma_ss7_process_state_change (ftdmchan);
 			}
-			
-			/* throw the channel into SUSPENDED to process the flag */
-			/* after doing this once the sig status will be down */
-			ftdm_set_state (ftdmchan, FTDM_CHANNEL_STATE_SUSPENDED);
+
+			/* Do not touch transiant calls on receiving PAUSE */
+			if ((FTDM_SUCCESS == ftdm_ss7_release_calls()) || (ftdmchan->state == FTDM_CHANNEL_STATE_DOWN)) {
+				/* throw the channel into SUSPENDED to process the flag */
+				/* after doing this once the sig status will be down */
+				ftdm_set_state (ftdmchan, FTDM_CHANNEL_STATE_SUSPENDED);
+			}
 		}
 
 		/* if the RESUME flag is up go to SUSPENDED to process the flag */
@@ -2450,8 +2633,12 @@ ftdm_status_t check_for_res_sus_flag(ftdm_span_t *ftdmspan)
 				ftdm_sangoma_ss7_process_state_change (ftdmchan);
 			}
 
-			/* got SUSPENDED state to clear the flag */
-			ftdm_set_state (ftdmchan, FTDM_CHANNEL_STATE_SUSPENDED);
+			if ((FTDM_SUCCESS == ftdm_ss7_release_calls()) || 
+					(ftdmchan->state == FTDM_CHANNEL_STATE_DOWN) || 
+					(ftdmchan->state == FTDM_CHANNEL_STATE_RESTART)) {
+				/* got SUSPENDED state to clear the flag */
+				ftdm_set_state (ftdmchan, FTDM_CHANNEL_STATE_SUSPENDED);
+			}
 		}
 
 		/* unlock the channel */

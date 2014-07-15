@@ -367,6 +367,7 @@ typedef struct sng_isup_intf {
 	uint32_t		switchType;
 	uint32_t		nwId;
 	uint32_t		mtpRouteId;
+	uint32_t		pauseAction;
 	uint32_t		ssf;
 	uint32_t		isap;
 	uint16_t		t4;
@@ -427,6 +428,7 @@ typedef struct sng_isup_ckt {
 	uint8_t			cpg_on_progress_media;
 	uint8_t			cpg_on_progress;
 	uint8_t			itx_auto_reply;
+	uint8_t			bearcap_check;
 	void			*obj;
 	uint16_t		t3;
 	uint32_t		t10;
@@ -481,6 +483,7 @@ typedef struct sng_isap {
 	uint32_t		tect;
 	uint32_t		trelrsp;
 	uint32_t		tfnlrelrsp;
+	uint32_t		defRelLocation;
 } sng_isap_t;
 
 typedef struct sng_relay {
@@ -542,6 +545,7 @@ typedef struct sng_ss7_cfg {
 	int 			sng_acc;
 	int 			msg_priority;
 	uint32_t 		set_msg_priority;
+	int			link_failure_action;
 } sng_ss7_cfg_t;
 
 typedef struct sng_ss7_mtp2api_data {
@@ -553,6 +557,12 @@ typedef struct sngss7_api_data {
     int16_t     mtp1_id;
     int16_t     mtp2_id;
 } sngss7_api_data_t;
+
+typedef enum {
+	SNGSS7_ACTION_RELEASE_CALLS = 0,
+	SNGSS7_ACTION_KEEP_CALLS,
+	SNGSS7_ACTION_INVALID
+} sng_link_failure_action;
 
 
 typedef struct ftdm_sngss7_data {
@@ -1135,7 +1145,7 @@ int ftmod_ss7_parse_xml(ftdm_conf_parameter_t *ftdm_parameters, ftdm_span_t *spa
 ftdm_status_t ftdm_sngss7_handle_cli_cmd(ftdm_stream_handle_t *stream, const char *data);
 
 /* in ftmod_sangoma_ss7_support.c */
-ftdm_status_t copy_cgPtyNum_from_sngss7(ftdm_channel_t *ftdmchan, SiCgPtyNum *cgPtyNum);
+ftdm_status_t copy_cgPtyNum_from_sngss7(ftdm_channel_t *ftdmchan, SiConEvnt *siConEvnt, sngss7_chan_data_t* sngss7_info); 
 ftdm_status_t copy_cgPtyNum_to_sngss7(ftdm_channel_t *ftdmchan, SiCgPtyNum *cgPtyNum);
 ftdm_status_t is_clip_disable(ftdm_channel_t *ftdmchan);
 ftdm_status_t copy_cdPtyNum_from_sngss7(ftdm_channel_t *ftdmchan, SiCdPtyNum *cdPtyNum);
@@ -1146,11 +1156,14 @@ ftdm_status_t copy_redirgInfo_from_sngss7(ftdm_channel_t *ftdmchan, SiRedirInfo 
 ftdm_status_t copy_redirgInfo_to_sngss7(ftdm_channel_t *ftdmchan, SiRedirInfo *redirInfo);
 ftdm_status_t copy_ocn_to_sngss7(ftdm_channel_t *ftdmchan, SiOrigCdNum *origCdNum);
 ftdm_status_t copy_ocn_from_sngss7(ftdm_channel_t *ftdmchan, SiOrigCdNum *origCdNum);
+ftdm_status_t sngss7_is_bearer_capability_supported(int bearcap);
 
 ftdm_status_t copy_access_transport_from_sngss7(ftdm_channel_t *ftdmchan, SiAccTrnspt *accTrnspt);
 ftdm_status_t copy_access_transport_to_sngss7(ftdm_channel_t *ftdmchan, SiAccTrnspt *accTrnspt);
 ftdm_status_t copy_locPtyNum_to_sngss7(ftdm_channel_t *ftdmchan, SiCgPtyNum *locPtyNum);
 ftdm_status_t copy_locPtyNum_from_sngss7(ftdm_channel_t *ftdmchan, SiCgPtyNum *locPtyNum);
+ftdm_status_t copy_nfci_to_sngss7(ftdm_channel_t *ftdmchan, SiNatFwdCalInd *nfci);
+ftdm_status_t copy_paramcompatibility_to_sngss7(ftdm_channel_t *ftdmchan, SiParmCompInfo *parmCom);
 ftdm_status_t copy_genNmb_to_sngss7(ftdm_channel_t *ftdmchan, SiGenNum *genNmb);
 ftdm_status_t copy_genNmb_from_sngss7(ftdm_channel_t *ftdmchan, SiGenNum *genNmb);
 ftdm_status_t copy_cgPtyCat_to_sngss7(ftdm_channel_t *ftdmchan, SiCgPtyCat *cgPtyCat);
@@ -1174,6 +1187,7 @@ ftdm_status_t copy_usr2UsrInfo_from_sngss7(ftdm_channel_t *ftdmchan, SiUsr2UsrIn
 ftdm_status_t copy_hopCounter_to_sngss7(ftdm_channel_t *ftdmchan, SiHopCounter *hopCounter);
 ftdm_status_t copy_hopCounter_from_sngss7(ftdm_channel_t *ftdmchan, SiHopCounter *hopCounter);
 
+ftdm_status_t ftdm_ss7_release_calls(void);
 
 ftdm_status_t copy_tknStr_from_sngss7(TknStr str, char *ftdm, TknU8 oddEven);
 ftdm_status_t append_tknStr_from_sngss7(TknStr str, char *ftdm, TknU8 oddEven);

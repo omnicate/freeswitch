@@ -93,6 +93,7 @@ ftdm_status_t handle_olm_msg(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 
 #define ftdm_running_return(var) if (!ftdm_running()) { SS7_ERROR("Error: ftdm_running is not set! Ignoring\n"); return var; } 
 
+
 ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circuit, SiConEvnt *siConEvnt)
 {
 	SS7_FUNC_TRACE_ENTER(__FUNCTION__);
@@ -183,43 +184,23 @@ ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 			sngss7_info->suInstId = get_unique_id();
 			sngss7_info->spInstId = spInstId;
 
-			/* fill in calling party information */
-			if (siConEvnt->cgPtyNum.eh.pres) {
-				if (siConEvnt->cgPtyNum.addrSig.pres) {
-					/* fill in cid_num */
-					copy_tknStr_from_sngss7(siConEvnt->cgPtyNum.addrSig,
-											ftdmchan->caller_data.cid_num.digits, 
-											siConEvnt->cgPtyNum.oddEven);
+			copy_cgPtyNum_from_sngss7(ftdmchan, siConEvnt, sngss7_info);
 
-					/* fill in cid Name */
-					ftdm_set_string(ftdmchan->caller_data.cid_name, ftdmchan->caller_data.cid_num.digits);
+			if (ftdm_strlen_zero(ftdmchan->caller_data.cid_num.digits)) {
 
-					/* fill in ANI */
-					ftdm_set_string(ftdmchan->caller_data.ani.digits, ftdmchan->caller_data.cid_num.digits);
-				}
-				else {
-					if (g_ftdm_sngss7_data.cfg.force_inr) {
-						sngss7_set_ckt_flag(sngss7_info, FLAG_INR_TX);
-						sngss7_clear_ckt_flag(sngss7_info, FLAG_INR_SENT);
-					}
-				}
-
-				if (siConEvnt->cgPtyNum.scrnInd.pres) {
-					/* fill in the screening indication value */
-					ftdmchan->caller_data.screen = siConEvnt->cgPtyNum.scrnInd.val;
-				}
-
-				if (siConEvnt->cgPtyNum.presRest.pres) {
-					/* fill in the presentation value */
-					ftdmchan->caller_data.pres = siConEvnt->cgPtyNum.presRest.val;
-				}	
-			} else {
 				if (g_ftdm_sngss7_data.cfg.force_inr) {
 					sngss7_set_ckt_flag(sngss7_info, FLAG_INR_TX);
 					sngss7_clear_ckt_flag(sngss7_info, FLAG_INR_SENT);
 				}
 
 				SS7_INFO_CHAN(ftdmchan,"No Calling party (ANI) information in IAM!%s\n", " ");
+			} else {
+				SS7_INFO_CHAN(ftdmchan,"Calling party (ANI) information [%s]  present in IAM!%s\n", ftdmchan->caller_data.cid_num.digits," ");
+				/* fill in cid Name */
+				ftdm_set_string(ftdmchan->caller_data.cid_name, ftdmchan->caller_data.cid_num.digits);
+
+				/* fill in ANI */
+				ftdm_set_string(ftdmchan->caller_data.ani.digits, ftdmchan->caller_data.cid_num.digits);
 			}
 
 			/* fill in called party infomation */
@@ -291,6 +272,22 @@ ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 			} else {
 				SS7_DEBUG_CHAN(ftdmchan,"No TMR/Bearer Cap information in IAM!%s\n", " ");
 			}
+
+			/* TODO - Ideally we should have configured list of supported bearer capability against which we 
+				  compare the received bearer capability */
+#ifdef SS7_UK
+			if ((g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].switchType == LSI_SW_UK) && 
+				       (g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].bearcap_check)) {
+				/* If bearer capability is not supported then reject call */
+				if (sngss7_is_bearer_capability_supported(ftdmchan->caller_data.bearer_capability) == FTDM_FAIL) {
+					SS7_DEBUG_CHAN(ftdmchan,"Received bearar capability[%d] unsupported %s \n",ftdmchan->caller_data.bearer_capability,"");
+					ftdmchan->caller_data.hangup_cause = 88;	/* SIT_CCINCOMPDEST - Incompatible Destination */
+					sngss7_set_ckt_flag (sngss7_info, FLAG_LOCAL_REL);
+					ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_CANCEL);
+					break;
+				}
+			}
+#endif
 
 			/* add any special variables for the dialplan */
 			sprintf(var, "%d", siConEvnt->cgPtyNum.natAddrInd.val);
@@ -1937,6 +1934,19 @@ ftdm_status_t handle_rsc_req(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 		/* go to idle so that we can redo the restart state*/
 		ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_IDLE);
 		break;
+
+	/* If call is active (or in-progress) then ignore RSC 
+	 * as it could possible that during the ringing/active call 
+	 * state SS7 link might have gone down or come up again..
+	 * so ignore RSC as we need to keep call active */
+	case FTDM_CHANNEL_STATE_RINGING:
+	case FTDM_CHANNEL_STATE_UP:
+	case FTDM_CHANNEL_STATE_PROGRESS_MEDIA:
+		if (FTDM_FAIL == ftdm_ss7_release_calls()) {
+			SS7_INFO_CHAN(ftdmchan, "[CIC:%d]Rx %s when call is up..ignoring..\n", g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic, DECODE_LCC_EVENT(evntType));
+			break;
+		}
+		/* fall down to release the calls */
 
 	default:
 		/* set the state of the channel to restart...the rest is done by the chan monitor */

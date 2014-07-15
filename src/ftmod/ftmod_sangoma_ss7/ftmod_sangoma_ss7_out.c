@@ -227,6 +227,14 @@ void ft_to_sngss7_iam (ftdm_channel_t * ftdmchan)
 		/* Access Transport - old implementation, taking from channel variable of ss7_clg_subaddr */
 		copy_accTrnspt_to_sngss7(ftdmchan, &iam.accTrnspt);
 
+#ifdef SS7_UK
+		SS7_INFO_CHAN(ftdmchan,"Tx IAM : SwitchType[%d]\n", g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].switchType);
+		if (g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].switchType == LSI_SW_UK) {
+			copy_nfci_to_sngss7(ftdmchan, &iam.natFwdCalInd);
+			copy_paramcompatibility_to_sngss7(ftdmchan, &iam.parmCom);
+		}
+#endif
+
 		/* Access Transport - taking from channel variable of ss7_access_transport_urlenc.
 		    This will overwirte the IE value set be above old implementation.
 		*/
@@ -387,6 +395,16 @@ void ft_to_sngss7_acm (ftdm_channel_t * ftdmchan)
 	acm.bckCallInd.cadPtyStatInd.val	= 0x01;
 	acm.bckCallInd.cadPtyCatInd.pres	= PRSNT_NODEF;
 	acm.bckCallInd.cadPtyCatInd.val		= CADCAT_ORDSUBS;
+	backwardInd = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "acm_bi_cpc");
+	if (!ftdm_strlen_zero(backwardInd)) {
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found user supplied backward indicator Called Party Category ACM, value \"%s\"\n", backwardInd);
+		/* CPC valid values 0/1/2 , considering only 0/2 as 1 is already assigned by-def */
+		if (!strcasecmp(backwardInd, "NULL")) {
+			acm.bckCallInd.cadPtyCatInd.val		= CADCAT_NOIND;
+		} else if (atoi(backwardInd) == 2 ) {
+			acm.bckCallInd.cadPtyCatInd.val		= CADCAT_PAYPHONE; 
+		}
+	}
 	acm.bckCallInd.end2EndMethInd.pres	= PRSNT_NODEF;
 	acm.bckCallInd.end2EndMethInd.val	= E2EMTH_NOMETH;
 	acm.bckCallInd.intInd.pres			= PRSNT_NODEF;
