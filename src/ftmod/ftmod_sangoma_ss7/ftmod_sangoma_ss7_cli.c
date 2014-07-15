@@ -1679,7 +1679,7 @@ static ftdm_status_t handle_show_acc_status(ftdm_stream_handle_t *stream, char *
 			break;
 		}
 
-		sngss7_rmt_cong = val;
+		sngss7_rmt_cong = (ftdm_sngss7_rmt_cong_t *)val;
 		/* Check if any entry is present in ACC hastable */
 		if(sngss7_rmt_cong) {
 			stream->write_function(stream, "| DPC=%2d | Congestion Level=%2d | T29 Timer Status= %s | T30 Timer Status= %s |",
@@ -1708,7 +1708,7 @@ static ftdm_status_t handle_show_acc_config(ftdm_stream_handle_t *stream, char *
 			break;
 		}
 
-		sngss7_rmt_cong = val;
+		sngss7_rmt_cong = (ftdm_sngss7_rmt_cong_t *)val;
 		/* Check if any entry is present in ACC hastable */
 		if(sngss7_rmt_cong) {
 			stream->write_function(stream, "***************************************************************************************************************************\n");
