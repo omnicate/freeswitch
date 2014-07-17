@@ -380,6 +380,17 @@ ftdm_status_t copy_cdPtyNum_to_sngss7(ftdm_channel_t *ftdmchan, SiCdPtyNum *cdPt
 	}
 }
 
+/* API to return success if link failure action configured RELEASE CALLS */
+ftdm_status_t ftdm_ss7_release_calls()
+{
+	if (SNGSS7_ACTION_RELEASE_CALLS == g_ftdm_sngss7_data.cfg.link_failure_action) {
+		return FTDM_SUCCESS;
+	} else {
+		return FTDM_FAIL;
+	}
+	return FTDM_SUCCESS;
+}
+
 #ifdef SS7_UK
 ftdm_status_t copy_nfci_to_sngss7(ftdm_channel_t *ftdmchan, SiNatFwdCalInd *nfci)
 {
@@ -423,15 +434,82 @@ ftdm_status_t copy_nfci_to_sngss7(ftdm_channel_t *ftdmchan, SiNatFwdCalInd *nfci
         return FTDM_SUCCESS;
 }
 
-/* API to return success if link failure action configured RELEASE CALLS */
-ftdm_status_t ftdm_ss7_release_calls()
+ftdm_status_t copy_divtlineid_to_sngss7(ftdm_channel_t *ftdmchan, SiLstDvrtLineID *lineid)
 {
-	if (SNGSS7_ACTION_RELEASE_CALLS == g_ftdm_sngss7_data.cfg.link_failure_action) {
-		return FTDM_SUCCESS;
+	const char *val = NULL;
+
+	sngss7_chan_data_t	*sngss7_info = ftdmchan->call_data;
+	ftdm_caller_data_t *caller_data = &ftdmchan->caller_data;
+
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_rdnis_digits");
+	if (!ftdm_strlen_zero(val)) {
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found user supplied Last Diverted Line ID \"%s\"\n", val);
+		if (copy_tknStr_to_sngss7((char*)val, &lineid->addrSig, &lineid->oddEven) != FTDM_SUCCESS) {
+			return FTDM_FAIL;
+		}
+	} else if (!ftdm_strlen_zero(caller_data->rdnis.digits)) {
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found user supplied Last Diverted Line ID \"%s\"\n", caller_data->rdnis.digits);
+		if (copy_tknStr_to_sngss7(caller_data->rdnis.digits, &lineid->addrSig, &lineid->oddEven) != FTDM_SUCCESS) {
+			return FTDM_FAIL;
+		}
 	} else {
-		return FTDM_FAIL;
+		val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_rdnis_pres_ind");
+		if (!ftdm_strlen_zero(val)) {
+			lineid->presRest.val = atoi(val);
+		} 
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Last Diverted Line Id Address Presentation Restricted Ind:%d\n", lineid->presRest.val);
+
+		ftdm_log_chan_msg(ftdmchan, FTDM_LOG_DEBUG, "No user supplied Last Diverted Line Id Number\n");
+		return FTDM_SUCCESS;
 	}
-	return FTDM_SUCCESS;
+
+	lineid->eh.pres = PRSNT_NODEF;
+
+	/* Nature of address indicator */
+	lineid->NatAddrInd.pres = PRSNT_NODEF;
+
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_rdnis_nadi");
+	if (!ftdm_strlen_zero(val)) {
+		lineid->NatAddrInd.val = atoi(val);
+	} else {		
+		lineid->NatAddrInd.val = g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].rdnis_nadi;
+	}
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Last Diverted Line Id NADI:%d\n", lineid->NatAddrInd.val);
+
+	/* Screening indicator */
+	lineid->scrInd.pres = PRSNT_NODEF;
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_rdnis_screen_ind");
+	if (!ftdm_strlen_zero(val)) {
+		lineid->scrInd.val = atoi(val);
+	} else {
+		lineid->scrInd.val = FTDM_SCREENING_VERIFIED_PASSED;
+	}
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Last Diverted Line Id Screening Ind:%d\n", lineid->scrInd.val);
+
+	/* Address presentation restricted ind */
+	lineid->presRest.pres = PRSNT_NODEF;
+
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_rdnis_pres_ind");
+	if (!ftdm_strlen_zero(val)) {
+		lineid->presRest.val = atoi(val);
+	} else {
+		lineid->presRest.val =  FTDM_PRES_ALLOWED;
+	}
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Last Diverted Line Id Address Presentation Restricted Ind:%d\n", lineid->presRest.val);
+
+	/* Numbering plan */
+	lineid->numPlanInd.pres = PRSNT_NODEF;
+
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_rdnis_plan");
+	if (!ftdm_strlen_zero(val)) {
+		lineid->numPlanInd.val = atoi(val);
+	} else {
+		lineid->numPlanInd.val = caller_data->rdnis.plan; 
+	}
+
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Last Diverted Line Id Numbering plan:%d\n", lineid->numPlanInd.val);
+
+	return copy_tknStr_to_sngss7(caller_data->rdnis.digits, &lineid->addrSig, &lineid->oddEven);
 }
 
 ftdm_status_t copy_paramcompatibility_to_sngss7(ftdm_channel_t *ftdmchan, SiParmCompInfo *parmCom)
@@ -465,6 +543,35 @@ ftdm_status_t copy_paramcompatibility_to_sngss7(ftdm_channel_t *ftdmchan, SiParm
 	/* pass not possible indicator */	
 	parmCom->passNtPoss1.pres = PRSNT_NODEF;
 	parmCom->passNtPoss1.val  = 2;	/* Discard parameter */ 
+
+	/* upgraded parm 2 */
+	parmCom->upgrPar2.pres = PRSNT_NODEF;
+	parmCom->upgrPar2.val  = 252;   /* Last Diverting Line ID */
+
+	/* transit exchange indicator */
+	parmCom->tranXInd1.pres = PRSNT_NODEF;
+	parmCom->tranXInd1.val  = 1; /* End node Interpretation */ 
+
+	/* release call indicator */	
+	parmCom->relCllInd1.pres = PRSNT_NODEF;
+	parmCom->relCllInd1.val  = 0; /* Do Not Release call */ 
+
+	/* send notification indicator */	
+	parmCom->sndNotInd1.pres = PRSNT_NODEF;
+	parmCom->sndNotInd1.val  = 0; /* Do not send notification indicator */
+
+	/* discard message indicator */	
+	parmCom->dcrdMsgInd1.pres = PRSNT_NODEF;
+	parmCom->dcrdMsgInd1.val  = 0; /* Do not discard message (pass on) */ 
+
+	/* discard parameter indicator */
+	parmCom->dcrdParInd1.pres = PRSNT_NODEF;
+	parmCom->dcrdParInd1.val  = 1;	/* Discard parameter */ 
+
+	/* pass not possible indicator */	
+	parmCom->passNtPoss1.pres = PRSNT_NODEF;
+	parmCom->passNtPoss1.val  = 2;	/* Discard parameter */ 
+
 
 	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "SS7-UK: Setting Parameter Compatibility information for NFCI %s\n",""); 
 	return FTDM_SUCCESS;
