@@ -1440,6 +1440,14 @@ ftdm_status_t handle_pause(uint32_t suInstId, uint32_t spInstId, uint32_t circui
 				i++;
 				continue;
 			}
+
+#ifdef SS7_UK
+			/* If recieved PAUSE indication for channel on which it call is in progress then change channel state to UP */
+			if (ftdmchan->state == FTDM_CHANNEL_STATE_PROGRESS_MEDIA) {
+				ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_UP);
+				SS7_DEBUG("Changing span[%d] channel[%d] state to UP as call is in progress\n", ftdmchan->span_id, ftdmchan->chan_id);
+			}
+#endif
 	
 			/* lock the channel */
 			ftdm_mutex_lock(ftdmchan->mutex);
