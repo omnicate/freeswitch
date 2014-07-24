@@ -433,6 +433,36 @@ ftdm_status_t copy_nfci_to_sngss7(ftdm_channel_t *ftdmchan, SiNatFwdCalInd *nfci
                         nfci->cliBlkInd.val, nfci->nwTransAddrInd.val, nfci->priorAccessInd.val, nfci->protectionInd.val);
         return FTDM_SUCCESS;
 }
+ftdm_status_t copy_nflxl_to_sngss7(ftdm_channel_t *ftdmchan, SiNatFwdCalIndLnk *nflxl)
+{
+        const char *  val = NULL;
+        nflxl->eh.pres = PRSNT_NODEF;
+
+        nflxl->rci.pres = PRSNT_NODEF;
+
+	/* for making 0x82 we need to set 
+	 * ss7_fci_lxl_isi = 2 and ss7_fci_lxl_rci = 80 */
+     
+        val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_fci_lxl_rci");
+        if (!ftdm_strlen_zero(val)) {
+                nflxl->rci.val = atoi(val);
+                ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "SS7-UK: ss7_fci_lxl_rci[%d]\n",nflxl->rci.val);
+        } else {
+                nflxl->rci.val = 2; 
+        }    
+
+        val = NULL;
+        nflxl->isi.pres = PRSNT_NODEF;
+        val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_fci_lxl_isi");
+        if (!ftdm_strlen_zero(val)) {
+                nflxl->isi.val = atoi(val);
+                ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "SS7-UK: ss7_fci_lxl_isi[%d]\n",nflxl->isi.val);
+        } else {
+                nflxl->isi.val = 1;
+        }
+
+        return FTDM_SUCCESS;
+}
 
 ftdm_status_t copy_divtlineid_to_sngss7(ftdm_channel_t *ftdmchan, SiLstDvrtLineID *lineid)
 {
@@ -455,10 +485,10 @@ ftdm_status_t copy_divtlineid_to_sngss7(ftdm_channel_t *ftdmchan, SiLstDvrtLineI
 	} else {
 		val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_rdnis_pres_ind");
 		if (!ftdm_strlen_zero(val)) {
+			ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Last Diverted Line Id Address Presentation Restricted Ind:%d\n", lineid->presRest.val);
+			lineid->presRest.pres = PRSNT_NODEF; 
 			lineid->presRest.val = atoi(val);
-		} 
-		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Last Diverted Line Id Address Presentation Restricted Ind:%d\n", lineid->presRest.val);
-
+		}
 		ftdm_log_chan_msg(ftdmchan, FTDM_LOG_DEBUG, "No user supplied Last Diverted Line Id Number\n");
 		return FTDM_SUCCESS;
 	}
@@ -507,9 +537,19 @@ ftdm_status_t copy_divtlineid_to_sngss7(ftdm_channel_t *ftdmchan, SiLstDvrtLineI
 		lineid->numPlanInd.val = caller_data->rdnis.plan; 
 	}
 
+	/* Numbering Incomplete Indicator */
+	lineid->numIncompInd.pres = PRSNT_NODEF;
+
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_ldli_incomp_ind");
+	if (!ftdm_strlen_zero(val)) {
+		lineid->numIncompInd.val = atoi(val);
+	} else {
+		lineid->numIncompInd.val = 0; 
+	}
+
 	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Last Diverted Line Id Numbering plan:%d\n", lineid->numPlanInd.val);
 
-	return copy_tknStr_to_sngss7(caller_data->rdnis.digits, &lineid->addrSig, &lineid->oddEven);
+	return FTDM_SUCCESS; 
 }
 
 ftdm_status_t copy_paramcompatibility_to_sngss7(ftdm_channel_t *ftdmchan, SiParmCompInfo *parmCom)
@@ -777,6 +817,133 @@ ftdm_status_t copy_genNmb_from_sngss7(ftdm_channel_t *ftdmchan, SiGenNum *genNmb
 	return FTDM_SUCCESS;
 }
 
+#ifdef SS7_UK
+ftdm_status_t copy_presNmb_from_sngss7(ftdm_channel_t *ftdmchan, SiPresentNum *presNmb)
+{
+	char val[64];
+	sngss7_chan_data_t	*sngss7_info = ftdmchan->call_data;
+
+	memset(val, 0, sizeof(val));
+
+	if (presNmb->eh.pres != PRSNT_NODEF || presNmb->addrSig.pres != PRSNT_NODEF) {
+		ftdm_log_chan_msg(ftdmchan, FTDM_LOG_DEBUG, "No Presentation Number available\n");
+		return FTDM_SUCCESS;
+	}
+
+	copy_tknStr_from_sngss7(presNmb->addrSig, val, presNmb->oddEven);
+
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Presentation Number:%s\n", val);
+	sngss7_add_var(sngss7_info, "ss7_pres_num_digits", val);
+
+	if (presNmb->NatAddrInd.pres == PRSNT_NODEF) {
+		snprintf(val, sizeof(val), "%d", presNmb->NatAddrInd.val);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Presentation Number \"nature of address\" \"%s\"\n", val);
+		sngss7_add_var(sngss7_info, "ss7_pres_num_nadi", val);
+	}
+
+	if (presNmb->scrInd.pres == PRSNT_NODEF) {
+		snprintf(val, sizeof(val), "%d", presNmb->scrInd.val);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Presentation Number \"screening indicator\" \"%s\"\n", val);
+		sngss7_add_var(sngss7_info, "ss7_pres_num_screen_ind", val);
+	}
+
+	if (presNmb->presRest.pres == PRSNT_NODEF) {
+		snprintf(val, sizeof(val), "%d", presNmb->presRest.val);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Presentation Number \"presentation indicator\" \"%s\"\n", val);
+		sngss7_add_var(sngss7_info, "ss7_pres_num_pres_ind", val);
+	}
+
+	if (presNmb->numPlanInd.pres == PRSNT_NODEF) {
+		snprintf(val, sizeof(val), "%d", presNmb->numPlanInd.val);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Presentation Number \"numbering plan\" \"%s\"\n", val);
+		sngss7_add_var(sngss7_info, "ss7_pres_num_npi", val);
+	}
+
+	if (presNmb->presNumPrefPlan.pres == PRSNT_NODEF) {
+		snprintf(val, sizeof(val), "%d", presNmb->presNumPrefPlan.val);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Presentation Number \"preference indicator\" \"%s\"\n", val);
+		sngss7_add_var(sngss7_info, "ss7_pres_num_pref_plan_ind", val);
+	}
+
+	return FTDM_SUCCESS;
+}
+
+ftdm_status_t copy_presnum_to_sngss7(ftdm_channel_t *ftdmchan, SiPresentNum *prsNmb)
+{	
+	const char *val = NULL;
+	sngss7_chan_data_t	*sngss7_info = ftdmchan->call_data;
+
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_pres_num_digits");
+	if (!ftdm_strlen_zero(val)) {
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found user supplied Presentation Number \"%s\"\n", val);
+		if (copy_tknStr_to_sngss7((char*)val, &prsNmb->addrSig, &prsNmb->oddEven) != FTDM_SUCCESS) {
+			return FTDM_FAIL;
+		}
+	} else {
+		return FTDM_SUCCESS;
+	}
+
+	prsNmb->eh.pres = PRSNT_NODEF;
+
+	/* Nature of Address Indicator */
+	prsNmb->NatAddrInd.pres = PRSNT_NODEF;
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_pres_num_nadi");
+	if (!ftdm_strlen_zero(val)) {
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found user supplied Presentation Number \"nature of address\" \"%s\"\n", val);
+		prsNmb->NatAddrInd.val	= atoi(val);
+	} else {
+		prsNmb->NatAddrInd.val	= g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].gn_nadi;
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "No user supplied Presentation Number \"nature of address\" \"%d\"\n", prsNmb->NatAddrInd.val);
+	}
+
+	/* Screenning Indicator */
+	prsNmb->scrInd.pres = PRSNT_NODEF;
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_pres_num_screen_ind");
+	if (!ftdm_strlen_zero(val)) {
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found user supplied Presentation Number \"screening indicator\" \"%s\"\n", val);
+		prsNmb->scrInd.val	= atoi(val);
+	} else {
+		prsNmb->scrInd.val	= g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].gn_screen_ind;
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "No user supplied Presentation Number \"screening indicator\" \"%d\"\n", prsNmb->scrInd.val);
+	}
+
+	/* Presentation Restriction indicator */
+	prsNmb->presRest.pres = PRSNT_NODEF;
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_pres_num_pres_ind");
+	if (!ftdm_strlen_zero(val)) {
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found user supplied Generic Number \"presentation indicator\" \"%s\"\n", val);
+		prsNmb->presRest.val	= atoi(val);
+	} else {
+		prsNmb->presRest.val	= g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].gn_pres_ind;
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "No user supplied Presentation Number \"presentation indicator\" \"%d\"\n", prsNmb->presRest.val);
+	}
+
+	/* Number Plan Indicator */
+	prsNmb->numPlanInd.pres = PRSNT_NODEF;
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_pres_num_npi");
+	if (!ftdm_strlen_zero(val)) {
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found user supplied Presentation Number \"numbering plan\" \"%s\"\n", val);
+		prsNmb->numPlanInd.val	= atoi(val);
+	} else {
+		prsNmb->numPlanInd.val	= g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].gn_npi;
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "No user supplied Presentation Number \"numbering plan\" \"%d\"\n", prsNmb->numPlanInd.val);
+	}
+
+	/* PNP - Presentation Number Preference Plan */
+	prsNmb->presNumPrefPlan.pres = PRSNT_NODEF;
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_pres_num_pref_plan_ind");
+	if (!ftdm_strlen_zero(val)) {
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found user supplied Presentation Number \"preference indicator\" \"%s\"\n", val);
+		prsNmb->presNumPrefPlan.val	= atoi(val);
+	} else {
+		prsNmb->presNumPrefPlan.val	= RSVD_PREVVERSION; 
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "No user supplied Presentation Number \"preference indicator\" \"%d\"\n", prsNmb->presNumPrefPlan.val);
+	}
+
+	return FTDM_SUCCESS;
+}
+#endif
+
 ftdm_status_t copy_redirgNum_to_sngss7(ftdm_channel_t *ftdmchan, SiRedirNum *redirgNum)
 {
 	const char* val = NULL;
@@ -852,7 +1019,11 @@ ftdm_status_t copy_redirgNum_to_sngss7(ftdm_channel_t *ftdmchan, SiRedirNum *red
 	
 	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Redirecting Number Numbering plan:%d\n", redirgNum->numPlan.val);
 
-	return copy_tknStr_to_sngss7(caller_data->rdnis.digits, &redirgNum->addrSig, &redirgNum->oddEven);
+	if (!ftdm_strlen_zero(caller_data->rdnis.digits)) {
+		return copy_tknStr_to_sngss7(caller_data->rdnis.digits, &redirgNum->addrSig, &redirgNum->oddEven);
+	} else {
+		return FTDM_SUCCESS;
+	}
 }
 
 ftdm_status_t copy_redirgNum_from_sngss7(ftdm_channel_t *ftdmchan, SiRedirNum *redirgNum)

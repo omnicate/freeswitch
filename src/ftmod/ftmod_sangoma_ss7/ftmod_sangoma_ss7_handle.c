@@ -219,6 +219,9 @@ ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 			copy_redirgNum_from_sngss7(ftdmchan, &siConEvnt->redirgNum);
 			copy_redirgInfo_from_sngss7(ftdmchan, &siConEvnt->redirInfo);
 			copy_genNmb_from_sngss7(ftdmchan, &siConEvnt->genNmb);
+#ifdef SS7_UK
+			copy_presNmb_from_sngss7(ftdmchan, &siConEvnt->presntNum);
+#endif
 
 			copy_cgPtyCat_from_sngss7(ftdmchan, &siConEvnt->cgPtyCat);
 			copy_cdPtyNum_from_sngss7(ftdmchan, &siConEvnt->cdPtyNum);
@@ -1441,12 +1444,16 @@ ftdm_status_t handle_pause(uint32_t suInstId, uint32_t spInstId, uint32_t circui
 				continue;
 			}
 
+#if 0
+			/* Temp fix did for BT to answer sip client as soon as ss7 link went down */
 #ifdef SS7_UK
 			/* If recieved PAUSE indication for channel on which it call is in progress then change channel state to UP */
-			if (ftdmchan->state == FTDM_CHANNEL_STATE_PROGRESS_MEDIA) {
+			if ((FTDM_CHANNEL_STATE_RINGING == ftdmchan->state ) || 
+				(ftdmchan->state == FTDM_CHANNEL_STATE_PROGRESS_MEDIA)) {
 				ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_UP);
 				SS7_DEBUG("Changing span[%d] channel[%d] state to UP as call is in progress\n", ftdmchan->span_id, ftdmchan->chan_id);
 			}
+#endif
 #endif
 	
 			/* lock the channel */
