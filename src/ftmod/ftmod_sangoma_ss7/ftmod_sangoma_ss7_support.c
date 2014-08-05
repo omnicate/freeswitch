@@ -433,6 +433,34 @@ ftdm_status_t copy_nfci_to_sngss7(ftdm_channel_t *ftdmchan, SiNatFwdCalInd *nfci
                         nfci->cliBlkInd.val, nfci->nwTransAddrInd.val, nfci->priorAccessInd.val, nfci->protectionInd.val);
         return FTDM_SUCCESS;
 }
+
+ftdm_status_t copy_nflxl_from_sngss7(ftdm_channel_t *ftdmchan, SiNatFwdCalIndLnk *nflxl)
+{
+	char val[64];
+	sngss7_chan_data_t	*sngss7_info = ftdmchan->call_data;
+
+	memset(val, 0, sizeof(val));
+
+	if (nflxl->eh.pres != PRSNT_NODEF) {
+		ftdm_log_chan_msg(ftdmchan, FTDM_LOG_DEBUG, "No LxL Parameter available\n");
+		return FTDM_SUCCESS;
+	}
+
+	if (nflxl->rci.pres == PRSNT_NODEF) {
+		snprintf(val, sizeof(val), "%d", nflxl->rci.val);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "SS7-UK: LxL RCI %s\n", val);
+		sngss7_add_var(sngss7_info, "ss7_fci_lxl_rci", val);
+	}
+
+	if (nflxl->isi.pres == PRSNT_NODEF) {
+		snprintf(val, sizeof(val), "%d", nflxl->isi.val);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "SS7-UK: LxL ISI %s\n", val);
+		sngss7_add_var(sngss7_info, "ss7_fci_lxl_isi", val);
+	}
+
+	return FTDM_SUCCESS;
+}
+
 ftdm_status_t copy_nflxl_to_sngss7(ftdm_channel_t *ftdmchan, SiNatFwdCalIndLnk *nflxl)
 {
         const char *  val = NULL;
@@ -471,7 +499,7 @@ ftdm_status_t copy_divtlineid_to_sngss7(ftdm_channel_t *ftdmchan, SiLstDvrtLineI
 	sngss7_chan_data_t	*sngss7_info = ftdmchan->call_data;
 	ftdm_caller_data_t *caller_data = &ftdmchan->caller_data;
 
-	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_rdnis_digits");
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_divertlineid_digits");
 	if (!ftdm_strlen_zero(val)) {
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found user supplied Last Diverted Line ID \"%s\"\n", val);
 		if (copy_tknStr_to_sngss7((char*)val, &lineid->addrSig, &lineid->oddEven) != FTDM_SUCCESS) {
@@ -483,7 +511,7 @@ ftdm_status_t copy_divtlineid_to_sngss7(ftdm_channel_t *ftdmchan, SiLstDvrtLineI
 			return FTDM_FAIL;
 		}
 	} else {
-		val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_rdnis_pres_ind");
+		val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_divertlineid_pres_ind");
 		if (!ftdm_strlen_zero(val)) {
 			ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Last Diverted Line Id Address Presentation Restricted Ind:%d\n", lineid->presRest.val);
 			lineid->presRest.pres = PRSNT_NODEF; 
@@ -498,7 +526,7 @@ ftdm_status_t copy_divtlineid_to_sngss7(ftdm_channel_t *ftdmchan, SiLstDvrtLineI
 	/* Nature of address indicator */
 	lineid->NatAddrInd.pres = PRSNT_NODEF;
 
-	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_rdnis_nadi");
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_divertlineid_nadi");
 	if (!ftdm_strlen_zero(val)) {
 		lineid->NatAddrInd.val = atoi(val);
 	} else {		
@@ -508,7 +536,7 @@ ftdm_status_t copy_divtlineid_to_sngss7(ftdm_channel_t *ftdmchan, SiLstDvrtLineI
 
 	/* Screening indicator */
 	lineid->scrInd.pres = PRSNT_NODEF;
-	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_rdnis_screen_ind");
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_divertlineid_screen_ind");
 	if (!ftdm_strlen_zero(val)) {
 		lineid->scrInd.val = atoi(val);
 	} else {
@@ -519,7 +547,7 @@ ftdm_status_t copy_divtlineid_to_sngss7(ftdm_channel_t *ftdmchan, SiLstDvrtLineI
 	/* Address presentation restricted ind */
 	lineid->presRest.pres = PRSNT_NODEF;
 
-	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_rdnis_pres_ind");
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_divertlineid_pres_ind");
 	if (!ftdm_strlen_zero(val)) {
 		lineid->presRest.val = atoi(val);
 	} else {
@@ -530,7 +558,7 @@ ftdm_status_t copy_divtlineid_to_sngss7(ftdm_channel_t *ftdmchan, SiLstDvrtLineI
 	/* Numbering plan */
 	lineid->numPlanInd.pres = PRSNT_NODEF;
 
-	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_rdnis_plan");
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_divertlineid_plan");
 	if (!ftdm_strlen_zero(val)) {
 		lineid->numPlanInd.val = atoi(val);
 	} else {
@@ -540,7 +568,7 @@ ftdm_status_t copy_divtlineid_to_sngss7(ftdm_channel_t *ftdmchan, SiLstDvrtLineI
 	/* Numbering Incomplete Indicator */
 	lineid->numIncompInd.pres = PRSNT_NODEF;
 
-	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_ldli_incomp_ind");
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_divertlineid_incomp_ind");
 	if (!ftdm_strlen_zero(val)) {
 		lineid->numIncompInd.val = atoi(val);
 	} else {
@@ -550,6 +578,57 @@ ftdm_status_t copy_divtlineid_to_sngss7(ftdm_channel_t *ftdmchan, SiLstDvrtLineI
 	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Last Diverted Line Id Numbering plan:%d\n", lineid->numPlanInd.val);
 
 	return FTDM_SUCCESS; 
+}
+
+ftdm_status_t copy_divtlineid_from_sngss7(ftdm_channel_t *ftdmchan, SiLstDvrtLineID *lineid)
+{
+	char digits[FTDM_DIGITS_LIMIT];
+	char val[FTDM_DIGITS_LIMIT];
+	sngss7_chan_data_t	*sngss7_info = ftdmchan->call_data;
+
+	if (lineid->eh.pres != PRSNT_NODEF || lineid->addrSig.pres != PRSNT_NODEF) {
+		ftdm_log_chan_msg(ftdmchan, FTDM_LOG_DEBUG, "SS7-UK: No Diverting line  Number available\n");
+		return FTDM_SUCCESS;
+	}
+
+	copy_tknStr_from_sngss7(lineid->addrSig, digits, lineid->oddEven);
+
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "SS7-UK: Diverting line  Number:%s\n", digits);
+	snprintf(val, sizeof(val), "%s", digits);
+	sngss7_add_var(sngss7_info, "ss7_divertlineid_digits", val);
+	
+
+	if (lineid->NatAddrInd.pres == PRSNT_NODEF) {
+		snprintf(val, sizeof(val), "%d", lineid->NatAddrInd.val);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "SS7-UK: Diverting line Number NADI:%s\n", val);
+		sngss7_add_var(sngss7_info, "ss7_divertlineid_nadi", val);
+	}
+
+	if (lineid->scrInd.pres == PRSNT_NODEF) {
+		snprintf(val, sizeof(val), "%d", lineid->scrInd.val);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "SS7-UK: Diverting line Number Screening Ind:%s\n", val);
+		sngss7_add_var(sngss7_info, "ss7_divertlineid_screen_ind", val);
+	}
+
+	if (lineid->presRest.pres == PRSNT_NODEF) {
+		snprintf(val, sizeof(val), "%d", lineid->presRest.val);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "SS7-UK: Diverting line Number Presentation Ind:%s\n", val);
+		sngss7_add_var(sngss7_info, "ss7_divertlineid_pres_ind", val);		
+	}
+
+	if (lineid->numPlanInd.pres == PRSNT_NODEF) {
+		snprintf(val, sizeof(val), "%d", lineid->numPlanInd.val);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "SS7-UK: Diverting line Number Numbering plan:%s\n", val);
+		sngss7_add_var(sngss7_info, "ss7_divertlineid_plan", val);
+	}
+
+	if (lineid->numIncompInd.pres == PRSNT_NODEF) {
+		snprintf(val, sizeof(val), "%d", lineid->numIncompInd.val);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "SS7-UK: Diverting line Number Incomplete Ind:%s\n", val);
+		sngss7_add_var(sngss7_info, "ss7_divertlineid_incomp_ind", val);
+	}
+
+	return FTDM_SUCCESS;
 }
 
 ftdm_status_t copy_paramcompatibility_to_sngss7(ftdm_channel_t *ftdmchan, SiParmCompInfo *parmCom)

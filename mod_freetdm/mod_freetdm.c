@@ -1713,7 +1713,56 @@ static switch_call_cause_t channel_outgoing_channel(switch_core_session_t *sessi
 		if (sipvar) {
 			ftdm_usrmsg_add_var(&usrmsg, "ss7_pres_num_pref_plan_ind", sipvar);
 		}
+
 		/********** SS7-UK : Presentation Number End *********/
+
+		/********** SS7-UK : Link-By-Link Begin  *********/
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-LxL_RCI");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_fci_lxl_rci", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-LxL_ISI");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_fci_lxl_isi", sipvar);
+		}
+
+		/********** SS7-UK : Link-By-Link End  *********/
+
+		/********** SS7-UK : Divert line id Begin  *********/
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-DivertLineId");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_divertlineid_digits", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-DivertLineId-NADI");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_divertlineid_nadi", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-DivertLineId-Screen");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_divertlineid_screen_ind", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-DivertLineId-PresInd");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_divertlineid_pres_ind", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-DivertLineId-Plan");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_divertlineid_plan", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-DivertLineId-IncInd");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_divertlineid_incomp_ind", sipvar);
+		}
+
+		/********** SS7-UK : Divert line id End  *********/
 	}
 
 	if (switch_test_flag(outbound_profile, SWITCH_CPF_SCREEN)) {
@@ -2248,6 +2297,52 @@ ftdm_status_t ftdm_channel_from_event(ftdm_sigmsg_t *sigmsg, switch_core_session
 		}
 
 		/********** SS7-UK : Presentation Number End *********/
+
+		/********** SS7-UK : Link-By-Link Begin  *********/
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_fci_lxl_rci");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-LxL_RCI", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_fci_lxl_isi");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-LxL_ISI", "%s", var_value);
+		}
+		/********** SS7-UK : Link-By-Link End  *********/
+
+		/********** SS7-UK : Divert line id Begin  *********/
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_divertlineid_digits");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-DivertLineId", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_divertlineid_nadi");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-DivertLineId-NADI", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_divertlineid_screen_ind");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-DivertLineId-Screen", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_divertlineid_pres_ind");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-DivertLineId-PresInd", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_divertlineid_plan");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-DivertLineId-Plan", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_divertlineid_incomp_ind");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-DivertLineId-IncInd", "%s", var_value);
+		}
+		/********** SS7-UK : Divert line id End  *********/
 
 		var_value = ftdm_sigmsg_get_var(sigmsg, "isdn.calling_subaddr_addr");
 		if (!ftdm_strlen_zero(var_value)) {

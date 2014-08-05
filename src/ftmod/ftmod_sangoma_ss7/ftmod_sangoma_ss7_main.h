@@ -1158,6 +1158,7 @@ ftdm_status_t copy_ocn_to_sngss7(ftdm_channel_t *ftdmchan, SiOrigCdNum *origCdNu
 ftdm_status_t copy_ocn_from_sngss7(ftdm_channel_t *ftdmchan, SiOrigCdNum *origCdNum);
 ftdm_status_t sngss7_is_bearer_capability_supported(int bearcap);
 ftdm_status_t copy_divtlineid_to_sngss7(ftdm_channel_t *ftdmchan, SiLstDvrtLineID *lineid);
+ftdm_status_t copy_divtlineid_from_sngss7(ftdm_channel_t *ftdmchan, SiLstDvrtLineID *lineid);
 
 ftdm_status_t copy_access_transport_from_sngss7(ftdm_channel_t *ftdmchan, SiAccTrnspt *accTrnspt);
 ftdm_status_t copy_access_transport_to_sngss7(ftdm_channel_t *ftdmchan, SiAccTrnspt *accTrnspt);
@@ -1165,6 +1166,7 @@ ftdm_status_t copy_locPtyNum_to_sngss7(ftdm_channel_t *ftdmchan, SiCgPtyNum *loc
 ftdm_status_t copy_locPtyNum_from_sngss7(ftdm_channel_t *ftdmchan, SiCgPtyNum *locPtyNum);
 ftdm_status_t copy_nfci_to_sngss7(ftdm_channel_t *ftdmchan, SiNatFwdCalInd *nfci);
 ftdm_status_t copy_nflxl_to_sngss7(ftdm_channel_t *ftdmchan, SiNatFwdCalIndLnk *nfci);
+ftdm_status_t copy_nflxl_from_sngss7(ftdm_channel_t *ftdmchan, SiNatFwdCalIndLnk *nflxl);
 ftdm_status_t copy_presnum_to_sngss7(ftdm_channel_t *ftdmchan, SiPresentNum *num);
 ftdm_status_t copy_presNmb_from_sngss7(ftdm_channel_t *ftdmchan, SiPresentNum *genNmb);
 ftdm_status_t copy_paramcompatibility_to_sngss7(ftdm_channel_t *ftdmchan, SiParmCompInfo *parmCom);
