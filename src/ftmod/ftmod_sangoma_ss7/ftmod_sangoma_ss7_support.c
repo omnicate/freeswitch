@@ -1379,7 +1379,6 @@ ftdm_status_t copy_cgPtyCat_from_sngss7(ftdm_channel_t *ftdmchan, SiCgPtyCat *cg
 	return FTDM_SUCCESS;
 }
 
-
 ftdm_status_t copy_accTrnspt_to_sngss7(ftdm_channel_t *ftdmchan, SiAccTrnspt *accTrnspt)
 {
 	const char			*clg_subAddr = NULL;

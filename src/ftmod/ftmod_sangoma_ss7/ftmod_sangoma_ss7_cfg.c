@@ -79,6 +79,7 @@ void ftmod_ss7_enable_isup_logging(void) {
 	ftmod_ss7_mtp3_debug(AENA);
 	ftmod_ss7_mtp2_debug(AENA);
 }
+/******************************************************************************/
 
 int  ft_to_sngss7_cfg_all(void)
 {
@@ -752,6 +753,22 @@ int ftmod_ss7_isup_gen_config(void)
 #ifdef SI_SUPPRESS_CFN
 	cfg.t.cfg.s.siGen.suppressCfn		= TRUE;					/* Flag used for 'suppress CFN' feature */
 #endif
+
+	if (g_ftdm_sngss7_data.cfg.sng_acc) {
+		cfg.t.cfg.s.siGen.autoCongEn = TRUE;
+	} else {
+		cfg.t.cfg.s.siGen.autoCongEn = FALSE;
+	}
+
+	cfg.t.cfg.s.siGen.msgPriorEn = g_ftdm_sngss7_data.cfg.msg_priority;
+	/* Setting up ISUP message priority */
+	if (cfg.t.cfg.s.siGen.msgPriorEn) {
+		/* Setting up priority level values of ISUP messages */
+		cfg.t.cfg.s.siGen.msgPrior = g_ftdm_sngss7_data.cfg.set_msg_priority;
+	} else {
+		cfg.t.cfg.s.siGen.msgPrior = DEFAULT_MSG_PRIORITY;
+	}
+
 
 	return(sng_cfg_isup(&pst, &cfg));
 

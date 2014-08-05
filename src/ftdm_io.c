@@ -626,7 +626,7 @@ FT_DECLARE_NONSTD(uint32_t) ftdm_hash_hashfromstring(void *ky)
 {
 	unsigned char *str = (unsigned char *) ky;
 	uint32_t hash = 0;
-    int c;
+	int c;
 	
 	while ((c = *str++)) {
         hash = c + (hash << 6) + (hash << 16) - hash;

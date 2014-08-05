@@ -150,88 +150,111 @@ void handle_isup_t39(void *userdata)
 }
 
 /* Changes w.r.t. ACC feature */
-void handle_isup_t29(void *userdata)
+void handle_route_t29(void *userdata)
 {
 	SS7_FUNC_TRACE_ENTER(__FUNCTION__);
 
-	sngss7_timer_data_t *timer = userdata;
-	sngss7_chan_data_t  *sngss7_info = timer->sngss7_info;
-	ftdm_channel_t      *ftdmchan = sngss7_info->ftdmchan;
+	sng_acc_tmr_t *timer_data = userdata;
+	ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong = timer_data->sngss7_rmt_cong;
 
-	ftdm_channel_lock(ftdmchan);
-
-	if (sngss7_info->t29.hb_timer_id) {
-		sngss7_info->t29.hb_timer_id = 0;
+	if (!sngss7_rmt_cong) {
+		SS7_DEBUG("Invalid User Data on T29 timer expiry\n");
+		goto end;
 	}
 
-	SS7_DEBUG("Timer 29 expired.....\n");
+	sngss7_rmt_cong->t29.tmr_running = 0x00;
+	if (sngss7_rmt_cong->t29.tmr_id) {
+		sngss7_rmt_cong->t29.tmr_id = 0;
+		SS7_DEBUG("Changing T29 Timer-Id to 0 on timer expiry\n");
+	}
 
-	ftdm_channel_unlock(ftdmchan);
+	SS7_DEBUG("Timer 29 expired for DPC[%d].....\n", sngss7_rmt_cong->dpc);
 
+end:
 	SS7_FUNC_TRACE_EXIT(__FUNCTION__);
 }
 
-void handle_isup_t30(void *userdata)
+void handle_route_t30(void *userdata)
 {
 	SS7_FUNC_TRACE_ENTER(__FUNCTION__);
 
-	sngss7_timer_data_t *timer = userdata;
-	sngss7_chan_data_t  *sngss7_info = timer->sngss7_info;
-	ftdm_channel_t      *ftdmchan = sngss7_info->ftdmchan;
-	ftdm_channel_t 	    *fchan = NULL;
+	sng_acc_tmr_t *timer_data = userdata;
+	ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong = timer_data->sngss7_rmt_cong;
+	ftdm_channel_t *ftdmchan = NULL;
 
-	ftdm_channel_lock(ftdmchan);
-
-	SS7_DEBUG("Timer 30 expired.....\n");
-
-	if (sngss7_info->t30.hb_timer_id) {
-		sngss7_info->t30.hb_timer_id = 0;
-	}
-	if (sngss7_rmtCongLvl) {
-		sngss7_rmtCongLvl--;
+	if (!sngss7_rmt_cong) {
+		SS7_DEBUG("Invalid User Data on T30 timer expiry\n");
+		goto end;
 	}
 
-	if (sngss7_rmtCongLvl) {
+	SS7_DEBUG("Timer 30 expired for DPC[%d].....\n", sngss7_rmt_cong->dpc);
+	sngss7_rmt_cong->t30.tmr_running = 0x00;
+
+	if (sngss7_rmt_cong->t30.tmr_id) {
+		sngss7_rmt_cong->t30.tmr_id = 0;
+		SS7_DEBUG("Changing T30 Timer-Id to 0 on timer expiry\n");
+	}
+
+	if (sngss7_rmt_cong->sngss7_rmtCongLvl) {
+		sngss7_rmt_cong->sngss7_rmtCongLvl--;
+	}
+
+	if (sngss7_rmt_cong->sngss7_rmtCongLvl) {
+		SS7_DEBUG("Restarting T-29 & T-30 timers as still DPC[%d] has congestion level of [%d]\n", sngss7_rmt_cong->dpc, sngss7_rmt_cong->sngss7_rmtCongLvl);
 		/* Restart Timer 29 & Timer 30 */
-		if (ftdm_sched_timer (sngss7_info->t29.sched,
+		if (ftdm_sched_timer (sngss7_rmt_cong->t29.tmr_sched,
 					"t29",
-					sngss7_info->t29.beat,
-					sngss7_info->t29.callback,
-					&sngss7_info->t29,
-					&sngss7_info->t29.hb_timer_id)) {
+					sngss7_rmt_cong->t29.beat,
+					sngss7_rmt_cong->t29.callback,
+					&sngss7_rmt_cong->t29,
+					&sngss7_rmt_cong->t29.tmr_id)) {
 			SS7_ERROR ("Unable to schedule timer T29\n");
 			goto end;
+		} else {
+			sngss7_rmt_cong->t29.tmr_running = 0x01;
+			SS7_DEBUG("T29 Timer is re-started for [%d]msec with timer-id[%d] for dpc[%d]\n", sngss7_rmt_cong->t29.beat, sngss7_rmt_cong->t29.tmr_id, sngss7_rmt_cong->dpc);
 		}
 
-		if (ftdm_sched_timer (sngss7_info->t30.sched,
+		if (ftdm_sched_timer (sngss7_rmt_cong->t30.tmr_sched,
 					"t30",
-					sngss7_info->t30.beat,
-					sngss7_info->t30.callback,
-					&sngss7_info->t30,
-					&sngss7_info->t30.hb_timer_id)) {
-			SS7_ERROR ("Unable to schedule timer T30\n");
-		}
+					sngss7_rmt_cong->t30.beat,
+					sngss7_rmt_cong->t30.callback,
+					&sngss7_rmt_cong->t30,
+					&sngss7_rmt_cong->t30.tmr_id)) {
+			SS7_ERROR ("Unable to schedule timer T30. Thus, stopping T29 Timer also.\n");
 
+			/* Kill t29 timer if active */
+			if (sngss7_rmt_cong->t29.tmr_running) {
+				if (ftdm_sched_cancel_timer (sngss7_rmt_cong->t29.tmr_sched, sngss7_rmt_cong->t29.tmr_id)) {
+					SS7_ERROR ("Unable to Cancle timer T29 timer\n");
+				} else {
+					sngss7_rmt_cong->t29.tmr_running = 0x00;
+					sngss7_rmt_cong->t29.tmr_id = 0;
+				}
+			}
+		} else {
+			sngss7_rmt_cong->t30.tmr_running = 0x01;
+			SS7_DEBUG("T30 Timer started for [%d]msec with timer-id[%d] for dpc[%d]\n", sngss7_rmt_cong->t30.beat, sngss7_rmt_cong->t30.tmr_id, sngss7_rmt_cong->dpc);
+		}
 	} else {
 		/* Start Releasing traffic normally i.e. empty SS7 Call Queue */
-		while ((fchan = ftdm_queue_dequeue(sngss7_queue.sngss7_call_queue))) {
-			if (fchan->state == FTDM_CHANNEL_STATE_DIALING) {
-				SS7_DEBUG_CHAN(fchan, "Sending outgoing call from \"%s\" to \"%s\" to LibSngSS7\n",
-						fchan->caller_data.ani.digits,
-						fchan->caller_data.dnis.digits);
+		SS7_DEBUG("Remote end DPC[%d] is uncongested with congestion level[%d] and thus traffic is resumed\n", sngss7_rmt_cong->dpc, sngss7_rmt_cong->sngss7_rmtCongLvl);
+		while ((ftdmchan = ftdm_queue_dequeue(sngss7_queue.sngss7_call_queue))) {
+			if (ftdmchan->state == FTDM_CHANNEL_STATE_DIALING) {
+				SS7_DEBUG_CHAN(ftdmchan, "Sending outgoing call from \"%s\" to \"%s\" to LibSngSS7\n",
+						ftdmchan->caller_data.ani.digits,
+						ftdmchan->caller_data.dnis.digits);
 
 				/*call sangoma_ss7_dial to make outgoing call */
-				ft_to_sngss7_iam(fchan);
-				ftdm_channel_complete_state(fchan);
+				ft_to_sngss7_iam(ftdmchan);
+				ftdm_channel_complete_state(ftdmchan);
 			} else {
-				SS7_DEBUG_CHAN(fchan, "Wrong call state [%d] for span[%d] and chan [%d]\n", fchan->state,fchan->span_id, fchan->chan_id);
+				SS7_DEBUG_CHAN(ftdmchan, "Wrong call state [%d] for span[%d] and chan [%d]\n", ftdmchan->state,ftdmchan->span_id, ftdmchan->chan_id);
 			}
 		}
 	}
 
 end:
-	ftdm_channel_unlock(ftdmchan);
-
 	SS7_FUNC_TRACE_EXIT(__FUNCTION__);
 }
 
