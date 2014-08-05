@@ -350,6 +350,7 @@ void ft_to_sngss7_inf(ftdm_channel_t *ftdmchan, SiCnStEvnt *inr)
 void ft_to_sngss7_inr(ftdm_channel_t *ftdmchan)
 {
 	SiCnStEvnt evnt;
+	const char *val = NULL;
 	sngss7_chan_data_t	*sngss7_info = ftdmchan->call_data;
 
 	memset (&evnt, 0x0, sizeof (evnt));
@@ -358,17 +359,37 @@ void ft_to_sngss7_inr(ftdm_channel_t *ftdmchan)
 	evnt.infoReqInd.cgPtyAdReqInd.pres = PRSNT_NODEF;
 	evnt.infoReqInd.cgPtyAdReqInd.val=CGPRTYADDREQ_REQ;
 
-	evnt.infoReqInd.holdingInd.pres =  PRSNT_NODEF;
-	evnt.infoReqInd.holdingInd.val = HOLD_REQ;
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_inr_holdind_disable");
+	if (!ftdm_strlen_zero(val)) {
+		evnt.infoReqInd.holdingInd.pres =  NOTPRSNT;
+	} else {
+		evnt.infoReqInd.holdingInd.pres =  PRSNT_NODEF;
+		evnt.infoReqInd.holdingInd.val = HOLD_REQ;
+	}
 
-	evnt.infoReqInd.cgPtyCatReqInd.pres = PRSNT_NODEF;
-	evnt.infoReqInd.cgPtyCatReqInd.val = CGPRTYCATREQ_REQ;
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_inr_cpc_disable");
+	if (!ftdm_strlen_zero(val)) {
+		evnt.infoReqInd.cgPtyCatReqInd.pres = NOTPRSNT;
+	} else {
+		evnt.infoReqInd.cgPtyCatReqInd.pres = PRSNT_NODEF;
+		evnt.infoReqInd.cgPtyCatReqInd.val = CGPRTYCATREQ_REQ;
+	}
 
-	evnt.infoReqInd.chrgInfoReqInd.pres =  PRSNT_NODEF;
-	evnt.infoReqInd.chrgInfoReqInd.val = CHRGINFO_REQ;
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_inr_chrginfo_disable");
+	if (!ftdm_strlen_zero(val)) {
+		evnt.infoReqInd.chrgInfoReqInd.pres =  NOTPRSNT;
+	} else {
+		evnt.infoReqInd.chrgInfoReqInd.pres =  PRSNT_NODEF;
+		evnt.infoReqInd.chrgInfoReqInd.val = CHRGINFO_REQ;
+	}
 
-	evnt.infoReqInd.malCaIdReqInd.pres =  PRSNT_NODEF;
-	evnt.infoReqInd.malCaIdReqInd.val = MLBG_INFOREQ;
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_inr_malcalid_disable");
+	if (!ftdm_strlen_zero(val)) {
+		evnt.infoReqInd.malCaIdReqInd.pres =  NOTPRSNT;
+	} else {
+		evnt.infoReqInd.malCaIdReqInd.pres =  PRSNT_NODEF;
+		evnt.infoReqInd.malCaIdReqInd.val = MLBG_INFOREQ;
+	}
 
 	sng_cc_inr(1, 
 			  sngss7_info->suInstId,
