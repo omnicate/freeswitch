@@ -1682,6 +1682,38 @@ static switch_call_cause_t channel_outgoing_channel(switch_core_session_t *sessi
 			ftdm_log(FTDM_LOG_INFO, "Got user to user information value as [%s] recieved in X-header\n", sipvar);
 			ftdm_usrmsg_add_var(&usrmsg, "ss7_usr2UsrInfo_val", sipvar);
 		}
+
+		/********** SS7-UK : Presentation Number Begin  *********/
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-PresNumber");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_pres_num_digits", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-PresNumber-NADI");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_pres_num_nadi", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-PresNumber-Screen");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_pres_num_screen_ind", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-PresNumber-PresInd");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_pres_num_pres_ind", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-PresNumber-Plan");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_pres_num_npi", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-PresNumber-PrefInd");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_pres_num_pref_plan_ind", sipvar);
+		}
+		/********** SS7-UK : Presentation Number End *********/
 	}
 
 	if (switch_test_flag(outbound_profile, SWITCH_CPF_SCREEN)) {
@@ -2182,6 +2214,40 @@ ftdm_status_t ftdm_channel_from_event(ftdm_sigmsg_t *sigmsg, switch_core_session
 		if (!ftdm_strlen_zero(var_value)) {
 			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-UUI", "%s", var_value);
 		}
+
+		/********** SS7-UK : Presentation Number Begin  *********/
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_pres_num_digits");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-PresNumber", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_pres_num_nadi");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-PresNumber-NADI", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_pres_num_screen_ind");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-PresNumber-Screen", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_pres_num_pres_ind");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-PresNumber-PresInd", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_pres_num_npi");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-PresNumber-Plan", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_pres_num_pref_plan_ind");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-PresNumber-PrefInd", "%s", var_value);
+		}
+
+		/********** SS7-UK : Presentation Number End *********/
 
 		var_value = ftdm_sigmsg_get_var(sigmsg, "isdn.calling_subaddr_addr");
 		if (!ftdm_strlen_zero(var_value)) {
