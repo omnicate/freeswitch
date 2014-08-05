@@ -233,7 +233,7 @@ void ft_to_sngss7_iam (ftdm_channel_t * ftdmchan)
 			copy_divtlineid_to_sngss7(ftdmchan, &iam.lstDvrtLineId);
 			copy_nfci_to_sngss7(ftdmchan, &iam.natFwdCalInd);
 			copy_presnum_to_sngss7(ftdmchan, &iam.presntNum);
-			//copy_nflxl_to_sngss7(ftdmchan, &iam.natFwdCalIndLnk);
+			copy_nflxl_to_sngss7(ftdmchan, &iam.natFwdCalIndLnk);
 			copy_paramcompatibility_to_sngss7(ftdmchan, &iam.parmCom);
 		}
 #endif
