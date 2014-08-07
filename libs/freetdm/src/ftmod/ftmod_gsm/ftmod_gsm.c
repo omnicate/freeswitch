@@ -397,10 +397,16 @@ void on_wat_rel_ind(unsigned char span_id, uint8_t call_id, wat_rel_event_t *rel
 		return;
 	}
 
-	/*  check that this isn't a call forwarding enable call, which do not run the state machine */
-	if (gsm_data->bchan->state != FTDM_CHANNEL_STATE_DOWN) {
+	if (gsm_data->bchan->state == FTDM_CHANNEL_STATE_DOWN) {
+		/*  this is most likely a call forwarding enable call, which do not run the state machine */
+		ftdm_clear_flag(gsm_data->bchan, FTDM_CHANNEL_INUSE);
+		return;
+	}
+
+	if (gsm_data->bchan->state > FTDM_CHANNEL_STATE_DOWN && gsm_data->bchan->state < FTDM_CHANNEL_STATE_HANGUP) {
 		ftdm_set_state(gsm_data->bchan, FTDM_CHANNEL_STATE_HANGUP);
 	}
+
 }
 
 void on_wat_rel_cfm(unsigned char span_id, uint8_t call_id)
