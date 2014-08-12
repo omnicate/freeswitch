@@ -2344,7 +2344,7 @@ ftdm_status_t ftdm_channel_from_event(ftdm_sigmsg_t *sigmsg, switch_core_session
 		}
 		/********** SS7-UK : Divert line id End  *********/
 
-		var_value = ftdm_sigmsg_get_var(sigmsg, "isdn.calling_subaddr_addr");
+		var_value = ftdm_sigmsg_get_var(sigmsg, "isdn.calling_subaddr_addr_url");
 		if (!ftdm_strlen_zero(var_value)) {
 			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-CgPty-SubAddr", "%s", var_value);
 		}
@@ -2359,7 +2359,7 @@ ftdm_status_t ftdm_channel_from_event(ftdm_sigmsg_t *sigmsg, switch_core_session
 			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-CgPty-SubAdr-OEIndicator", "%s", var_value);
 		}
 
-		var_value = ftdm_sigmsg_get_var(sigmsg, "isdn.called_subaddr_addr");
+		var_value = ftdm_sigmsg_get_var(sigmsg, "isdn.called_subaddr_addr_url");
 		if (!ftdm_strlen_zero(var_value)) {
 			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-CdPty-SubAddr", "%s", var_value);
 		}

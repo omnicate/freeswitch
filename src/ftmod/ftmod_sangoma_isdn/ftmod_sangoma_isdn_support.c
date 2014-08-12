@@ -461,10 +461,10 @@ ftdm_status_t get_calling_subaddr(ftdm_channel_t *ftdmchan, CgPtySad *cgPtySad)
 	/* calling party subaddress is raw hex dump so can not be considered as string */
 	/* transmit this as URL encoded format */
 	ftdm_url_encode((char*)cgPtySad->sadInfo.val, subaddress, cgPtySad->sadInfo.len);
-		
-	sngisdn_add_var((sngisdn_chan_data_t*)ftdmchan->call_data, "isdn.calling_subaddr_addr", subaddress);
 
-	snprintf(val, sizeof(val), "%d", cgPtySad->oddEvenInd.val); 
+	sngisdn_add_var((sngisdn_chan_data_t*)ftdmchan->call_data, "isdn.calling_subaddr_addr_url", subaddress);
+
+	snprintf(val, sizeof(val), "%d", cgPtySad->oddEvenInd.val);
 	sngisdn_add_var((sngisdn_chan_data_t*)ftdmchan->call_data, "isdn.calling_subaddr_oe_ind", val);
 
 	snprintf(val, sizeof(val), "%d", cgPtySad->typeSad.val);
@@ -479,7 +479,7 @@ ftdm_status_t get_called_subaddr(ftdm_channel_t *ftdmchan, CdPtySad *cdPtySad)
 {
 	char subaddress[100];
 	char val[100];
-	
+
 	if (cdPtySad->eh.pres != PRSNT_NODEF) {
 		return FTDM_FAIL;
 	}
@@ -492,13 +492,13 @@ ftdm_status_t get_called_subaddr(ftdm_channel_t *ftdmchan, CdPtySad *cdPtySad)
 	/* calling party subaddress is raw hex dump so can not be considered as string */
 	/* transmit this as URL encoded format */
 	ftdm_url_encode((char*)cdPtySad->sadInfo.val, subaddress, cdPtySad->sadInfo.len);
-		
-	sngisdn_add_var((sngisdn_chan_data_t*)ftdmchan->call_data, "isdn.called_subaddr_addr", subaddress);
+
+	sngisdn_add_var((sngisdn_chan_data_t*)ftdmchan->call_data, "isdn.called_subaddr_addr_url", subaddress);
 
 	snprintf(val, sizeof(val), "%d", cdPtySad->typeSad.val);
 	sngisdn_add_var((sngisdn_chan_data_t*)ftdmchan->call_data, "isdn.called_subaddr_type", val);
 
-	snprintf(val, sizeof(val), "%d", cdPtySad->oddEvenInd.val); 
+	snprintf(val, sizeof(val), "%d", cdPtySad->oddEvenInd.val);
 	sngisdn_add_var((sngisdn_chan_data_t*)ftdmchan->call_data, "isdn.called_subaddr_oe_ind", val);
 
 	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Received Encoded called party subaddress [ %s]\n", subaddress);
@@ -902,21 +902,105 @@ ftdm_status_t set_calling_name(ftdm_channel_t *ftdmchan, ConEvnt *conEvnt)
 
 ftdm_status_t set_calling_subaddr(ftdm_channel_t *ftdmchan, CgPtySad *cgPtySad)
 {
-	const char* clg_subaddr = NULL;
-	clg_subaddr = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "isdn.calling_subaddr");
-	if (!ftdm_strlen_zero(clg_subaddr)) {
-		unsigned len = strlen (clg_subaddr);
-		cgPtySad->eh.pres = PRSNT_NODEF;
-		cgPtySad->typeSad.pres = 1;
-		cgPtySad->typeSad.val = 0; /* NSAP */
-		cgPtySad->oddEvenInd.pres = 1;
-		cgPtySad->oddEvenInd.val = 0;
+	char *val_dec = NULL;
+	const char *val = NULL;
+	const char *clg_subaddr = NULL;
+	ftdm_size_t val_len = 0;
 
-		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Sending Calling Party Subaddress:%s\n", clg_subaddr);
-		cgPtySad->sadInfo.pres = 1;
-		cgPtySad->sadInfo.len = len;
-		memcpy(cgPtySad->sadInfo.val, clg_subaddr, len);
+	clg_subaddr = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "isdn.calling_subaddr_addr_url");
+	if (ftdm_strlen_zero(clg_subaddr)) {
+		cgPtySad->eh.pres = NOTPRSNT;
+		cgPtySad->typeSad.pres = NOTPRSNT;
+		cgPtySad->oddEvenInd.pres = NOTPRSNT;
+		cgPtySad->sadInfo.pres = NOTPRSNT;
+		ftdm_log(FTDM_LOG_DEBUG, "No User supplied Calling Party Subaddress found.\n");
+	} else {
+		cgPtySad->eh.pres = PRSNT_NODEF;
+		val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "isdn.calling_subaddr_type");
+		if (!ftdm_strlen_zero(val)) {
+			cgPtySad->typeSad.pres = PRSNT_NODEF;
+			cgPtySad->typeSad.val = atoi(val);
+			ftdm_log(FTDM_LOG_DEBUG, "Found User supplied Calling Party Subaddress value as: %d\n", cgPtySad->typeSad.val);
+		} else {
+			cgPtySad->typeSad.pres = NOTPRSNT;
+			ftdm_log(FTDM_LOG_DEBUG, "No User supplied Calling Party Subaddress value Found\n");
+		}
+
+		val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "isdn.calling_subaddr_oe_ind");
+		if (!ftdm_strlen_zero(val)) {
+			cgPtySad->oddEvenInd.pres = PRSNT_NODEF;
+			cgPtySad->oddEvenInd.val = atoi(val);
+			ftdm_log(FTDM_LOG_DEBUG, "Found User supplied Calling Party Sub-address Odd Even value: %d\n", cgPtySad->oddEvenInd.val);
+		} else {
+			cgPtySad->oddEvenInd.pres = NOTPRSNT;
+			ftdm_log(FTDM_LOG_DEBUG, "No User supplied Calling Party Sub-address Odd Even value Found\n");
+		}
+
+		val_len = strlen (val);
+		val_dec = ftdm_strdup(clg_subaddr);
+
+		cgPtySad->sadInfo.pres = PRSNT_NODEF;
+
+		/* placing subaddress information value in url decoded format as it  can include null character */
+		ftdm_url_decode(val_dec, (ftdm_size_t*)&val_len);
+		memcpy((char*)cgPtySad->sadInfo.val, val_dec, val_len);
+		cgPtySad->sadInfo.len = val_len;
+		ftdm_safe_free(val_dec);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found user supplied Calling Party Subaddress Information:%s\n", clg_subaddr);
 	}
+
+	return FTDM_SUCCESS;
+}
+
+ftdm_status_t set_called_subaddr(ftdm_channel_t *ftdmchan, CdPtySad *cdPtySad)
+{
+	char *val_dec = NULL;
+	const char *val = NULL;
+	const char *cld_subaddr = NULL;
+	ftdm_size_t val_len = 0;
+
+	cld_subaddr = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "isdn.called_subaddr_addr_url");
+	if (ftdm_strlen_zero(cld_subaddr)) {
+		cdPtySad->eh.pres = NOTPRSNT;
+		cdPtySad->typeSad.pres = NOTPRSNT;
+		cdPtySad->oddEvenInd.pres = NOTPRSNT;
+		cdPtySad->sadInfo.pres = NOTPRSNT;
+		ftdm_log(FTDM_LOG_DEBUG, "No User supplied Called Party Subaddress found.\n");
+	} else {
+		cdPtySad->eh.pres = PRSNT_NODEF;
+		val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "isdn.called_subaddr_type");
+		if (!ftdm_strlen_zero(val)) {
+			cdPtySad->typeSad.pres = PRSNT_NODEF;
+			cdPtySad->typeSad.val = atoi(val);
+			ftdm_log(FTDM_LOG_DEBUG, "Found User supplied Called Party Subaddress value as: %d\n", cdPtySad->typeSad.val);
+		} else {
+			cdPtySad->typeSad.pres = NOTPRSNT;
+			ftdm_log(FTDM_LOG_DEBUG, "No User supplied Called Party Subaddress value Found\n");
+		}
+
+		val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "isdn.called_subaddr_oe_ind");
+		if (!ftdm_strlen_zero(val)) {
+			cdPtySad->oddEvenInd.pres = PRSNT_NODEF;
+			cdPtySad->oddEvenInd.val = atoi(val);
+			ftdm_log(FTDM_LOG_DEBUG, "Found User supplied Called Party Sub-address Odd Even value: %d\n", cdPtySad->oddEvenInd.val);
+		} else {
+			cdPtySad->oddEvenInd.pres = NOTPRSNT;
+			ftdm_log(FTDM_LOG_DEBUG, "No User supplied Called Party Sub-address Odd Even value Found\n");
+		}
+
+		val_len = strlen (val);
+		val_dec = ftdm_strdup(cld_subaddr);
+
+		cdPtySad->sadInfo.pres = PRSNT_NODEF;
+
+		/* placing subaddress information value in url decoded format as it  can include null character */
+		ftdm_url_decode(val_dec, (ftdm_size_t*)&val_len);
+		memcpy((char*)cdPtySad->sadInfo.val, val_dec, val_len);
+		cdPtySad->sadInfo.len = val_len;
+		ftdm_safe_free(val_dec);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found user supplied Called Party Subaddress Information:%s\n", cld_subaddr);
+	}
+
 	return FTDM_SUCCESS;
 }
 
