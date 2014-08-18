@@ -688,7 +688,7 @@ static int ftmod_ss7_parse_sng_gen(ftdm_conf_node_t *sng_gen, char* operating_mo
 			ftmod_ss7_set_glare_resolution (parm->val);
 			SS7_DEBUG("Found glare resolution configuration = %d  %s\n", g_ftdm_sngss7_data.cfg.glareResolution, parm->val );
 		}
-		else if (!strcasecmp(parm->var, "force-inr")) {
+		else if (!strcasecmp(parm->var, "force_inr")) {
 			if (ftdm_true(parm->val)) {
 				g_ftdm_sngss7_data.cfg.force_inr = 1;
 			} else {
