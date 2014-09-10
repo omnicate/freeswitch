@@ -380,6 +380,8 @@ static void *ftdm_sangoma_isdn_io_run(ftdm_thread_t *me, void *obj)
 				poll_events[i] |= FTDM_READ;
 			}
 		}
+		/* Free memory allocated to citer */
+		ftdm_iterator_free(citer);
 
 		status = ftdm_span_poll_event(span, waitms, poll_events);
 		switch (status) {
@@ -418,6 +420,8 @@ static void *ftdm_sangoma_isdn_io_run(ftdm_thread_t *me, void *obj)
 						}
 					}
 				}
+				/* Free memory allocated to citer */
+				ftdm_iterator_free(citer);
 
 				/* Check if there are any channels that have events available */
 				while (ftdm_span_next_event(span, &event) == FTDM_SUCCESS) {
