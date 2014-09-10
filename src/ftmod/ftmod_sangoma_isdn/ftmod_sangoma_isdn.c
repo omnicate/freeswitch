@@ -1343,12 +1343,12 @@ static FIO_SIG_UNLOAD_FUNCTION(ftdm_sangoma_isdn_unload)
 #define SANGOMA_ISDN_API_USAGE_TRACE 			"ftdm sangoma_isdn trace <q921|q931> <span name>\n"
 #define SANGOMA_ISDN_API_USAGE_SHOW_L1_STATS		"ftdm sangoma_isdn l1_stats <span name>\n"
 #define SANGOMA_ISDN_API_USAGE_SHOW_SPANS		"ftdm sangoma_isdn show_spans [<span name>]\n"
-#define SANGOMA_ISDN_API_USAGE_SHOW_MEMORY		"ftdm sangoma_isdn show_memory\n"
+#define SANGOMA_ISDN_API_USAGE_SHOW_STACK_MEMORY	"ftdm sangoma_isdn show_stack_memory\n"
 
 #define SANGOMA_ISDN_API_USAGE	"\t"SANGOMA_ISDN_API_USAGE_TRACE \
 								"\t"SANGOMA_ISDN_API_USAGE_SHOW_L1_STATS \
 								"\t"SANGOMA_ISDN_API_USAGE_SHOW_SPANS \
-								"\t"SANGOMA_ISDN_API_USAGE_SHOW_MEMORY
+								"\t"SANGOMA_ISDN_API_USAGE_SHOW_STACK_MEMORY
 
 static FIO_API_FUNCTION(ftdm_sangoma_isdn_api)
 {
@@ -1485,7 +1485,7 @@ static FIO_API_FUNCTION(ftdm_sangoma_isdn_api)
 		sngisdn_get_memory_info();
 	}
 
-	if (!strcasecmp(argv[0], "show_memory")) {
+	if (!strcasecmp(argv[0], "show_stack_memory")) {
 		sngisdn_get_memory_info();
 		status = FTDM_SUCCESS;
 	}
