@@ -153,6 +153,8 @@ typedef struct sng_ccSpan
 } sng_ccSpan_t;
 
 int cmbLinkSetId;
+/* Total number of cics configured */
+uint32_t nmb_cics_cfg = 0;
 /******************************************************************************/
 
 /* PROTOTYPES *****************************************************************/
@@ -715,10 +717,41 @@ static int ftmod_ss7_parse_sng_gen(ftdm_conf_node_t *sng_gen, char* operating_mo
 				g_ftdm_sngss7_data.cfg.sng_acc = 0;
 			}
 			SS7_DEBUG("Found Automatic Congestion Control configuration = %s\n", parm->val);
-		} else if (!strcasecmp(parm->var, "acc-q-size")) {
-			sngss7_queue.ss7_call_qsize = atoi(parm->val);
-		} else if (!strcasecmp(parm->var, "acc-dequeue-rate")) {
-			sngss7_queue.call_dequeue_rate = atoi(parm->val);
+		} else if (!strcasecmp(parm->var, "acc-max-bucket")) {
+			if (g_ftdm_sngss7_data.cfg.sng_acc) {
+				g_ftdm_sngss7_data.cfg.accCfg.max_bkt_size = atoi(parm->val);
+				SS7_DEBUG("Found Maximum Bucket Size = %d for Automatic Congestion Control feature\n", g_ftdm_sngss7_data.cfg.accCfg.max_bkt_size);
+			} else {
+				SS7_DEBUG("Found invalid configurable parameter Max Bucket Size as Automatic congestion feature is not enable\n");
+			}
+	       } else if (!strcasecmp(parm->var, "traffic-reduction-rate")) {
+			if (g_ftdm_sngss7_data.cfg.sng_acc) {
+				g_ftdm_sngss7_data.cfg.accCfg.trf_red_rate = atoi(parm->val);
+				SS7_DEBUG("Found Traffic reduction rate = %d for Automatic Congestion Control feature\n", g_ftdm_sngss7_data.cfg.accCfg.trf_red_rate);
+			} else {
+				SS7_DEBUG("Found invalid configurable parameter Traffic reduction rate as Automatic congestion feature is not enable\n");
+			}
+		} else if (!strcasecmp(parm->var, "traffic-increment-rate")) {
+			if (g_ftdm_sngss7_data.cfg.sng_acc) {
+				g_ftdm_sngss7_data.cfg.accCfg.trf_inc_rate = atoi(parm->val);
+				SS7_DEBUG("Found Traffic reduction rate = %d for Automatic Congestion Control feature\n", g_ftdm_sngss7_data.cfg.accCfg.trf_inc_rate);
+			} else {
+				SS7_DEBUG("Found invalid configurable parameter Traffic increment rate as Automatic congestion feature is not enable\n");
+			}
+		} else if (!strcasecmp(parm->var, "first-level-reduction-rate")) {
+				if (g_ftdm_sngss7_data.cfg.sng_acc) {
+					g_ftdm_sngss7_data.cfg.accCfg.cnglvl1_red_rate = atoi(parm->val);
+					SS7_DEBUG("Found Congestion Level 1 traffic reduction rate = %d for Automatic Congestion Control feature\n", g_ftdm_sngss7_data.cfg.accCfg.cnglvl1_red_rate);
+				} else {
+					SS7_DEBUG("Found invalid configurable parameter Congestion Level 1 Traffic Reduction Rate as Automatic congestion feature is not enable\n");
+				}
+		} else if (!strcasecmp(parm->var, "second-level-reduction-rate")) {
+				if (g_ftdm_sngss7_data.cfg.sng_acc) {
+					g_ftdm_sngss7_data.cfg.accCfg.cnglvl2_red_rate = atoi(parm->val);
+					SS7_DEBUG("Found Congestion Level 2 traffic reduction rate = %d for Automatic Congestion Control feature\n", g_ftdm_sngss7_data.cfg.accCfg.cnglvl2_red_rate);
+				} else {
+					SS7_DEBUG("Found invalid configurable parameter Congestion Level 2 Traffic Reduction Rate as Automatic congestion feature is not enable\n");
+				}
 		} else if (!strcasecmp(parm->var, "set-isup-message-priority")) {
 			g_ftdm_sngss7_data.cfg.msg_priority = 1;
 			g_ftdm_sngss7_data.cfg.set_msg_priority	= atoi(parm->val);
@@ -742,19 +775,12 @@ static int ftmod_ss7_parse_sng_gen(ftdm_conf_node_t *sng_gen, char* operating_mo
 		parm = parm + 1;
 	} /* for (i = 0; i < num_parms; i++) */
 
+	/* Set default configuration for Automatic congestion control feature if any parameter is not configured properly */
+	ftmod_ss7_acc_default_config();
+
 	if (!g_ftdm_sngss7_data.cfg.max_cpu_usage) {
 		g_ftdm_sngss7_data.cfg.max_cpu_usage = 80;
 		SS7_DEBUG("Assigning default value to maximum cpu usage limit = %d\n", g_ftdm_sngss7_data.cfg.max_cpu_usage);
-	}
-
-	if (!sngss7_queue.ss7_call_qsize) {
-		/* set call queue size to default value i.e. ACC_QUEUE_SIZE */
-		sngss7_queue.ss7_call_qsize = ACC_QUEUE_SIZE;
-	}
-
-	if (!sngss7_queue.call_dequeue_rate) {
-		/* set call dequeue rate to default value i.e. ACC_DEQUEUE_RATE in ms */
-		sngss7_queue.call_dequeue_rate = ACC_DEQUEUE_RATE;
 	}
 
 	return FTDM_SUCCESS;
@@ -2069,6 +2095,12 @@ static int ftmod_ss7_parse_cc_spans(ftdm_conf_node_t *cc_spans)
 		cc_span = cc_span->next;
 	}
 
+	/* In case ACC feature is enable and use doest not provide valid MAX BUCKET SIZE value,
+	 * Set ACC MAX BUCKET SIZE equals to total number of CICS configured */
+	if ((g_ftdm_sngss7_data.cfg.sng_acc) && (!g_ftdm_sngss7_data.cfg.accCfg.max_bkt_size)) {
+		g_ftdm_sngss7_data.cfg.accCfg.max_bkt_size = nmb_cics_cfg;
+		SS7_DEBUG("Setting ACC Maximum Bucket Size to %d i.e. equals to total number of CICS configured\n", g_ftdm_sngss7_data.cfg.accCfg.max_bkt_size);
+	}
 	return FTDM_SUCCESS;
 
 }
@@ -3147,9 +3179,9 @@ static int ftmod_ss7_fill_in_ccSpan(sng_ccSpan_t *ccSpan)
 {
 	sng_timeslot_t		timeslot;
 	sngss7_chan_data_t	*ss7_info = NULL;
-	int					x;
-	int					count = 1;
-	int					flag;
+	int			x;
+	int			count = 1;
+	int			flag;
 
 	while (ccSpan->ch_map[0] != '\0') {
 	/**************************************************************************/
@@ -3167,6 +3199,7 @@ static int ftmod_ss7_fill_in_ccSpan(sng_ccSpan_t *ccSpan)
 		/**********************************************************************/
 			/* check the id value ( 0 = new, 0 > circuit can be existing) */
 			if (g_ftdm_sngss7_data.cfg.isupCkt[x].id == 0) {
+				nmb_cics_cfg++;
 				/* we're at the end of the list of circuitsl aka this is new */
 				SS7_DEBUG("Found a new circuit %d, ccSpanId=%d, chan=%d\n",
 							x, 
@@ -3701,6 +3734,11 @@ static int ftmod_ss7_fill_in_acc_timer(sng_route_t *mtp3_route, ftdm_span_t *spa
 	/* prepare automatic congestion control structure */
 	sngss7_rmt_cong->sngss7_rmtCongLvl = 0;
 	sngss7_rmt_cong->dpc = mtp3_route->dpc;
+	sngss7_rmt_cong->call_blk_rate = 0;
+	sngss7_rmt_cong->calls_allowed = 0;
+	sngss7_rmt_cong->calls_passed = 0;
+	sngss7_rmt_cong->calls_rejected = 0;
+	sngss7_rmt_cong->loc_calls_rejected = 0;
 
 	sprintf(dpc, "%d", sngss7_rmt_cong->dpc);
 	if (hashtable_search(ss7_rmtcong_lst, (void *)dpc)) {
@@ -3728,7 +3766,6 @@ static int ftmod_ss7_fill_in_acc_timer(sng_route_t *mtp3_route, ftdm_span_t *spa
 	sngss7_rmt_cong->t29.counter	= 1;
 	sngss7_rmt_cong->t29.beat	= (t29_val) * 100;	/* beat is in ms, t29 is in 100ms */
 	sngss7_rmt_cong->t29.callback	= handle_route_t29;
-	sngss7_rmt_cong->t29.tmr_running = 0x00;
 	sngss7_rmt_cong->t29.sngss7_rmt_cong = sngss7_rmt_cong;
 
 	/* prepare the timer structures */
@@ -3736,7 +3773,6 @@ static int ftmod_ss7_fill_in_acc_timer(sng_route_t *mtp3_route, ftdm_span_t *spa
 	sngss7_rmt_cong->t30.counter	= 1;
 	sngss7_rmt_cong->t30.beat	= (t30_val) * 100; /* beat is in ms, t30 is in 100ms */
 	sngss7_rmt_cong->t30.callback	= handle_route_t30;
-	sngss7_rmt_cong->t30.tmr_running = 0x00;
 	sngss7_rmt_cong->t30.sngss7_rmt_cong = sngss7_rmt_cong;
 
 	memset(dpc, 0 , sizeof(dpc));

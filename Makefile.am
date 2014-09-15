@@ -223,7 +223,8 @@ ftmod_sangoma_ss7_la_SOURCES = \
 	$(SRC)/ftmod/ftmod_sangoma_ss7/ftmod_sangoma_ss7_m2ua_xml.c \
 	$(SRC)/ftmod/ftmod_sangoma_ss7/ftmod_sangoma_ss7_m2ua.c \
 	$(SRC)/ftmod/ftmod_sangoma_ss7/ftmod_sangoma_ss7_relay.c\
-    $(SRC)/ftmod/ftmod_sangoma_ss7/ftmod_sangoma_ss7_mtp2api.c
+	$(SRC)/ftmod/ftmod_sangoma_ss7/ftmod_sangoma_ss7_mtp2api.c \
+	$(SRC)/ftmod/ftmod_sangoma_ss7/ftmod_sangoma_ss7_acc.c
 
 
 ftmod_sangoma_ss7_la_CFLAGS  = $(FTDM_CFLAGS) $(AM_CFLAGS) -D_GNU_SOURCE

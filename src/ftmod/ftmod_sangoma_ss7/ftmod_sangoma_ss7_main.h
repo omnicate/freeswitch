@@ -73,9 +73,13 @@
 #define SNGSS7_SWITCHTYPE_ANSI(switchtype)	(switchtype == LSI_SW_ANS88) || \
 											(switchtype == LSI_SW_ANS92) || \
 											(switchtype == LSI_SW_ANS95)
-#define ACC_QUEUE_SIZE 		15
-#define ACC_DEQUEUE_RATE 	200
+/* Default values w.r.t. Automatic Congestion Control */
+#define MAX_BUCKET_SIZE 	100
+#define CALL_CONTROL_RATE 	10
+#define LVL1_CALL_CNTRL_RATE 	50
+#define LVL2_CALL_CNTRL_RATE 	90
 #define MAX_DPC_CONFIGURED 	25
+
 #define DEFAULT_MSG_PRIORITY    7
 
 #define sngss7_flush_queue(queue) \
@@ -157,7 +161,7 @@ typedef enum {
 
 #define SNGSS7_DECODE_ACC_STATUS(status) \
 ((status == 0))		?"INACTIVE" : \
-((status == 1))		?"ACTIVE" :\
+((status != 0))		?"ACTIVE" :\
 "Unknown Automatic Congestion Control Timer Status"
 
 typedef struct sng_mtp2_error_type {
@@ -198,9 +202,9 @@ typedef struct sng_mtp1_link {
 	uint32_t	id;
 	uint32_t	span;
 	uint32_t	chan;
-    char        span_name[MAX_NAME_LEN];
-    ftdm_channel_t *ftdmchan;
-    uint8_t     extSeqNum;
+	char        span_name[MAX_NAME_LEN];
+	ftdm_channel_t *ftdmchan;
+	uint8_t     extSeqNum;
 } sng_mtp1_link_t;
 
 typedef struct sng_mtp2_link {
@@ -517,7 +521,13 @@ typedef struct sng_sctp_cfg {
 	sng_sctp_link_t		linkCfg[MAX_SCTP_LINK+1];
 } sng_sctp_cfg_t;
 
-
+typedef struct sng_acc_cfg {
+	uint32_t max_bkt_size;
+	uint32_t trf_red_rate;
+	uint32_t trf_inc_rate;
+	uint32_t cnglvl1_red_rate;
+	uint32_t cnglvl2_red_rate;
+} sng_acc_cfg_t;
 
 typedef struct sng_ss7_cfg {
 	uint32_t		spc;
@@ -542,7 +552,8 @@ typedef struct sng_ss7_cfg {
 	uint32_t		force_inr;
 	sng_m2ua_gbl_cfg_t 	g_m2ua_cfg;
 	sng_sctp_cfg_t		sctpCfg;
-	int 			sng_acc;
+	uint32_t 		sng_acc;
+	sng_acc_cfg_t		accCfg;
 	int 			msg_priority;
 	uint32_t 		set_msg_priority;
 	int			link_failure_action;
@@ -577,12 +588,6 @@ typedef struct ftdm_sngss7_data {
 	int			stack_logging_enable;
 } ftdm_sngss7_data_t;
 
-typedef struct ftdm_sngss7_call_queue {
-	ftdm_queue_t 	*sngss7_call_queue;
-	uint32_t 	ss7_call_qsize;
-	uint32_t	call_dequeue_rate;
-} ftdm_sngss7_call_queue_t;
-
 typedef struct ftdm_sngss7_call_reject_queue {
 	ftdm_queue_t    *sngss7_call_rej_queue;
 	uint32_t        ss7_call_rej_qsize;
@@ -594,13 +599,19 @@ typedef struct sng_acc_tmr {
 	int 			beat;
 	int 			counter;
 	ftdm_sched_callback_t   callback;
-	int 			tmr_running;
 	void  			*sngss7_rmt_cong;
 } sng_acc_tmr_t;
 
 typedef struct ftdm_sngss7_rmt_cong {
 	uint32_t       	  sngss7_rmtCongLvl;
 	uint32_t       	  dpc;
+	uint32_t 	  call_blk_rate;
+	uint32_t 	  calls_allowed;
+	/* Pushkar changes for counter */
+	uint32_t 	  calls_passed;
+	uint32_t 	  calls_rejected;
+	uint32_t 	  loc_calls_rejected;
+	/* changes end */
 	sng_acc_tmr_t     t29;
 	sng_acc_tmr_t     t30;
 } ftdm_sngss7_rmt_cong_t;
@@ -933,9 +944,9 @@ extern uint32_t				sngss7_id;
 extern ftdm_sched_t			*sngss7_sched;
 extern int				cmbLinkSetId;
 /* variables w.r.t ACC feature */
-extern ftdm_sngss7_call_queue_t		sngss7_queue;
 extern ftdm_sngss7_call_reject_queue_t 	sngss7_reject_queue;
 extern ftdm_hash_t 			*ss7_rmtcong_lst;
+uint32_t 				nmb_cics_cfg;
 
 /******************************************************************************/
 
@@ -1257,6 +1268,14 @@ void handle_wait_uba_timeout(void *userdata);
 void handle_tx_ubl_on_rx_bla_timer(void *userdata);
 void handle_wait_rsca_timeout(void *userdata);
 void handle_disable_ubl_timeout(void *userdata);
+
+/* in ftdm_sangoma_ss7_acc.c */
+ftdm_status_t ftmod_ss7_acc_default_config(void);
+ftdm_status_t ftdm_sangoma_ss7_get_congestion_status(ftdm_channel_t *ftdmchan);
+ftdm_status_t ftdm_check_acc(sngss7_chan_data_t *sngss7_info, SiRelEvnt *siRelEvnt, ftdm_channel_t *ftdmchan);
+ftdm_status_t sng_acc_handle_call_rate(ftdm_bool_t inc, ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong);
+ ftdm_sngss7_rmt_cong_t* sng_acc_get_cong_struct(ftdm_channel_t *ftdmchan);
+void sngss7_free_acc(void);
 
 #if JZ_BLO_TIMER
 void handle_disable_tx_ubl_timeout_on_tx_blo(void *userdata);

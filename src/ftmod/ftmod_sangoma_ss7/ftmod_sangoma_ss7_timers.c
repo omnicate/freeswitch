@@ -162,7 +162,6 @@ void handle_route_t29(void *userdata)
 		goto end;
 	}
 
-	sngss7_rmt_cong->t29.tmr_running = 0x00;
 	if (sngss7_rmt_cong->t29.tmr_id) {
 		sngss7_rmt_cong->t29.tmr_id = 0;
 		SS7_DEBUG("Changing T29 Timer-Id to 0 on timer expiry\n");
@@ -180,7 +179,6 @@ void handle_route_t30(void *userdata)
 
 	sng_acc_tmr_t *timer_data = userdata;
 	ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong = timer_data->sngss7_rmt_cong;
-	ftdm_channel_t *ftdmchan = NULL;
 
 	if (!sngss7_rmt_cong) {
 		SS7_DEBUG("Invalid User Data on T30 timer expiry\n");
@@ -188,7 +186,6 @@ void handle_route_t30(void *userdata)
 	}
 
 	SS7_DEBUG("Timer 30 expired for DPC[%d].....\n", sngss7_rmt_cong->dpc);
-	sngss7_rmt_cong->t30.tmr_running = 0x00;
 
 	if (sngss7_rmt_cong->t30.tmr_id) {
 		sngss7_rmt_cong->t30.tmr_id = 0;
@@ -196,12 +193,32 @@ void handle_route_t30(void *userdata)
 	}
 
 	if (sngss7_rmt_cong->sngss7_rmtCongLvl) {
-		sngss7_rmt_cong->sngss7_rmtCongLvl--;
-	}
+		if (sngss7_rmt_cong->sngss7_rmtCongLvl == 2) {
+			sngss7_rmt_cong->sngss7_rmtCongLvl--;
+			sngss7_rmt_cong->call_blk_rate = g_ftdm_sngss7_data.cfg.accCfg.cnglvl1_red_rate;
+		} else {
+			if ((sngss7_rmt_cong->call_blk_rate - g_ftdm_sngss7_data.cfg.accCfg.trf_inc_rate) > 0) {
+				sngss7_rmt_cong->call_blk_rate = sngss7_rmt_cong->call_blk_rate - g_ftdm_sngss7_data.cfg.accCfg.trf_inc_rate;
+			} else {
+				sngss7_rmt_cong->call_blk_rate = 0;
+				sngss7_rmt_cong->calls_allowed = 0;
+				/* Pushkar changes for counter */
+				sngss7_rmt_cong->calls_passed = 0;
+				sngss7_rmt_cong->calls_rejected = 0;
+				sngss7_rmt_cong->loc_calls_rejected = 0;
+				/* changes ends */
+				sngss7_rmt_cong->sngss7_rmtCongLvl = 0;
+			}
+		}
 
-	if (sngss7_rmt_cong->sngss7_rmtCongLvl) {
-		SS7_DEBUG("Restarting T-29 & T-30 timers as still DPC[%d] has congestion level of [%d]\n", sngss7_rmt_cong->dpc, sngss7_rmt_cong->sngss7_rmtCongLvl);
 		/* Restart Timer 29 & Timer 30 */
+		SS7_DEBUG("Restarting T-29 & T-30 timers as still DPC[%d] has congestion level of [%d]\n", sngss7_rmt_cong->dpc, sngss7_rmt_cong->sngss7_rmtCongLvl);
+		/* This should never happen but in order to handle error properly check is required */
+		if (sngss7_rmt_cong->t29.tmr_id) {
+			SS7_DEBUG("Starting T29 Timer %d is already running donot start it\n", sngss7_rmt_cong->t29.tmr_id);
+			goto start_t30;
+		}
+
 		if (ftdm_sched_timer (sngss7_rmt_cong->t29.tmr_sched,
 					"t29",
 					sngss7_rmt_cong->t29.beat,
@@ -211,10 +228,15 @@ void handle_route_t30(void *userdata)
 			SS7_ERROR ("Unable to schedule timer T29\n");
 			goto end;
 		} else {
-			sngss7_rmt_cong->t29.tmr_running = 0x01;
 			SS7_DEBUG("T29 Timer is re-started for [%d]msec with timer-id[%d] for dpc[%d]\n", sngss7_rmt_cong->t29.beat, sngss7_rmt_cong->t29.tmr_id, sngss7_rmt_cong->dpc);
 		}
 
+start_t30:
+		/* This should never happen but in order to handle error properly check is required */
+		if (sngss7_rmt_cong->t30.tmr_id) {
+			SS7_DEBUG("Starting T30 Timer %d is already running donot start it\n", sngss7_rmt_cong->t30.tmr_id);
+			goto end;
+		}
 		if (ftdm_sched_timer (sngss7_rmt_cong->t30.tmr_sched,
 					"t30",
 					sngss7_rmt_cong->t30.beat,
@@ -224,34 +246,19 @@ void handle_route_t30(void *userdata)
 			SS7_ERROR ("Unable to schedule timer T30. Thus, stopping T29 Timer also.\n");
 
 			/* Kill t29 timer if active */
-			if (sngss7_rmt_cong->t29.tmr_running) {
+			if (sngss7_rmt_cong->t29.tmr_id) {
 				if (ftdm_sched_cancel_timer (sngss7_rmt_cong->t29.tmr_sched, sngss7_rmt_cong->t29.tmr_id)) {
 					SS7_ERROR ("Unable to Cancle timer T29 timer\n");
 				} else {
-					sngss7_rmt_cong->t29.tmr_running = 0x00;
 					sngss7_rmt_cong->t29.tmr_id = 0;
 				}
 			}
 		} else {
-			sngss7_rmt_cong->t30.tmr_running = 0x01;
 			SS7_DEBUG("T30 Timer started for [%d]msec with timer-id[%d] for dpc[%d]\n", sngss7_rmt_cong->t30.beat, sngss7_rmt_cong->t30.tmr_id, sngss7_rmt_cong->dpc);
 		}
 	} else {
 		/* Start Releasing traffic normally i.e. empty SS7 Call Queue */
 		SS7_DEBUG("Remote end DPC[%d] is uncongested with congestion level[%d] and thus traffic is resumed\n", sngss7_rmt_cong->dpc, sngss7_rmt_cong->sngss7_rmtCongLvl);
-		while ((ftdmchan = ftdm_queue_dequeue(sngss7_queue.sngss7_call_queue))) {
-			if (ftdmchan->state == FTDM_CHANNEL_STATE_DIALING) {
-				SS7_DEBUG_CHAN(ftdmchan, "Sending outgoing call from \"%s\" to \"%s\" to LibSngSS7\n",
-						ftdmchan->caller_data.ani.digits,
-						ftdmchan->caller_data.dnis.digits);
-
-				/*call sangoma_ss7_dial to make outgoing call */
-				ft_to_sngss7_iam(ftdmchan);
-				ftdm_channel_complete_state(ftdmchan);
-			} else {
-				SS7_DEBUG_CHAN(ftdmchan, "Wrong call state [%d] for span[%d] and chan [%d]\n", ftdmchan->state,ftdmchan->span_id, ftdmchan->chan_id);
-			}
-		}
 	}
 
 end:
