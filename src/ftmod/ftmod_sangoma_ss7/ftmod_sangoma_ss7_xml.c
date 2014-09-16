@@ -717,13 +717,6 @@ static int ftmod_ss7_parse_sng_gen(ftdm_conf_node_t *sng_gen, char* operating_mo
 				g_ftdm_sngss7_data.cfg.sng_acc = 0;
 			}
 			SS7_DEBUG("Found Automatic Congestion Control configuration = %s\n", parm->val);
-		} else if (!strcasecmp(parm->var, "acc-max-bucket")) {
-			if (g_ftdm_sngss7_data.cfg.sng_acc) {
-				g_ftdm_sngss7_data.cfg.accCfg.max_bkt_size = atoi(parm->val);
-				SS7_DEBUG("Found Maximum Bucket Size = %d for Automatic Congestion Control feature\n", g_ftdm_sngss7_data.cfg.accCfg.max_bkt_size);
-			} else {
-				SS7_DEBUG("Found invalid configurable parameter Max Bucket Size as Automatic congestion feature is not enable\n");
-			}
 	       } else if (!strcasecmp(parm->var, "traffic-reduction-rate")) {
 			if (g_ftdm_sngss7_data.cfg.sng_acc) {
 				g_ftdm_sngss7_data.cfg.accCfg.trf_red_rate = atoi(parm->val);
@@ -1653,6 +1646,8 @@ static int ftmod_ss7_parse_mtp_route(ftdm_conf_node_t *mtp_route, ftdm_span_t *s
 		return FTDM_FAIL;
 	} 
 
+	/* Initializing max bucket size to 0 */
+	mtpRoute.max_bkt_size = 0;
 	SS7_DEBUG("Parsing \"mtp_route\"...\n");
 
 	for (i = 0; i < num_parms; i++) {
@@ -1706,6 +1701,13 @@ static int ftmod_ss7_parse_mtp_route(ftdm_conf_node_t *mtp_route, ftdm_span_t *s
 				mtpRoute.tfrReq = 0;
 			}
 			SS7_DEBUG("Found an mtp3 tfrReq = %d\n",mtpRoute.tfrReq);
+		} else if (!strcasecmp(parm->var, "acc-max-bucket")) {
+			if (g_ftdm_sngss7_data.cfg.sng_acc) {
+				mtpRoute.max_bkt_size = atoi(parm->val);
+				SS7_DEBUG("Found Maximum Bucket Size = %d for Automatic Congestion Control feature\n", mtpRoute.max_bkt_size);
+			} else {
+				SS7_DEBUG("Found invalid configurable parameter Max Bucket Size as Automatic congestion feature is not enable\n");
+			}
 		} else if (!strcasecmp(parm->var, "mtp3.t8")) {
 			mtpRoute.t8 = atoi(parm->val);
 			SS7_DEBUG("Found an mtp3 t8 = %d\n",mtpRoute.t8);
@@ -2095,12 +2097,6 @@ static int ftmod_ss7_parse_cc_spans(ftdm_conf_node_t *cc_spans)
 		cc_span = cc_span->next;
 	}
 
-	/* In case ACC feature is enable and use doest not provide valid MAX BUCKET SIZE value,
-	 * Set ACC MAX BUCKET SIZE equals to total number of CICS configured */
-	if ((g_ftdm_sngss7_data.cfg.sng_acc) && (!g_ftdm_sngss7_data.cfg.accCfg.max_bkt_size)) {
-		g_ftdm_sngss7_data.cfg.accCfg.max_bkt_size = nmb_cics_cfg;
-		SS7_DEBUG("Setting ACC Maximum Bucket Size to %d i.e. equals to total number of CICS configured\n", g_ftdm_sngss7_data.cfg.accCfg.max_bkt_size);
-	}
 	return FTDM_SUCCESS;
 
 }
@@ -2118,6 +2114,8 @@ static int ftmod_ss7_parse_cc_span(ftdm_conf_node_t *cc_span)
 	int						i;
 	int						ret;
 
+	/* To get number of CIC's configured per DPC */
+	nmb_cics_cfg = 0;
 	/* initalize the ccSpan structure */
 	memset(&sng_ccSpan, 0x0, sizeof(sng_ccSpan));
 
@@ -2359,6 +2357,8 @@ static int ftmod_ss7_parse_cc_span(ftdm_conf_node_t *cc_span)
 		/* default the status to PAUSED */
 		sngss7_set_flag(&g_ftdm_sngss7_data.cfg.isupIntf[sng_ccSpan.isupInf], SNGSS7_PAUSED);
 	}
+
+	sng_acc_assign_max_bucket(sng_ccSpan.isupInf, nmb_cics_cfg);
 
 	return FTDM_SUCCESS;
 }
@@ -3739,12 +3739,20 @@ static int ftmod_ss7_fill_in_acc_timer(sng_route_t *mtp3_route, ftdm_span_t *spa
 	sngss7_rmt_cong->calls_passed = 0;
 	sngss7_rmt_cong->calls_rejected = 0;
 	sngss7_rmt_cong->loc_calls_rejected = 0;
+	sngss7_rmt_cong->max_bkt_size = 0;
 
 	sprintf(dpc, "%d", sngss7_rmt_cong->dpc);
 	if (hashtable_search(ss7_rmtcong_lst, (void *)dpc)) {
 		SS7_DEBUG("DPC[%d] is already inserted in the hash tablearsing\n", mtp3_route->dpc);
 		ftdm_safe_free(sngss7_rmt_cong);
 		return FTDM_SUCCESS;
+	}
+
+	if (mtp3_route->max_bkt_size) {
+		sngss7_rmt_cong->max_bkt_size = mtp3_route->max_bkt_size;
+		SS7_DEBUG("Found user supplied max bucket size as %d for DPC[%d]\n", sngss7_rmt_cong->max_bkt_size, mtp3_route->dpc);
+	} else {
+		SS7_DEBUG("No user supplied max bucket size for DPC[%d]\n", mtp3_route->dpc);
 	}
 
 	/* Timer for ACC Feature in ms can be 300-600ms */
@@ -3786,6 +3794,7 @@ static int ftmod_ss7_fill_in_acc_timer(sng_route_t *mtp3_route, ftdm_span_t *spa
 
 	return FTDM_SUCCESS;
 }
+
 /******************************************************************************/
 
 /******************************************************************************/

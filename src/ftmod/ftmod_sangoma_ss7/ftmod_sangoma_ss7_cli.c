@@ -1721,9 +1721,8 @@ static ftdm_status_t handle_show_acc_config(ftdm_stream_handle_t *stream, char *
 	stream->write_function(stream, "***************************************************************************************************************************\n\n");
 	stream->write_function(stream, "                                                    Global Configuration                                                   \n");
 	stream->write_function(stream, "***************************************************************************************************************************\n");
-	stream->write_function(stream, "| Max Cpu Usage = %d |\n| Max Bucket Size = %d |\n| Traffic Reduction Rate =%d% |\n| Traffic increment rate = %d% |\n",
+	stream->write_function(stream, "| Max Cpu Usage = %d |\n| Traffic Reduction Rate =%d% |\n| Traffic increment rate = %d% |\n",
 			g_ftdm_sngss7_data.cfg.max_cpu_usage,
-			g_ftdm_sngss7_data.cfg.accCfg.max_bkt_size,
 			g_ftdm_sngss7_data.cfg.accCfg.trf_red_rate,
 			g_ftdm_sngss7_data.cfg.accCfg.trf_inc_rate);
 
@@ -1744,7 +1743,8 @@ static ftdm_status_t handle_show_acc_config(ftdm_stream_handle_t *stream, char *
 			stream->write_function(stream, " \t\t\t\t\t For DPC = %d \t\t\t\t\t\n", sngss7_rmt_cong->dpc);
 			stream->write_function(stream, "***************************************************************************************************************************\n");
 
-			stream->write_function(stream, "| T29 Timer Value = %dmsec |\n| T30 Timer Value = %dmsec |\n",
+			stream->write_function(stream, "| Max Bucket Size = %d |\n| T29 Timer Value = %dmsec |\n| T30 Timer Value = %dmsec |\n",
+					sngss7_rmt_cong->max_bkt_size,
 					sngss7_rmt_cong->t29.beat,
 					sngss7_rmt_cong->t30.beat);
 		}

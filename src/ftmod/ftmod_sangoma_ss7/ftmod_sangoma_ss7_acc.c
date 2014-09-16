@@ -51,6 +51,8 @@
 
 /* Automatic Congestion Control Default Configuration */
 ftdm_status_t ftmod_ss7_acc_default_config(void);
+/* Configure the call block rate as per number of cics configured per DPC basis */
+ftdm_status_t sng_acc_assign_max_bucket(uint32_t intfId, uint32_t cics_cfg);
 /* Check whether remote is congested or not */
 ftdm_status_t ftdm_sangoma_ss7_get_congestion_status(ftdm_channel_t *ftdmchan);
 /* Check ACC status on reception of Release Message */
@@ -96,7 +98,59 @@ ftdm_status_t ftmod_ss7_acc_default_config()
 
 	return FTDM_SUCCESS;
 }
-  
+
+/* Configure the call block rate as per number of cics configured per DPC basis */
+ftdm_status_t sng_acc_assign_max_bucket(uint32_t intfId, uint32_t cics_cfg)
+{
+	ftdm_sngss7_rmt_cong_t  *sngss7_rmt_cong = NULL;
+	ftdm_hash_iterator_t 	*i = NULL;
+	const void 		*key = NULL;
+	void 			*val = NULL;
+	int 			loop = 0;
+	uint32_t 		idx = 0;
+
+	if (!g_ftdm_sngss7_data.cfg.sng_acc)
+		return FTDM_FAIL;
+
+	/* Iterate trough hash table and update the call block rate */
+	for (i = hashtable_first(ss7_rmtcong_lst); i; i = hashtable_next(i)) {
+		idx = 0;
+		hashtable_this(i, &key, NULL, &val);
+		if (!key || !val) {
+			break;
+		}
+
+		sngss7_rmt_cong = (ftdm_sngss7_rmt_cong_t *)val;
+		/* Check if any entry is present in ACC hastable */
+		if(!sngss7_rmt_cong) {
+			continue;
+		}
+
+		while (idx < (MAX_ISUP_INFS)) {
+			if (intfId == g_ftdm_sngss7_data.cfg.isupIntf[idx].id) {
+				if (g_ftdm_sngss7_data.cfg.isupIntf[idx].dpc == sngss7_rmt_cong->dpc) {
+					if (!sngss7_rmt_cong->max_bkt_size) {
+						sngss7_rmt_cong->max_bkt_size = sngss7_rmt_cong->max_bkt_size + cics_cfg;
+						SS7_DEBUG("Configured maximum bucket size as %d for DPC %d\n",sngss7_rmt_cong->max_bkt_size, sngss7_rmt_cong->dpc);
+					}
+					loop = 1;
+					break;
+				}
+			}
+			idx++;
+		}
+		if (loop) {
+			break;
+		}
+	}
+
+	if (loop) {
+		return FTDM_SUCCESS;
+	}
+
+	return FTDM_FAIL;
+}
+
 /******************************************************************************/
 /* Get Local/Remote Congestion and queue or Release call accordingly */
 ftdm_status_t ftdm_sangoma_ss7_get_congestion_status(ftdm_channel_t *ftdmchan)
@@ -324,8 +378,8 @@ ftdm_status_t sng_acc_handle_call_rate(ftdm_bool_t inc, ftdm_sngss7_rmt_cong_t *
 
 	if (sngss7_rmt_cong->sngss7_rmtCongLvl) {
 		if (inc) {
-			if (sngss7_rmt_cong->calls_allowed < (g_ftdm_sngss7_data.cfg.accCfg.max_bkt_size - ((g_ftdm_sngss7_data.cfg.accCfg.max_bkt_size * sngss7_rmt_cong->call_blk_rate)/100))) {
-				SS7_DEBUG("Number of calls allowed[%d], Max Bucket size[%d], Call Block Rate[%d]\n\n\n", sngss7_rmt_cong->calls_allowed, g_ftdm_sngss7_data.cfg.accCfg.max_bkt_size, sngss7_rmt_cong->call_blk_rate);
+			if (sngss7_rmt_cong->calls_allowed < (sngss7_rmt_cong->max_bkt_size - ((sngss7_rmt_cong->max_bkt_size * sngss7_rmt_cong->call_blk_rate)/100))) {
+				SS7_DEBUG("Number of calls allowed[%d], Max Bucket size[%d], Call Block Rate[%d]\n\n\n", sngss7_rmt_cong->calls_allowed, sngss7_rmt_cong->max_bkt_size, sngss7_rmt_cong->call_blk_rate);
 
 				sngss7_rmt_cong->calls_allowed++;
 				sngss7_rmt_cong->calls_passed++;

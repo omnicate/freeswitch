@@ -343,6 +343,7 @@ typedef struct sng_route {
 	uint32_t		nwId;
 	uint32_t		isSTP;
 	uint32_t		dir;
+	uint32_t 	  	max_bkt_size; /* Maximum bucket allocated per DPC basis for ACC */
 	uint32_t		t6;
 	uint32_t		t8;
 	uint32_t		t10;
@@ -522,7 +523,6 @@ typedef struct sng_sctp_cfg {
 } sng_sctp_cfg_t;
 
 typedef struct sng_acc_cfg {
-	uint32_t max_bkt_size;
 	uint32_t trf_red_rate;
 	uint32_t trf_inc_rate;
 	uint32_t cnglvl1_red_rate;
@@ -607,6 +607,7 @@ typedef struct ftdm_sngss7_rmt_cong {
 	uint32_t       	  dpc;
 	uint32_t 	  call_blk_rate;
 	uint32_t 	  calls_allowed;
+	uint32_t 	  max_bkt_size;
 	/* Pushkar changes for counter */
 	uint32_t 	  calls_passed;
 	uint32_t 	  calls_rejected;
@@ -1271,6 +1272,7 @@ void handle_disable_ubl_timeout(void *userdata);
 
 /* in ftdm_sangoma_ss7_acc.c */
 ftdm_status_t ftmod_ss7_acc_default_config(void);
+ftdm_status_t sng_acc_assign_max_bucket(uint32_t intfId, uint32_t cics_cfg);
 ftdm_status_t ftdm_sangoma_ss7_get_congestion_status(ftdm_channel_t *ftdmchan);
 ftdm_status_t ftdm_check_acc(sngss7_chan_data_t *sngss7_info, SiRelEvnt *siRelEvnt, ftdm_channel_t *ftdmchan);
 ftdm_status_t sng_acc_handle_call_rate(ftdm_bool_t inc, ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong);
