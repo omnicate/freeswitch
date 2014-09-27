@@ -32,6 +32,7 @@
 #include <switch.h>
 #define SMS_CHAT_PROTO "GLOBAL_SMS"
 #define MY_EVENT_SEND_MESSAGE "SMS::SEND_MESSAGE"
+#define MY_EVENT_DELIVERY_REPORT "SMS::DELIVERY_REPORT"
 
 /* Prototypes */
 SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_sms_shutdown);
@@ -39,6 +40,35 @@ SWITCH_MODULE_RUNTIME_FUNCTION(mod_sms_runtime);
 SWITCH_MODULE_LOAD_FUNCTION(mod_sms_load);
 SWITCH_MODULE_DEFINITION(mod_sms, mod_sms_load, mod_sms_shutdown, NULL);
 
+
+static void send_report(switch_event_t *event, const char * Status) {
+	switch_event_t *report = NULL;
+	switch_event_header_t *header;
+
+	if (switch_event_create_subclass(&report, SWITCH_EVENT_CUSTOM, MY_EVENT_DELIVERY_REPORT) == SWITCH_STATUS_SUCCESS) {
+
+		switch_event_add_header_string(report, SWITCH_STACK_BOTTOM, "Status", Status);
+
+
+		for (header = event->headers; header; header = header->next) {
+			if (!strcmp(header->name, "Event-Subclass")) {
+				continue;
+			}
+			if (!strcmp(header->name, "Event-Name")) {
+				continue;
+			}
+	        if (header->idx) {
+	            int i;
+	            for (i = 0; i < header->idx; i++) {
+	                switch_event_add_header_string(report, SWITCH_STACK_PUSH, header->name, header->array[i]);
+	            }
+	        } else {
+	            switch_event_add_header_string(report, SWITCH_STACK_BOTTOM, header->name, header->value);
+	        }
+		}
+		switch_event_fire(&report);
+	}
+}
 
 static void event_handler(switch_event_t *event) 
 {
@@ -52,13 +82,15 @@ static void event_handler(switch_event_t *event)
 
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Delivery Failure\n");
 		DUMP_EVENT(event);
-
+		send_report(event, "Failure");
 		return;
 	} else if ( check_failure && switch_false(check_failure) ) {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "SMS Delivery Success\n");
+		send_report(event, "Success");
 		return;
 	} else if ( check_nonblocking && switch_true(check_nonblocking) ) {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "SMS Delivery assumed successful due to being sent in non-blocking manner\n");
+		send_report(event, "Accepted");
 		return;
 	}
 
@@ -482,6 +514,22 @@ SWITCH_STANDARD_CHAT_APP(stop_function)
 	return SWITCH_STATUS_FALSE;
 }
 
+SWITCH_STANDARD_CHAT_APP(error_function)
+{
+
+	switch_event_t *fireme;
+
+	if (data) {
+		switch_event_add_header_string(message, SWITCH_STACK_BOTTOM, "SIP-Reply-Code", data);
+	}
+
+	switch_event_dup(&fireme, message);
+	switch_event_fire(&fireme);
+
+	switch_set_flag(message, EF_NO_CHAT_EXEC);
+	return SWITCH_STATUS_FALSE;
+}
+
 SWITCH_STANDARD_CHAT_APP(send_function)
 {
 	const char *dest_proto = data;
@@ -576,6 +624,7 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_sms_load)
 	SWITCH_ADD_CHAT_APP(chat_app_interface, "send", "send the message as-is", "send the message as-is", send_function, "", SCAF_NONE);
 	SWITCH_ADD_CHAT_APP(chat_app_interface, "fire", "fire the message", "fire the message", fire_function, "", SCAF_NONE);
 	SWITCH_ADD_CHAT_APP(chat_app_interface, "system", "execute a system command", "execute a sytem command", system_function, "", SCAF_NONE);
+	SWITCH_ADD_CHAT_APP(chat_app_interface, "error", "sets error", "sets error", error_function, "", SCAF_NONE);
 						
 	/* indicate that the module should continue to be loaded */
 	return SWITCH_STATUS_SUCCESS;
