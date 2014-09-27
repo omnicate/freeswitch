@@ -7585,7 +7585,7 @@ void sofia_handle_sip_i_refer(nua_t *nua, sofia_profile_t *profile, nua_handle_t
 					if ((p = strchr(rep, ';'))) {
 						*p = '\0';
 					}
-					switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "Replaces: [%s]\n", rep);
+					switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "REFER replaces: [%s]\n", rep);
 				} else {
 					switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Memory Error!\n");
 					goto done;
@@ -7734,8 +7734,12 @@ void sofia_handle_sip_i_refer(nua_t *nua, sofia_profile_t *profile, nua_handle_t
 								if (moh) {
 									char *xdest;
 									xdest = switch_core_session_sprintf(a_session, "endless_playback:%s,park", moh);
+									switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "REFER from %s (bridged to %s) replaces %s with %s\n"
+													  ,switch_core_session_get_uuid(session), rep, br_a, xdest);
 									switch_ivr_session_transfer(a_session, xdest, "inline", NULL);
 								} else {
+									switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "REFER from %s (bridged to %s) replaces %s with park\n"
+													  ,switch_core_session_get_uuid(session), rep, br_a);
 									switch_ivr_session_transfer(a_session, "park", "inline", NULL);
 								}
 
@@ -7832,7 +7836,7 @@ void sofia_handle_sip_i_refer(nua_t *nua, sofia_profile_t *profile, nua_handle_t
                                 switch_core_session_rwunlock(tmp);
                             }
 
-							switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, "REFER from %s (bridged to %s) replaces %s (bridged to %s)\n"
+							switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "REFER from %s (bridged to %s) replaces %s (bridged to %s)\n"
 											  ,switch_core_session_get_uuid(session), br_a, rep, br_b);
 
 							switch_ivr_uuid_bridge(br_a, br_b);
@@ -7905,8 +7909,12 @@ void sofia_handle_sip_i_refer(nua_t *nua, sofia_profile_t *profile, nua_handle_t
 									}
 
 									if (idest) {
+										switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "REFER from %s replaces %s with %s\n"
+														  ,switch_core_session_get_uuid(session), rep, idest);
 										switch_ivr_session_transfer(t_session, idest, "inline", NULL);
 									} else {
+										switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "REFER from %s replaces %s with %s\n"
+														  ,switch_core_session_get_uuid(session), rep, ext);
 										switch_ivr_session_transfer(t_session, ext, NULL, NULL);
 									}
 
@@ -8071,6 +8079,9 @@ void sofia_handle_sip_i_refer(nua_t *nua, sofia_profile_t *profile, nua_handle_t
 			const char *var;
 			switch_channel_t *b_channel = switch_core_session_get_channel(b_session);
 			switch_event_t *event = NULL;
+
+			switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "REFER from %s transfers %s to %s@%s\n"
+							  ,switch_core_session_get_uuid(session), br, exten, (char *) refer_to->r_url->url_host);
 
 			switch_channel_set_variable(channel, "transfer_fallback_extension", from->a_user);
 			if (!zstr(full_ref_by)) {
