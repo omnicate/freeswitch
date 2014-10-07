@@ -708,6 +708,15 @@ static ftdm_status_t ftdm_sangoma_isdn_process_state_change(ftdm_channel_t *ftdm
 			ts.user_data = ftdmchan->fsk_buffer;
 			teletone_run(&ts, ftdmchan->span->tone_map[FTDM_TONEMAP_DIAL]);
 			ts.user_data = dt_buffer;
+
+
+#if 0
+			ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_RING);
+			ftdm_sangoma_isdn_process_state_change( ftdmchan );
+
+#endif
+			sngisdn_send_signal(sngisdn_info, FTDM_SIGEVENT_RING);
+
 #endif
 
 
