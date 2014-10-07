@@ -196,7 +196,7 @@ void sngisdn_process_con_ind (sngisdn_event_data_t *sngisdn_event)
 				}
 			}
 #endif			
-			if (signal_data->overlap_dial == SNGISDN_OPT_TRUE && !conEvnt->sndCmplt.eh.pres) {
+			if (signal_data->overlap_dial == SNGISDN_OPT_TRUE /* && !conEvnt->sndCmplt.eh.pres */) {
 				ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_COLLECT);
 			} else {
 				ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_RING);

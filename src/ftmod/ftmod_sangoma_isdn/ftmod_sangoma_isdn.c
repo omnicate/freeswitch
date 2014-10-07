@@ -34,6 +34,8 @@
  */
 
 
+
+#include "private/ftdm_core.h"
 #include "ftmod_sangoma_isdn.h"
 
 #ifdef FTDM_DEBUG_CHAN_MEMORY
@@ -630,6 +632,20 @@ static void ftdm_sangoma_isdn_process_stack_event (ftdm_span_t *span, sngisdn_ev
 	}
 }
 
+static int teletone_handler(teletone_generation_session_t *ts, teletone_tone_map_t *map)
+{
+	ftdm_buffer_t *dt_buffer = ts->user_data;
+	int wrote;
+
+	if (!dt_buffer) {
+		return -1;
+	}
+	wrote = teletone_mux_tones(ts, map);
+	ftdm_buffer_write(dt_buffer, ts->buffer, wrote * 2);
+	return 0;
+}
+
+
 /* this function is called with the channel already locked by the core */
 static ftdm_status_t ftdm_sangoma_isdn_process_state_change(ftdm_channel_t *ftdmchan)
 {
@@ -643,6 +659,18 @@ static ftdm_status_t ftdm_sangoma_isdn_process_state_change(ftdm_channel_t *ftdm
 	sigev.chan_id = ftdmchan->chan_id;
 	sigev.span_id = ftdmchan->span_id;
 	sigev.channel = ftdmchan;
+
+	ftdm_buffer_t *dt_buffer = NULL;
+	teletone_generation_session_t ts;
+
+	if (ftdm_buffer_create(&dt_buffer, 1024, 3192, 0) != FTDM_SUCCESS) {
+		snprintf(ftdmchan->last_error, sizeof(ftdmchan->last_error), "memory error!");
+		ftdm_log_chan_msg(ftdmchan, FTDM_LOG_ERROR, "MEM ERROR\n");
+		return FTDM_FAIL;
+	}
+	ts.buffer = NULL;
+	teletone_init_session(&ts, 0, teletone_handler, dt_buffer);
+	ts.rate = 8000;
 
 #ifdef FTDM_DEBUG_CHAN_MEMORY
 	if (ftdmchan->state == FTDM_CHANNEL_STATE_DIALING) {
@@ -661,6 +689,28 @@ static ftdm_status_t ftdm_sangoma_isdn_process_state_change(ftdm_channel_t *ftdm
 			/* TODO: Re-implement this. There is a way to re-evaluate new incoming digits from dialplan as they come */
 			sngisdn_snd_setup_ack(ftdmchan);
 			/* Just wait in this state until we get enough digits or T302 timeout */
+
+			
+#if 1
+#if 1 
+			ts.debug = 1;
+			ts.debug_stream = stdout;
+#endif
+			ftdm_buffer_set_loops(dt_buffer, -1);
+			ftdm_buffer_zero(dt_buffer);
+			if (ftdmchan->fsk_buffer) {
+				ftdm_buffer_zero(ftdmchan->fsk_buffer);
+			} else {
+				ftdm_buffer_create(&ftdmchan->fsk_buffer, 128, 128, 0);
+				ftdm_log_chan(ftdmchan, FTDM_LOG_CRIT, "jz: created fsk_buffer in ISDN mod %p\n", ftdmchan->fsk_buffer);
+			}
+						
+			ts.user_data = ftdmchan->fsk_buffer;
+			teletone_run(&ts, ftdmchan->span->tone_map[FTDM_TONEMAP_DIAL]);
+			ts.user_data = dt_buffer;
+#endif
+
+
 		}
 		break;
 	case FTDM_CHANNEL_STATE_GET_CALLERID:
@@ -947,6 +997,14 @@ static ftdm_status_t ftdm_sangoma_isdn_process_state_change(ftdm_channel_t *ftdm
 		ftdm_assert(mprotect(ftdmchan, sizeof(*ftdmchan), PROT_READ|PROT_WRITE) == 0, "Failed to mprotect");
 	}
 #endif
+							
+			if (ts.buffer) {
+				teletone_destroy_session(&ts);
+			}
+			
+			if (dt_buffer) {
+				ftdm_buffer_destroy(&dt_buffer);
+			}
 	return FTDM_SUCCESS;
 }
 
