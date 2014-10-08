@@ -594,7 +594,7 @@ static void *ftdm_sangoma_isdn_tones_run(ftdm_thread_t *me, void *obj)
 	while (ftdm_running() && !(ftdm_test_flag(span, FTDM_SPAN_STOP_THREAD))) {
 		ftdm_wait_flag_t flags;
 		ftdm_status_t status;
-		// int last_chan_state = 0;
+		int last_chan_state = 0;
 		int gated = 0;
 		// unsigned long now = ftdm_current_time_in_ms();
 
@@ -606,31 +606,11 @@ static void *ftdm_sangoma_isdn_tones_run(ftdm_thread_t *me, void *obj)
 			switch (ftdmchan->state) {
 			case FTDM_CHANNEL_STATE_COLLECT:
 				{
-					ftdm_isdn_bchan_data_t *data = (ftdm_isdn_bchan_data_t *)chan->call_data;
-					ftdm_caller_data_t *caller_data = ftdm_channel_get_caller_data(chan);
-
-					/* check overlap dial timeout first before generating tone */
-					if (data && data->digit_timeout && data->digit_timeout <= now) {
-						if (strlen(caller_data->dnis.digits) > 0) {
-							ftdm_log(FTDM_LOG_DEBUG, "Overlap dial timeout, advancing to RING state\n");
-							ftdm_set_state_locked(chan, FTDM_CHANNEL_STATE_RING);
-						} else {
-							/* no digits received, hangup */
-							ftdm_log(FTDM_LOG_DEBUG, "Overlap dial timeout, no digits received, going to HANGUP state\n");
-							caller_data->hangup_cause = FTDM_CAUSE_RECOVERY_ON_TIMER_EXPIRE;	/* TODO: probably wrong cause value */
-							ftdm_set_state_locked(chan, FTDM_CHANNEL_STATE_HANGUP);
-						}
-						data->digit_timeout = 0;
-						continue;
-					}
-
-					if (last_chan_state != ftdm_channel_get_state(chan)) {
+					if (last_chan_state != ftdm_channel_get_state(ftdmchan)) {
 						ftdm_buffer_zero(dt_buffer);
 						teletone_run(&ts, span->tone_map[FTDM_TONEMAP_DIAL]);
-						last_chan_state = ftdm_channel_get_state(chan);
+						last_chan_state = ftdm_channel_get_state(ftdmchan);
 					}
-					ftdm_log(FTDM_LOG_DEBUG, "Channel in COLLECT state.......\n");
-					
 				}
 				break;
 
