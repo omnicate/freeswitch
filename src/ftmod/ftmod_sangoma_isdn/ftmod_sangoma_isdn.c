@@ -280,6 +280,20 @@ ftdm_state_map_t sangoma_isdn_state_map = {
 	}
 };
 
+static int teletone_handler(teletone_generation_session_t *ts, teletone_tone_map_t *map)
+{
+	ftdm_buffer_t *dt_buffer = ts->user_data;
+	int wrote;
+
+	if (!dt_buffer) {
+		return -1;
+	}
+	wrote = teletone_mux_tones(ts, map);
+	ftdm_buffer_write(dt_buffer, ts->buffer, wrote * 2);
+	return 0;
+}
+
+
 static void ftdm_sangoma_isdn_process_phy_events(ftdm_span_t *span, ftdm_oob_event_t event)
 {
 	sngisdn_span_data_t *signal_data = (sngisdn_span_data_t*) span->signal_data;
@@ -526,6 +540,208 @@ ftdm_sangoma_isdn_run_exit:
 }
 
 
+static void *ftdm_sangoma_isdn_tones_run(ftdm_thread_t *me, void *obj)
+{
+	ftdm_span_t *span = (ftdm_span_t *) obj;
+	
+	sngisdn_span_data_t *signal_data = (sngisdn_span_data_t*)span->signal_data;
+	ftdm_iterator_t *chaniter = NULL;
+	ftdm_iterator_t *citer = NULL;
+	ftdm_channel_t *ftdmchan = NULL;
+	
+	//ftdm_isdn_data_t *isdn_data = span->signal_data;
+	ftdm_buffer_t *dt_buffer = NULL;
+	teletone_generation_session_t ts = {{{{0}}}};;
+	unsigned char frame[1024];
+	/*
+	int x;
+	*/
+	int interval;
+	int offset = 0;
+	unsigned i = 0;	
+
+	ftdm_log(FTDM_LOG_DEBUG, "Sangoma ISDN tones thread starting.\n");
+
+	if (ftdm_buffer_create(&dt_buffer, 1024, 1024, 0) != FTDM_SUCCESS) {
+		snprintf(signal_data->dchan->last_error, sizeof(signal_data->dchan->last_error), "memory error!");
+		ftdm_log(FTDM_LOG_ERROR, "MEM ERROR\n");
+		goto done;
+	}
+	ftdm_buffer_set_loops(dt_buffer, -1);
+
+
+	ftdm_assert(((sngisdn_span_data_t*)span->signal_data)->dchan, "Span does not have a dchannel");
+	chaniter = ftdm_span_get_chan_iterator(span, NULL);
+	if (!chaniter) {
+		ftdm_log(FTDM_LOG_CRIT, "Failed to allocate channel iterator for span %s!\n", span->name);
+		goto done;
+	}
+	for (i = 0, citer = ftdm_span_get_chan_iterator(span, chaniter); citer; citer = ftdm_iterator_next(citer), i++) {
+		ftdmchan = ftdm_iterator_current(citer);
+		ftdm_channel_command(ftdmchan, FTDM_COMMAND_GET_INTERVAL, &interval);
+	}
+	if (!interval) {
+		interval = 20;
+	}
+	ftdm_log(FTDM_LOG_NOTICE, "Tone generating interval %d\n", interval);
+
+	/* init teletone */
+	teletone_init_session(&ts, 0, teletone_handler, dt_buffer);
+	ts.rate     = 8000;
+	ts.duration = ts.rate;
+
+	/* main loop */
+	while (ftdm_running() && !(ftdm_test_flag(span, FTDM_SPAN_STOP_THREAD))) {
+		ftdm_wait_flag_t flags;
+		ftdm_status_t status;
+		// int last_chan_state = 0;
+		int gated = 0;
+		// unsigned long now = ftdm_current_time_in_ms();
+
+		/* check b-channel states and generate & send tones if neccessary */
+		for (i = 0, citer = ftdm_span_get_chan_iterator(span, chaniter); citer; citer = ftdm_iterator_next(citer), i++) {
+			ftdmchan = ftdm_iterator_current(citer);
+			ftdm_size_t len = sizeof(frame), rlen;
+			
+			switch (ftdmchan->state) {
+			case FTDM_CHANNEL_STATE_COLLECT:
+				{
+					ftdm_isdn_bchan_data_t *data = (ftdm_isdn_bchan_data_t *)chan->call_data;
+					ftdm_caller_data_t *caller_data = ftdm_channel_get_caller_data(chan);
+
+					/* check overlap dial timeout first before generating tone */
+					if (data && data->digit_timeout && data->digit_timeout <= now) {
+						if (strlen(caller_data->dnis.digits) > 0) {
+							ftdm_log(FTDM_LOG_DEBUG, "Overlap dial timeout, advancing to RING state\n");
+							ftdm_set_state_locked(chan, FTDM_CHANNEL_STATE_RING);
+						} else {
+							/* no digits received, hangup */
+							ftdm_log(FTDM_LOG_DEBUG, "Overlap dial timeout, no digits received, going to HANGUP state\n");
+							caller_data->hangup_cause = FTDM_CAUSE_RECOVERY_ON_TIMER_EXPIRE;	/* TODO: probably wrong cause value */
+							ftdm_set_state_locked(chan, FTDM_CHANNEL_STATE_HANGUP);
+						}
+						data->digit_timeout = 0;
+						continue;
+					}
+
+					if (last_chan_state != ftdm_channel_get_state(chan)) {
+						ftdm_buffer_zero(dt_buffer);
+						teletone_run(&ts, span->tone_map[FTDM_TONEMAP_DIAL]);
+						last_chan_state = ftdm_channel_get_state(chan);
+					}
+					ftdm_log(FTDM_LOG_DEBUG, "Channel in COLLECT state.......\n");
+					
+				}
+				break;
+
+			case FTDM_CHANNEL_STATE_RING:
+				{
+					#if 0
+					if (last_chan_state != ftdm_channel_get_state(chan)) {
+						ftdm_buffer_zero(dt_buffer);
+						teletone_run(&ts, span->tone_map[FTDM_TONEMAP_RING]);
+						last_chan_state = ftdm_channel_get_state(chan);
+					}
+					ftdm_log(FTDM_LOG_DEBUG, "Channel in RING state.......\n");
+					#endif
+					
+				}
+				break;
+
+			default:
+				continue;
+			}
+
+			if (!ftdm_test_flag(ftdmchan, FTDM_CHANNEL_OPEN)) {
+				if (ftdm_channel_open_chan(ftdmchan) != FTDM_SUCCESS) {
+					ftdm_set_state_locked(ftdmchan, FTDM_CHANNEL_STATE_HANGUP);
+					continue;
+				}
+				ftdm_log(FTDM_LOG_NOTICE, "Successfully opened channel %d:%d\n",
+						ftdm_channel_get_span_id(ftdmchan),
+						ftdm_channel_get_id(ftdmchan));
+			}
+
+			flags = FTDM_READ;
+
+			status = ftdm_channel_wait(ftdmchan, &flags, (gated) ? 0 : interval);
+			switch (status) {
+			case FTDM_FAIL:
+				continue;
+
+			case FTDM_TIMEOUT:
+				gated = 1;
+				continue;
+
+			default:
+				if (!(flags & FTDM_READ)) {
+					continue;
+				}
+			}
+			gated = 1;
+
+			status = ftdm_channel_read(ftdmchan, frame, &len);
+			if (status != FTDM_SUCCESS || len <= 0) {
+				continue;
+			}
+
+			if (ftdmchan->effective_codec != FTDM_CODEC_SLIN) {
+				len *= 2;
+			}
+
+			/* seek to current offset */
+			ftdm_buffer_seek(dt_buffer, offset);
+
+			rlen = ftdm_buffer_read_loop(dt_buffer, frame, len);
+
+			if (ftdmchan->effective_codec != FTDM_CODEC_SLIN) {
+				fio_codec_t codec_func = NULL;
+
+				if (ftdmchan->native_codec == FTDM_CODEC_ULAW) {
+					codec_func = fio_slin2ulaw;
+				} else if (ftdmchan->native_codec == FTDM_CODEC_ALAW) {
+					codec_func = fio_slin2alaw;
+				}
+
+				if (codec_func) {
+					status = codec_func(frame, sizeof(frame), &rlen);
+				} else {
+					snprintf(ftdmchan->last_error, sizeof(ftdmchan->last_error), "codec error!");
+					goto done;
+				}
+			}
+			ftdm_channel_write(ftdmchan, frame, sizeof(frame), &rlen);
+		}
+
+		/*
+		 * sleep a bit if there was nothing to do
+		 */
+		if (!gated) {
+			ftdm_sleep(interval);
+		}
+
+		offset += (ts.rate / (1000 / interval)) << 1;
+		if (offset >= ts.rate) {
+			offset = 0;
+		}
+	}
+
+done:
+	if (ts.buffer) {
+		teletone_destroy_session(&ts);
+	}
+
+	if (dt_buffer) {
+		ftdm_buffer_destroy(&dt_buffer);
+	}
+
+	ftdm_log(FTDM_LOG_DEBUG, "Sangoma ISDN tone thread ended.\n");
+
+	return NULL;
+}
+
+
+
 /**
  * \brief Checks if span has state changes pending and processes
  * \param span Span where event was fired
@@ -632,20 +848,6 @@ static void ftdm_sangoma_isdn_process_stack_event (ftdm_span_t *span, sngisdn_ev
 	}
 }
 
-static int teletone_handler(teletone_generation_session_t *ts, teletone_tone_map_t *map)
-{
-	ftdm_buffer_t *dt_buffer = ts->user_data;
-	int wrote;
-
-	if (!dt_buffer) {
-		return -1;
-	}
-	wrote = teletone_mux_tones(ts, map);
-	ftdm_buffer_write(dt_buffer, ts->buffer, wrote * 2);
-	return 0;
-}
-
-
 /* this function is called with the channel already locked by the core */
 static ftdm_status_t ftdm_sangoma_isdn_process_state_change(ftdm_channel_t *ftdmchan)
 {
@@ -691,7 +893,7 @@ static ftdm_status_t ftdm_sangoma_isdn_process_state_change(ftdm_channel_t *ftdm
 			/* Just wait in this state until we get enough digits or T302 timeout */
 
 			
-#if 1
+#if  0
 #if 1 
 			ts.debug = 1;
 			ts.debug_stream = stdout;
@@ -714,8 +916,9 @@ static ftdm_status_t ftdm_sangoma_isdn_process_state_change(ftdm_channel_t *ftdm
 			ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_RING);
 			ftdm_sangoma_isdn_process_state_change( ftdmchan );
 
-#endif
 			sngisdn_send_signal(sngisdn_info, FTDM_SIGEVENT_RING);
+
+#endif
 
 #endif
 
@@ -1146,6 +1349,13 @@ static ftdm_status_t ftdm_sangoma_isdn_start(ftdm_span_t *span)
 	/*start the dchan monitor thread*/
 	if (ftdm_thread_create_detached(ftdm_sangoma_isdn_io_run, span) != FTDM_SUCCESS) {
 		ftdm_log(FTDM_LOG_CRIT,"Failed to start Sangoma ISDN d-channel Monitor Thread!\n");
+		return FTDM_FAIL;
+	}
+
+
+	/*start the tone thread*/
+	if (ftdm_thread_create_detached(ftdm_sangoma_isdn_tones_run, span) != FTDM_SUCCESS) {
+		ftdm_log(FTDM_LOG_CRIT,"Failed to start Sangoma ISDN Tone Thread!\n");
 		return FTDM_FAIL;
 	}
 
