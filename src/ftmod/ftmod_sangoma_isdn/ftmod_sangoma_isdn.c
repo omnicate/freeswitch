@@ -626,6 +626,8 @@ static void *ftdm_sangoma_isdn_tones_run(ftdm_thread_t *me, void *obj)
 					#endif
 					
 				}
+				/* do not play ringtone in ring event */
+				continue;
 				break;
 
 			default:
