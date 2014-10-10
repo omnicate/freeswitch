@@ -257,6 +257,7 @@ typedef struct sngisdn_span_data {
 	uint8_t			trace_flags;		/* TODO change to bit map of sngisdn_tracetype_t */
 	uint8_t			early_media_flags;	/* bit map of ftdm_sngisdn_early_media_opt_t */
 	uint8_t			overlap_dial;
+	uint8_t			overlap_dial_gentone;
 	uint8_t			setup_arb;
 	uint8_t			facility_ie_decode;
 	uint8_t			facility;

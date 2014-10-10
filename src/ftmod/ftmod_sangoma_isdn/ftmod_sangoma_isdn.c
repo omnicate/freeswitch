@@ -549,7 +549,6 @@ static void *ftdm_sangoma_isdn_tones_run(ftdm_thread_t *me, void *obj)
 	ftdm_iterator_t *citer = NULL;
 	ftdm_channel_t *ftdmchan = NULL;
 	
-	//ftdm_isdn_data_t *isdn_data = span->signal_data;
 	ftdm_buffer_t *dt_buffer = NULL;
 	teletone_generation_session_t ts = {{{{0}}}};;
 	unsigned char frame[1024];
@@ -606,7 +605,8 @@ static void *ftdm_sangoma_isdn_tones_run(ftdm_thread_t *me, void *obj)
 			switch (ftdmchan->state) {
 			case FTDM_CHANNEL_STATE_COLLECT:
 				{
-					if (last_chan_state != ftdm_channel_get_state(ftdmchan)) {
+					if (last_chan_state != ftdm_channel_get_state(ftdmchan) && 
+					    signal_data->overlap_dial_gentone == SNGISDN_OPT_TRUE ) {
 						ftdm_buffer_zero(dt_buffer);
 						teletone_run(&ts, span->tone_map[FTDM_TONEMAP_DIAL]);
 						last_chan_state = ftdm_channel_get_state(ftdmchan);

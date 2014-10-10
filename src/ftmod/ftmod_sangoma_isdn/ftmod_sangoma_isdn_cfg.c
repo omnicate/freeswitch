@@ -291,6 +291,7 @@ ftdm_status_t ftmod_isdn_parse_cfg(ftdm_conf_parameter_t *ftdm_parameters, ftdm_
 	signal_data->tei = 0;
 	signal_data->min_digits = 8;
 	signal_data->overlap_dial = SNGISDN_OPT_DEFAULT;
+	signal_data->overlap_dial_gentone = SNGISDN_OPT_DEFAULT;
 	signal_data->setup_arb = SNGISDN_OPT_DEFAULT;
 	signal_data->facility_ie_decode = SNGISDN_OPT_DEFAULT;
 	signal_data->ignore_cause_value = SNGISDN_OPT_DEFAULT;
@@ -345,6 +346,14 @@ ftdm_status_t ftmod_isdn_parse_cfg(ftdm_conf_parameter_t *ftdm_parameters, ftdm_
 				signal_data->overlap_dial = SNGISDN_OPT_TRUE;
 			} else if (!strcasecmp(val, "no")) {
 				signal_data->overlap_dial = SNGISDN_OPT_FALSE;
+			} else {
+				ftdm_log(FTDM_LOG_ERROR, "Invalid value for parameter:%s:%s\n", var, val);
+			}
+		} else if (!strcasecmp(var, "overlap-gentone")) {
+			if (!strcasecmp(val, "yes")) {
+				signal_data->overlap_dial_gentone = SNGISDN_OPT_TRUE;
+			} else if (!strcasecmp(val, "no")) {
+				signal_data->overlap_dial_gentone = SNGISDN_OPT_FALSE;
 			} else {
 				ftdm_log(FTDM_LOG_ERROR, "Invalid value for parameter:%s:%s\n", var, val);
 			}
