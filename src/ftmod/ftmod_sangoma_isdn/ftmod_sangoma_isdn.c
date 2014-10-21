@@ -396,6 +396,8 @@ static void *ftdm_sangoma_isdn_io_run(ftdm_thread_t *me, void *obj)
 				poll_events[i] |= FTDM_READ;
 			}
 		}
+		/* Free memory allocated to citer */
+		ftdm_iterator_free(citer);
 
 		status = ftdm_span_poll_event(span, waitms, poll_events);
 		switch (status) {
@@ -434,6 +436,8 @@ static void *ftdm_sangoma_isdn_io_run(ftdm_thread_t *me, void *obj)
 						}
 					}
 				}
+				/* Free memory allocated to citer */
+				ftdm_iterator_free(citer);
 
 				/* Check if there are any channels that have events available */
 				while (ftdm_span_next_event(span, &event) == FTDM_SUCCESS) {
@@ -1596,12 +1600,14 @@ static FIO_SIG_UNLOAD_FUNCTION(ftdm_sangoma_isdn_unload)
 }
 
 #define SANGOMA_ISDN_API_USAGE_TRACE 			"ftdm sangoma_isdn trace <q921|q931> <span name>\n"
-#define SANGOMA_ISDN_API_USAGE_SHOW_L1_STATS	"ftdm sangoma_isdn l1_stats <span name>\n"
+#define SANGOMA_ISDN_API_USAGE_SHOW_L1_STATS		"ftdm sangoma_isdn l1_stats <span name>\n"
 #define SANGOMA_ISDN_API_USAGE_SHOW_SPANS		"ftdm sangoma_isdn show_spans [<span name>]\n"
+#define SANGOMA_ISDN_API_USAGE_SHOW_STACK_MEMORY	"ftdm sangoma_isdn show_stack_memory\n"
 
 #define SANGOMA_ISDN_API_USAGE	"\t"SANGOMA_ISDN_API_USAGE_TRACE \
 								"\t"SANGOMA_ISDN_API_USAGE_SHOW_L1_STATS \
-								"\t"SANGOMA_ISDN_API_USAGE_SHOW_SPANS
+								"\t"SANGOMA_ISDN_API_USAGE_SHOW_SPANS \
+								"\t"SANGOMA_ISDN_API_USAGE_SHOW_STACK_MEMORY
 
 static FIO_API_FUNCTION(ftdm_sangoma_isdn_api)
 {
@@ -1736,6 +1742,11 @@ static FIO_API_FUNCTION(ftdm_sangoma_isdn_api)
 	}
 	if (!strcasecmp(argv[0], "check_mem")) {
 		sngisdn_get_memory_info();
+	}
+
+	if (!strcasecmp(argv[0], "show_stack_memory")) {
+		sngisdn_get_memory_info();
+		status = FTDM_SUCCESS;
 	}
 done:
 	switch (status) {
