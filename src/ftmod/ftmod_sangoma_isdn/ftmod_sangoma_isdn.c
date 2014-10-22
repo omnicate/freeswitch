@@ -1600,11 +1600,13 @@ static FIO_SIG_UNLOAD_FUNCTION(ftdm_sangoma_isdn_unload)
 }
 
 #define SANGOMA_ISDN_API_USAGE_TRACE 			"ftdm sangoma_isdn trace <q921|q931> <span name>\n"
+#define SANGOMA_ISDN_API_USAGE_STACK_TRACE 		"ftdm sangoma_isdn stack trace <enable|disable>\n"
 #define SANGOMA_ISDN_API_USAGE_SHOW_L1_STATS		"ftdm sangoma_isdn l1_stats <span name>\n"
 #define SANGOMA_ISDN_API_USAGE_SHOW_SPANS		"ftdm sangoma_isdn show_spans [<span name>]\n"
 #define SANGOMA_ISDN_API_USAGE_SHOW_STACK_MEMORY	"ftdm sangoma_isdn show_stack_memory\n"
 
 #define SANGOMA_ISDN_API_USAGE	"\t"SANGOMA_ISDN_API_USAGE_TRACE \
+								"\t"SANGOMA_ISDN_API_USAGE_STACK_TRACE \
 								"\t"SANGOMA_ISDN_API_USAGE_SHOW_L1_STATS \
 								"\t"SANGOMA_ISDN_API_USAGE_SHOW_SPANS \
 								"\t"SANGOMA_ISDN_API_USAGE_SHOW_STACK_MEMORY
@@ -1659,7 +1661,34 @@ static FIO_API_FUNCTION(ftdm_sangoma_isdn_api)
 		}
 		goto done;
 	}
-	
+
+	/* ISDN Stack trace on */
+	if (!strcasecmp(argv[0], "stack")) {
+		char *trace_opt;
+
+		if (argc != 3) {
+			ftdm_log(FTDM_LOG_ERROR, "Usage: %s\n", SANGOMA_ISDN_API_USAGE_STACK_TRACE);
+			status = FTDM_FAIL;
+			goto done;
+		}
+		trace_opt = argv[2];
+
+		if (!strcasecmp(argv[1], "trace")) {
+			if (!strcasecmp(trace_opt, "enable")) {
+				status = sngisdn_activate_trace(NULL, SNGISDN_STACK_TRACE_ENABLE);
+			} else if (!strcasecmp(trace_opt, "disable")) {
+				status = sngisdn_activate_trace(NULL, SNGISDN_STACK_TRACE_DISABLE);
+			} else {
+				stream->write_function(stream, "-ERR invalid stack trace option <enable|disable>\n");
+				status = FTDM_FAIL;
+			}
+		} else {
+			stream->write_function(stream, "-ERR invalid stack trace option <enable|disable>\n");
+			status = FTDM_FAIL;
+		}
+		goto done;
+	}
+
 	if (!strcasecmp(argv[0], "l1_stats")) {
 		ftdm_span_t *span;
 		if (argc < 2) {
