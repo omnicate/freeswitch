@@ -164,6 +164,7 @@ ftdm_status_t ftdm_sangoma_ss7_get_congestion_status(ftdm_channel_t *ftdmchan)
 
 	cpu_usage = ftdm_get_cpu_usage();
 
+	SS7_INFO_CHAN(ftdmchan,"Getting congestion Status for DPC[%d]\n", g_ftdm_sngss7_data.cfg.isupIntf[sngss7_info->circuit->infId].dpc);
 	if (!(sngss7_rmt_cong = sng_acc_get_cong_struct(ftdmchan))) {
 		SS7_INFO_CHAN(ftdmchan,"Could not find congestion structure for DPC[%d]... Incoming Call\n", g_ftdm_sngss7_data.cfg.isupIntf[sngss7_info->circuit->infId].dpc);
 		return FTDM_FAIL;
@@ -174,12 +175,21 @@ ftdm_status_t ftdm_sangoma_ss7_get_congestion_status(ftdm_channel_t *ftdmchan)
 		sngss7_rmt_cong->loc_calls_rejected++;
 		SS7_DEBUG_CHAN(ftdmchan, "Hanging up call due to High cpu usage of [%d] against configured cpu limit[%d]!\n",
 				cpu_usage, g_ftdm_sngss7_data.cfg.max_cpu_usage);
-		ftdmchan->caller_data.hangup_cause = FTDM_CAUSE_SWITCH_CONGESTION;
+		/* PUSHKAR TODO: Need to made this as a configurable parameter */
+		/*ftdmchan->caller_data.hangup_cause = FTDM_CAUSE_SWITCH_CONGESTION;*/
+		ftdmchan->caller_data.hangup_cause = FTDM_CAUSE_NORMAL_CIRCUIT_CONGESTION;
 		sngss7_set_call_flag (sngss7_info, FLAG_CONG_REL);
 		if (ftdm_queue_enqueue(sngss7_reject_queue.sngss7_call_rej_queue, ftdmchan)) {
 			/* end the call */
-			SS7_DEBUG_CHAN(ftdmchan, "Unable to queue as Call reject congestion queue is already full%s\n", "");
-			ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_HANGUP);
+			/* in case of native bridge */
+			if (ftdm_test_flag(ftdmchan, FTDM_CHANNEL_NATIVE_SIGBRIDGE)) {
+				SS7_DEBUG_CHAN(ftdmchan, "Unable to queue as Call reject congestion queue is already full for Native Bridge. Thus, moving to TERMINATIG STATE%s\n", "");
+				ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_TERMINATING);
+			} else {
+				SS7_DEBUG_CHAN(ftdmchan, "Unable to queue as Call reject congestion queue is already full. Thus, moving to HANGUP state%s\n", "");
+				ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_HANGUP);
+			}
+
 			return FTDM_BREAK;
 		}
 		return FTDM_SUCCESS;
@@ -192,6 +202,7 @@ ftdm_status_t ftdm_sangoma_ss7_get_congestion_status(ftdm_channel_t *ftdmchan)
 
 	/* If remote exchange is congested then pass calls as per call block rate depending up on the congestion level */
 	if ((sngss7_rmt_cong->sngss7_rmtCongLvl) && (sngss7_rmt_cong->dpc == g_ftdm_sngss7_data.cfg.isupIntf[sngss7_info->circuit->infId].dpc)) {
+		SS7_DEBUG_CHAN(ftdmchan, "DPC[%d] is congested having congestion Level as  %d\n", sngss7_rmt_cong->dpc, sngss7_rmt_cong->sngss7_rmtCongLvl);
 		if (!(sng_acc_handle_call_rate(FTDM_TRUE, sngss7_rmt_cong))) {
 			return FTDM_FAIL;
 		}
@@ -199,12 +210,20 @@ ftdm_status_t ftdm_sangoma_ss7_get_congestion_status(ftdm_channel_t *ftdmchan)
 		sngss7_rmt_cong->calls_rejected++;
 		SS7_DEBUG_CHAN(ftdmchan, "Reached maximum level of %d percentage to allow calls\n", (100 - sngss7_rmt_cong->call_blk_rate));
 		SS7_DEBUG_CHAN(ftdmchan, "Call is rejected as the remote end is congested having congestion level as %d\n", sngss7_rmt_cong->sngss7_rmtCongLvl);
-		ftdmchan->caller_data.hangup_cause = FTDM_CAUSE_SWITCH_CONGESTION;
+		/* PUSHKAR TODO: Need to made this as a configurable parameter */
+		/*ftdmchan->caller_data.hangup_cause = FTDM_CAUSE_SWITCH_CONGESTION;*/
+		ftdmchan->caller_data.hangup_cause = FTDM_CAUSE_NORMAL_CIRCUIT_CONGESTION;
 		sngss7_set_call_flag (sngss7_info, FLAG_CONG_REL);
 		if (ftdm_queue_enqueue(sngss7_reject_queue.sngss7_call_rej_queue, ftdmchan)) {
 			/* end the call */
 			SS7_DEBUG_CHAN(ftdmchan, "Unable to queue as Call reject congestion queue is already full as bucket is full%s\n", "");
-			ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_HANGUP);
+			/* in case of native bridge */
+			if (ftdm_test_flag(ftdmchan, FTDM_CHANNEL_NATIVE_SIGBRIDGE)) {
+				ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_TERMINATING);
+			} else {
+				ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_HANGUP);
+			}
+
 			return FTDM_BREAK;
 		}
 		return FTDM_SUCCESS;

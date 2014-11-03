@@ -1730,6 +1730,14 @@ static switch_call_cause_t channel_outgoing_channel(switch_core_session_t *sessi
 
 		/********** SS7-UK : Link-By-Link End  *********/
 
+		/********** SS7-UK : ACC Priority Field  *********/
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-IAM-Priority");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_iam_priority", sipvar);
+		}
+		/********** SS7-UK : ACC Priority Field  *********/
+
+
 		/********** SS7-UK : Divert line id Begin  *********/
 
 		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-DivertLineId");
@@ -2310,6 +2318,13 @@ ftdm_status_t ftdm_channel_from_event(ftdm_sigmsg_t *sigmsg, switch_core_session
 			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-LxL_ISI", "%s", var_value);
 		}
 		/********** SS7-UK : Link-By-Link End  *********/
+
+		/********** SS7-UK : ACC Priority Field  *********/
+		sipvar = switch_channel_get_variable(channel, "ss7_iam_priority");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "sip_h_X-FreeTDM-IAM-Priority", var_value);
+		}
+		/********** SS7-UK : ACC Priority Field  *********/
 
 		/********** SS7-UK : Divert line id Begin  *********/
 

@@ -54,6 +54,7 @@ ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 ftdm_status_t handle_con_sta(uint32_t suInstId, uint32_t spInstId, uint32_t circuit, SiCnStEvnt *siCnStEvnt, uint8_t evntType);
 ftdm_status_t handle_con_cfm(uint32_t suInstId, uint32_t spInstId, uint32_t circuit, SiConEvnt *siConEvnt);
 ftdm_status_t handle_rel_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circuit, SiRelEvnt *siRelEvnt);
+ftdm_status_t handle_peer_rel_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circuit, SiRelEvnt *siRelEvnt);
 
 ftdm_status_t handle_rel_cfm(uint32_t suInstId, uint32_t spInstId, uint32_t circuit, SiRelEvnt *siRelEvnt);
 ftdm_status_t handle_dat_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circuit, SiInfoEvnt *siInfoEvnt);
@@ -99,10 +100,11 @@ ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 	sngss7_chan_data_t *sngss7_info = NULL;
 	ftdm_channel_t *ftdmchan = NULL;
 	char var[FTDM_DIGITS_LIMIT];
+	char val[64];
 	ftdm_status_t status = FTDM_FAIL;
-	int skip_acc = 0;
-	
+
 	memset(var, '\0', sizeof(var));
+	memset(val, 0, sizeof(val));
 
 	ftdm_running_return(FTDM_FAIL);
 
@@ -247,6 +249,8 @@ ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 				}
 			}
 
+			/* By default there will be no message priority */
+			sngss7_info->priority = FTDM_FALSE;
 			/* Check for self congestion or remote congestion */
 			if (g_ftdm_sngss7_data.cfg.sng_acc) {
 				if ((siConEvnt->cgPtyCat.eh.pres == PRSNT_NODEF) &&
@@ -254,12 +258,17 @@ ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 
 					/* TODO - confirm priority cpc value  */
 					if (siConEvnt->cgPtyCat.cgPtyCat.val == CAT_PRIOR) {
-						skip_acc = 1;
+						SS7_DEBUG_CHAN(ftdmchan,"Allow message even if there is congestion as the message has a priority level%s\n", " ");
 
+						snprintf(val, sizeof(val), "%d", siConEvnt->cgPtyCat.cgPtyCat.val);
+						ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Setting Priority as %s\n", val);
+						sngss7_add_var(sngss7_info, "ss7_iam_priority", val);
+
+						sngss7_info->priority = FTDM_TRUE;
 					}
 				}
 
-				if (!skip_acc) {
+				if (!(sngss7_info->priority)) {
 					status = ftdm_sangoma_ss7_get_congestion_status(ftdmchan);
 					if ((status == FTDM_SUCCESS) || (status == FTDM_BREAK)) {
 						break;
@@ -914,6 +923,34 @@ ftdm_status_t handle_rel_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 }
 
 /******************************************************************************/
+ftdm_status_t handle_peer_rel_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circuit, SiRelEvnt *siRelEvnt)
+{
+	SS7_FUNC_TRACE_ENTER(__FUNCTION__);
+
+	sngss7_chan_data_t  *sngss7_info ;
+	ftdm_channel_t	  *ftdmchan;
+
+	ftdm_running_return(FTDM_FAIL);
+	if (extract_chan_data(circuit, &sngss7_info, &ftdmchan)) {
+		SS7_ERROR("Failed to extract channel data for circuit = %d!\n", circuit);
+		SS7_FUNC_TRACE_EXIT(__FUNCTION__);
+		return FTDM_FAIL;
+	}
+	ftdm_mutex_lock(ftdmchan->mutex);
+
+	/* check for Automatic Congestion level */
+	ftdm_check_acc(sngss7_info, siRelEvnt, ftdmchan);
+
+	SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Tx REL cause=%d\n",
+							sngss7_info->circuit->cic,
+							siRelEvnt->causeDgn.causeVal.val);
+
+	ftdm_mutex_unlock(ftdmchan->mutex);
+	SS7_FUNC_TRACE_EXIT(__FUNCTION__);
+	return FTDM_SUCCESS;
+}
+
+/******************************************************************************/
 ftdm_status_t handle_rel_cfm(uint32_t suInstId, uint32_t spInstId, uint32_t circuit, SiRelEvnt *siRelEvnt)
 {
 	SS7_FUNC_TRACE_ENTER(__FUNCTION__);
@@ -1307,7 +1344,9 @@ ftdm_status_t handle_reattempt(uint32_t suInstId, uint32_t spInstId, uint32_t ci
 		/* Reject the call if self exchange is congested */
 		if (siStaEvnt->causeDgn.causeVal.val == SIT_CCSWTCHCONG) {
 			/* hangup the call if the circuit is in congested state */
-			ftdmchan->caller_data.hangup_cause = FTDM_CAUSE_SWITCH_CONGESTION;
+			/* PUSHKAR TODO: Need to made this as a configurable parameter */
+			/*ftdmchan->caller_data.hangup_cause = FTDM_CAUSE_SWITCH_CONGESTION;*/
+			ftdmchan->caller_data.hangup_cause = FTDM_CAUSE_NORMAL_CIRCUIT_CONGESTION;
 			/* set flag to indicate this hangup is started due to congestion */
 			sngss7_set_call_flag (sngss7_info, FLAG_CONG_REL);
 			if (ftdm_queue_enqueue(sngss7_reject_queue.sngss7_call_rej_queue, ftdmchan)) {

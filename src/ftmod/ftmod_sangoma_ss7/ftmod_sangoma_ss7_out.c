@@ -153,6 +153,15 @@ void ft_to_sngss7_iam (ftdm_channel_t * ftdmchan)
 			copy_numPortFwdInfo_to_sngss7(ftdmchan, &iam.numPortFwdInfo);
 			copy_hopCounter_to_sngss7(ftdmchan, &iam.hopCounter);
 			copy_usr2UsrInfo_to_sngss7(ftdmchan, &iam.usr2UsrInfo);
+
+			if (iam.natFwdCalIndLnk.rci.val) {
+				ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "SS7-UK: Native Bridge ss7_fci_lxl_rci[%d]\n",iam.natFwdCalIndLnk.rci.val);
+			}
+
+			if (iam.natFwdCalIndLnk.isi.val) {
+				ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "SS7-UK: Native Bridge ss7_fci_lxl_isi[%d]\n",iam.natFwdCalIndLnk.isi.val);
+			}
+
 		}
 	} else if (sngss7_info->circuit->transparent_iam &&
 		sngss7_retrieve_iam(ftdmchan, &iam) == FTDM_SUCCESS) {

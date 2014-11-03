@@ -381,9 +381,16 @@ static void *app_sngss7_call_queue_handler(ftdm_thread_t * me, void *obj)
 		while ((ftdmchan = ftdm_queue_dequeue(sngss7_reject_queue.sngss7_call_rej_queue))) {
 			sngss7_info = ftdmchan->call_data;
 			SS7_DEBUG_CHAN(ftdmchan, "Rejecting Call on span %d and chan %d... Due to congestion\n", ftdmchan->span_id, ftdmchan->chan_id);
-			sngss7_send_signal(sngss7_info, FTDM_SIGEVENT_STOP);
+			/* in case of native bridge */
+			if (ftdm_test_flag(ftdmchan, FTDM_CHANNEL_NATIVE_SIGBRIDGE)) {
+				SS7_DEBUG_CHAN(ftdmchan, "Changing span[%d] chan[%d] state to Terminating in Native Bridge\n", ftdmchan->span_id, ftdmchan->chan_id);
+				ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_TERMINATING);
+			} else {
+				SS7_DEBUG_CHAN(ftdmchan, "Changing span[%d] chan[%d] state to Hangup \n", ftdmchan->span_id, ftdmchan->chan_id);
+				sngss7_send_signal(sngss7_info, FTDM_SIGEVENT_STOP);
+				/*ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_HANGUP);*/
+			}
 		}
-
 		ftdm_sleep(100);
 	}
 
@@ -1018,6 +1025,7 @@ static void ftdm_sangoma_ss7_process_peer_stack_event (ftdm_channel_t *ftdmchan,
 	case (SNGSS7_REL_IND_EVENT):
 	        SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Tx peer REL cause=%d\n", sngss7_info->circuit->cic, sngss7_event->event.siRelEvnt.causeDgn.causeVal.val);
 
+		handle_peer_rel_ind(sngss7_event->suInstId, sngss7_event->spInstId, sngss7_event->circuit,  &sngss7_event->event.siRelEvnt);
 		//handle_rel_ind(sngss7_event->suInstId, sngss7_event->spInstId, sngss7_event->circuit,  &sngss7_event->event.siRelEvnt);
 		sng_cc_rel_request (1,
 					sngss7_info->suInstId,
@@ -1137,9 +1145,11 @@ static ftdm_status_t ftdm_sangoma_ss7_native_bridge_state_change(ftdm_channel_t 
 static ftdm_status_t ftdm_sangoma_ss7_native_bridge_state_change(ftdm_channel_t *ftdmchan)
 {
 	sngss7_chan_data_t *sngss7_info = ftdmchan->call_data;
+	ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong = NULL;
 
 	ftdm_channel_complete_state(ftdmchan);
 
+	SS7_DEBUG_CHAN(ftdmchan, "DEBUG: peer state change to %s\n", ftdm_channel_state2str(ftdmchan->state));
 	switch (ftdmchan->state) {
 
 	case FTDM_CHANNEL_STATE_DOWN:
@@ -1149,6 +1159,7 @@ static ftdm_status_t ftdm_sangoma_ss7_native_bridge_state_change(ftdm_channel_t 
 			sngss7_clear_ckt_flag(sngss7_info, FLAG_T6_CANCELED);
 			sngss7_clear_ckt_flag (sngss7_info, FLAG_SENT_ACM);
 			sngss7_clear_ckt_flag (sngss7_info, FLAG_SENT_CPG);
+			sngss7_clear_call_flag (sngss7_info, FLAG_CONG_REL);
 
 			sngss7_flush_queue(sngss7_info->event_queue);
 			sngss7_info->peer_event_transfer_cnt = 0;
@@ -1181,7 +1192,22 @@ static ftdm_status_t ftdm_sangoma_ss7_native_bridge_state_change(ftdm_channel_t 
 
 	case FTDM_CHANNEL_STATE_HANGUP:
 		{
-			ft_to_sngss7_rlc(ftdmchan);
+			SS7_DEBUG_CHAN(ftdmchan, "DEBUG:  STATE Hangup received peer state change to %s\n", ftdm_channel_state2str(ftdmchan->state));
+
+			/* If this is not rejected call then only decrement the number of active calls */
+			if (!sngss7_test_call_flag (sngss7_info, FLAG_CONG_REL)) {
+				if (((sngss7_rmt_cong = sng_acc_get_cong_struct(ftdmchan)))) {
+					SS7_DEBUG_CHAN(ftdmchan,"Decrementing Number of active calls.%s\n", "");
+					/* Decrease number of active calls by 1 for the respective congested DPC */
+					sng_acc_handle_call_rate(FTDM_FALSE, sngss7_rmt_cong);
+				}
+			}
+
+			if (sngss7_test_call_flag (sngss7_info, FLAG_CONG_REL)) {
+				SS7_DEBUG_CHAN(ftdmchan,"Hanging up due to congestion %s. Thus, sending release\n","");
+			} else {
+				ft_to_sngss7_rlc(ftdmchan);
+			}
 			ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_DOWN);
 		}
 		break;
@@ -1200,6 +1226,7 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 	sng_isup_inf_t *isup_intf = NULL;
 	int state_flag = 1; 
 	int i = 0;
+	const char *val = NULL;
 	ftdm_status_t status = FTDM_FAIL;
 	ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong = NULL;
 
@@ -1256,7 +1283,12 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 		{
 			SS7_DEBUG_CHAN(ftdmchan, "Received the end of pulsing character %s\n", "");
 
-			if (!sngss7_test_ckt_flag(sngss7_info, FLAG_FULL_NUMBER)) {
+			if (1) {
+				SS7_DEBUG("Received the end of pulsing character in native bridge thus donot remove it from destination number\n", "");
+				if (!sngss7_test_ckt_flag(sngss7_info, FLAG_FULL_NUMBER)) {
+					sngss7_set_ckt_flag(sngss7_info, FLAG_FULL_NUMBER);
+				}
+			} else if (!sngss7_test_ckt_flag(sngss7_info, FLAG_FULL_NUMBER)) {
 				/* remove the ST */
 				ftdmchan->caller_data.dnis.digits[i-1] = '\0';
 				sngss7_set_ckt_flag(sngss7_info, FLAG_FULL_NUMBER);
@@ -1419,7 +1451,6 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 					ftdmchan->caller_data.ani.digits,
 					ftdmchan->caller_data.dnis.digits);
 
-
 		/* we have enough information to inform FTDM of the call */
 		sngss7_send_signal(sngss7_info, FTDM_SIGEVENT_START);
 
@@ -1432,7 +1463,19 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 			break;
 		}
 
-		status = ftdm_sangoma_ss7_get_congestion_status(ftdmchan);
+		/* A possible scenario need to check afterwards */
+		val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_iam_priority");
+		if (!ftdm_strlen_zero(val)) {
+			if (!(atoi(val) ==  CAT_PRIOR)) {
+				SS7_DEBUG("Checking for congestion status\n");
+				status = ftdm_sangoma_ss7_get_congestion_status(ftdmchan);
+			} else {
+				SS7_DEBUG("This is a priority Call thus processing it normally\n");
+			}
+		} else {
+			SS7_DEBUG("Since the call is not a priority one. Thus, checking for congestion status\n");
+			status = ftdm_sangoma_ss7_get_congestion_status(ftdmchan);
+		}
 
 		if ((status == FTDM_BREAK) || (status == FTDM_SUCCESS)) {
 			if (status == FTDM_BREAK) {
@@ -1440,7 +1483,6 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 			}
 			break;
 		}
-
 		SS7_DEBUG_CHAN(ftdmchan, "Sending outgoing call from \"%s\" to \"%s\" to LibSngSS7\n",
 					   ftdmchan->caller_data.ani.digits,
 					   ftdmchan->caller_data.dnis.digits);
@@ -1680,7 +1722,7 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 
 			SS7_DEBUG_CHAN(ftdmchan,"Completing remotely requested hangup!%s\n", "");
 		} else if (sngss7_test_ckt_flag (sngss7_info, FLAG_LOCAL_REL)) {
-			
+
 			/* if this hang up is do to a rx RESET we need to sit here till the RSP arrives */
 			if (sngss7_test_ckt_flag (sngss7_info, FLAG_RESET_TX_RSP)) {
 				/* go to the down state as we have already received RSC-RLC */
@@ -1809,6 +1851,7 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 		sngss7_info->spInstId = 0;
 		sngss7_info->globalFlg = 0;
 		sngss7_info->spId = 0;
+		sngss7_info->priority = FTDM_FALSE;
 
 		/* clear any call related flags */
 		sngss7_clear_ckt_flag (sngss7_info, FLAG_REMOTE_REL);
