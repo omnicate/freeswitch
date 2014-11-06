@@ -1197,9 +1197,11 @@ static ftdm_status_t ftdm_sangoma_ss7_native_bridge_state_change(ftdm_channel_t 
 			/* If this is not rejected call then only decrement the number of active calls */
 			if (!sngss7_test_call_flag (sngss7_info, FLAG_CONG_REL)) {
 				if (((sngss7_rmt_cong = sng_acc_get_cong_struct(ftdmchan)))) {
-					SS7_DEBUG_CHAN(ftdmchan,"Decrementing Number of active calls.%s\n", "");
-					/* Decrease number of active calls by 1 for the respective congested DPC */
-					sng_acc_handle_call_rate(FTDM_FALSE, sngss7_rmt_cong);
+					if (sngss7_rmt_cong->sngss7_rmtCongLvl) {
+						SS7_DEBUG_CHAN(ftdmchan,"Decrementing Number of active calls for congested DPC[%d]\n", sngss7_rmt_cong->dpc);
+						/* Decrease number of active calls by 1 for the respective congested DPC */
+						sng_acc_handle_call_rate(FTDM_FALSE, sngss7_rmt_cong);
+					}
 				}
 			}
 
@@ -1646,9 +1648,11 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 		/* If this is not rejected call then only decrement the number of active calls */
 		if (!sngss7_test_call_flag (sngss7_info, FLAG_CONG_REL)) {
 			if (((sngss7_rmt_cong = sng_acc_get_cong_struct(ftdmchan)))) {
-				SS7_DEBUG_CHAN(ftdmchan,"Decrementing Number of active calls.%s\n", "");
-				/* Decrease number of active calls by 1 for the respective congested DPC */
-				sng_acc_handle_call_rate(FTDM_FALSE, sngss7_rmt_cong);
+				if (sngss7_rmt_cong->sngss7_rmtCongLvl) {
+					SS7_DEBUG_CHAN(ftdmchan,"Decrementing Number of active calls for congested DPC[%d]\n", sngss7_rmt_cong->dpc);
+					/* Decrease number of active calls by 1 for the respective congested DPC */
+					sng_acc_handle_call_rate(FTDM_FALSE, sngss7_rmt_cong);
+				}
 			}
 		}
 

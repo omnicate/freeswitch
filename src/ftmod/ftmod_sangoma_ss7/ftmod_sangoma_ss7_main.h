@@ -612,6 +612,7 @@ typedef struct ftdm_sngss7_rmt_cong {
 	uint32_t 	  calls_passed;
 	uint32_t 	  calls_rejected;
 	uint32_t 	  loc_calls_rejected;
+	ftdm_mutex_t 	  *mutex;
 	/* changes end */
 	sng_acc_tmr_t     t29;
 	sng_acc_tmr_t     t30;
