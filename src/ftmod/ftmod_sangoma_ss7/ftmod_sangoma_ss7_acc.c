@@ -297,8 +297,12 @@ ftdm_status_t ftdm_check_acc(sngss7_chan_data_t *sngss7_info, SiRelEvnt *siRelEv
 				 */
 				if (sngss7_rmt_cong->dpc == dpc) {
 					if (sngss7_rmt_cong->t29.tmr_id) {
+						/* Add counter so we can keep count within T29 how many ACL we received */
+						/* TODO */
+						SS7_INFO_CHAN(ftdmchan,"NSG-ACC: T29: ACL received, continue with call %s\n","");
 						return FTDM_SUCCESS;
 					} else if (sngss7_rmt_cong->t30.tmr_id) {
+						SS7_INFO_CHAN(ftdmchan,"NSG-ACC: Resetting T29 %s\n","");
 						ftdm_mutex_lock(sngss7_rmt_cong->mutex);
 						if ((sngss7_rmt_cong->sngss7_rmtCongLvl == siRelEvnt->autoCongLvl.auCongLvl.val) && (sngss7_rmt_cong->sngss7_rmtCongLvl == 1)) {
 							if (sngss7_rmt_cong->call_blk_rate < g_ftdm_sngss7_data.cfg.accCfg.cnglvl2_red_rate) {
