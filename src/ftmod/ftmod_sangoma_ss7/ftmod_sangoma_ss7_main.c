@@ -54,6 +54,15 @@ ftdm_sngss7_opr_mode g_ftdm_operating_mode;
 ftdm_sngss7_call_reject_queue_t  sngss7_reject_queue;	/* Call reject queue */
 ftdm_hash_t *ss7_rmtcong_lst;				/* Hash list of all dpc to store congestion values */
 
+#ifdef ACC_TEST
+uint32_t iam_recv = 0;
+uint32_t iam_pri_recv = 0;
+uint32_t iam_trans = 0;
+uint32_t rel_recv = 0;
+uint32_t rel_rcl1_recv = 0;
+uint32_t rel_rcl2_recv = 0;
+#endif
+
 /******************************************************************************/
 
 /* PROTOTYPES *****************************************************************/

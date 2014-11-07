@@ -59,6 +59,7 @@
 
 /* DEFINES ********************************************************************/
 #define MAX_NAME_LEN			25
+#define ACC_TEST 			1
 
 #define MAX_CIC_LENGTH			5
 #define MAX_CIC_MAP_LENGTH		1000 
@@ -81,6 +82,15 @@
 #define MAX_DPC_CONFIGURED 	25
 
 #define DEFAULT_MSG_PRIORITY    7
+
+#ifdef ACC_TEST
+#define ACC_IAM_RECV_DEBUG 	1
+#define ACC_IAM_PRI_RECV_DEBUG  2
+#define ACC_IAM_TRANS_DEBUG 	3
+#define ACC_REL_RECV_DEBUG 	4
+#define ACC_REL_RECV_ACL1_DEBUG 5
+#define ACC_REL_RECV_ACL2_DEBUG 6
+#endif
 
 #define sngss7_flush_queue(queue) \
 			do { \
@@ -613,6 +623,15 @@ typedef struct ftdm_sngss7_rmt_cong {
 	uint32_t 	  calls_rejected;
 	uint32_t 	  loc_calls_rejected;
 	ftdm_mutex_t 	  *mutex;
+#ifdef ACC_TEST
+	uint32_t          iam_recv;
+	uint32_t          iam_pri_recv;
+	uint32_t          iam_trans;
+	uint32_t          rel_recv;
+	uint32_t          rel_rcl1_recv;
+	uint32_t          rel_rcl2_recv;
+	sng_acc_tmr_t 	  acc_debug;
+#endif
 	/* changes end */
 	sng_acc_tmr_t     t29;
 	sng_acc_tmr_t     t30;
@@ -950,6 +969,14 @@ extern int				cmbLinkSetId;
 extern ftdm_sngss7_call_reject_queue_t 	sngss7_reject_queue;
 extern ftdm_hash_t 			*ss7_rmtcong_lst;
 uint32_t 				nmb_cics_cfg;
+#ifdef ACC_TEST
+extern uint32_t				iam_recv;
+extern uint32_t				iam_pri_recv;
+extern uint32_t				iam_trans;
+extern uint32_t				rel_recv;
+extern uint32_t				rel_rcl1_recv;
+extern uint32_t				rel_rcl2_recv;
+#endif
 
 /******************************************************************************/
 
@@ -1267,6 +1294,9 @@ void handle_isup_t10(void *userdata);
 void handle_isup_t39(void *userdata);
 void handle_route_t29(void *userdata);
 void handle_route_t30(void *userdata);
+#ifdef ACC_TEST
+void handle_route_acc_debug(void *userdata);
+#endif
 void handle_wait_bla_timeout(void *userdata);
 void handle_wait_uba_timeout(void *userdata);
 void handle_tx_ubl_on_rx_bla_timer(void *userdata);
@@ -1279,7 +1309,11 @@ ftdm_status_t sng_acc_assign_max_bucket(uint32_t intfId, uint32_t cics_cfg);
 ftdm_status_t ftdm_sangoma_ss7_get_congestion_status(ftdm_channel_t *ftdmchan);
 ftdm_status_t ftdm_check_acc(sngss7_chan_data_t *sngss7_info, SiRelEvnt *siRelEvnt, ftdm_channel_t *ftdmchan);
 ftdm_status_t sng_acc_handle_call_rate(ftdm_bool_t inc, ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong);
- ftdm_sngss7_rmt_cong_t* sng_acc_get_cong_struct(ftdm_channel_t *ftdmchan);
+#ifdef ACC_TEST
+ftdm_status_t sng_prnt_acc_debug(uint32_t dpc);
+ftdm_status_t sng_increment_acc_statistics(ftdm_channel_t *ftdmchan, uint32_t acc_debug_lvl);
+#endif
+ftdm_sngss7_rmt_cong_t* sng_acc_get_cong_struct(ftdm_channel_t *ftdmchan);
 void sngss7_free_acc(void);
 
 #if JZ_BLO_TIMER

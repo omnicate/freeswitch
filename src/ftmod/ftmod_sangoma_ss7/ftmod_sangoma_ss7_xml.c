@@ -3741,6 +3741,15 @@ static int ftmod_ss7_fill_in_acc_timer(sng_route_t *mtp3_route, ftdm_span_t *spa
 	sngss7_rmt_cong->loc_calls_rejected = 0;
 	sngss7_rmt_cong->max_bkt_size = 0;
 
+#ifdef ACC_TEST
+	sngss7_rmt_cong->iam_recv = 0;
+	sngss7_rmt_cong->iam_pri_recv = 0;
+	sngss7_rmt_cong->iam_trans = 0;
+	sngss7_rmt_cong->rel_recv = 0;
+	sngss7_rmt_cong->rel_rcl1_recv = 0;
+	sngss7_rmt_cong->rel_rcl2_recv = 0;
+#endif
+
 	/* Create mutex */
 	ftdm_mutex_create(&sngss7_rmt_cong->mutex);
 
@@ -3786,6 +3795,15 @@ static int ftmod_ss7_fill_in_acc_timer(sng_route_t *mtp3_route, ftdm_span_t *spa
 	sngss7_rmt_cong->t30.callback	= handle_route_t30;
 	sngss7_rmt_cong->t30.sngss7_rmt_cong = sngss7_rmt_cong;
 
+#ifdef ACC_TEST
+	/* prepare the timer structures */
+	sngss7_rmt_cong->acc_debug.tmr_sched	= ((sngss7_span_data_t *)(span->signal_data))->sched;
+	sngss7_rmt_cong->acc_debug.counter	= 1;
+	sngss7_rmt_cong->acc_debug.beat	= 10 * 100; /* beat is in ms, t30 is in 100ms */
+	sngss7_rmt_cong->acc_debug.callback	= handle_route_acc_debug;
+	sngss7_rmt_cong->acc_debug.sngss7_rmt_cong = sngss7_rmt_cong;
+#endif
+
 	memset(dpc, 0 , sizeof(dpc));
 	sprintf(dpc, "%d", sngss7_rmt_cong->dpc);
 
@@ -3794,6 +3812,25 @@ static int ftmod_ss7_fill_in_acc_timer(sng_route_t *mtp3_route, ftdm_span_t *spa
 	/* Insert the same in ACC hash list */
 	hashtable_insert(ss7_rmtcong_lst, (void *)dpc_key, sngss7_rmt_cong, HASHTABLE_FLAG_FREE_KEY);
 	SS7_DEBUG("DPC[%d] successfully inserted in ACC hash list\n", sngss7_rmt_cong->dpc);
+
+#ifdef ACC_TEST
+	/* if timer is not started start the ACC DEBUG Timer */
+	if (sngss7_rmt_cong->acc_debug.tmr_id) {
+		SS7_DEBUG("NSG-ACC: ACC DEBUG Timer is already running for DPC[%d]\n", sngss7_rmt_cong->dpc);
+	} else {
+		SS7_DEBUG("NSG-ACC: Starting ACC DEBUG Timer for DPC[%d]\n", sngss7_rmt_cong->dpc);
+		if (ftdm_sched_timer (sngss7_rmt_cong->acc_debug.tmr_sched,
+					"acc_debug",
+					sngss7_rmt_cong->acc_debug.beat,
+					sngss7_rmt_cong->acc_debug.callback,
+					&sngss7_rmt_cong->acc_debug,
+					&sngss7_rmt_cong->acc_debug.tmr_id)) {
+			SS7_ERROR ("NSG-ACC: Unable to schedule ACC DEBUG Timer\n");
+		} else {
+			SS7_INFO("NSG-ACC: ACC DEBUG Timer started with timer-id[%d] for dpc[%d]\n", sngss7_rmt_cong->t29.tmr_id, sngss7_rmt_cong->dpc);
+		}
+	}
+#endif
 
 	return FTDM_SUCCESS;
 }

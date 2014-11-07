@@ -60,12 +60,22 @@ ftdm_status_t ftdm_check_acc(sngss7_chan_data_t *sngss7_info, SiRelEvnt *siRelEv
 /* Handle Active Calls rate */
 ftdm_status_t sng_acc_handle_call_rate(ftdm_bool_t inc, ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong);
 /* Get Remote congestion Structure */
- ftdm_sngss7_rmt_cong_t* sng_acc_get_cong_struct(ftdm_channel_t *ftdmchan);
+ftdm_sngss7_rmt_cong_t* sng_acc_get_cong_struct(ftdm_channel_t *ftdmchan);
 /* Free ACC Hash list */
 static void sngss7_free_acc_hashlist(void);
 /* Free ACC parameters */
 void sngss7_free_acc(void);
+#ifdef ACC_TEST
+/* Print ACC Call Statistics in a acc_debug.txt file */
+ftdm_status_t sng_prnt_acc_debug(uint32_t dpc);
+/* Increment the ACC DEBUG counters */
+ftdm_status_t sng_increment_acc_statistics(ftdm_channel_t *ftdmchan, uint32_t acc_debug_lvl);
+#endif
 /******************************************************************************/
+
+#ifdef ACC_TEST
+static int debug_idx = 0;
+#endif
 
 /* FUNCTIONS ******************************************************************/
 /******************************************************************************/
@@ -258,6 +268,31 @@ ftdm_status_t ftdm_check_acc(sngss7_chan_data_t *sngss7_info, SiRelEvnt *siRelEv
 		SS7_ERROR_CHAN(ftdmchan,"NSG-ACC: Could not find congestion structure for DPC[%d]\n", dpc);
 		return FTDM_FAIL;
 	}
+
+#ifdef ACC_TEST
+	/* Increment ACC DEBUG counter */
+	if (siRelEvnt->autoCongLvl.eh.pres) {
+		if (siRelEvnt->autoCongLvl.auCongLvl.pres) {
+			if (sngss7_rmt_cong->sngss7_rmtCongLvl == 1) {
+				SS7_INFO_CHAN(ftdmchan,"NSG-ACC: Received REL on DPC[%d] with ACL[1], incrementing ACC DEBUG statistics\n", dpc);
+				sng_increment_acc_statistics(ftdmchan, ACC_REL_RECV_ACL1_DEBUG);
+			} else if (sngss7_rmt_cong->sngss7_rmtCongLvl == 2) {
+				SS7_INFO_CHAN(ftdmchan,"NSG-ACC: Received REL on DPC[%d] with ACL[2], incrementing ACC DEBUG statistics\n", dpc);
+				sng_increment_acc_statistics(ftdmchan, ACC_REL_RECV_ACL2_DEBUG);
+			} else if (sngss7_rmt_cong->sngss7_rmtCongLvl == 0) {
+				/* This is an invalid case but in order to be on the safer side include this */
+				SS7_INFO_CHAN(ftdmchan,"NSG-ACC: Received REL on DPC[%d] with ACL[0], incrementing ACC DEBUG statistics\n", dpc);
+				sng_increment_acc_statistics(ftdmchan, ACC_REL_RECV_DEBUG);
+			}
+		} else {
+			SS7_INFO_CHAN(ftdmchan,"NSG-ACC: Received REL on DPC[%d] but ACL value is not present incrementing ACC DEBUG statistics\n", dpc);
+			sng_increment_acc_statistics(ftdmchan, ACC_REL_RECV_DEBUG);
+		}
+	} else {
+		SS7_INFO_CHAN(ftdmchan,"NSG-ACC: Received REL on DPC[%d] with no ACL, incrementing ACC DEBUG statistics\n", dpc);
+		sng_increment_acc_statistics(ftdmchan, ACC_REL_RECV_DEBUG);
+	}
+#endif
 
 	/* Check if remote exchange is congested */
 	if (siRelEvnt->autoCongLvl.eh.pres) {
@@ -541,6 +576,105 @@ void sngss7_free_acc()
 	}
 	SS7_DEBUG("De-allocation Complete\n");
 }
+
+#ifdef ACC_TEST
+/******************************************************************************/
+/* Print ACC statistics into a file */
+ftdm_status_t sng_prnt_acc_debug(uint32_t dpc)
+{
+	FILE *log_file_ptr = NULL;
+	char file_path[512];
+	char *hash_dpc = NULL;
+	ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong = NULL;
+	time_t curr_time = time(NULL);
+
+	memset(file_path, 0, sizeof(file_path));
+	if (!dpc) {
+		SS7_ERROR("NSG-ACC: Invalid dpc %d. Thus, cannot log.\n", dpc);
+		return FTDM_FAIL;
+	}
+
+	sprintf(hash_dpc, "%d", dpc);
+
+	/* Get remote congestion information for respective DPC from hash list */
+	sngss7_rmt_cong = hashtable_search(ss7_rmtcong_lst, (void *)hash_dpc);
+
+	if (!sngss7_rmt_cong) {
+		SS7_ERROR("NSG-ACC: DPC[%d] is not preset in ACC hash list. Thus, can not log.\n", dpc);
+		return FTDM_FAIL;
+	}
+
+	sprintf(file_path, "/tmp/acc_debug-%d.txt", dpc);
+	SS7_DEBUG("NSG-ACC: Open %s file and writting Call statistics in to it\n", file_path);
+	if ((log_file_ptr = fopen(file_path, "a")) == NULL) {
+		SS7_ERROR("NSG-ACC: Failed to Open Log File.\n");
+		return FTDM_FAIL;
+	}
+
+	if (!debug_idx) {
+		fprintf(log_file_ptr, "Time, IAM Recv, IAM with priority Recv, IAM Trans, REL Recv, REL with RCL 1, REL with RCL 2, Cong Value, Cong Block Rate, Calls blocked, Calls Allowed");
+	}
+
+	time(&curr_time);
+	fprintf(log_file_ptr, "%s, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d", ctime(&curr_time), iam_recv, iam_pri_recv, iam_trans, rel_recv, rel_rcl1_recv, rel_rcl2_recv, sngss7_rmt_cong->sngss7_rmtCongLvl, sngss7_rmt_cong->call_blk_rate, sngss7_rmt_cong->calls_rejected, sngss7_rmt_cong->calls_passed);
+
+	if (log_file_ptr) {
+		fclose(log_file_ptr);
+	}
+
+	debug_idx++;
+	return FTDM_SUCCESS;
+}
+
+/******************************************************************************/
+/* Increment parameters required in order to Debug ACC */
+ftdm_status_t sng_increment_acc_statistics(ftdm_channel_t *ftdmchan, uint32_t acc_debug_lvl)
+{
+	ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong = NULL;
+	sngss7_chan_data_t *sngss7_info = ftdmchan->call_data;
+
+	if (!ftdmchan) {
+		return FTDM_FAIL;
+	}
+
+	if (!(sngss7_rmt_cong = sng_acc_get_cong_struct(ftdmchan))) {
+		SS7_ERROR_CHAN(ftdmchan,"NSG-ACC: Could not find congestion structure for DPC[%d]... DEBUG statistics\n", g_ftdm_sngss7_data.cfg.isupIntf[sngss7_info->circuit->infId].dpc);
+		return FTDM_FAIL;
+	}
+
+	switch (acc_debug_lvl) {
+		case ACC_IAM_RECV_DEBUG:
+			sngss7_rmt_cong->iam_recv++;
+			break;
+
+		case ACC_IAM_PRI_RECV_DEBUG:
+			sngss7_rmt_cong->iam_pri_recv++;
+			break;
+
+		case ACC_IAM_TRANS_DEBUG:
+			sngss7_rmt_cong->iam_trans++;
+			break;
+
+		case ACC_REL_RECV_DEBUG:
+			sngss7_rmt_cong->rel_recv++;
+			break;
+
+		case ACC_REL_RECV_ACL1_DEBUG:
+			sngss7_rmt_cong->rel_rcl1_recv++;
+			break;
+
+		case ACC_REL_RECV_ACL2_DEBUG:
+			sngss7_rmt_cong->rel_rcl2_recv++;
+			break;
+
+		default:
+			SS7_ERROR_CHAN(ftdmchan,"NSG-ACC: Invalid ACC DEBUG option for DPC[%d]\n", g_ftdm_sngss7_data.cfg.isupIntf[sngss7_info->circuit->infId].dpc);
+			break;
+	}
+
+	return FTDM_SUCCESS;
+}
+#endif
 
 /******************************************************************************/
 /* For Emacs:

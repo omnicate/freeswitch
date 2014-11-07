@@ -256,6 +256,12 @@ void ft_to_sngss7_iam (ftdm_channel_t * ftdmchan)
 		copy_hopCounter_to_sngss7(ftdmchan, &iam.hopCounter);
 		copy_usr2UsrInfo_to_sngss7(ftdmchan, &iam.usr2UsrInfo);
 
+#ifdef ACC_TEST
+		if (iam.cgPtyCat.cgPtyCat.val == CAT_PRIOR) {
+			sng_increment_acc_statistics(ftdmchan, ACC_IAM_TRANS_DEBUG);
+		}
+#endif
+
 		SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Tx IAM clg = \"%s\" (NADI=%d), cld = \"%s\" (NADI=%d), loc = %s (NADI=%d)\n",
 									sngss7_info->circuit->cic,
 									ftdmchan->caller_data.cid_num.digits,
