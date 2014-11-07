@@ -616,7 +616,7 @@ ftdm_status_t sng_prnt_acc_debug(uint32_t dpc)
 	}
 
 	time(&curr_time);
-	fprintf(log_file_ptr, "%s, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d", ctime(&curr_time), iam_recv, iam_pri_recv, iam_trans, rel_recv, rel_rcl1_recv, rel_rcl2_recv, sngss7_rmt_cong->sngss7_rmtCongLvl, sngss7_rmt_cong->call_blk_rate, sngss7_rmt_cong->calls_rejected, sngss7_rmt_cong->calls_passed);
+	fprintf(log_file_ptr, "%s, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d", ctime(&curr_time), sngss7_rmt_cong->iam_recv, sngss7_rmt_cong->iam_pri_recv, sngss7_rmt_cong->iam_trans, sngss7_rmt_cong->rel_recv, sngss7_rmt_cong->rel_rcl1_recv, sngss7_rmt_cong->rel_rcl2_recv, sngss7_rmt_cong->sngss7_rmtCongLvl, sngss7_rmt_cong->call_blk_rate, sngss7_rmt_cong->calls_rejected, sngss7_rmt_cong->calls_passed);
 
 	if (log_file_ptr) {
 		fclose(log_file_ptr);

@@ -969,14 +969,6 @@ extern int				cmbLinkSetId;
 extern ftdm_sngss7_call_reject_queue_t 	sngss7_reject_queue;
 extern ftdm_hash_t 			*ss7_rmtcong_lst;
 uint32_t 				nmb_cics_cfg;
-#ifdef ACC_TEST
-extern uint32_t				iam_recv;
-extern uint32_t				iam_pri_recv;
-extern uint32_t				iam_trans;
-extern uint32_t				rel_recv;
-extern uint32_t				rel_rcl1_recv;
-extern uint32_t				rel_rcl2_recv;
-#endif
 
 /******************************************************************************/
 
