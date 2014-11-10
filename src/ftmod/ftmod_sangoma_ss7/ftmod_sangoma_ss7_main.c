@@ -1647,8 +1647,14 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 			break;
 		}
 
-		/* If this is not rejected call then only decrement the number of active calls */
-		if (!sngss7_test_call_flag (sngss7_info, FLAG_CONG_REL)) {
+		/* Decrement the value of allowed calls in case of congestion if and only if
+		 * 1) It is not a rejected call and also not a normal call i.e. call before congestion is started
+		 * 2) It is not a priority call
+		 * 3) And there is a congestion present on the dpc from which REL is received */
+
+		/* We started incrementing leaky bucket counter after we detect congestion, hence decrement counters for the calls
+		 * which has been received after congestion only i.e. FLAG_NRML_CALL is false */
+		if ((!sngss7_test_call_flag (sngss7_info, FLAG_CONG_REL)) && (!sngss7_test_call_flag (sngss7_info, FLAG_NRML_CALL))) {
 			if (((sngss7_rmt_cong = sng_acc_get_cong_struct(ftdmchan)))) {
 				if (sngss7_rmt_cong->sngss7_rmtCongLvl) {
 					if (!sngss7_test_call_flag (sngss7_info, FLAG_PRI_CALL)) {
@@ -1656,7 +1662,7 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 						/* Decrease number of active calls by 1 for the respective congested DPC */
 						sng_acc_handle_call_rate(FTDM_FALSE, sngss7_rmt_cong, ftdmchan);
 					} else {
-						SS7_DEBUG_CHAN(ftdmchan,"NSG-ACC: Since it is a priority call therefore no nedd to decrement number of allowed calls for dpc[%d]\n", sngss7_rmt_cong->dpc);
+						SS7_DEBUG_CHAN(ftdmchan,"NSG-ACC: Do not decrement number of allowed calls for priority calls on dpc[%d]\n", sngss7_rmt_cong->dpc);
 					}
 				}
 			}
@@ -1870,6 +1876,7 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 		sngss7_clear_ckt_flag (sngss7_info, FLAG_SENT_CPG);
 		sngss7_clear_call_flag (sngss7_info, FLAG_CONG_REL);
 		sngss7_clear_call_flag (sngss7_info, FLAG_PRI_CALL);
+		sngss7_clear_call_flag (sngss7_info, FLAG_NRML_CALL);
 
 
 		if (ftdm_test_flag (ftdmchan, FTDM_CHANNEL_OPEN)) {

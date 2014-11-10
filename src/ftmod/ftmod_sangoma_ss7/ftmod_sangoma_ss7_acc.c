@@ -202,6 +202,7 @@ ftdm_status_t ftdm_sangoma_ss7_get_congestion_status(ftdm_channel_t *ftdmchan)
 
 	/* If remote exchange is congested then pass calls as per call block rate depending up on the congestion level */
 	if ((sngss7_rmt_cong->sngss7_rmtCongLvl) && (sngss7_rmt_cong->dpc == g_ftdm_sngss7_data.cfg.isupIntf[sngss7_info->circuit->infId].dpc)) {
+
 		SS7_DEBUG_CHAN(ftdmchan, "NSG-ACC: DPC[%d] is congested having congestion Level as  %d\n", sngss7_rmt_cong->dpc, sngss7_rmt_cong->sngss7_rmtCongLvl);
 		if (!(sng_acc_handle_call_rate(FTDM_TRUE, sngss7_rmt_cong, ftdmchan))) {
 			return FTDM_FAIL;
@@ -231,6 +232,11 @@ ftdm_status_t ftdm_sangoma_ss7_get_congestion_status(ftdm_channel_t *ftdmchan)
 			return FTDM_BREAK;
 		}
 		return FTDM_SUCCESS;
+	} else {
+		/* Since there is no congestion. Thus, this is a normal call and we donnot have to decrement the counter of
+		 * number of allowed calls in case of congestion */
+		sngss7_set_call_flag (sngss7_info, FLAG_NRML_CALL);
+		SS7_DEBUG_CHAN(ftdmchan, "NSG-ACC: This is a normal call for dpc[%d] as congestion is not present till now\n", sngss7_rmt_cong->dpc);
 	}
 
 	return FTDM_FAIL;

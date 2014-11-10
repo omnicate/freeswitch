@@ -753,12 +753,14 @@ typedef enum {
 
 typedef enum {
 	FLAG_CONG_REL			= (1 << 0),  /* Releasing call due to congestion */
-	FLAG_PRI_CALL			= (1 << 1),  /* Releasing call due to congestion */
+	FLAG_PRI_CALL			= (1 << 1),  /* Set If the incoming call is a priority call */
+	FLAG_NRML_CALL 			= (1 << 2)  /* Set If there is no congestion when call is received */
 } sng_call_flag_t;
 
 #define CALL_FLAGS_STRING \
 	"CONG_REL", \
-	"PRI_CALL"
+	"PRI_CALL", \
+	"NRML_CALL"
 FTDM_STR2ENUM_P(ftmod_ss7_call_state2flag, ftmod_ss7_call_flag2str, sng_call_flag_t)
 
 
