@@ -1200,7 +1200,7 @@ static ftdm_status_t ftdm_sangoma_ss7_native_bridge_state_change(ftdm_channel_t 
 					if (sngss7_rmt_cong->sngss7_rmtCongLvl) {
 						SS7_DEBUG_CHAN(ftdmchan,"Decrementing Number of active calls for congested DPC[%d]\n", sngss7_rmt_cong->dpc);
 						/* Decrease number of active calls by 1 for the respective congested DPC */
-						sng_acc_handle_call_rate(FTDM_FALSE, sngss7_rmt_cong);
+						sng_acc_handle_call_rate(FTDM_FALSE, sngss7_rmt_cong, ftdmchan);
 					}
 				}
 			}
@@ -1472,6 +1472,8 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 				SS7_DEBUG("Checking for congestion status\n");
 				status = ftdm_sangoma_ss7_get_congestion_status(ftdmchan);
 			} else {
+				/* set the flag to indicate this is a priority call in case of congestion */
+				sngss7_set_call_flag (sngss7_info, FLAG_PRI_CALL);
 				SS7_DEBUG("This is a priority Call thus processing it normally\n");
 			}
 		} else {
@@ -1649,9 +1651,13 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 		if (!sngss7_test_call_flag (sngss7_info, FLAG_CONG_REL)) {
 			if (((sngss7_rmt_cong = sng_acc_get_cong_struct(ftdmchan)))) {
 				if (sngss7_rmt_cong->sngss7_rmtCongLvl) {
-					SS7_DEBUG_CHAN(ftdmchan,"Decrementing Number of active calls for congested DPC[%d]\n", sngss7_rmt_cong->dpc);
-					/* Decrease number of active calls by 1 for the respective congested DPC */
-					sng_acc_handle_call_rate(FTDM_FALSE, sngss7_rmt_cong);
+					if (!sngss7_test_call_flag (sngss7_info, FLAG_PRI_CALL)) {
+						SS7_DEBUG_CHAN(ftdmchan,"NSG-ACC: Decrementing Number of active calls for congested DPC[%d]\n", sngss7_rmt_cong->dpc);
+						/* Decrease number of active calls by 1 for the respective congested DPC */
+						sng_acc_handle_call_rate(FTDM_FALSE, sngss7_rmt_cong, ftdmchan);
+					} else {
+						SS7_DEBUG_CHAN(ftdmchan,"NSG-ACC: Since it is a priority call therefore no nedd to decrement number of allowed calls for dpc[%d]\n", sngss7_rmt_cong->dpc);
+					}
 				}
 			}
 		}
@@ -1863,6 +1869,7 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 		sngss7_clear_ckt_flag (sngss7_info, FLAG_SENT_ACM);
 		sngss7_clear_ckt_flag (sngss7_info, FLAG_SENT_CPG);
 		sngss7_clear_call_flag (sngss7_info, FLAG_CONG_REL);
+		sngss7_clear_call_flag (sngss7_info, FLAG_PRI_CALL);
 
 
 		if (ftdm_test_flag (ftdmchan, FTDM_CHANNEL_OPEN)) {
