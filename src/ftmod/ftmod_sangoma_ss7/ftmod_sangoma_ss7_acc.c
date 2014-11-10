@@ -73,10 +73,6 @@ ftdm_status_t sng_increment_acc_statistics(ftdm_channel_t *ftdmchan, uint32_t ac
 #endif
 /******************************************************************************/
 
-#ifdef ACC_TEST
-static int debug_idx = 0;
-#endif
-
 /* FUNCTIONS ******************************************************************/
 /******************************************************************************/
 /* Set Default configuration for Automatic Congestion Control Feature
@@ -538,6 +534,12 @@ static void sngss7_free_acc_hashlist()
 		}
 		sngss7_rmt_cong = (ftdm_sngss7_rmt_cong_t*)val;
 
+		/* Closing the file pointer */
+		if (sngss7_rmt_cong->log_file_ptr) {
+			SS7_DEBUG("NSG-ACC: Closing File pointer for dpc[%d]", sngss7_rmt_cong->dpc);
+			fclose(sngss7_rmt_cong->log_file_ptr);
+		}
+
 		/* Destroy mutex */
 		ftdm_mutex_destroy(&sngss7_rmt_cong->mutex);
 		ftdm_safe_free(sngss7_rmt_cong);
@@ -583,18 +585,16 @@ void sngss7_free_acc()
 ftdm_status_t sng_prnt_acc_debug(uint32_t dpc)
 {
 	FILE *log_file_ptr = NULL;
-	char file_path[512];
 	char *hash_dpc = NULL;
 	ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong = NULL;
 	time_t curr_time = time(NULL);
 
-	memset(file_path, 0, sizeof(file_path));
 	if (!dpc) {
-		SS7_ERROR("NSG-ACC: Invalid dpc %d. Thus, cannot log.\n", dpc);
+		SS7_ERROR("NSG-ACC: Invalid dpc[%d]. Thus, cannot log.\n", dpc);
 		return FTDM_FAIL;
 	}
 
-	sprintf(hash_dpc, "%d", dpc);
+	snprintf(hash_dpc, sizeof(hash_dpc), "%d", dpc);
 
 	/* Get remote congestion information for respective DPC from hash list */
 	sngss7_rmt_cong = hashtable_search(ss7_rmtcong_lst, (void *)hash_dpc);
@@ -604,25 +604,34 @@ ftdm_status_t sng_prnt_acc_debug(uint32_t dpc)
 		return FTDM_FAIL;
 	}
 
-	sprintf(file_path, "/tmp/acc_debug-%d.txt", dpc);
-	SS7_DEBUG("NSG-ACC: Open %s file and writting Call statistics in to it\n", file_path);
-	if ((log_file_ptr = fopen(file_path, "a")) == NULL) {
-		SS7_ERROR("NSG-ACC: Failed to Open Log File.\n");
+	if (sngss7_rmt_cong->log_file_ptr == NULL) {
+		SS7_ERROR("NSG-ACC: Invalid file descriptor for dpc[%d]\n", dpc);
 		return FTDM_FAIL;
 	}
 
-	if (!debug_idx) {
+	if (!sngss7_rmt_cong->debug_idx) {
 		fprintf(log_file_ptr, "Time, IAM Recv, IAM with priority Recv, IAM Trans, REL Recv, REL with RCL 1, REL with RCL 2, Cong Value, Cong Block Rate, Calls blocked, Calls Allowed");
 	}
 
 	time(&curr_time);
-	fprintf(log_file_ptr, "%s, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d", ctime(&curr_time), sngss7_rmt_cong->iam_recv, sngss7_rmt_cong->iam_pri_recv, sngss7_rmt_cong->iam_trans, sngss7_rmt_cong->rel_recv, sngss7_rmt_cong->rel_rcl1_recv, sngss7_rmt_cong->rel_rcl2_recv, sngss7_rmt_cong->sngss7_rmtCongLvl, sngss7_rmt_cong->call_blk_rate, sngss7_rmt_cong->calls_rejected, sngss7_rmt_cong->calls_passed);
+	fprintf(log_file_ptr, "%s, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d",
+			ctime(&curr_time), sngss7_rmt_cong->iam_recv, sngss7_rmt_cong->iam_pri_recv, sngss7_rmt_cong->iam_trans, sngss7_rmt_cong->rel_recv, sngss7_rmt_cong->rel_rcl1_recv, sngss7_rmt_cong->rel_rcl2_recv, sngss7_rmt_cong->sngss7_rmtCongLvl, sngss7_rmt_cong->call_blk_rate, sngss7_rmt_cong->calls_rejected, sngss7_rmt_cong->calls_passed);
 
-	if (log_file_ptr) {
-		fclose(log_file_ptr);
-	}
+	/* Resetting counters to 0 inorder to get every 1 second data */
+	ftdm_mutex_lock(sngss7_rmt_cong->mutex);
+	sngss7_rmt_cong->iam_recv = 0;
+	sngss7_rmt_cong->iam_pri_recv = 0;
+	sngss7_rmt_cong->iam_trans = 0;
+	sngss7_rmt_cong->rel_recv = 0;
+	sngss7_rmt_cong->rel_rcl1_recv = 0;
+	sngss7_rmt_cong->rel_rcl2_recv = 0;
+	sngss7_rmt_cong->sngss7_rmtCongLvl = 0;
+	sngss7_rmt_cong->call_blk_rate = 0;
+	sngss7_rmt_cong->calls_rejected = 0;
+	sngss7_rmt_cong->calls_passed = 0;
+	ftdm_mutex_unlock(sngss7_rmt_cong->mutex);
 
-	debug_idx++;
+	sngss7_rmt_cong->debug_idx++;
 	return FTDM_SUCCESS;
 }
 

@@ -630,6 +630,8 @@ typedef struct ftdm_sngss7_rmt_cong {
 	uint32_t          rel_recv;
 	uint32_t          rel_rcl1_recv;
 	uint32_t          rel_rcl2_recv;
+	uint32_t 	  debug_idx;
+	FILE 		  *log_file_ptr;
 	sng_acc_tmr_t 	  acc_debug;
 #endif
 	/* changes end */

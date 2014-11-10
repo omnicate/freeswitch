@@ -3715,6 +3715,9 @@ static int ftmod_ss7_fill_in_acc_timer(sng_route_t *mtp3_route, ftdm_span_t *spa
 	ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong = NULL;
 	char dpc[MAX_DPC_CONFIGURED];
 	char *dpc_key=NULL;
+#ifdef ACC_TEST
+	char file_path[512] = { 0 };
+#endif
 
 	memset(dpc, 0 , sizeof(dpc));
 
@@ -3748,6 +3751,8 @@ static int ftmod_ss7_fill_in_acc_timer(sng_route_t *mtp3_route, ftdm_span_t *spa
 	sngss7_rmt_cong->rel_recv = 0;
 	sngss7_rmt_cong->rel_rcl1_recv = 0;
 	sngss7_rmt_cong->rel_rcl2_recv = 0;
+	sngss7_rmt_cong->log_file_ptr = NULL;
+	sngss7_rmt_cong->debug_idx = 0;
 #endif
 
 	/* Create mutex */
@@ -3814,6 +3819,18 @@ static int ftmod_ss7_fill_in_acc_timer(sng_route_t *mtp3_route, ftdm_span_t *spa
 	SS7_DEBUG("DPC[%d] successfully inserted in ACC hash list\n", sngss7_rmt_cong->dpc);
 
 #ifdef ACC_TEST
+	memset(file_path, 0, sizeof(file_path));
+	/* creating the file in which ACC debugs needs to be written */
+	snprintf(file_path, sizeof(file_path), "/tmp/acc_debug-%d.txt", sngss7_rmt_cong->dpc);
+
+	SS7_DEBUG("NSG-ACC: Open %s file and writting Call statistics in to it\n", file_path);
+	if ((sngss7_rmt_cong->log_file_ptr = fopen(file_path, "a")) == NULL) {
+		SS7_ERROR("NSG-ACC: Failed to Open Log File.\n");
+		return FTDM_FAIL;
+	} else {
+		SS7_DEBUG("NSG-ACC: %s file is open successfully\n", file_path);
+	}
+
 	/* if timer is not started start the ACC DEBUG Timer */
 	if (sngss7_rmt_cong->acc_debug.tmr_id) {
 		SS7_DEBUG("NSG-ACC: ACC DEBUG Timer is already running for DPC[%d]\n", sngss7_rmt_cong->dpc);

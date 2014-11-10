@@ -271,46 +271,25 @@ end:
 #ifdef ACC_TEST
 void handle_route_acc_debug(void *userdata)
 {
-	SS7_FUNC_TRACE_ENTER(__FUNCTION__);
-
 	sng_acc_tmr_t *timer_data = userdata;
 	ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong = timer_data->sngss7_rmt_cong;
 
 	if (!sngss7_rmt_cong) {
-		SS7_DEBUG("NSG-ACC: Invalid User Data on T29 timer expiry\n");
-		goto end;
+		SS7_DEBUG("NSG-ACC: Invalid ftdm_sngss7_rmt_cong_t \n");
+		return;
 	}
 
-	if (sngss7_rmt_cong->sngss7_rmtCongLvl) {
-		sng_prnt_acc_debug(sngss7_rmt_cong->dpc);
+	sng_prnt_acc_debug(sngss7_rmt_cong->dpc);
+	sngss7_rmt_cong->acc_debug.tmr_id = 0;
+
+	if (ftdm_sched_timer (sngss7_rmt_cong->acc_debug.tmr_sched,
+				"acc_debug",
+				sngss7_rmt_cong->acc_debug.beat,
+				sngss7_rmt_cong->acc_debug.callback,
+				&sngss7_rmt_cong->acc_debug,
+				&sngss7_rmt_cong->acc_debug.tmr_id)) {
+		SS7_ERROR ("NSG-ACC: Unable to schedule ACC DEBUG Timer\n");
 	}
-
-	if (sngss7_rmt_cong->t29.tmr_id) {
-		sngss7_rmt_cong->t29.tmr_id = 0;
-		SS7_DEBUG("NSG-ACC: Changing T29 Timer-Id to 0 on timer expiry\n");
-	}
-
-	SS7_DEBUG("NSG-ACC: Timer Debug Timer expired for DPC[%d] Again restarting the same if not running\n", sngss7_rmt_cong->dpc);
-
-	/* if timer is not started start the ACC DEBUG Timer */
-	if (sngss7_rmt_cong->acc_debug.tmr_id) {
-		SS7_DEBUG("NSG-ACC: ACC DEBUG Timer is already running for DPC[%d]\n", sngss7_rmt_cong->dpc);
-	} else {
-		SS7_DEBUG("NSG-ACC: Starting ACC DEBUG Timer for DPC[%d]\n", sngss7_rmt_cong->dpc);
-		if (ftdm_sched_timer (sngss7_rmt_cong->acc_debug.tmr_sched,
-					"acc_debug",
-					sngss7_rmt_cong->acc_debug.beat,
-					sngss7_rmt_cong->acc_debug.callback,
-					&sngss7_rmt_cong->acc_debug,
-					&sngss7_rmt_cong->acc_debug.tmr_id)) {
-			SS7_ERROR ("NSG-ACC: Unable to schedule ACC DEBUG Timer\n");
-		} else {
-			SS7_INFO("NSG-ACC: ACC DEBUG Timer started with timer-id[%d] for dpc[%d]\n", sngss7_rmt_cong->t29.tmr_id, sngss7_rmt_cong->dpc);
-		}
-	}
-
-end:
-	SS7_FUNC_TRACE_EXIT(__FUNCTION__);
 }
 #endif
 
