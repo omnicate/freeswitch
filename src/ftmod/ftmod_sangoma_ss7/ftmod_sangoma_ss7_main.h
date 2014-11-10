@@ -776,10 +776,14 @@ typedef enum {
 
 typedef enum {
 	FLAG_CONG_REL			= (1 << 0),  /* Releasing call due to congestion */
+	FLAG_PRI_CALL			= (1 << 1),  /* Set If the incoming call is a priority call */
+	FLAG_NRML_CALL 			= (1 << 2)  /* Set If there is no congestion when call is received */
 } sng_call_flag_t;
 
 #define CALL_FLAGS_STRING \
-	"CONG_REL",
+	"CONG_REL", \
+	"PRI_CALL", \
+	"NRML_CALL"
 FTDM_STR2ENUM_P(ftmod_ss7_call_state2flag, ftmod_ss7_call_flag2str, sng_call_flag_t)
 
 
@@ -1304,7 +1308,7 @@ ftdm_status_t ftmod_ss7_acc_default_config(void);
 ftdm_status_t sng_acc_assign_max_bucket(uint32_t intfId, uint32_t cics_cfg);
 ftdm_status_t ftdm_sangoma_ss7_get_congestion_status(ftdm_channel_t *ftdmchan);
 ftdm_status_t ftdm_check_acc(sngss7_chan_data_t *sngss7_info, SiRelEvnt *siRelEvnt, ftdm_channel_t *ftdmchan);
-ftdm_status_t sng_acc_handle_call_rate(ftdm_bool_t inc, ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong);
+ftdm_status_t sng_acc_handle_call_rate(ftdm_bool_t inc, ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong, ftdm_channel_t *ftdmchan);
 #ifdef ACC_TEST
 ftdm_status_t sng_prnt_acc_debug(uint32_t dpc);
 ftdm_status_t sng_increment_acc_statistics(ftdm_channel_t *ftdmchan, uint32_t acc_debug_lvl);

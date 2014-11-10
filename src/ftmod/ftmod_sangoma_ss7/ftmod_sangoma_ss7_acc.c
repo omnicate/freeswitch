@@ -58,7 +58,7 @@ ftdm_status_t ftdm_sangoma_ss7_get_congestion_status(ftdm_channel_t *ftdmchan);
 /* Check ACC status on reception of Release Message */
 ftdm_status_t ftdm_check_acc(sngss7_chan_data_t *sngss7_info, SiRelEvnt *siRelEvnt, ftdm_channel_t *ftdmchan);
 /* Handle Active Calls rate */
-ftdm_status_t sng_acc_handle_call_rate(ftdm_bool_t inc, ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong);
+ftdm_status_t sng_acc_handle_call_rate(ftdm_bool_t inc, ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong, ftdm_channel_t *ftdmchan);
 /* Get Remote congestion Structure */
 ftdm_sngss7_rmt_cong_t* sng_acc_get_cong_struct(ftdm_channel_t *ftdmchan);
 /* Free ACC Hash list */
@@ -208,8 +208,9 @@ ftdm_status_t ftdm_sangoma_ss7_get_congestion_status(ftdm_channel_t *ftdmchan)
 
 	/* If remote exchange is congested then pass calls as per call block rate depending up on the congestion level */
 	if ((sngss7_rmt_cong->sngss7_rmtCongLvl) && (sngss7_rmt_cong->dpc == g_ftdm_sngss7_data.cfg.isupIntf[sngss7_info->circuit->infId].dpc)) {
+
 		SS7_DEBUG_CHAN(ftdmchan, "NSG-ACC: DPC[%d] is congested having congestion Level as  %d\n", sngss7_rmt_cong->dpc, sngss7_rmt_cong->sngss7_rmtCongLvl);
-		if (!(sng_acc_handle_call_rate(FTDM_TRUE, sngss7_rmt_cong))) {
+		if (!(sng_acc_handle_call_rate(FTDM_TRUE, sngss7_rmt_cong, ftdmchan))) {
 			return FTDM_FAIL;
 		}
 
@@ -237,6 +238,11 @@ ftdm_status_t ftdm_sangoma_ss7_get_congestion_status(ftdm_channel_t *ftdmchan)
 			return FTDM_BREAK;
 		}
 		return FTDM_SUCCESS;
+	} else {
+		/* Since there is no congestion. Thus, this is a normal call and we donnot have to decrement the counter of
+		 * number of allowed calls in case of congestion */
+		sngss7_set_call_flag (sngss7_info, FLAG_NRML_CALL);
+		SS7_DEBUG_CHAN(ftdmchan, "NSG-ACC: This is a normal call for dpc[%d] as congestion is not present till now\n", sngss7_rmt_cong->dpc);
 	}
 
 	return FTDM_FAIL;
@@ -439,7 +445,7 @@ done:
 /* Check If inc flag is true then increase the number of calls allowed iff
  * number of active calls is less than that of maximum number of calls allowed
  */
-ftdm_status_t sng_acc_handle_call_rate(ftdm_bool_t inc, ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong)
+ftdm_status_t sng_acc_handle_call_rate(ftdm_bool_t inc, ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong, ftdm_channel_t *ftdmchan)
 {
 	ftdm_status_t ret=FTDM_FAIL;
 
@@ -457,7 +463,7 @@ ftdm_status_t sng_acc_handle_call_rate(ftdm_bool_t inc, ftdm_sngss7_rmt_cong_t *
 				ret = FTDM_SUCCESS;
 				goto done;
 			} else {
-				SS7_DEBUG("NSG-ACC: Rejecting incoming call due to reaching limit.. Allowed Calls[%d], Max Bucket size[%d], Call Block Rate[%d]\n",
+				SS7_INFO_CHAN(ftdmchan, "NSG-ACC: Rejecting incoming call due to reaching limit.. Allowed Calls[%d], Max Bucket size[%d], Call Block Rate[%d]\n",
 						sngss7_rmt_cong->calls_allowed, sngss7_rmt_cong->max_bkt_size, sngss7_rmt_cong->call_blk_rate);
 			}
 		} else {
@@ -466,7 +472,7 @@ ftdm_status_t sng_acc_handle_call_rate(ftdm_bool_t inc, ftdm_sngss7_rmt_cong_t *
 				ret = FTDM_SUCCESS;
 				goto done;
 			} else {
-				SS7_DEBUG("NSG-ACC: Rejecting incoming call \n");
+				SS7_INFO_CHAN(ftdmchan, "NSG-ACC: Rejecting incoming call %s\n", "");
 			}
 		}
 	}
