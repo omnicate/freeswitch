@@ -534,11 +534,13 @@ static void sngss7_free_acc_hashlist()
 		}
 		sngss7_rmt_cong = (ftdm_sngss7_rmt_cong_t*)val;
 
+#ifdef ACC_TEST
 		/* Closing the file pointer */
 		if (sngss7_rmt_cong->log_file_ptr) {
 			SS7_DEBUG("NSG-ACC: Closing File pointer for dpc[%d]", sngss7_rmt_cong->dpc);
 			fclose(sngss7_rmt_cong->log_file_ptr);
 		}
+#endif
 
 		/* Destroy mutex */
 		ftdm_mutex_destroy(&sngss7_rmt_cong->mutex);
