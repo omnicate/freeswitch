@@ -3748,6 +3748,7 @@ static int ftmod_ss7_fill_in_acc_timer(sng_route_t *mtp3_route, ftdm_span_t *spa
 	sngss7_rmt_cong->iam_recv = 0;
 	sngss7_rmt_cong->iam_pri_recv = 0;
 	sngss7_rmt_cong->iam_trans = 0;
+	sngss7_rmt_cong->iam_pri_trans = 0;
 	sngss7_rmt_cong->rel_recv = 0;
 	sngss7_rmt_cong->rel_rcl1_recv = 0;
 	sngss7_rmt_cong->rel_rcl2_recv = 0;

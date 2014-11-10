@@ -270,22 +270,17 @@ ftdm_status_t ftdm_check_acc(sngss7_chan_data_t *sngss7_info, SiRelEvnt *siRelEv
 	if (siRelEvnt->autoCongLvl.eh.pres) {
 		if (siRelEvnt->autoCongLvl.auCongLvl.pres) {
 			if (sngss7_rmt_cong->sngss7_rmtCongLvl == 1) {
-				SS7_INFO_CHAN(ftdmchan,"NSG-ACC: Received REL on DPC[%d] with ACL[1], incrementing ACC DEBUG statistics\n", dpc);
 				sng_increment_acc_statistics(ftdmchan, ACC_REL_RECV_ACL1_DEBUG);
 			} else if (sngss7_rmt_cong->sngss7_rmtCongLvl == 2) {
-				SS7_INFO_CHAN(ftdmchan,"NSG-ACC: Received REL on DPC[%d] with ACL[2], incrementing ACC DEBUG statistics\n", dpc);
 				sng_increment_acc_statistics(ftdmchan, ACC_REL_RECV_ACL2_DEBUG);
 			} else if (sngss7_rmt_cong->sngss7_rmtCongLvl == 0) {
 				/* This is an invalid case but in order to be on the safer side include this */
-				SS7_INFO_CHAN(ftdmchan,"NSG-ACC: Received REL on DPC[%d] with ACL[0], incrementing ACC DEBUG statistics\n", dpc);
 				sng_increment_acc_statistics(ftdmchan, ACC_REL_RECV_DEBUG);
 			}
 		} else {
-			SS7_INFO_CHAN(ftdmchan,"NSG-ACC: Received REL on DPC[%d] but ACL value is not present incrementing ACC DEBUG statistics\n", dpc);
 			sng_increment_acc_statistics(ftdmchan, ACC_REL_RECV_DEBUG);
 		}
 	} else {
-		SS7_INFO_CHAN(ftdmchan,"NSG-ACC: Received REL on DPC[%d] with no ACL, incrementing ACC DEBUG statistics\n", dpc);
 		sng_increment_acc_statistics(ftdmchan, ACC_REL_RECV_DEBUG);
 	}
 #endif
@@ -586,8 +581,7 @@ void sngss7_free_acc()
 /* Print ACC statistics into a file */
 ftdm_status_t sng_prnt_acc_debug(uint32_t dpc)
 {
-	FILE *log_file_ptr = NULL;
-	char *hash_dpc = NULL;
+	char hash_dpc[10] = { 0 };
 	ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong = NULL;
 	time_t curr_time = time(NULL);
 
@@ -612,28 +606,31 @@ ftdm_status_t sng_prnt_acc_debug(uint32_t dpc)
 	}
 
 	if (!sngss7_rmt_cong->debug_idx) {
-		fprintf(log_file_ptr, "Time, IAM Recv, IAM with priority Recv, IAM Trans, REL Recv, REL with RCL 1, REL with RCL 2, Cong Value, Cong Block Rate, Calls blocked, Calls Allowed");
+		/* Print only first time */
+		fprintf(sngss7_rmt_cong->log_file_ptr, "RcvIAM, priRcvIAM, transIAM, priTransIAM, recvREL, acl1REL, acl2REL, accLvl, blkRate, blkCalls, allowCalls, Time\n");
+		sngss7_rmt_cong->debug_idx = 1;
 	}
 
 	time(&curr_time);
-	fprintf(log_file_ptr, "%s, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d",
-			ctime(&curr_time), sngss7_rmt_cong->iam_recv, sngss7_rmt_cong->iam_pri_recv, sngss7_rmt_cong->iam_trans, sngss7_rmt_cong->rel_recv, sngss7_rmt_cong->rel_rcl1_recv, sngss7_rmt_cong->rel_rcl2_recv, sngss7_rmt_cong->sngss7_rmtCongLvl, sngss7_rmt_cong->call_blk_rate, sngss7_rmt_cong->calls_rejected, sngss7_rmt_cong->calls_passed);
+	fprintf(sngss7_rmt_cong->log_file_ptr, "%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %s",
+			sngss7_rmt_cong->iam_recv, sngss7_rmt_cong->iam_pri_recv, sngss7_rmt_cong->iam_trans,
+			sngss7_rmt_cong->iam_pri_trans, sngss7_rmt_cong->rel_recv, sngss7_rmt_cong->rel_rcl1_recv,
+			sngss7_rmt_cong->rel_rcl2_recv, sngss7_rmt_cong->sngss7_rmtCongLvl, sngss7_rmt_cong->call_blk_rate,
+			sngss7_rmt_cong->calls_rejected, sngss7_rmt_cong->calls_passed, ctime(&curr_time));
 
 	/* Resetting counters to 0 inorder to get every 1 second data */
 	ftdm_mutex_lock(sngss7_rmt_cong->mutex);
 	sngss7_rmt_cong->iam_recv = 0;
 	sngss7_rmt_cong->iam_pri_recv = 0;
 	sngss7_rmt_cong->iam_trans = 0;
+	sngss7_rmt_cong->iam_pri_trans = 0;
 	sngss7_rmt_cong->rel_recv = 0;
 	sngss7_rmt_cong->rel_rcl1_recv = 0;
 	sngss7_rmt_cong->rel_rcl2_recv = 0;
-	sngss7_rmt_cong->sngss7_rmtCongLvl = 0;
-	sngss7_rmt_cong->call_blk_rate = 0;
 	sngss7_rmt_cong->calls_rejected = 0;
 	sngss7_rmt_cong->calls_passed = 0;
 	ftdm_mutex_unlock(sngss7_rmt_cong->mutex);
 
-	sngss7_rmt_cong->debug_idx++;
 	return FTDM_SUCCESS;
 }
 
@@ -653,6 +650,7 @@ ftdm_status_t sng_increment_acc_statistics(ftdm_channel_t *ftdmchan, uint32_t ac
 		return FTDM_FAIL;
 	}
 
+	ftdm_mutex_lock(sngss7_rmt_cong->mutex);
 	switch (acc_debug_lvl) {
 		case ACC_IAM_RECV_DEBUG:
 			sngss7_rmt_cong->iam_recv++;
@@ -664,6 +662,10 @@ ftdm_status_t sng_increment_acc_statistics(ftdm_channel_t *ftdmchan, uint32_t ac
 
 		case ACC_IAM_TRANS_DEBUG:
 			sngss7_rmt_cong->iam_trans++;
+			break;
+
+		case ACC_IAM_TRANS_PRI_DEBUG:
+			sngss7_rmt_cong->iam_pri_trans++;
 			break;
 
 		case ACC_REL_RECV_DEBUG:
@@ -682,6 +684,8 @@ ftdm_status_t sng_increment_acc_statistics(ftdm_channel_t *ftdmchan, uint32_t ac
 			SS7_ERROR_CHAN(ftdmchan,"NSG-ACC: Invalid ACC DEBUG option for DPC[%d]\n", g_ftdm_sngss7_data.cfg.isupIntf[sngss7_info->circuit->infId].dpc);
 			break;
 	}
+	ftdm_mutex_unlock(sngss7_rmt_cong->mutex);
+
 
 	return FTDM_SUCCESS;
 }

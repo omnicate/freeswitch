@@ -275,13 +275,14 @@ void handle_route_acc_debug(void *userdata)
 	ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong = timer_data->sngss7_rmt_cong;
 
 	if (!sngss7_rmt_cong) {
-		SS7_DEBUG("NSG-ACC: Invalid ftdm_sngss7_rmt_cong_t \n");
+		SS7_ERROR("NSG-ACC: Invalid ftdm_sngss7_rmt_cong_t \n");
 		return;
 	}
 
 	sng_prnt_acc_debug(sngss7_rmt_cong->dpc);
 	sngss7_rmt_cong->acc_debug.tmr_id = 0;
 
+	/* Restart timer */
 	if (ftdm_sched_timer (sngss7_rmt_cong->acc_debug.tmr_sched,
 				"acc_debug",
 				sngss7_rmt_cong->acc_debug.beat,

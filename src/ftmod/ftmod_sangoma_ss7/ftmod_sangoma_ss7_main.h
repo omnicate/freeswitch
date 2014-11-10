@@ -87,9 +87,10 @@
 #define ACC_IAM_RECV_DEBUG 	1
 #define ACC_IAM_PRI_RECV_DEBUG  2
 #define ACC_IAM_TRANS_DEBUG 	3
-#define ACC_REL_RECV_DEBUG 	4
-#define ACC_REL_RECV_ACL1_DEBUG 5
-#define ACC_REL_RECV_ACL2_DEBUG 6
+#define ACC_IAM_TRANS_PRI_DEBUG 4
+#define ACC_REL_RECV_DEBUG 	5
+#define ACC_REL_RECV_ACL1_DEBUG 6
+#define ACC_REL_RECV_ACL2_DEBUG 7
 #endif
 
 #define sngss7_flush_queue(queue) \
@@ -627,6 +628,7 @@ typedef struct ftdm_sngss7_rmt_cong {
 	uint32_t          iam_recv;
 	uint32_t          iam_pri_recv;
 	uint32_t          iam_trans;
+	uint32_t 	  iam_pri_trans;
 	uint32_t          rel_recv;
 	uint32_t          rel_rcl1_recv;
 	uint32_t          rel_rcl2_recv;

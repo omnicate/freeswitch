@@ -370,10 +370,8 @@ ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 
 #ifdef ACC_TEST
 			if (sngss7_info->priority == FTDM_FALSE) {
-				SS7_INFO_CHAN(ftdmchan,"NSG-ACC: Received IAM for DPC[%d], incrementing ACC DEBUG statistics\n", g_ftdm_sngss7_data.cfg.isupIntf[sngss7_info->circuit->infId].dpc);
 				sng_increment_acc_statistics(ftdmchan, ACC_IAM_RECV_DEBUG);
 			} else {
-				SS7_INFO_CHAN(ftdmchan,"NSG-ACC: Received IAM for DPC[%d] with priority, incrementing ACC DEBUG statistics\n", g_ftdm_sngss7_data.cfg.isupIntf[sngss7_info->circuit->infId].dpc);
 				sng_increment_acc_statistics(ftdmchan, ACC_IAM_PRI_RECV_DEBUG);
 			}
 #endif
