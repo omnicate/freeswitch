@@ -210,6 +210,7 @@ ftdm_status_t ftdm_sangoma_ss7_get_congestion_status(ftdm_channel_t *ftdmchan)
 	if ((sngss7_rmt_cong->sngss7_rmtCongLvl) && (sngss7_rmt_cong->dpc == g_ftdm_sngss7_data.cfg.isupIntf[sngss7_info->circuit->infId].dpc)) {
 
 		SS7_DEBUG_CHAN(ftdmchan, "NSG-ACC: DPC[%d] is congested having congestion Level as  %d\n", sngss7_rmt_cong->dpc, sngss7_rmt_cong->sngss7_rmtCongLvl);
+
 		if (!(sng_acc_handle_call_rate(FTDM_TRUE, sngss7_rmt_cong, ftdmchan))) {
 			return FTDM_FAIL;
 		}
@@ -457,6 +458,9 @@ ftdm_status_t sng_acc_handle_call_rate(ftdm_bool_t inc, ftdm_sngss7_rmt_cong_t *
 
 	if (sngss7_rmt_cong->sngss7_rmtCongLvl) {
 		if (inc) {
+			SS7_INFO_CHAN(ftdmchan, "NSG-ACC: Bkt Size[%d], Blk Rate[%d], Max limit[%d]\n", sngss7_rmt_cong->max_bkt_size, sngss7_rmt_cong->call_blk_rate,
+						 (sngss7_rmt_cong->max_bkt_size - ((sngss7_rmt_cong->max_bkt_size * sngss7_rmt_cong->call_blk_rate)/100)));
+
 			if (sngss7_rmt_cong->calls_allowed < (sngss7_rmt_cong->max_bkt_size - ((sngss7_rmt_cong->max_bkt_size * sngss7_rmt_cong->call_blk_rate)/100))) {
 				sngss7_rmt_cong->calls_allowed++;
 				sngss7_rmt_cong->calls_passed++;

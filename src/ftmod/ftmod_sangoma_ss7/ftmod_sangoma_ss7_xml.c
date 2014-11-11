@@ -3756,15 +3756,15 @@ static int ftmod_ss7_fill_in_acc_timer(sng_route_t *mtp3_route, ftdm_span_t *spa
 	sngss7_rmt_cong->debug_idx = 0;
 #endif
 
-	/* Create mutex */
-	ftdm_mutex_create(&sngss7_rmt_cong->mutex);
-
 	sprintf(dpc, "%d", sngss7_rmt_cong->dpc);
 	if (hashtable_search(ss7_rmtcong_lst, (void *)dpc)) {
 		SS7_DEBUG("DPC[%d] is already inserted in the hash tablearsing\n", mtp3_route->dpc);
 		ftdm_safe_free(sngss7_rmt_cong);
 		return FTDM_SUCCESS;
 	}
+
+	/* Create mutex */
+	ftdm_mutex_create(&sngss7_rmt_cong->mutex);
 
 	if (mtp3_route->max_bkt_size) {
 		sngss7_rmt_cong->max_bkt_size = mtp3_route->max_bkt_size;

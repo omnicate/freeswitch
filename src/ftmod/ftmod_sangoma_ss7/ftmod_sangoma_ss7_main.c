@@ -1658,11 +1658,13 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 			if (((sngss7_rmt_cong = sng_acc_get_cong_struct(ftdmchan)))) {
 				if (sngss7_rmt_cong->sngss7_rmtCongLvl) {
 					if (!sngss7_test_call_flag (sngss7_info, FLAG_PRI_CALL)) {
-						SS7_DEBUG_CHAN(ftdmchan,"NSG-ACC: Decrementing Number of active calls for congested DPC[%d]\n", sngss7_rmt_cong->dpc);
+						SS7_DEBUG_CHAN(ftdmchan,"NSG-ACC: Decrementing Number of active calls to [%d] for congested DPC[%d]\n", 
+								(sngss7_rmt_cong->calls_allowed-1), sngss7_rmt_cong->dpc);
 						/* Decrease number of active calls by 1 for the respective congested DPC */
 						sng_acc_handle_call_rate(FTDM_FALSE, sngss7_rmt_cong, ftdmchan);
 					} else {
-						SS7_DEBUG_CHAN(ftdmchan,"NSG-ACC: Do not decrement number of allowed calls for priority calls on dpc[%d]\n", sngss7_rmt_cong->dpc);
+						SS7_DEBUG_CHAN(ftdmchan,"NSG-ACC: Do not decrement number of allowed calls[%d] for priority calls on dpc[%d]\n", 
+								sngss7_rmt_cong->calls_allowed, sngss7_rmt_cong->dpc);
 					}
 				}
 			}
