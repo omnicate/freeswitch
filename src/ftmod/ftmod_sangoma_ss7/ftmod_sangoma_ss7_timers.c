@@ -210,6 +210,11 @@ void handle_route_t30(void *userdata)
 				sngss7_rmt_cong->loc_calls_rejected = 0;
 				/* changes ends */
 				sngss7_rmt_cong->sngss7_rmtCongLvl = 0;
+				sng_acc_free_active_calls_hashlist(sngss7_rmt_cong);
+				ftdm_mutex_unlock(sngss7_rmt_cong->mutex);
+				/* No need to run Timer as we have released all congestion resources */
+				/* We are not happy to handle traffic */
+				goto end;
 			}
 		}
 

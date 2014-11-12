@@ -639,7 +639,13 @@ typedef struct ftdm_sngss7_rmt_cong {
 	/* changes end */
 	sng_acc_tmr_t     t29;
 	sng_acc_tmr_t     t30;
+	ftdm_hash_t *ss7_active_calls;				/* Hash list of all active calls as per block rate */
 } ftdm_sngss7_rmt_cong_t;
+
+typedef struct ftdm_sngss7_active_calls {
+	uint32_t       	  span_id;
+	uint32_t 	  chan_id;
+} ftdm_sngss7_active_calls_t;
 
 typedef enum{
 	SNG_SS7_OPR_MODE_NONE,
@@ -976,6 +982,7 @@ extern int				cmbLinkSetId;
 /* variables w.r.t ACC feature */
 extern ftdm_sngss7_call_reject_queue_t 	sngss7_reject_queue;
 extern ftdm_hash_t 			*ss7_rmtcong_lst;
+extern ftdm_hash_t 			*ss7_active_calls;
 uint32_t 				nmb_cics_cfg;
 
 /******************************************************************************/
@@ -1314,6 +1321,8 @@ ftdm_status_t sng_prnt_acc_debug(uint32_t dpc);
 ftdm_status_t sng_increment_acc_statistics(ftdm_channel_t *ftdmchan, uint32_t acc_debug_lvl);
 #endif
 ftdm_sngss7_rmt_cong_t* sng_acc_get_cong_struct(ftdm_channel_t *ftdmchan);
+ftdm_status_t sng_acc_free_active_calls_hashlist(ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong);
+ftdm_status_t sng_acc_rmv_active_call(ftdm_channel_t *ftdmchan);
 void sngss7_free_acc(void);
 
 #if JZ_BLO_TIMER

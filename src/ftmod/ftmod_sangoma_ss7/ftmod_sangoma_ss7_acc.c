@@ -45,6 +45,8 @@
 
 /* GLOBALS ********************************************************************/
 
+ftdm_hash_t *ss7_rmtcong_lst;	/* Hash list of all dpc to store congestion values */
+
 /******************************************************************************/
 
 /* PROTOTYPES *****************************************************************/
@@ -71,6 +73,12 @@ ftdm_status_t sng_prnt_acc_debug(uint32_t dpc);
 /* Increment the ACC DEBUG counters */
 ftdm_status_t sng_increment_acc_statistics(ftdm_channel_t *ftdmchan, uint32_t acc_debug_lvl);
 #endif
+
+/* Insert calls active after congetion is determined */
+ftdm_status_t sng_acc_active_call_insert(ftdm_channel_t *ftdmchan);
+/* Free active call hash list */
+ftdm_status_t sng_acc_free_active_calls_hashlist(ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong);
+
 /******************************************************************************/
 
 /* FUNCTIONS ******************************************************************/
@@ -81,6 +89,18 @@ ftdm_status_t ftmod_ss7_acc_default_config()
 {
 	if (!g_ftdm_sngss7_data.cfg.sng_acc)
 		return FTDM_FAIL;
+
+	if (ss7_rmtcong_lst == NULL) {
+		/* initializing global ACC structure */
+		ss7_rmtcong_lst = create_hashtable(MAX_DPC_CONFIGURED, ftdm_hash_hashfromstring, ftdm_hash_equalkeys);
+
+		if (!ss7_rmtcong_lst) {
+			SS7_DEBUG("NSG-ACC: Failed to create hash list for ss7_rmtcong_lst \n");
+			return FTDM_SUCCESS;
+		} else {
+			SS7_DEBUG("NSG-ACC: ss7_rmtcong_lst successfully created \n");
+		}
+	}
 
 	if (!g_ftdm_sngss7_data.cfg.accCfg.trf_red_rate) {
 		g_ftdm_sngss7_data.cfg.accCfg.trf_red_rate = CALL_CONTROL_RATE;
@@ -254,6 +274,7 @@ ftdm_status_t ftdm_sangoma_ss7_get_congestion_status(ftdm_channel_t *ftdmchan)
  * received in the RELEASE message */
 ftdm_status_t ftdm_check_acc(sngss7_chan_data_t *sngss7_info, SiRelEvnt *siRelEvnt, ftdm_channel_t *ftdmchan)
 {
+	int lvlchange = 0;
 	/* Contains Information w.r.t. congested DPC */
 	ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong = NULL;
 	uint32_t dpc = g_ftdm_sngss7_data.cfg.isupIntf[sngss7_info->circuit->infId].dpc;
@@ -341,17 +362,28 @@ ftdm_status_t ftdm_check_acc(sngss7_chan_data_t *sngss7_info, SiRelEvnt *siRelEv
 							if (sngss7_rmt_cong->call_blk_rate < g_ftdm_sngss7_data.cfg.accCfg.cnglvl2_red_rate) {
 								sngss7_rmt_cong->call_blk_rate = sngss7_rmt_cong->call_blk_rate + g_ftdm_sngss7_data.cfg.accCfg.trf_red_rate;
 								SS7_INFO_CHAN(ftdmchan,"NSG-ACC: T30 : ACL[1] Reducing Call Rate to [%d] for dpc[%d]\n" , sngss7_rmt_cong->call_blk_rate,dpc);
+								lvlchange = 1;
 							}
 						}
 
 						if ((siRelEvnt->autoCongLvl.auCongLvl.val == 1) && (sngss7_rmt_cong->sngss7_rmtCongLvl == 2)) {
 							sngss7_rmt_cong->call_blk_rate = g_ftdm_sngss7_data.cfg.accCfg.cnglvl1_red_rate;
 							sngss7_rmt_cong->sngss7_rmtCongLvl--;
+							lvlchange = 1;
 							SS7_INFO_CHAN(ftdmchan,"NSG-ACC: T30 : ACL[1] from ACL[2] Increasing Call Rate to [%d] for dpc[%d]\n" , sngss7_rmt_cong->call_blk_rate,dpc);
 						} else if ((siRelEvnt->autoCongLvl.auCongLvl.val == 2) && (sngss7_rmt_cong->sngss7_rmtCongLvl == 1)) {
 							sngss7_rmt_cong->call_blk_rate = g_ftdm_sngss7_data.cfg.accCfg.cnglvl2_red_rate;
 							sngss7_rmt_cong->sngss7_rmtCongLvl++;
+							lvlchange = 1;
 							SS7_INFO_CHAN(ftdmchan,"NSG-ACC: T30 : ACL[2] from ACL[1] Reducing Call Rate to [%d] for dpc[%d]\n" , sngss7_rmt_cong->call_blk_rate,dpc);
+						}
+
+
+						if (lvlchange) {
+							/* reset whole active call list as block rate or congestion level is changed so that
+							 * we can keep count for this level only and discard previous active calls count */
+							sng_acc_free_active_calls_hashlist(sngss7_rmt_cong);
+							sngss7_rmt_cong->calls_allowed = 0;
 						}
 
 						ftdm_mutex_unlock(sngss7_rmt_cong->mutex);
@@ -465,6 +497,8 @@ ftdm_status_t sng_acc_handle_call_rate(ftdm_bool_t inc, ftdm_sngss7_rmt_cong_t *
 				sngss7_rmt_cong->calls_allowed++;
 				sngss7_rmt_cong->calls_passed++;
 				ret = FTDM_SUCCESS;
+				/* Calls allowed, make entry to active call list */
+				sng_acc_active_call_insert(ftdmchan);
 				goto done;
 			} else {
 				SS7_INFO_CHAN(ftdmchan, "NSG-ACC: Rejecting incoming call due to reaching limit.. Allowed Calls[%d], Max Bucket size[%d], Call Block Rate[%d]\n",
@@ -546,6 +580,8 @@ static void sngss7_free_acc_hashlist()
 			fclose(sngss7_rmt_cong->log_file_ptr);
 		}
 #endif
+		sng_acc_free_active_calls_hashlist(sngss7_rmt_cong);
+		hashtable_destroy(sngss7_rmt_cong->ss7_active_calls);
 
 		/* Destroy mutex */
 		ftdm_mutex_destroy(&sngss7_rmt_cong->mutex);
@@ -576,10 +612,10 @@ void sngss7_free_acc()
 	reject_queue = NULL;
 
 	if (ss7_rmtcong_lst) {
-		SS7_DEBUG("De-allocation Hashlists\n");
+		SS7_DEBUG("De-allocation ACC Hashlists\n");
 		/* free all the members of ACC hash list */
 		sngss7_free_acc_hashlist();
-		/* delete the hash table */
+		/* delete the acc hash table */
 		hashtable_destroy(ss7_rmtcong_lst);
 		ss7_rmtcong_lst = NULL;
 	}
@@ -594,6 +630,9 @@ ftdm_status_t sng_prnt_acc_debug(uint32_t dpc)
 	char hash_dpc[10] = { 0 };
 	ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong = NULL;
 	time_t curr_time = time(NULL);
+
+	if (!g_ftdm_sngss7_data.cfg.sng_acc)
+		return FTDM_FAIL;
 
 	if (!dpc) {
 		SS7_ERROR("NSG-ACC: Invalid dpc[%d]. Thus, cannot log.\n", dpc);
@@ -650,6 +689,8 @@ ftdm_status_t sng_increment_acc_statistics(ftdm_channel_t *ftdmchan, uint32_t ac
 {
 	ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong = NULL;
 	sngss7_chan_data_t *sngss7_info = ftdmchan->call_data;
+	if (!g_ftdm_sngss7_data.cfg.sng_acc)
+		return FTDM_FAIL;
 
 	if (!ftdmchan) {
 		return FTDM_FAIL;
@@ -700,6 +741,143 @@ ftdm_status_t sng_increment_acc_statistics(ftdm_channel_t *ftdmchan, uint32_t ac
 	return FTDM_SUCCESS;
 }
 #endif
+
+/******************************************************************************/
+/* Configure the call block rate as per number of cics configured per DPC basis */
+ftdm_status_t sng_acc_active_call_insert(ftdm_channel_t *ftdmchan)
+{
+	ftdm_status_t ret = FTDM_FAIL;
+	char span_chan[12] = { 0 };
+	ftdm_sngss7_active_calls_t *sngss7_active_call = NULL;
+	ftdm_sngss7_rmt_cong_t* sngss7_rmt_cong = NULL;
+	char* key = NULL;
+
+	if (!g_ftdm_sngss7_data.cfg.sng_acc)
+		return ret;
+
+	sngss7_rmt_cong = sng_acc_get_cong_struct(ftdmchan);
+
+	if (!sngss7_rmt_cong) {
+		return ret;
+	}
+
+	if (!sngss7_rmt_cong->ss7_active_calls) {
+		return ret;
+	}
+
+	ftdm_mutex_lock(sngss7_rmt_cong->mutex);
+
+	snprintf(span_chan, sizeof(span_chan), "s%dc%d", ftdmchan->span_id, ftdmchan->chan_id);
+	if (hashtable_search(sngss7_rmt_cong->ss7_active_calls, (void *)span_chan)) {
+		SS7_ERROR_CHAN(ftdmchan, "NSG-ACC: Entry already present in Cong active call list %s\n", "");
+		goto done;
+	}
+
+	sngss7_active_call = ftdm_calloc(sizeof(*sngss7_active_call), 1);
+
+	if (!sngss7_active_call) {
+		SS7_ERROR_CHAN(ftdmchan,"NSG-ACC: Unable to allocate memory to insert active calls %s\n", "");
+		goto done;
+	}
+
+	/* Initializing structure variables */
+	sngss7_active_call->span_id = ftdmchan->span_id;
+	sngss7_active_call->chan_id = ftdmchan->chan_id;
+
+	key = ftdm_strdup(span_chan);
+
+	/* Insert the same in ACC hash list */
+	hashtable_insert(sngss7_rmt_cong->ss7_active_calls, (void *)key, sngss7_active_call, HASHTABLE_FLAG_FREE_KEY);
+	SS7_INFO_CHAN(ftdmchan, "NSG-ACC: Successfully inserted in active calls hash list %s\n", "");
+	ret=FTDM_SUCCESS;
+
+done:
+	ftdm_mutex_unlock(sngss7_rmt_cong->mutex);
+	return ret;
+}
+
+/******************************************************************************/
+/* If call is present in active call list then remove it and clear the call */
+ftdm_status_t sng_acc_rmv_active_call(ftdm_channel_t *ftdmchan)
+{
+	ftdm_sngss7_rmt_cong_t* sngss7_rmt_cong = NULL;
+	ftdm_sngss7_active_calls_t *sngss7_active_call = NULL;
+	char key[25] = { 0 };
+
+	if (!g_ftdm_sngss7_data.cfg.sng_acc)
+		return FTDM_FAIL;
+
+	sngss7_rmt_cong = sng_acc_get_cong_struct(ftdmchan);
+
+	if (!sngss7_rmt_cong) {
+		return FTDM_FAIL;
+	}
+
+	if (!sngss7_rmt_cong->ss7_active_calls) {
+		return FTDM_FAIL;
+	}
+
+	ftdm_mutex_lock(sngss7_rmt_cong->mutex);
+
+	snprintf(key, sizeof(key), "s%dc%d", ftdmchan->span_id, ftdmchan->chan_id);
+
+	if ((sngss7_active_call = hashtable_search(sngss7_rmt_cong->ss7_active_calls, (void *)key)) == NULL) {
+		SS7_ERROR_CHAN(ftdmchan, "NSG-ACC: Entry NOT present in Cong active call list %s\n", "");
+		ftdm_mutex_unlock(sngss7_rmt_cong->mutex);
+		return FTDM_FAIL;
+	}
+
+	SS7_DEBUG("NSG-ACC: Removing %s entry from active calls hash list\n", key);
+	hashtable_remove(sngss7_rmt_cong->ss7_active_calls, (void *)key);
+	ftdm_safe_free(sngss7_active_call);
+
+	ftdm_mutex_unlock(sngss7_rmt_cong->mutex);
+
+	return FTDM_SUCCESS;
+}
+
+/******************************************************************************/
+/* Iterate through Active Calls hash list and remove hash list members one by one */
+ftdm_status_t sng_acc_free_active_calls_hashlist(ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong)
+{
+	ftdm_hash_iterator_t *i = NULL;
+	const void *key = NULL;
+	void *val = NULL;
+	ftdm_sngss7_active_calls_t *sngss7_active_call = NULL;
+	char actv_call[25] = { 0 };
+	ftdm_status_t ret = FTDM_FAIL;
+
+	if (!g_ftdm_sngss7_data.cfg.sng_acc)
+		return ret;
+
+	if (!sngss7_rmt_cong) {
+		return ret;
+	}
+
+	if (!sngss7_rmt_cong->ss7_active_calls) {
+		return ret;
+	}
+
+	ftdm_mutex_lock(sngss7_rmt_cong->mutex);
+
+	for (i = hashtable_first(sngss7_rmt_cong->ss7_active_calls); i; i = hashtable_next(i)) {
+		memset(actv_call, 0, sizeof(actv_call));
+
+		hashtable_this(i, &key, NULL, &val);
+		if (!key || !val) {
+			break;
+		}
+		sngss7_active_call = (ftdm_sngss7_active_calls_t*)val;
+
+		snprintf(actv_call, sizeof(actv_call), "s%dc%d", sngss7_active_call->span_id, sngss7_active_call->chan_id);
+		SS7_DEBUG("NSG-ACC: Removing %s entry from active calls hash list\n", actv_call);
+		hashtable_remove(sngss7_rmt_cong->ss7_active_calls, (void *)actv_call);
+		ftdm_safe_free(sngss7_active_call);
+	}
+	ftdm_mutex_unlock(sngss7_rmt_cong->mutex);
+
+	return FTDM_SUCCESS;
+}
 
 /******************************************************************************/
 /* For Emacs:

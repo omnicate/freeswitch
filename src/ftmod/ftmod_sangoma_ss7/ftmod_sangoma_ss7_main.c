@@ -52,7 +52,6 @@ static ftdm_io_interface_t g_ftdm_sngss7_interface;
 ftdm_sngss7_data_t g_ftdm_sngss7_data;
 ftdm_sngss7_opr_mode g_ftdm_operating_mode;
 ftdm_sngss7_call_reject_queue_t  sngss7_reject_queue;	/* Call reject queue */
-ftdm_hash_t *ss7_rmtcong_lst;				/* Hash list of all dpc to store congestion values */
 
 /******************************************************************************/
 
@@ -1658,10 +1657,17 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 			if (((sngss7_rmt_cong = sng_acc_get_cong_struct(ftdmchan)))) {
 				if (sngss7_rmt_cong->sngss7_rmtCongLvl) {
 					if (!sngss7_test_call_flag (sngss7_info, FLAG_PRI_CALL)) {
-						SS7_DEBUG_CHAN(ftdmchan,"NSG-ACC: Decrementing Number of active calls to [%d] for congested DPC[%d]\n", 
-								(sngss7_rmt_cong->calls_allowed-1), sngss7_rmt_cong->dpc);
-						/* Decrease number of active calls by 1 for the respective congested DPC */
-						sng_acc_handle_call_rate(FTDM_FALSE, sngss7_rmt_cong, ftdmchan);
+						SS7_DEBUG_CHAN(ftdmchan,"NSG-ACC: Decrementing Number of active calls [%d] by 1 for congested DPC[%d]\n", 
+								(sngss7_rmt_cong->calls_allowed), sngss7_rmt_cong->dpc);
+						/* Check if the call is receivied during same congestion block rate the please fo ahead and
+						 * decrement the number of active calls by 1 */
+						if (FTDM_SUCCESS == sng_acc_rmv_active_call(ftdmchan)) {
+							/* Decrease number of active calls by 1 for the respective congested DPC */
+							sng_acc_handle_call_rate(FTDM_FALSE, sngss7_rmt_cong, ftdmchan);
+						} else {
+							SS7_DEBUG_CHAN(ftdmchan,"NSG-ACC: Not found in call list, hence not decrementing active calls[%d] for dpc[%d]\n",
+									(sngss7_rmt_cong->calls_allowed), sngss7_rmt_cong->dpc);
+						}
 					} else {
 						SS7_DEBUG_CHAN(ftdmchan,"NSG-ACC: Do not decrement number of allowed calls[%d] for priority calls on dpc[%d]\n", 
 								sngss7_rmt_cong->calls_allowed, sngss7_rmt_cong->dpc);
@@ -2886,7 +2892,7 @@ static FIO_SIG_LOAD_FUNCTION(ftdm_sangoma_ss7_init)
 	memset(&sngss7_reject_queue, 0, sizeof(sngss7_reject_queue));
 
 	/* initializing global ACC structure */
-	ss7_rmtcong_lst = create_hashtable(MAX_DPC_CONFIGURED, ftdm_hash_hashfromstring, ftdm_hash_equalkeys);
+	ss7_rmtcong_lst = NULL;
 
 	/* initalize the global gen_config flag */
 	g_ftdm_sngss7_data.gen_config = 0;

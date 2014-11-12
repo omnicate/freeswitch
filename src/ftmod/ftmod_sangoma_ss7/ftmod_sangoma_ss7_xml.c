@@ -3763,6 +3763,17 @@ static int ftmod_ss7_fill_in_acc_timer(sng_route_t *mtp3_route, ftdm_span_t *spa
 		return FTDM_SUCCESS;
 	}
 
+	/* initializing global active calls during congestion */
+	sngss7_rmt_cong->ss7_active_calls = create_hashtable(MAX_DPC_CONFIGURED, ftdm_hash_hashfromstring, ftdm_hash_equalkeys);
+
+	if (!sngss7_rmt_cong->ss7_active_calls) {
+		SS7_DEBUG("NSG-ACC: Failed to create hash list for ss7_active_calls \n");
+		ftdm_safe_free(sngss7_rmt_cong);
+		return FTDM_SUCCESS;
+	} else {
+		SS7_DEBUG("NSG-ACC: ss7_active_calls hash list successfully created for dpc[%d]\n", dpc);
+	}
+
 	/* Create mutex */
 	ftdm_mutex_create(&sngss7_rmt_cong->mutex);
 
