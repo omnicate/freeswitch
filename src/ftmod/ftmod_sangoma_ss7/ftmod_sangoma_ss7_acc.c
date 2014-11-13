@@ -490,7 +490,8 @@ ftdm_status_t sng_acc_handle_call_rate(ftdm_bool_t inc, ftdm_sngss7_rmt_cong_t *
 
 	if (sngss7_rmt_cong->sngss7_rmtCongLvl) {
 		if (inc) {
-			SS7_INFO_CHAN(ftdmchan, "NSG-ACC: Bkt Size[%d], Blk Rate[%d], Max limit[%d]\n", sngss7_rmt_cong->max_bkt_size, sngss7_rmt_cong->call_blk_rate,
+			SS7_INFO_CHAN(ftdmchan, "NSG-ACC: Bkt Size[%d], Blk Rate[%d], Current Call Allowed[%d], Max limit[%d]\n",
+						 sngss7_rmt_cong->max_bkt_size, sngss7_rmt_cong->call_blk_rate, sngss7_rmt_cong->calls_allowed,
 						 (sngss7_rmt_cong->max_bkt_size - ((sngss7_rmt_cong->max_bkt_size * sngss7_rmt_cong->call_blk_rate)/100)));
 
 			if (sngss7_rmt_cong->calls_allowed < (sngss7_rmt_cong->max_bkt_size - ((sngss7_rmt_cong->max_bkt_size * sngss7_rmt_cong->call_blk_rate)/100))) {
@@ -506,7 +507,7 @@ ftdm_status_t sng_acc_handle_call_rate(ftdm_bool_t inc, ftdm_sngss7_rmt_cong_t *
 			}
 		} else {
 			if (sngss7_rmt_cong->calls_allowed) {
-				sngss7_rmt_cong->calls_allowed--;
+				/*sngss7_rmt_cong->calls_allowed--;*/
 				ret = FTDM_SUCCESS;
 				goto done;
 			} else {

@@ -167,7 +167,11 @@ void handle_route_t29(void *userdata)
 		SS7_DEBUG("NSG-ACC: Changing T29 Timer-Id to 0 on timer expiry\n");
 	}
 
-	SS7_DEBUG("NSG-ACC: Timer 29 expired for DPC[%d].....\n", sngss7_rmt_cong->dpc);
+	ftdm_mutex_lock(sngss7_rmt_cong->mutex);
+	sngss7_rmt_cong->calls_allowed = 0;
+	ftdm_mutex_unlock(sngss7_rmt_cong->mutex);
+
+	SS7_DEBUG("NSG-ACC: Timer 29 expired for DPC[%d]. Thus, resetting active calls.\n", sngss7_rmt_cong->dpc);
 
 end:
 	SS7_FUNC_TRACE_EXIT(__FUNCTION__);

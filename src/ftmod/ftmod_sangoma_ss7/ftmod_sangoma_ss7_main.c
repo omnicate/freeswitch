@@ -1657,8 +1657,6 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 			if (((sngss7_rmt_cong = sng_acc_get_cong_struct(ftdmchan)))) {
 				if (sngss7_rmt_cong->sngss7_rmtCongLvl) {
 					if (!sngss7_test_call_flag (sngss7_info, FLAG_PRI_CALL)) {
-						SS7_DEBUG_CHAN(ftdmchan,"NSG-ACC: Decrementing Number of active calls [%d] by 1 for congested DPC[%d]\n", 
-								(sngss7_rmt_cong->calls_allowed), sngss7_rmt_cong->dpc);
 						/* Check if the call is receivied during same congestion block rate the please fo ahead and
 						 * decrement the number of active calls by 1 */
 						if (FTDM_SUCCESS == sng_acc_rmv_active_call(ftdmchan)) {
@@ -1669,8 +1667,8 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 									(sngss7_rmt_cong->calls_allowed), sngss7_rmt_cong->dpc);
 						}
 					} else {
-						SS7_DEBUG_CHAN(ftdmchan,"NSG-ACC: Do not decrement number of allowed calls[%d] for priority calls on dpc[%d]\n", 
-								sngss7_rmt_cong->calls_allowed, sngss7_rmt_cong->dpc);
+						SS7_DEBUG_CHAN(ftdmchan,"NSG-ACC: Received Release for prirotity call on dpc[%d]\n",
+								sngss7_rmt_cong->dpc);
 					}
 				}
 			}
