@@ -1464,28 +1464,33 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 			break;
 		}
 
-		/* A possible scenario need to check afterwards */
-		val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_iam_priority");
-		if (!ftdm_strlen_zero(val)) {
-			if (!(atoi(val) ==  CAT_PRIOR)) {
-				SS7_DEBUG("Checking for congestion status\n");
-				status = ftdm_sangoma_ss7_get_congestion_status(ftdmchan);
+		if (g_ftdm_sngss7_data.cfg.sng_acc) {
+			/* A possible scenario need to check afterwards */
+			val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_iam_priority");
+			if (!ftdm_strlen_zero(val)) {
+				if (!(atoi(val) ==  CAT_PRIOR)) {
+					SS7_DEBUG("Checking for congestion status\n");
+					status = ftdm_sangoma_ss7_get_congestion_status(ftdmchan);
+				} else {
+					/* set the flag to indicate this is a priority call in case of congestion */
+					sngss7_set_call_flag (sngss7_info, FLAG_PRI_CALL);
+					SS7_DEBUG("This is a priority Call thus processing it normally\n");
+				}
 			} else {
-				/* set the flag to indicate this is a priority call in case of congestion */
-				sngss7_set_call_flag (sngss7_info, FLAG_PRI_CALL);
-				SS7_DEBUG("This is a priority Call thus processing it normally\n");
+				SS7_DEBUG("Since the call is not a priority one. Thus, checking for congestion status\n");
+				status = ftdm_sangoma_ss7_get_congestion_status(ftdmchan);
 			}
-		} else {
-			SS7_DEBUG("Since the call is not a priority one. Thus, checking for congestion status\n");
-			status = ftdm_sangoma_ss7_get_congestion_status(ftdmchan);
+			/* increased number of received calls */
+			ftdm_sangoma_ss7_received_call(ftdmchan);
+
+				if ((status == FTDM_BREAK) || (status == FTDM_SUCCESS)) {
+					if (status == FTDM_BREAK) {
+						state_flag = 0;
+					}
+					break;
+				}
 		}
 
-		if ((status == FTDM_BREAK) || (status == FTDM_SUCCESS)) {
-			if (status == FTDM_BREAK) {
-				state_flag = 0;
-			}
-			break;
-		}
 		SS7_DEBUG_CHAN(ftdmchan, "Sending outgoing call from \"%s\" to \"%s\" to LibSngSS7\n",
 					   ftdmchan->caller_data.ani.digits,
 					   ftdmchan->caller_data.dnis.digits);

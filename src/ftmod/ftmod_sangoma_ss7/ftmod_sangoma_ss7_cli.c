@@ -1688,8 +1688,10 @@ static ftdm_status_t handle_show_acc_status(ftdm_stream_handle_t *stream, char *
 			stream->write_function(stream, "\n***************************************************************************************************************************\n");
 			stream->write_function(stream, " \t\t\t\t\t For DPC = %d \t\t\t\t\t\n", sngss7_rmt_cong->dpc);
 			stream->write_function(stream, "***************************************************************************************************************************\n");
-			stream->write_function(stream, "| Congestion Level = %d |\n| Calls Active = %d |\n| Call Block Rate = %d% |\n| Total Number of Calls allowed = %d |\n",
+			stream->write_function(stream, "| Congestion Level = %d |\n| Average Calls/second = %d |\n| Calls Bucket Size = %d |\n| Calls Active = %d |\n| Call Block Rate = %d% |\n| Total Number of Calls allowed = %d |\n",
 					sngss7_rmt_cong->sngss7_rmtCongLvl,
+					sngss7_rmt_cong->avg_call_rate,
+					sngss7_rmt_cong->max_bkt_size,
 					sngss7_rmt_cong->calls_allowed,
 					sngss7_rmt_cong->call_blk_rate,
 					sngss7_rmt_cong->calls_passed);
@@ -1743,8 +1745,9 @@ static ftdm_status_t handle_show_acc_config(ftdm_stream_handle_t *stream, char *
 			stream->write_function(stream, " \t\t\t\t\t For DPC = %d \t\t\t\t\t\n", sngss7_rmt_cong->dpc);
 			stream->write_function(stream, "***************************************************************************************************************************\n");
 
-			stream->write_function(stream, "| Max Bucket Size = %d |\n| T29 Timer Value = %dmsec |\n| T30 Timer Value = %dmsec |\n",
+			stream->write_function(stream, "| Call Rate Timer = %d |\n| Max Bucket Size = %d |\n| T29 Timer Value = %dmsec |\n| T30 Timer Value = %dmsec |\n",
 					sngss7_rmt_cong->max_bkt_size,
+					sngss7_rmt_cong->acc_call_rate.beat,
 					sngss7_rmt_cong->t29.beat,
 					sngss7_rmt_cong->t30.beat);
 		}

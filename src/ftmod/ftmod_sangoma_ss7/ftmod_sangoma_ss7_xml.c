@@ -1744,6 +1744,9 @@ static int ftmod_ss7_parse_mtp_route(ftdm_conf_node_t *mtp_route, ftdm_span_t *s
 		} else if (!strcasecmp(parm->var, "dpc.t30")) {
 			mtpRoute.t30 = atoi(parm->val);
 			SS7_DEBUG("Found ACC t30 Timer = %d\n",mtpRoute.t30);
+		} else if (!strcasecmp(parm->var, "dpc.acc-call-rate")) {
+			mtpRoute.call_rate = atoi(parm->val);
+			SS7_DEBUG("Found ACC call rate Timer = %d\n",mtpRoute.call_rate);
 		} else {
 			SS7_WARN("Found an invalid parameter \"%s\"!Ignoring it.\n", parm->var);
 		}
@@ -3712,6 +3715,7 @@ static int ftmod_ss7_fill_in_acc_timer(sng_route_t *mtp3_route, ftdm_span_t *spa
 {
 	uint32_t t29_val = 0;
 	uint32_t t30_val = 0;
+	uint32_t acc_call_rate = 0;
 	ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong = NULL;
 	char dpc[MAX_DPC_CONFIGURED];
 	char *dpc_key=NULL;
@@ -3740,9 +3744,12 @@ static int ftmod_ss7_fill_in_acc_timer(sng_route_t *mtp3_route, ftdm_span_t *spa
 	sngss7_rmt_cong->call_blk_rate = 0;
 	sngss7_rmt_cong->calls_allowed = 0;
 	sngss7_rmt_cong->calls_passed = 0;
+	sngss7_rmt_cong->calls_received = 0;
 	sngss7_rmt_cong->calls_rejected = 0;
 	sngss7_rmt_cong->loc_calls_rejected = 0;
 	sngss7_rmt_cong->max_bkt_size = 0;
+	/* Gives the average calls per second when acc is enable */
+	sngss7_rmt_cong->avg_call_rate = 0;
 
 #ifdef ACC_TEST
 	sngss7_rmt_cong->iam_recv = 0;
@@ -3798,6 +3805,13 @@ static int ftmod_ss7_fill_in_acc_timer(sng_route_t *mtp3_route, ftdm_span_t *spa
 		t30_val	= mtp3_route->t30;
 	}
 
+	/* Timer for getting calls per call rate timer expiry */
+	if (mtp3_route->call_rate == 0) {
+		acc_call_rate = 50;
+	} else {
+		acc_call_rate = mtp3_route->call_rate;
+	}
+
 	/* prepare the timer structures */
 	sngss7_rmt_cong->t29.tmr_sched	= ((sngss7_span_data_t *)(span->signal_data))->sched;
 	sngss7_rmt_cong->t29.counter	= 1;
@@ -3812,11 +3826,18 @@ static int ftmod_ss7_fill_in_acc_timer(sng_route_t *mtp3_route, ftdm_span_t *spa
 	sngss7_rmt_cong->t30.callback	= handle_route_t30;
 	sngss7_rmt_cong->t30.sngss7_rmt_cong = sngss7_rmt_cong;
 
+	/* prepare the timer structures */
+	sngss7_rmt_cong->acc_call_rate.tmr_sched	= ((sngss7_span_data_t *)(span->signal_data))->sched;
+	sngss7_rmt_cong->acc_call_rate.counter		= 1;
+	sngss7_rmt_cong->acc_call_rate.beat		= (acc_call_rate) * 100; /* beat is in ms, acc_call_rate is in 100ms */
+	sngss7_rmt_cong->acc_call_rate.callback		= handle_route_acc_call_rate;
+	sngss7_rmt_cong->acc_call_rate.sngss7_rmt_cong 	= sngss7_rmt_cong;
+
 #ifdef ACC_TEST
 	/* prepare the timer structures */
 	sngss7_rmt_cong->acc_debug.tmr_sched	= ((sngss7_span_data_t *)(span->signal_data))->sched;
 	sngss7_rmt_cong->acc_debug.counter	= 1;
-	sngss7_rmt_cong->acc_debug.beat	= 10 * 100; /* beat is in ms, t30 is in 100ms */
+	sngss7_rmt_cong->acc_debug.beat		= 10 * 100; /* beat is in ms, t30 is in 100ms */
 	sngss7_rmt_cong->acc_debug.callback	= handle_route_acc_debug;
 	sngss7_rmt_cong->acc_debug.sngss7_rmt_cong = sngss7_rmt_cong;
 #endif
@@ -3861,6 +3882,23 @@ static int ftmod_ss7_fill_in_acc_timer(sng_route_t *mtp3_route, ftdm_span_t *spa
 	}
 #endif
 
+	/* if timer is not started, start ACC Call rate timer in order to calculate number of average calls
+	 * per socnd depending upon the number of call received with in call rate timer beat time */
+	if (sngss7_rmt_cong->acc_call_rate.tmr_id) {
+		SS7_DEBUG("NSG-ACC: ACC DEBUG Timer is already running for DPC[%d]\n", sngss7_rmt_cong->dpc);
+	} else {
+		SS7_DEBUG("NSG-ACC: Starting ACC DEBUG Timer for DPC[%d]\n", sngss7_rmt_cong->dpc);
+		if (ftdm_sched_timer (sngss7_rmt_cong->acc_call_rate.tmr_sched,
+					"acc_call_rate",
+					sngss7_rmt_cong->acc_call_rate.beat,
+					sngss7_rmt_cong->acc_call_rate.callback,
+					&sngss7_rmt_cong->acc_call_rate,
+					&sngss7_rmt_cong->acc_call_rate.tmr_id)) {
+			SS7_ERROR ("NSG-ACC: Unable to schedule ACC Call Rate Timer\n");
+		} else {
+			SS7_INFO("NSG-ACC: ACC Call Rate Timer started with timer-id[%d] for dpc[%d]\n", sngss7_rmt_cong->t29.tmr_id, sngss7_rmt_cong->dpc);
+		}
+	}
 	return FTDM_SUCCESS;
 }
 

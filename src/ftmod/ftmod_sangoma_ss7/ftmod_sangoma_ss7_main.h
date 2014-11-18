@@ -59,7 +59,6 @@
 
 /* DEFINES ********************************************************************/
 #define MAX_NAME_LEN			25
-#define ACC_TEST 			1
 
 #define MAX_CIC_LENGTH			5
 #define MAX_CIC_MAP_LENGTH		1000 
@@ -366,8 +365,9 @@ typedef struct sng_route {
 	uint32_t		t21;
 	uint32_t		t25;
 	uint32_t		t26;
-	uint32_t 		t29; /* Timers per DPC basis for Automatic Congestion Control */
-	uint32_t 		t30; /* Timers per DPC basis for Automatic Congestion Control */
+	uint32_t 		t29; 	   /* Timers per DPC basis for Automatic Congestion Control */
+	uint32_t 		t30; 	   /* Timers per DPC basis for Automatic Congestion Control */
+	uint32_t 		call_rate; /* Timers per DPC basis in order to calculate average CPS */
 	uint32_t		lsetSel;
 	uint32_t		slsLnk;
 	uint32_t		tfrReq;
@@ -618,7 +618,9 @@ typedef struct ftdm_sngss7_rmt_cong {
 	uint32_t       	  dpc;
 	uint32_t 	  call_blk_rate;
 	uint32_t 	  calls_allowed;
+	uint32_t 	  calls_received;
 	uint32_t 	  max_bkt_size;
+	uint32_t 	  avg_call_rate;			/* Get the average calls per second when ACC feature is enable */
 	/* Pushkar changes for counter */
 	uint32_t 	  calls_passed;
 	uint32_t 	  calls_rejected;
@@ -639,6 +641,7 @@ typedef struct ftdm_sngss7_rmt_cong {
 	/* changes end */
 	sng_acc_tmr_t     t29;
 	sng_acc_tmr_t     t30;
+	sng_acc_tmr_t     acc_call_rate;
 	ftdm_hash_t *ss7_active_calls;				/* Hash list of all active calls as per block rate */
 } ftdm_sngss7_rmt_cong_t;
 
@@ -1301,6 +1304,7 @@ void handle_isup_t10(void *userdata);
 void handle_isup_t39(void *userdata);
 void handle_route_t29(void *userdata);
 void handle_route_t30(void *userdata);
+void handle_route_acc_call_rate(void *userdata);
 #ifdef ACC_TEST
 void handle_route_acc_debug(void *userdata);
 #endif
@@ -1323,6 +1327,7 @@ ftdm_status_t sng_increment_acc_statistics(ftdm_channel_t *ftdmchan, uint32_t ac
 ftdm_sngss7_rmt_cong_t* sng_acc_get_cong_struct(ftdm_channel_t *ftdmchan);
 ftdm_status_t sng_acc_free_active_calls_hashlist(ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong);
 ftdm_status_t sng_acc_rmv_active_call(ftdm_channel_t *ftdmchan);
+ftdm_status_t ftdm_sangoma_ss7_received_call(ftdm_channel_t *ftdmchan);
 void sngss7_free_acc(void);
 
 #if JZ_BLO_TIMER

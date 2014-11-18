@@ -78,6 +78,8 @@ ftdm_status_t sng_increment_acc_statistics(ftdm_channel_t *ftdmchan, uint32_t ac
 ftdm_status_t sng_acc_active_call_insert(ftdm_channel_t *ftdmchan);
 /* Free active call hash list */
 ftdm_status_t sng_acc_free_active_calls_hashlist(ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong);
+/* Increment Call Received Counter */
+ftdm_status_t ftdm_sangoma_ss7_received_call(ftdm_channel_t *ftdmchan);
 
 /******************************************************************************/
 
@@ -328,8 +330,11 @@ ftdm_status_t ftdm_check_acc(sngss7_chan_data_t *sngss7_info, SiRelEvnt *siRelEv
 				} else {
 					sngss7_rmt_cong->call_blk_rate = g_ftdm_sngss7_data.cfg.accCfg.cnglvl2_red_rate;
 				}
-				ftdm_mutex_unlock(sngss7_rmt_cong->mutex);
 
+				/* change acc bucket size depending upon the call rate once congestion starts */
+				sngss7_rmt_cong->max_bkt_size = sngss7_rmt_cong->avg_call_rate;
+
+				ftdm_mutex_unlock(sngss7_rmt_cong->mutex);
 				SS7_INFO_CHAN(ftdmchan,"NSG-ACC: Entering to Congestion : Received ACL[%d] from remote dpc[%d], Congestion Rate[%d] \n",
 						sngss7_rmt_cong->sngss7_rmtCongLvl, sngss7_rmt_cong->dpc, sngss7_rmt_cong->call_blk_rate);
 			} else {
@@ -657,13 +662,13 @@ ftdm_status_t sng_prnt_acc_debug(uint32_t dpc)
 
 	if (!sngss7_rmt_cong->debug_idx) {
 		/* Print only first time */
-		fprintf(sngss7_rmt_cong->log_file_ptr, "RcvIAM, priRcvIAM, transIAM, priTransIAM, recvREL, acl1REL, acl2REL, accLvl, blkRate, blkCalls, allowCalls, Time\n");
+		fprintf(sngss7_rmt_cong->log_file_ptr, "MaxBktSize, RcvIAM, priRcvIAM, transIAM, priTransIAM, recvREL, acl1REL, acl2REL, accLvl, blkRate, blkCalls, allowCalls, Time\n");
 		sngss7_rmt_cong->debug_idx = 1;
 	}
 
 	time(&curr_time);
-	fprintf(sngss7_rmt_cong->log_file_ptr, "%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %s",
-			sngss7_rmt_cong->iam_recv, sngss7_rmt_cong->iam_pri_recv, sngss7_rmt_cong->iam_trans,
+	fprintf(sngss7_rmt_cong->log_file_ptr, "%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %s",
+			sngss7_rmt_cong->max_bkt_size, sngss7_rmt_cong->iam_recv, sngss7_rmt_cong->iam_pri_recv, sngss7_rmt_cong->iam_trans,
 			sngss7_rmt_cong->iam_pri_trans, sngss7_rmt_cong->rel_recv, sngss7_rmt_cong->rel_rcl1_recv,
 			sngss7_rmt_cong->rel_rcl2_recv, sngss7_rmt_cong->sngss7_rmtCongLvl, sngss7_rmt_cong->call_blk_rate,
 			sngss7_rmt_cong->calls_rejected, sngss7_rmt_cong->calls_passed, ctime(&curr_time));
@@ -880,6 +885,33 @@ ftdm_status_t sng_acc_free_active_calls_hashlist(ftdm_sngss7_rmt_cong_t *sngss7_
 	return FTDM_SUCCESS;
 }
 
+/* Increment the number of received call counter */
+ftdm_status_t ftdm_sangoma_ss7_received_call(ftdm_channel_t *ftdmchan)
+{
+	ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong = NULL;
+	sngss7_chan_data_t *sngss7_info = ftdmchan->call_data;
+
+	if (!g_ftdm_sngss7_data.cfg.sng_acc)
+		return FTDM_FAIL;
+
+	if (!(sngss7_rmt_cong = sng_acc_get_cong_struct(ftdmchan))) {
+		SS7_ERROR_CHAN(ftdmchan,"NSG-ACC: Could not find congestion structure for DPC[%d].\n", g_ftdm_sngss7_data.cfg.isupIntf[sngss7_info->circuit->infId].dpc);
+		return FTDM_FAIL;
+	}
+
+	/* If ACC call rate timer is running then only increase number of calls received */
+	ftdm_mutex_lock(sngss7_rmt_cong->mutex);
+
+	if (sngss7_rmt_cong->acc_call_rate.tmr_id) {
+		sngss7_rmt_cong->calls_received++;
+		SS7_DEBUG_CHAN(ftdmchan, "NSG-ACC: Number of calls received till now is %d for dpc[%d]\n",
+				sngss7_rmt_cong->calls_received, g_ftdm_sngss7_data.cfg.isupIntf[sngss7_info->circuit->infId].dpc);
+	}
+
+	ftdm_mutex_unlock(sngss7_rmt_cong->mutex);
+
+	return FTDM_SUCCESS;
+}
 /******************************************************************************/
 /* For Emacs:
 * Local Variables:

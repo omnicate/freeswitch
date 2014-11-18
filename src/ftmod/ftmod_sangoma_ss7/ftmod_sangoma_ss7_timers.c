@@ -277,6 +277,49 @@ end:
 	SS7_FUNC_TRACE_EXIT(__FUNCTION__);
 }
 
+/* This timer basically calculate the average calls per second each time timer experies and assign
+ * bucket size depending upon the number of calls received and timer expiry rate */
+void handle_route_acc_call_rate(void *userdata)
+{
+	sng_acc_tmr_t *timer_data = userdata;
+	uint32_t rate = 0;	/* in seconds */
+	ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong = timer_data->sngss7_rmt_cong;
+
+	if (!sngss7_rmt_cong) {
+		SS7_ERROR("NSG-ACC: Invalid ftdm_sngss7_rmt_cong_t \n");
+		return;
+	}
+
+	sngss7_rmt_cong->acc_call_rate.tmr_id = 0;
+	rate = sngss7_rmt_cong->acc_call_rate.beat/1000;
+
+	ftdm_mutex_lock(sngss7_rmt_cong->mutex);
+	if (sngss7_rmt_cong->calls_received) {
+		sngss7_rmt_cong->avg_call_rate = (sngss7_rmt_cong->calls_received/rate);
+		if (!sngss7_rmt_cong->avg_call_rate) {
+			sngss7_rmt_cong->avg_call_rate = sngss7_rmt_cong->calls_received;
+		}
+
+		if (sngss7_rmt_cong->sngss7_rmtCongLvl) {
+			sngss7_rmt_cong->max_bkt_size = sngss7_rmt_cong->avg_call_rate;
+		}
+
+		SS7_DEBUG("NSG-ACC: Calls received[%d], Timer rate[%d] & Revised Bucket Size[%d]\n", sngss7_rmt_cong->calls_received, rate, sngss7_rmt_cong->max_bkt_size);
+		sngss7_rmt_cong->calls_received = 0;
+	}
+	ftdm_mutex_unlock(sngss7_rmt_cong->mutex);
+
+	/* Restart timer */
+	if (ftdm_sched_timer (sngss7_rmt_cong->acc_call_rate.tmr_sched,
+				"acc_call_rate",
+				sngss7_rmt_cong->acc_call_rate.beat,
+				sngss7_rmt_cong->acc_call_rate.callback,
+				&sngss7_rmt_cong->acc_call_rate,
+				&sngss7_rmt_cong->acc_call_rate.tmr_id)) {
+		SS7_ERROR ("NSG-ACC: Unable to schedule ACC Call Rate Timer\n");
+	}
+}
+
 #ifdef ACC_TEST
 void handle_route_acc_debug(void *userdata)
 {

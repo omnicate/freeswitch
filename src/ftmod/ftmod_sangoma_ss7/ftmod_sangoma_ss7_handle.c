@@ -274,6 +274,9 @@ ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 						break;
 					}
 				}
+
+				/* Increased number of received calls */
+				ftdm_sangoma_ss7_received_call(ftdmchan);
 			}
 
 			/* fill in the TMR/bearer capability */
