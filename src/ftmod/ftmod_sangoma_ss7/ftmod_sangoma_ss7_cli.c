@@ -1745,9 +1745,9 @@ static ftdm_status_t handle_show_acc_config(ftdm_stream_handle_t *stream, char *
 			stream->write_function(stream, " \t\t\t\t\t For DPC = %d \t\t\t\t\t\n", sngss7_rmt_cong->dpc);
 			stream->write_function(stream, "***************************************************************************************************************************\n");
 
-			stream->write_function(stream, "| Call Rate Timer = %d |\n| Max Bucket Size = %d |\n| T29 Timer Value = %dmsec |\n| T30 Timer Value = %dmsec |\n",
-					sngss7_rmt_cong->max_bkt_size,
+			stream->write_function(stream, "| Call Rate Timer = %dmsec |\n| Max Bucket Size = %d |\n| T29 Timer Value = %dmsec |\n| T30 Timer Value = %dmsec |\n",
 					sngss7_rmt_cong->acc_call_rate.beat,
+					sngss7_rmt_cong->max_bkt_size,
 					sngss7_rmt_cong->t29.beat,
 					sngss7_rmt_cong->t30.beat);
 		}
