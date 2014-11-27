@@ -724,7 +724,7 @@ static switch_status_t channel_on_soft_execute(switch_core_session_t *session)
 static switch_status_t channel_send_dtmf(switch_core_session_t *session, const switch_dtmf_t *dtmf)
 {
 	private_t *tech_pvt = NULL;
-	char tmp[2] = "";
+	char tmp[100] = "";
 
 	tech_pvt = switch_core_session_get_private(session);
 	assert(tech_pvt != NULL);
@@ -732,10 +732,31 @@ static switch_status_t channel_send_dtmf(switch_core_session_t *session, const s
 	if (switch_test_flag(tech_pvt, TFLAG_DEAD)) {
 		switch_channel_hangup(switch_core_session_get_channel(session), SWITCH_CAUSE_LOSE_RACE);
 		return SWITCH_STATUS_FALSE;
-	} 
+	}
 
-	tmp[0] = dtmf->digit;
-	ftdm_channel_command(tech_pvt->ftdmchan, FTDM_COMMAND_SEND_DTMF, tmp);
+	if (dtmf->digit == 'X' || dtmf->digit == 'Q') {
+		int x = 0;
+		switch_channel_t *channel = switch_core_session_get_channel(session);
+		const char *regenerate_oob_tones = NULL;
+		assert(channel != NULL);
+		regenerate_oob_tones = switch_channel_get_variable(channel,"fax_regenerate_oob_tones");
+		// FAX out of band tones, force echo canceller to be disabled....
+		ftdm_channel_command(tech_pvt->ftdmchan, FTDM_COMMAND_DISABLE_ECHOCANCEL, &x);
+		ftdm_channel_command(tech_pvt->ftdmchan, FTDM_COMMAND_DISABLE_ECHOTRAIN, &x);
+		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "Echo Canceller Disabled\n");
+		// check if we're asked to regenerate them...
+		if (!zstr(regenerate_oob_tones) && switch_true(regenerate_oob_tones)) {
+			snprintf (tmp, sizeof(tmp),"(%u)%c",dtmf->duration,dtmf->digit);
+		} else {
+			tmp[0] = '\0';
+		}
+	} else {
+		tmp[0] = dtmf->digit;
+	}
+
+	if (tmp[0] != '\0') {
+		ftdm_channel_command(tech_pvt->ftdmchan, FTDM_COMMAND_SEND_DTMF, tmp);
+	}
 		
 	return SWITCH_STATUS_SUCCESS;
 }

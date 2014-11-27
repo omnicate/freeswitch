@@ -3114,6 +3114,11 @@ static ftdm_status_t ftdm_channel_done(ftdm_channel_t *ftdmchan)
 		ftdmchan->dtmf_off = FTDM_DEFAULT_DTMF_OFF;
 	}
 
+	if (ftdmchan->tone_session.debug_stream) {
+		fclose(ftdmchan->tone_session.debug_stream);
+		ftdmchan->tone_session.debug_stream = NULL;
+	}
+
 	memset(ftdmchan->dtmf_hangup_buf, '\0', ftdmchan->span->dtmf_hangup_len);
 
 	if (ftdm_test_flag(ftdmchan, FTDM_CHANNEL_TRANSCODE)) {
@@ -3184,10 +3189,14 @@ static ftdm_status_t ftdmchan_activate_dtmf_buffer(ftdm_channel_t *ftdmchan)
 	ftdmchan->tone_session.wait = ftdmchan->dtmf_off * (ftdmchan->tone_session.rate / 1000);
 	ftdmchan->tone_session.volume = -7;
 
-	/*
+#if 0
 	  ftdmchan->tone_session.debug = 1;
-	  ftdmchan->tone_session.debug_stream = stdout;
-	*/
+	  if (!ftdmchan->tone_session.debug_stream) {
+		char debug_fname[255];
+		snprintf(debug_fname, sizeof(debug_fname), "/tmp/teletone-%d-%d.io", ftdmchan->span_id, ftdmchan->chan_id);
+		ftdmchan->tone_session.debug_stream = fopen(debug_fname, "w");
+	  }
+#endif
 
 	return FTDM_SUCCESS;
 }
@@ -3913,6 +3922,12 @@ FT_DECLARE(ftdm_status_t) ftdm_channel_queue_dtmf(ftdm_channel_t *ftdmchan, cons
 	
 	ftdm_assert_return(ftdmchan != NULL, FTDM_FAIL, "No channel\n");
 
+	if (ftdmchan->state == FTDM_CHANNEL_STATE_COLLECT && !ftdmchan->forward_collect_digit_dtmf) {
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Dropping DTMF %s in state COLLECT (debug = %d, forward_collect_digit_dtmf = %d)\n",
+					  dtmf, ftdmchan->dtmfdbg.enabled, ftdmchan->forward_collect_digit_dtmf);
+		return FTDM_SUCCESS;
+	}
+
 	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Queuing DTMF %s (debug = %d)\n", dtmf, ftdmchan->dtmfdbg.enabled);
 
 	if (!ftdmchan->dtmfdbg.enabled) {
@@ -4128,8 +4143,30 @@ static ftdm_status_t handle_tone_generation(ftdm_channel_t *ftdmchan)
 					ftdm_insert_dtmf_pause(ftdmchan, FTDM_HALF_DTMF_PAUSE);
 				} else if (*cur == 'W') {
 					ftdm_insert_dtmf_pause(ftdmchan, FTDM_FULL_DTMF_PAUSE);
+				} else if (*cur =='(') {
+					//tone duration...
+					char *end = strchr(cur,')');
+					char duration[100];
+					int i = 0;
+					//eat the (
+					cur++;
+					if (!end) {
+						ftdm_log_chan(ftdmchan, FTDM_LOG_WARNING, "Failed parsing DTMF [%s] duration. Could not find duration end delimiter!\n",
+									  digits);
+						continue;
+					}
+					while (cur != end && i < 99) {
+						duration[i] = *cur;
+						cur++;
+						i++;
+					}
+					duration[i] = '\0';
+
+					ftdmchan->tone_session.duration = atoi(duration);
+					ftdmchan->tone_session.wait = 50 * (ftdmchan->tone_session.rate / 1000);
 				} else {
 					if ((wrote = teletone_mux_tones(&ftdmchan->tone_session, &ftdmchan->tone_session.TONES[(int)*cur]))) {
+						ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Generated %d samples for tone %c\n", wrote, *cur);
 						ftdm_buffer_write(ftdmchan->dtmf_buffer, ftdmchan->tone_session.buffer, wrote * 2);
 						x++;
 					} else {
@@ -5284,6 +5321,10 @@ FT_DECLARE(ftdm_status_t) ftdm_configure_span_channels(ftdm_span_t *span, const 
 		if (chan_config->prebuffer_size) {
 			span->channels[chan_index]->prebuffer_size_opt = chan_config->prebuffer_size;
 		}
+
+		if (chan_config->forward_collect_digit_dtmf) {
+			span->channels[chan_index]->forward_collect_digit_dtmf =  chan_config->forward_collect_digit_dtmf;
+		}
 	}
 
 	return FTDM_SUCCESS;
@@ -5524,6 +5565,9 @@ static ftdm_status_t load_config(int reload)
 					chan_config.iostats = FTDM_FALSE;
 				}
 				ftdm_log(FTDM_LOG_DEBUG, "Setting iostats to '%s'\n", chan_config.iostats ? "yes" : "no");
+			} else if (!strcasecmp(var, "forward_collect_digit_dtmf")) {
+				chan_config.forward_collect_digit_dtmf =  ftdm_true(val);
+				ftdm_log(FTDM_LOG_DEBUG, "Setting forward_collect_digit_dtmf to '%s'\n", chan_config.forward_collect_digit_dtmf ? "yes" : "no");
 			} else if (!strcasecmp(var, "group")) {
 				len = strlen(val);
 				if (len >= FTDM_MAX_NAME_STR_SZ) {

@@ -171,6 +171,10 @@ TELETONE_API(int) teletone_init_session(teletone_generation_session_t *ts, int b
 	teletone_set_tone(ts, '#', 941.0, 1477.0, 0.0);
 	teletone_set_tone(ts, 'D', 941.0, 1633.0, 0.0);
 	
+	/*FAX TONES*/
+	teletone_set_tone(ts, 'X', 2100.0, 0.0); //CED
+	teletone_set_tone(ts, 'Q', 1100.0, 0.0); //CNG
+
 	return 0;
 }
 
@@ -219,6 +223,12 @@ TELETONE_API(int) teletone_mux_tones(teletone_generation_session_t *ts, teletone
 	memset(tones, 0, sizeof(tones[0]) * TELETONE_MAX_TONES);
 	duration = (ts->tmp_duration > -1) ? ts->tmp_duration : ts->duration;
 	wait = (ts->tmp_wait > -1) ? ts->tmp_wait : ts->wait;
+
+	if (ts->debug_stream) {
+		for (i = 0; i < TELETONE_MAX_TONES && map->freqs[i]; i++) {
+			fprintf(ts->debug_stream, "muxing tone freq %f (%dms)\n", map->freqs[i], ts->duration / (ts->rate / 1000));
+		}
+	}
 
 	if (map->freqs[0] > 0) {
 		for (freqlen = 0; freqlen < TELETONE_MAX_TONES && map->freqs[freqlen]; freqlen++) {
