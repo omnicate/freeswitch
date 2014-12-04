@@ -2094,6 +2094,10 @@ ftdm_status_t handle_ucic(uint32_t suInstId, uint32_t spInstId, uint32_t circuit
 	for (curr = iter; curr; curr = ftdm_iterator_next(curr)) {
 		ftdm_channel_t *fchan = ftdm_iterator_current(curr);
 
+		if (ftdm_test_flag(fchan, FTDM_CHANNEL_OPEN)) {
+			continue;
+		}
+
 		ftdm_channel_lock(fchan);
 
 		cinfo = fchan->call_data;

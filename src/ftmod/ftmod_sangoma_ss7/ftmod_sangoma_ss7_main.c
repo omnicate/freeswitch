@@ -2410,9 +2410,9 @@ static ftdm_status_t ftdm_sangoma_ss7_start(ftdm_span_t * span)
 
 	SS7_INFO ("Starting span %s:%u.\n", span->name, span->span_id);
 
-    if (SNG_SS7_OPR_MODE_MTP2_API == g_ftdm_operating_mode) {
-        return sngss7_activate_mtp2api(span);
-    }
+	if (SNG_SS7_OPR_MODE_MTP2_API == g_ftdm_operating_mode) {
+		return sngss7_activate_mtp2api(span);
+	}
 
 	/* clear the monitor thread stop flag */
 	ftdm_clear_flag (span, FTDM_SPAN_STOP_THREAD);
@@ -2425,6 +2425,10 @@ static ftdm_status_t ftdm_sangoma_ss7_start(ftdm_span_t * span)
 	for (x = 1; x < (span->chan_count + 1); x++) {
 		/* extract the channel structure and sngss7 channel data */
 		ftdmchan = span->channels[x];
+
+		if (ftdm_test_flag(ftdmchan, FTDM_CHANNEL_OPEN)) {
+			continue;
+		}
 
 		/* if there is no sig mod data move along */
 		if (ftdmchan->call_data == NULL) continue;
@@ -2796,13 +2800,13 @@ static FIO_IO_LOAD_FUNCTION(ftdm_sangoma_ss7_io_init)
 
 /* START **********************************************************************/
 ftdm_module_t ftdm_module = {
-	"sangoma_ss7",					/*char name[256];				   */
-	ftdm_sangoma_ss7_io_init,		/*fio_io_load_t					 */
-	NULL,							/*fio_io_unload_t				   */
-	ftdm_sangoma_ss7_init,			/*fio_sig_load_t					*/
-	NULL,							/*fio_sig_configure_t			   */
-	ftdm_sangoma_ss7_unload,		/*fio_sig_unload_t				  */
-	ftdm_sangoma_ss7_span_config	/*fio_configure_span_signaling_t	*/
+	"sangoma_ss7",			/* char name[256]		  */
+	ftdm_sangoma_ss7_io_init,	/* fio_io_load_t 		  */
+	NULL,				/* fio_io_unload_t 		  */
+	ftdm_sangoma_ss7_init,		/* fio_sig_load_t 		  */
+	NULL,				/* fio_sig_configure_t		  */
+	ftdm_sangoma_ss7_unload,	/* fio_sig_unload_t		  */
+	ftdm_sangoma_ss7_span_config	/* fio_configure_span_signaling_t */
 };
 /******************************************************************************/
 

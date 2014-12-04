@@ -559,5 +559,44 @@ with the signaling protocols that you can run on top of your I/O interfaces.
 			<param name="context" value="default"/>
 		</span>
 	</pritap_spans>
+
+	<!--
+	     Sangoma Transparent Span/Channel configuration.
+	     Transparent Span/channel is required when we want to transparently relay the E1 data over IP and vice-versa.
+	     Network scenario -
+	     Telco  < == X channel data over E1 == >  Sangoma GW < == X channel data over IP == > Sangoma GW < == X channel data over E1 == > Telco
+	-->
+
+	<transparent_spans>
+		<!-- Optional parameters -->
+		<!--
+		     User may not need to change these parameters unless it is really required.
+		     Default value of chunk-size is set to 10 and echo-cancel mode is DISABLE
+		-->
+		<span_gen>
+			<param name="chunk-size" value="10"/>
+			<param name="echo-cancel" value="no"/>
+		</span_gen>
+
+		<span name="wp1">
+			<!-- Mandatory parameters -->
+			<!-- This part of configuration configures transparent channel and its
+		             respective dependent configurable parameters
+			-->
+			<channel id="1">
+				<!-- remote IP to send raw data present on transparent channel -->
+				<param name="remote-ip" value="xxx.xxx.xxx.xxx"/>
+
+				<!-- remote port -->
+				<param name="remote-port" value="wxyz"/>
+
+				<!-- local IP to received raw data present on socket -->
+				<param name="local-ip" value="yyy.yyy.yyy.yyy"/>
+
+				<!-- local port -->
+				<param name="local-port" value="xwyz"/>
+			</channel>
+		</span>
+	</transparent_spans>
 </configuration>
 

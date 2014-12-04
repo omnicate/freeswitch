@@ -1428,7 +1428,7 @@ int ftmod_ss7_isup_intf_config(int id)
 
 #endif
 #if (LSIV4 || LSIV5)
-	cfg.t.cfg.s.siIntfCb.lnkSelOpt				= LSI_LINSEK_CIC;		/* link select option */
+	cfg.t.cfg.s.siIntfCb.lnkSelOpt				= LSI_LNKSEL_CIC;		/* link select option */
 # if (SS7_ANS88 || SS7_ANS92 || SS7_ANS95 || SS7_BELL)
 	cfg.t.cfg.s.siIntfCb.lnkSelBits				= LSI_LNKSEL_8BITS;		/* number of bits for link selection */
 # endif

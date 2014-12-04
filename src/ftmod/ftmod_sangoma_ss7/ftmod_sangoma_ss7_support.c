@@ -1695,6 +1695,10 @@ ftdm_status_t check_if_rx_grs_started(ftdm_span_t *ftdmspan)
 	for (curr = iter; curr; curr = ftdm_iterator_next(curr)) {
 		ftdm_channel_t *fchan = ftdm_iterator_current(curr);
 
+		if (ftdm_test_flag(fchan, FTDM_CHANNEL_OPEN)) {
+			continue;
+		}
+
 		ftdm_channel_lock(fchan);
 	
 		cinfo = fchan->call_data;
@@ -1785,6 +1789,10 @@ ftdm_status_t check_if_rx_grs_processed(ftdm_span_t *ftdmspan)
 	iter = ftdm_span_get_chan_iterator(ftdmspan, NULL);
 	for (curr = iter; curr; curr = ftdm_iterator_next(curr)) {
 		ftdm_channel_t *fchan = ftdm_iterator_current(curr);
+
+		if (ftdm_test_flag(fchan, FTDM_CHANNEL_OPEN)) {
+			continue;
+		}
 
 		ftdm_channel_lock(fchan);
 
@@ -1923,6 +1931,10 @@ ftdm_status_t check_if_rx_gra_started(ftdm_span_t *ftdmspan)
 
 	for (curr = iter; curr; curr = ftdm_iterator_next(curr)) {
 		ftdm_channel_t *fchan = ftdm_iterator_current(curr);
+
+		if (ftdm_test_flag(fchan, FTDM_CHANNEL_OPEN)) {
+			continue;
+		}
 		ftdm_channel_lock(fchan);
 
 		cinfo = fchan->call_data;
@@ -2099,6 +2111,10 @@ ftdm_status_t process_span_ucic(ftdm_span_t *ftdmspan)
 	for (curr = iter; curr; curr = ftdm_iterator_next(curr)) {
 		ftdm_channel_t *fchan = ftdm_iterator_current(curr);
 
+		if (ftdm_test_flag(fchan, FTDM_CHANNEL_OPEN)) {
+			continue;
+		}
+
 		ftdm_channel_lock(fchan);
 
 		cinfo = fchan->call_data;
@@ -2177,6 +2193,10 @@ ftdm_status_t clear_rx_grs_data(sngss7_chan_data_t *sngss7_info)
 	for (curr = iter; curr; curr = ftdm_iterator_next(curr)) {
 		ftdm_channel_t *fchan = ftdm_iterator_current(curr);
 
+		if (ftdm_test_flag(fchan, FTDM_CHANNEL_OPEN)) {
+			continue;
+		}
+
 		ftdm_channel_lock(fchan);
 
 		cinfo = fchan->call_data;
@@ -2214,6 +2234,10 @@ ftdm_status_t clear_rx_gra_data(sngss7_chan_data_t *sngss7_info)
 	curr = iter;
 	for (curr = iter; curr; curr = ftdm_iterator_next(curr)) {
 		ftdm_channel_t *fchan = ftdm_iterator_current(curr);
+
+		if (ftdm_test_flag(fchan, FTDM_CHANNEL_OPEN)) {
+			continue;
+		}
 
 		ftdm_channel_lock(fchan);
 
@@ -2859,7 +2883,11 @@ ftdm_status_t check_for_reconfig_flag(ftdm_span_t *ftdmspan)
 	/**************************************************************************/
 		/* extract the channel structure and sngss7 channel data */
 		ftdmchan = ftdmspan->channels[x];
-		
+
+		if (ftdm_test_flag(ftdmchan, FTDM_CHANNEL_OPEN)) {
+			continue;
+		}
+
 		/* if the call data is NULL move on */
 		if (ftdmchan->call_data == NULL) {
 			SS7_WARN_CHAN(ftdmchan, "Found ftdmchan with no sig module data!%s\n", " ");
