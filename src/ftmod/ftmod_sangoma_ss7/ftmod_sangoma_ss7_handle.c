@@ -221,6 +221,7 @@ ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 			copy_redirgNum_from_sngss7(ftdmchan, &siConEvnt->redirgNum);
 			copy_redirgInfo_from_sngss7(ftdmchan, &siConEvnt->redirInfo);
 			copy_genNmb_from_sngss7(ftdmchan, &siConEvnt->genNmb);
+			copy_genNmbR_from_sngss7(ftdmchan, &siConEvnt->genNmbR);
 #ifdef SS7_UK
 			copy_presNmb_from_sngss7(ftdmchan, &siConEvnt->presntNum);
 			copy_nflxl_from_sngss7(ftdmchan, &siConEvnt->natFwdCalIndLnk);

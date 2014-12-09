@@ -896,6 +896,62 @@ ftdm_status_t copy_genNmb_from_sngss7(ftdm_channel_t *ftdmchan, SiGenNum *genNmb
 	return FTDM_SUCCESS;
 }
 
+ftdm_status_t copy_genNmbR_from_sngss7(ftdm_channel_t *ftdmchan, SiGenNum *genNmbR)
+{
+	char val[64];
+	sngss7_chan_data_t	*sngss7_info = ftdmchan->call_data;
+
+	memset(val, 0, sizeof(val));
+
+	if (genNmbR->eh.pres != PRSNT_NODEF || genNmbR->addrSig.pres != PRSNT_NODEF) {
+		ftdm_log_chan_msg(ftdmchan, FTDM_LOG_DEBUG, "No Generic Number (Repeated) available\n");
+		return FTDM_SUCCESS;
+	}
+
+	copy_tknStr_from_sngss7(genNmbR->addrSig, val, genNmbR->oddEven);
+
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Generic Number(Repeated):%s\n", val);
+	sngss7_add_var(sngss7_info, "ss7_gn_repeated_digits", val);
+
+	if (genNmbR->nmbQual.pres == PRSNT_NODEF) {
+		snprintf(val, sizeof(val), "%d", genNmbR->nmbQual.val);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Generic Number(Repeated)\"number qualifier\" \"%s\" \n", val);
+		sngss7_add_var(sngss7_info, "ss7_gn_repeated_numqual", val);
+	}
+
+	if (genNmbR->natAddrInd.pres == PRSNT_NODEF) {
+		snprintf(val, sizeof(val), "%d", genNmbR->natAddrInd.val);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Generic Number(Repeated) \"nature of address\" \"%s\"\n", val);
+		sngss7_add_var(sngss7_info, "ss7_gn_repeated_nadi", val);
+	}
+
+	if (genNmbR->scrnInd.pres == PRSNT_NODEF) {
+		snprintf(val, sizeof(val), "%d", genNmbR->scrnInd.val);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Generic Number(Repeated) \"screening indicator\" \"%s\"\n", val);
+		sngss7_add_var(sngss7_info, "ss7_gn_repeated_screen_ind", val);
+	}
+	
+	if (genNmbR->presRest.pres == PRSNT_NODEF) {
+		snprintf(val, sizeof(val), "%d", genNmbR->presRest.val);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Generic Number(Repeated) \"presentation indicator\" \"%s\"\n", val);
+		sngss7_add_var(sngss7_info, "ss7_gn_repeated_pres_ind", val);
+	}
+
+	if (genNmbR->numPlan.pres == PRSNT_NODEF) {
+		snprintf(val, sizeof(val), "%d", genNmbR->numPlan.val);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Generic Number(Repeated) \"numbering plan\" \"%s\"\n", val);
+		sngss7_add_var(sngss7_info, "ss7_gn_repeated_npi", val);
+	}
+
+	if (genNmbR->niInd.pres == PRSNT_NODEF) {
+		snprintf(val, sizeof(val), "%d", genNmbR->niInd.val);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Generic Number(Repeated) \"number incomplete indicator\" \"%s\"\n", val);
+		sngss7_add_var(sngss7_info, "ss7_gn_repeated_num_inc_ind", val);
+	}
+	
+	return FTDM_SUCCESS;
+}
+
 #ifdef SS7_UK
 ftdm_status_t copy_presNmb_from_sngss7(ftdm_channel_t *ftdmchan, SiPresentNum *presNmb)
 {
