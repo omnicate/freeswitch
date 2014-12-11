@@ -447,12 +447,14 @@ ftdm_status_t copy_nflxl_from_sngss7(ftdm_channel_t *ftdmchan, SiNatFwdCalIndLnk
 	}
 
 	if (nflxl->rci.pres == PRSNT_NODEF) {
+		nflxl->rci.val = 128;
 		snprintf(val, sizeof(val), "%d", nflxl->rci.val);
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "SS7-UK: LxL RCI %s\n", val);
 		sngss7_add_var(sngss7_info, "ss7_fci_lxl_rci", val);
 	}
 
 	if (nflxl->isi.pres == PRSNT_NODEF) {
+		nflxl->isi.val = 2;
 		snprintf(val, sizeof(val), "%d", nflxl->isi.val);
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "SS7-UK: LxL ISI %s\n", val);
 		sngss7_add_var(sngss7_info, "ss7_fci_lxl_isi", val);
@@ -476,7 +478,8 @@ ftdm_status_t copy_nflxl_to_sngss7(ftdm_channel_t *ftdmchan, SiNatFwdCalIndLnk *
                 nflxl->rci.val = atoi(val);
                 ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "SS7-UK: ss7_fci_lxl_rci[%d]\n",nflxl->rci.val);
         } else {
-                nflxl->rci.val = 2; 
+                nflxl->rci.val = 128;
+                ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "SS7-UK: Set default value to ss7_fci_lxl_rci[%d]\n",nflxl->rci.val);
         }    
 
         val = NULL;
@@ -486,7 +489,8 @@ ftdm_status_t copy_nflxl_to_sngss7(ftdm_channel_t *ftdmchan, SiNatFwdCalIndLnk *
                 nflxl->isi.val = atoi(val);
                 ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "SS7-UK: ss7_fci_lxl_isi[%d]\n",nflxl->isi.val);
         } else {
-                nflxl->isi.val = 1;
+                nflxl->isi.val = 2;
+                ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "SS7-UK: Set default value to ss7_fci_lxl_isi[%d]\n",nflxl->isi.val);
         }
 
         return FTDM_SUCCESS;
@@ -1491,12 +1495,20 @@ ftdm_status_t copy_ocn_to_sngss7(ftdm_channel_t *ftdmchan, SiOrigCdNum *origCdNu
 
 ftdm_status_t copy_cgPtyCat_to_sngss7(ftdm_channel_t *ftdmchan, SiCgPtyCat *cgPtyCat)
 {
+	const char *val = NULL;
 	ftdm_caller_data_t *caller_data = &ftdmchan->caller_data;
 	
-	cgPtyCat->eh.pres 			= PRSNT_NODEF;
+	cgPtyCat->eh.pres 		= PRSNT_NODEF;
 	cgPtyCat->cgPtyCat.pres 	= PRSNT_NODEF;
 	
-	cgPtyCat->cgPtyCat.val = get_trillium_val(cpc_codes, caller_data->cpc, CAT_ORD);
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_iam_priority");
+        if (!ftdm_strlen_zero(val)) {
+		/* since val has the trillium specific values thus assigning it directly */
+		cgPtyCat->cgPtyCat.val = atoi(val);
+	} else {
+		cgPtyCat->cgPtyCat.val = get_trillium_val(cpc_codes, caller_data->cpc, CAT_ORD);
+	}
+
 	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Calling Party Category:0x%x\n",cgPtyCat->cgPtyCat.val);
 	return FTDM_SUCCESS;	
 }

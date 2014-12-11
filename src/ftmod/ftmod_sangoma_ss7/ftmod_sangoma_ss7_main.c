@@ -51,10 +51,7 @@ static sng_isup_event_interface_t sng_event;
 static ftdm_io_interface_t g_ftdm_sngss7_interface;
 ftdm_sngss7_data_t g_ftdm_sngss7_data;
 ftdm_sngss7_opr_mode g_ftdm_operating_mode;
-ftdm_sngss7_call_queue_t sngss7_queue;			/* ACC Call queue */
 ftdm_sngss7_call_reject_queue_t  sngss7_reject_queue;	/* Call reject queue */
-ftdm_hash_t *ss7_rmtcong_lst;				/* Hash list of all dpc to store congestion values */
-int g_num_threads = 0;					/* number of threads running */
 
 /******************************************************************************/
 
@@ -63,8 +60,7 @@ static void *ftdm_sangoma_ss7_run (ftdm_thread_t * me, void *obj);
 static void ftdm_sangoma_ss7_process_peer_stack_event (ftdm_channel_t *ftdmchan, sngss7_event_data_t *sngss7_event);
 
 static ftdm_status_t ftdm_sangoma_ss7_start (ftdm_span_t * span);
-static void sngss7_free_acc_hashlist(void);
-static void sngss7_free_acc(void);
+static void ftdm_sangoma_ss7_cleanup(ftdm_span_t *ftdmspan);
 /******************************************************************************/
 
 
@@ -373,11 +369,10 @@ static void *app_sngss7_call_queue_handler(ftdm_thread_t * me, void *obj)
 {
 	ftdm_channel_t *ftdmchan = NULL;
 	sngss7_chan_data_t *sngss7_info = NULL;
-	ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong = NULL;
-	char dpc[MAX_DPC_CONFIGURED];
 
-	memset(dpc, 0 , sizeof(dpc));
-
+	/*  When there is a Local/Remote congestion then some delay is required
+	 *  in order to complete thread processing to set channel state properly
+	 *  and the reject calls with the appropriate hangup cause code */
 	while (ftdm_running()) {
 		ftdmchan = NULL;
 
@@ -386,150 +381,22 @@ static void *app_sngss7_call_queue_handler(ftdm_thread_t * me, void *obj)
 		while ((ftdmchan = ftdm_queue_dequeue(sngss7_reject_queue.sngss7_call_rej_queue))) {
 			sngss7_info = ftdmchan->call_data;
 			SS7_DEBUG_CHAN(ftdmchan, "Rejecting Call on span %d and chan %d... Due to congestion\n", ftdmchan->span_id, ftdmchan->chan_id);
-			sngss7_send_signal(sngss7_info, FTDM_SIGEVENT_STOP);
-		}
-
-		ftdmchan = NULL;
-		/* Dequeue events based on dequeue rate as configured by user */
-		ftdm_sleep(sngss7_queue.call_dequeue_rate);
-
-		/* Dequeue message form ss7 call queue and start processing the dequeued call */
-		if (!(ftdmchan = ftdm_queue_dequeue(sngss7_queue.sngss7_call_queue))) {
-			continue;
-		}
-
-		sngss7_info = ftdmchan->call_data;
-		sprintf(dpc, "%d", g_ftdm_sngss7_data.cfg.isupIntf[sngss7_info->circuit->infId].dpc);
-		sngss7_rmt_cong = hashtable_search(ss7_rmtcong_lst, (void *)dpc);
-
-		/* * Check if the dequeued message is w.r.t. DPC which is congested then proceed to IAM
-		 * * If the dequeued call DPC is not present in HASH list or the DPC is not congested then drop the call as it may be because of some other reason */
-		if ((sngss7_rmt_cong) && (sngss7_rmt_cong->sngss7_rmtCongLvl) && (sngss7_rmt_cong->dpc == g_ftdm_sngss7_data.cfg.isupIntf[sngss7_info->circuit->infId].dpc)) {
-			if (ftdmchan->state == FTDM_CHANNEL_STATE_DIALING) {
-				SS7_DEBUG_CHAN(ftdmchan, "Sending outgoing call from \"%s\" to \"%s\" to LibSngSS7\n",
-						ftdmchan->caller_data.ani.digits,
-						ftdmchan->caller_data.dnis.digits);
-
-				/*call sangoma_ss7_dial to make outgoing call */
-				ft_to_sngss7_iam(ftdmchan);
-
-				ftdm_channel_complete_state(ftdmchan);
+			/* in case of native bridge */
+			if (ftdm_test_flag(ftdmchan, FTDM_CHANNEL_NATIVE_SIGBRIDGE)) {
+				SS7_DEBUG_CHAN(ftdmchan, "Changing span[%d] chan[%d] state to Terminating in Native Bridge\n", ftdmchan->span_id, ftdmchan->chan_id);
+				ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_TERMINATING);
 			} else {
-				SS7_DEBUG_CHAN(ftdmchan, "Wrong call state [%d] for span[%d] and chan [%d]\n", ftdmchan->state,ftdmchan->span_id, ftdmchan->chan_id);
-			}
-		} else {
-			if (ftdm_queue_enqueue(sngss7_queue.sngss7_call_queue, ftdmchan)) {
-				SS7_DEBUG_CHAN(ftdmchan, "Unable to queue as Call Congestion queue is already full%s\n", "");
-				ftdmchan->caller_data.hangup_cause = FTDM_CAUSE_SWITCH_CONGESTION;
-				sngss7_set_call_flag (sngss7_info, FLAG_CONG_REL);
-				ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_HANGUP);
+				SS7_DEBUG_CHAN(ftdmchan, "Changing span[%d] chan[%d] state to Hangup \n", ftdmchan->span_id, ftdmchan->chan_id);
+				sngss7_send_signal(sngss7_info, FTDM_SIGEVENT_STOP);
+				/*ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_HANGUP);*/
 			}
 		}
-
+		ftdm_sleep(100);
 	}
 
 	return NULL;
 }
 
-/******************************************************************************/
-/* Iterate through ACC hash list and remove hash list members one by one */
-static void sngss7_free_acc_hashlist()
-{
-	ftdm_hash_iterator_t *i = NULL;
-	const void *key = NULL;
-	void *val = NULL;
-	ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong = NULL;
-
-
-	for (i = hashtable_first(ss7_rmtcong_lst); i; i = hashtable_next(i)) {
-		hashtable_this(i, &key, NULL, &val);
-		if (!key || !val) {
-			break;
-		}
-		sngss7_rmt_cong = (ftdm_sngss7_rmt_cong_t*)val;
-		ftdm_safe_free(sngss7_rmt_cong);
-	}
-}
-
-/******************************************************************************/
-/* Free all the parameter as allocated w.r.t. ACC Feature */
-static void sngss7_free_acc()
-{
-	ftdm_sngss7_call_queue_t 	 *call_queue = NULL;
-	ftdm_sngss7_call_reject_queue_t  *reject_queue = NULL;
-	int max_wait = 20;
-
-	while (g_num_threads && (max_wait-- > 0)) {
-		fprintf(stderr, "Waiting for all threads to finish (%d)\n", g_num_threads);
-		ftdm_sleep(100);
-	}
-
-	call_queue = &sngss7_queue;
-	reject_queue = &sngss7_reject_queue;
-	ftdm_queue_destroy(&call_queue->sngss7_call_queue);
-	ftdm_queue_destroy(&reject_queue->sngss7_call_rej_queue);
-
-	call_queue = NULL;
-	reject_queue = NULL;
-
-	/* free all the members of ACC hash list */
-	sngss7_free_acc_hashlist();
-	/* delete the hash table */
-	hashtable_destroy(ss7_rmtcong_lst);
-	ss7_rmtcong_lst = NULL;
-}
-
-/******************************************************************************/
-/* Get Local/Remote Congestion and queue or Release call accordingly */
-ftdm_status_t ftdm_sangoma_ss7_get_congestion_status(ftdm_channel_t *ftdmchan)
-{
-	int cpu_usage = 0;
-	ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong = NULL;
-	char dpc[MAX_DPC_CONFIGURED];
-	sngss7_chan_data_t *sngss7_info = ftdmchan->call_data;
-
-	memset(dpc, 0 , sizeof(dpc));
-	if (g_ftdm_sngss7_data.cfg.sng_acc) {
-		cpu_usage = ftdm_get_cpu_usage();
-
-		/* check if cpu usgae is more than that it is expected by user */
-		if (cpu_usage > g_ftdm_sngss7_data.cfg.max_cpu_usage) {
-			SS7_DEBUG_CHAN(ftdmchan, "Hanging up call due to High cpu usage of [%d] against configured cpu limit[%d]!\n",
-					cpu_usage, g_ftdm_sngss7_data.cfg.max_cpu_usage);
-			ftdmchan->caller_data.hangup_cause = FTDM_CAUSE_SWITCH_CONGESTION;
-			sngss7_set_call_flag (sngss7_info, FLAG_CONG_REL);
-			if (ftdm_queue_enqueue(sngss7_reject_queue.sngss7_call_rej_queue, ftdmchan)) {
-				/* end the call */
-				SS7_DEBUG_CHAN(ftdmchan, "Unable to queue as Call reject congestion queue is already full%s\n", "");
-				ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_HANGUP);
-				return FTDM_BREAK;
-			}
-			return FTDM_SUCCESS;
-		}
-		sprintf(dpc, "%d", g_ftdm_sngss7_data.cfg.isupIntf[sngss7_info->circuit->infId].dpc);
-		sngss7_rmt_cong = hashtable_search(ss7_rmtcong_lst, (void *)dpc);
-
-		if (!sngss7_rmt_cong) {
-			SS7_INFO_CHAN(ftdmchan,"DPC[%d] is not preset in ACC hash list\n", g_ftdm_sngss7_data.cfg.isupIntf[sngss7_info->circuit->infId].dpc);
-			return FTDM_FAIL;
-		}
-
-		/* If remote exchange is congested then queue the call */
-		if ((sngss7_rmt_cong->sngss7_rmtCongLvl) && (sngss7_rmt_cong->dpc == g_ftdm_sngss7_data.cfg.isupIntf[sngss7_info->circuit->infId].dpc)) {
-			SS7_DEBUG_CHAN(ftdmchan, "Remote congestion detected at dpc[%d]..queuing the call..\n",sngss7_rmt_cong->dpc);
-			if (ftdm_queue_enqueue(sngss7_queue.sngss7_call_queue, ftdmchan)) {
-				SS7_DEBUG_CHAN(ftdmchan, "Unable to queue as Call Congestion queue is already full%s\n", "");
-				ftdmchan->caller_data.hangup_cause = FTDM_CAUSE_SWITCH_CONGESTION;
-				sngss7_set_call_flag (sngss7_info, FLAG_CONG_REL);
-				ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_HANGUP);
-				return FTDM_BREAK;
-			}
-			return FTDM_SUCCESS;
-		}
-	}
-
-	return FTDM_FAIL;
-}
 
 static void check_span_oob_events(ftdm_span_t *ftdmspan)
 {
@@ -744,22 +611,20 @@ static void *ftdm_sangoma_ss7_run(ftdm_thread_t * me, void *obj)
 	}
 ftdm_sangoma_ss7_stop:
 
-	/* Stop all threads */
-	ftdm_sleep(1000);
-
-	if (g_ftdm_sngss7_data.cfg.sng_acc) {
-		sngss7_free_acc();
-	}
-
-	/* clear the IN_THREAD flag so that we know the thread is done */
-	ftdm_clear_flag (ftdmspan, FTDM_SPAN_IN_THREAD);
-
-	ftdm_log (FTDM_LOG_INFO,"ftmod_sangoma_ss7 monitor thread for span=%u stopping.\n",ftdmspan->span_id);
-
+	ftdm_sangoma_ss7_cleanup(ftdmspan);
 	return NULL;
 
 ftdm_sangoma_ss7_run_exit:
 
+	ftdm_sangoma_ss7_cleanup(ftdmspan);
+	ftdm_sangoma_ss7_stop (ftdmspan);
+
+	return NULL;
+}
+
+/* Perform SS7 Threads clean up */
+static void ftdm_sangoma_ss7_cleanup(ftdm_span_t* ftdmspan)
+{
 	/* Stop all threads */
 	ftdm_sleep(1000);
 
@@ -771,10 +636,6 @@ ftdm_sangoma_ss7_run_exit:
 	ftdm_clear_flag (ftdmspan, FTDM_SPAN_IN_THREAD);
 
 	ftdm_log (FTDM_LOG_INFO,"ftmod_sangoma_ss7 monitor thread for span=%u stopping due to error.\n",ftdmspan->span_id);
-
-	ftdm_sangoma_ss7_stop (ftdmspan);
-
-	return NULL;
 }
 
 /*
@@ -1164,6 +1025,7 @@ static void ftdm_sangoma_ss7_process_peer_stack_event (ftdm_channel_t *ftdmchan,
 	case (SNGSS7_REL_IND_EVENT):
 	        SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Tx peer REL cause=%d\n", sngss7_info->circuit->cic, sngss7_event->event.siRelEvnt.causeDgn.causeVal.val);
 
+		handle_peer_rel_ind(sngss7_event->suInstId, sngss7_event->spInstId, sngss7_event->circuit,  &sngss7_event->event.siRelEvnt);
 		//handle_rel_ind(sngss7_event->suInstId, sngss7_event->spInstId, sngss7_event->circuit,  &sngss7_event->event.siRelEvnt);
 		sng_cc_rel_request (1,
 					sngss7_info->suInstId,
@@ -1283,9 +1145,11 @@ static ftdm_status_t ftdm_sangoma_ss7_native_bridge_state_change(ftdm_channel_t 
 static ftdm_status_t ftdm_sangoma_ss7_native_bridge_state_change(ftdm_channel_t *ftdmchan)
 {
 	sngss7_chan_data_t *sngss7_info = ftdmchan->call_data;
+	ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong = NULL;
 
 	ftdm_channel_complete_state(ftdmchan);
 
+	SS7_DEBUG_CHAN(ftdmchan, "DEBUG: peer state change to %s\n", ftdm_channel_state2str(ftdmchan->state));
 	switch (ftdmchan->state) {
 
 	case FTDM_CHANNEL_STATE_DOWN:
@@ -1295,6 +1159,7 @@ static ftdm_status_t ftdm_sangoma_ss7_native_bridge_state_change(ftdm_channel_t 
 			sngss7_clear_ckt_flag(sngss7_info, FLAG_T6_CANCELED);
 			sngss7_clear_ckt_flag (sngss7_info, FLAG_SENT_ACM);
 			sngss7_clear_ckt_flag (sngss7_info, FLAG_SENT_CPG);
+			sngss7_clear_call_flag (sngss7_info, FLAG_CONG_REL);
 
 			sngss7_flush_queue(sngss7_info->event_queue);
 			sngss7_info->peer_event_transfer_cnt = 0;
@@ -1327,7 +1192,24 @@ static ftdm_status_t ftdm_sangoma_ss7_native_bridge_state_change(ftdm_channel_t 
 
 	case FTDM_CHANNEL_STATE_HANGUP:
 		{
-			ft_to_sngss7_rlc(ftdmchan);
+			SS7_DEBUG_CHAN(ftdmchan, "DEBUG:  STATE Hangup received peer state change to %s\n", ftdm_channel_state2str(ftdmchan->state));
+
+			/* If this is not rejected call then only decrement the number of active calls */
+			if (!sngss7_test_call_flag (sngss7_info, FLAG_CONG_REL)) {
+				if (((sngss7_rmt_cong = sng_acc_get_cong_struct(ftdmchan)))) {
+					if (sngss7_rmt_cong->sngss7_rmtCongLvl) {
+						SS7_DEBUG_CHAN(ftdmchan,"Decrementing Number of active calls for congested DPC[%d]\n", sngss7_rmt_cong->dpc);
+						/* Decrease number of active calls by 1 for the respective congested DPC */
+						sng_acc_handle_call_rate(FTDM_FALSE, sngss7_rmt_cong, ftdmchan);
+					}
+				}
+			}
+
+			if (sngss7_test_call_flag (sngss7_info, FLAG_CONG_REL)) {
+				SS7_DEBUG_CHAN(ftdmchan,"Hanging up due to congestion %s. Thus, sending release\n","");
+			} else {
+				ft_to_sngss7_rlc(ftdmchan);
+			}
 			ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_DOWN);
 		}
 		break;
@@ -1346,7 +1228,9 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 	sng_isup_inf_t *isup_intf = NULL;
 	int state_flag = 1; 
 	int i = 0;
+	const char *val = NULL;
 	ftdm_status_t status = FTDM_FAIL;
+	ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong = NULL;
 
 	SS7_DEBUG_CHAN(ftdmchan, "ftmod_sangoma_ss7 processing state %s: ckt=0x%X, blk=0x%X, call=0x%X\n",
 						ftdm_channel_state2str (ftdmchan->state),
@@ -1401,7 +1285,12 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 		{
 			SS7_DEBUG_CHAN(ftdmchan, "Received the end of pulsing character %s\n", "");
 
-			if (!sngss7_test_ckt_flag(sngss7_info, FLAG_FULL_NUMBER)) {
+			if (1) {
+				SS7_DEBUG("Received the end of pulsing character in native bridge thus donot remove it from destination number\n", "");
+				if (!sngss7_test_ckt_flag(sngss7_info, FLAG_FULL_NUMBER)) {
+					sngss7_set_ckt_flag(sngss7_info, FLAG_FULL_NUMBER);
+				}
+			} else if (!sngss7_test_ckt_flag(sngss7_info, FLAG_FULL_NUMBER)) {
 				/* remove the ST */
 				ftdmchan->caller_data.dnis.digits[i-1] = '\0';
 				sngss7_set_ckt_flag(sngss7_info, FLAG_FULL_NUMBER);
@@ -1564,7 +1453,6 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 					ftdmchan->caller_data.ani.digits,
 					ftdmchan->caller_data.dnis.digits);
 
-
 		/* we have enough information to inform FTDM of the call */
 		sngss7_send_signal(sngss7_info, FTDM_SIGEVENT_START);
 
@@ -1577,13 +1465,31 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 			break;
 		}
 
-		status = ftdm_sangoma_ss7_get_congestion_status(ftdmchan);
-
-		if ((status == FTDM_BREAK) || (status == FTDM_SUCCESS)) {
-			if (status == FTDM_BREAK) {
-				state_flag = 0;
+		if (g_ftdm_sngss7_data.cfg.sng_acc) {
+			/* A possible scenario need to check afterwards */
+			val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_iam_priority");
+			if (!ftdm_strlen_zero(val)) {
+				if (!(atoi(val) ==  CAT_PRIOR)) {
+					SS7_DEBUG("Checking for congestion status\n");
+					status = ftdm_sangoma_ss7_get_congestion_status(ftdmchan);
+				} else {
+					/* set the flag to indicate this is a priority call in case of congestion */
+					sngss7_set_call_flag (sngss7_info, FLAG_PRI_CALL);
+					SS7_DEBUG("This is a priority Call thus processing it normally\n");
+				}
+			} else {
+				SS7_DEBUG("Since the call is not a priority one. Thus, checking for congestion status\n");
+				status = ftdm_sangoma_ss7_get_congestion_status(ftdmchan);
 			}
-			break;
+			/* increased number of received calls */
+			ftdm_sangoma_ss7_received_call(ftdmchan);
+
+				if ((status == FTDM_BREAK) || (status == FTDM_SUCCESS)) {
+					if (status == FTDM_BREAK) {
+						state_flag = 0;
+					}
+					break;
+				}
 		}
 
 		SS7_DEBUG_CHAN(ftdmchan, "Sending outgoing call from \"%s\" to \"%s\" to LibSngSS7\n",
@@ -1746,6 +1652,34 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 			break;
 		}
 
+		/* Decrement the value of allowed calls in case of congestion if and only if
+		 * 1) It is not a rejected call and also not a normal call i.e. call before congestion is started
+		 * 2) It is not a priority call
+		 * 3) And there is a congestion present on the dpc from which REL is received */
+
+		/* We started incrementing leaky bucket counter after we detect congestion, hence decrement counters for the calls
+		 * which has been received after congestion only i.e. FLAG_NRML_CALL is false */
+		if ((!sngss7_test_call_flag (sngss7_info, FLAG_CONG_REL)) && (!sngss7_test_call_flag (sngss7_info, FLAG_NRML_CALL))) {
+			if (((sngss7_rmt_cong = sng_acc_get_cong_struct(ftdmchan)))) {
+				if (sngss7_rmt_cong->sngss7_rmtCongLvl) {
+					if (!sngss7_test_call_flag (sngss7_info, FLAG_PRI_CALL)) {
+						/* Check if the call is receivied during same congestion block rate the please fo ahead and
+						 * decrement the number of active calls by 1 */
+						if (FTDM_SUCCESS == sng_acc_rmv_active_call(ftdmchan)) {
+							/* Decrease number of active calls by 1 for the respective congested DPC */
+							sng_acc_handle_call_rate(FTDM_FALSE, sngss7_rmt_cong, ftdmchan);
+						} else {
+							SS7_DEBUG_CHAN(ftdmchan,"NSG-ACC: Not found in call list, hence not decrementing active calls[%d] for dpc[%d]\n",
+									(sngss7_rmt_cong->calls_allowed), sngss7_rmt_cong->dpc);
+						}
+					} else {
+						SS7_DEBUG_CHAN(ftdmchan,"NSG-ACC: Received Release for prirotity call on dpc[%d]\n",
+								sngss7_rmt_cong->dpc);
+					}
+				}
+			}
+		}
+
 		/* check for remote hangup flag */
 		if (sngss7_test_ckt_flag (sngss7_info, FLAG_REMOTE_REL)) {
 			/* remote release ...do nothing here */
@@ -1816,7 +1750,7 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 
 			SS7_DEBUG_CHAN(ftdmchan,"Completing remotely requested hangup!%s\n", "");
 		} else if (sngss7_test_ckt_flag (sngss7_info, FLAG_LOCAL_REL)) {
-			
+
 			/* if this hang up is do to a rx RESET we need to sit here till the RSP arrives */
 			if (sngss7_test_ckt_flag (sngss7_info, FLAG_RESET_TX_RSP)) {
 				/* go to the down state as we have already received RSC-RLC */
@@ -1833,6 +1767,7 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 		} else if (sngss7_test_call_flag (sngss7_info, FLAG_CONG_REL)) {
 			SS7_DEBUG_CHAN(ftdmchan,"Completing requested hangup due to congestion!%s\n", "");
 			state_flag = 0;
+			ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_DOWN);
 		} else {
 			SS7_DEBUG_CHAN(ftdmchan,"Completing requested hangup for unknown reason!%s\n", "");
 			if (sngss7_channel_status_clear(sngss7_info)) {
@@ -1944,6 +1879,7 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 		sngss7_info->spInstId = 0;
 		sngss7_info->globalFlg = 0;
 		sngss7_info->spId = 0;
+		sngss7_info->priority = FTDM_FALSE;
 
 		/* clear any call related flags */
 		sngss7_clear_ckt_flag (sngss7_info, FLAG_REMOTE_REL);
@@ -1951,6 +1887,8 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 		sngss7_clear_ckt_flag (sngss7_info, FLAG_SENT_ACM);
 		sngss7_clear_ckt_flag (sngss7_info, FLAG_SENT_CPG);
 		sngss7_clear_call_flag (sngss7_info, FLAG_CONG_REL);
+		sngss7_clear_call_flag (sngss7_info, FLAG_PRI_CALL);
+		sngss7_clear_call_flag (sngss7_info, FLAG_NRML_CALL);
 
 
 		if (ftdm_test_flag (ftdmchan, FTDM_CHANNEL_OPEN)) {
@@ -2841,7 +2779,6 @@ ftdm_status_t ftdm_sangoma_ss7_stop(ftdm_span_t * span)
 static FIO_CONFIGURE_SPAN_SIGNALING_FUNCTION(ftdm_sangoma_ss7_span_config)
 {
 	sngss7_span_data_t *ss7_span_info;
-	ftdm_sngss7_call_queue_t *init_queue = NULL;
 	ftdm_sngss7_call_reject_queue_t *reject_queue = NULL;
 
 	ftdm_log (FTDM_LOG_INFO, "Configuring ftmod_sangoma_ss7 span = %s(%d)...\n",
@@ -2916,21 +2853,15 @@ static FIO_CONFIGURE_SPAN_SIGNALING_FUNCTION(ftdm_sangoma_ss7_span_config)
 		return FTDM_FAIL;
 	}
 
-	if (g_ftdm_sngss7_data.cfg.sng_acc) {
-		init_queue = &sngss7_queue;
-		/* create global SS7 ACC Call queue */
-		if (ftdm_queue_create(&init_queue->sngss7_call_queue, sngss7_queue.ss7_call_qsize) != FTDM_SUCCESS) {
-			ftdm_log(FTDM_LOG_ERROR, "Failed to create global SS7 ACC queue!\n");
-			ftdm_sleep(100);
-			return FTDM_FAIL;
-		}
-
+	if ((g_ftdm_sngss7_data.cfg.sng_acc)) {
 		sngss7_reject_queue.ss7_call_rej_qsize = 1000; /* Default it to 1000 value */
 		reject_queue =&sngss7_reject_queue;
+		if (!reject_queue->sngss7_call_rej_queue) {
+			ftdm_log(FTDM_LOG_DEBUG, "Creating global SS7 ACC Call reject queue!\n");
+		}
+
 		/* create global SS7 Call Reject queue */
 		if (ftdm_queue_create(&reject_queue->sngss7_call_rej_queue, sngss7_reject_queue.ss7_call_rej_qsize) != FTDM_SUCCESS) {
-			ftdm_queue_destroy(&init_queue->sngss7_call_queue);
-			init_queue = NULL;
 			ftdm_log(FTDM_LOG_ERROR, "Failed to create global SS7 ACC Call reject queue!\n");
 			ftdm_sleep(100);
 			return FTDM_FAIL;
@@ -2962,11 +2893,10 @@ static FIO_SIG_LOAD_FUNCTION(ftdm_sangoma_ss7_init)
 	cmbLinkSetId = 0;
 
 	/* initializing global ACC queue structure */
-	memset(&sngss7_queue, 0, sizeof(sngss7_queue));
 	memset(&sngss7_reject_queue, 0, sizeof(sngss7_reject_queue));
 
 	/* initializing global ACC structure */
-	ss7_rmtcong_lst = create_hashtable(MAX_DPC_CONFIGURED, ftdm_hash_hashfromstring, ftdm_hash_equalkeys);
+	ss7_rmtcong_lst = NULL;
 
 	/* initalize the global gen_config flag */
 	g_ftdm_sngss7_data.gen_config = 0;
