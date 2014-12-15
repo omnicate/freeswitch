@@ -2320,9 +2320,9 @@ ftdm_status_t ftdm_channel_from_event(ftdm_sigmsg_t *sigmsg, switch_core_session
 		/********** SS7-UK : Link-By-Link End  *********/
 
 		/********** SS7-UK : ACC Priority Field  *********/
-		sipvar = switch_channel_get_variable(channel, "ss7_iam_priority");
-		if (sipvar) {
-			ftdm_usrmsg_add_var(&usrmsg, "sip_h_X-FreeTDM-IAM-Priority", var_value);
+		var_value = switch_channel_get_variable(channel, "ss7_iam_priority");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-IAM-Priority", var_value); 
 		}
 		/********** SS7-UK : ACC Priority Field  *********/
 
