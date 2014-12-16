@@ -479,6 +479,8 @@ ftdm_status_t handle_con_sta(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 		case FTDM_CHANNEL_STATE_RING:
 		case FTDM_CHANNEL_STATE_RINGING:
 
+			SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Rx CPG in state: %s \n", sngss7_info->circuit->cic, ftdm_channel_state2str (ftdmchan->state));
+
 			sngss7_info->spInstId = spInstId;
 			if (siCnStEvnt->evntInfo.eh.pres == PRSNT_NODEF && 
 				siCnStEvnt->evntInfo.evntInd.pres == PRSNT_NODEF) {
@@ -494,7 +496,11 @@ ftdm_status_t handle_con_sta(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 							ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_PROGRESS_MEDIA);
 						}
 					}
-					else if (ftdmchan->state != FTDM_CHANNEL_STATE_RINGING) {
+					else if ((ftdmchan->state == FTDM_CHANNEL_STATE_PROGRESS_MEDIA) && 
+						 (g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].ignore_alert_on_cpg == FTDM_TRUE)) {
+						/* #10999 Ignore 180 after 183..on ACM we have already sent 183, hence ignore 180..*/ 
+						break;
+					} else if (ftdmchan->state != FTDM_CHANNEL_STATE_RINGING) {
 						sngss7_send_signal(sngss7_info, FTDM_SIGEVENT_ALERTING);
 					}
 					break;
