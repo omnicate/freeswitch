@@ -452,10 +452,18 @@ ftdm_status_t handle_con_sta(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 				/* need to grab the sp instance id */ 
 				sngss7_info->spInstId = spInstId;
 
+				/* RFC3398 - implementation -
+				 * ACM - Called Party Status indicator - Subscriber free then 180
+				 * ACM - In-Band media - 183
+				 */
+
 				if (siCnStEvnt->bckCallInd.eh.pres == PRSNT_NODEF) {
 					if (siCnStEvnt->bckCallInd.cadPtyStatInd.pres == PRSNT_NODEF) {
 						if (siCnStEvnt->bckCallInd.cadPtyStatInd.val == CADSTAT_NOIND ) {
-							next_state = FTDM_CHANNEL_STATE_PROGRESS;
+							/* RFC3398 - section 7.2.5 explain Early ACM requirement where
+							 * GW has to send 183 instead of 180 in case if the Called Party's
+							 * Status Indicator is set to 00 (no indication). */
+							next_state = FTDM_CHANNEL_STATE_PROGRESS_MEDIA;
 						} else if (siCnStEvnt->bckCallInd.cadPtyStatInd.val == CADSTAT_SUBFREE) {
 							next_state = FTDM_CHANNEL_STATE_RINGING;
 						}
@@ -525,7 +533,17 @@ ftdm_status_t handle_con_sta(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 				siCnStEvnt->evntInfo.evntInd.pres == PRSNT_NODEF) {
 				switch (siCnStEvnt->evntInfo.evntInd.val) {
 				case EV_ALERT:
-					if (ftdmchan->state != FTDM_CHANNEL_STATE_RINGING) {
+					/* #10999 - Even if Event indicator says alert , we also need to see 
+					 * if CPG has in-band information present in Optional BCI parameter */
+					if (siCnStEvnt->optBckCalInd.eh.pres == PRSNT_NODEF && 
+							siCnStEvnt->optBckCalInd.inbndInfoInd.pres == PRSNT_NODEF && 
+							siCnStEvnt->optBckCalInd.inbndInfoInd.val) {
+						SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Rx CPG with In-band information in Optional BCI params\n", sngss7_info->circuit->cic);
+						if (ftdmchan->state != FTDM_CHANNEL_STATE_PROGRESS_MEDIA) {
+							ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_PROGRESS_MEDIA);
+						}
+					}
+					else if (ftdmchan->state != FTDM_CHANNEL_STATE_RINGING) {
 						sngss7_send_signal(sngss7_info, FTDM_SIGEVENT_ALERTING);
 					}
 					break;
