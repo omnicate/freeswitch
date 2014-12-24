@@ -142,7 +142,6 @@ typedef struct switch_core_media_params_s {
 	char *adv_sdp_audio_ip;
 
     int num_codecs;
-	int hold_laps;
 	switch_core_media_dtmf_t dtmf_type;
 	switch_payload_t cng_pt;
 

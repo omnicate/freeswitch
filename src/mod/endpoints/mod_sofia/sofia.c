@@ -7074,7 +7074,6 @@ static void sofia_handle_sip_i_state(switch_core_session_t *session, int status,
 		if (r_sdp) {
 			const char *var;
 			uint8_t match = 0, is_ok = 1, is_t38 = 0;
-			tech_pvt->mparams.hold_laps = 0;
 
 				if ((var = switch_channel_get_variable(channel, "sip_ignore_reinvites")) && switch_true(var)) {
 					switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "Ignoring Re-invite\n");
@@ -7089,15 +7088,8 @@ static void sofia_handle_sip_i_state(switch_core_session_t *session, int status,
 				if (switch_channel_test_flag(channel, CF_PROXY_MODE) || switch_channel_test_flag(channel, CF_PROXY_MEDIA)) {
 					if ((sofia_test_media_flag(profile, SCMF_DISABLE_HOLD)
 						 || ((var = switch_channel_get_variable(channel, "rtp_disable_hold")) && switch_true(var)))
-						&& ((switch_stristr("sendonly", r_sdp) || switch_stristr("0.0.0.0", r_sdp)) || tech_pvt->mparams.hold_laps)) {
+						&& ((switch_stristr("sendonly", r_sdp) || switch_stristr("0.0.0.0", r_sdp)))) {
 						nua_respond(tech_pvt->nh, SIP_200_OK, TAG_END());
-
-						if (tech_pvt->mparams.hold_laps) {
-							tech_pvt->mparams.hold_laps = 0;
-						} else {
-							tech_pvt->mparams.hold_laps = 1;
-						}
-
 						goto done;
 					}
 					
@@ -7109,7 +7101,6 @@ static void sofia_handle_sip_i_state(switch_core_session_t *session, int status,
 						if (switch_channel_test_flag(channel, CF_PROXY_MODE) && !is_t38 && 
 							((profile->media_options & MEDIA_OPT_MEDIA_ON_HOLD) || media_on_hold)) {
 							if (switch_stristr("sendonly", r_sdp) || switch_stristr("0.0.0.0", r_sdp)) {
-								tech_pvt->mparams.hold_laps = 1;
 								switch_channel_set_variable(channel, SWITCH_R_SDP_VARIABLE, r_sdp);
 								switch_channel_clear_flag(channel, CF_PROXY_MODE);
 								switch_core_media_set_local_sdp(tech_pvt->session, NULL, SWITCH_FALSE);

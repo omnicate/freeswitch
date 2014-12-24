@@ -3416,11 +3416,8 @@ SWITCH_DECLARE(uint8_t) switch_core_media_negotiate_sdp(switch_core_session_t *s
 				switch_channel_set_variable(session->channel, "media_audio_mode", NULL);
 			}
 
-			if (!(switch_media_handle_test_media_flag(smh, SCMF_DISABLE_HOLD)
-				  || ((val = switch_channel_get_variable(session->channel, "rtp_disable_hold"))
-					  && switch_true(val)))
-				&& !smh->mparams->hold_laps) {
-				smh->mparams->hold_laps++;
+			if (!(switch_media_handle_test_media_flag(smh, SCMF_DISABLE_HOLD) || 
+				  ((val = switch_channel_get_variable(session->channel, "rtp_disable_hold")) && switch_true(val)))) {
 				if (switch_core_media_toggle_hold(session, sendonly)) {
 					reneg = switch_media_handle_test_media_flag(smh, SCMF_RENEG_ON_HOLD);
 					if ((val = switch_channel_get_variable(session->channel, "rtp_renegotiate_codec_on_hold"))) {
@@ -4209,23 +4206,6 @@ SWITCH_DECLARE(int) switch_core_media_toggle_hold(switch_core_session_t *session
 
 		}
 	} else {
-		if (switch_channel_test_flag(session->channel, CF_HOLD_LOCK)) {
-			switch_channel_set_flag(session->channel, CF_PROTO_HOLD);
-			switch_channel_mark_hold(session->channel, SWITCH_TRUE);
-
-			if (a_engine->rtp_session) {
-				switch_rtp_set_flag(a_engine->rtp_session, SWITCH_RTP_FLAG_PAUSE);
-			}
-
-			if (v_engine->rtp_session) {
-				switch_rtp_set_flag(v_engine->rtp_session, SWITCH_RTP_FLAG_PAUSE);
-			}
-
-			changed = 1;
-		}
-
-		switch_channel_clear_flag(session->channel, CF_HOLD_LOCK);
-
 		if (switch_channel_test_flag(session->channel, CF_PROTO_HOLD)) {
 			const char *val;
 			int media_on_hold_a = switch_true(switch_channel_get_variable_dup(session->channel, "bypass_media_resume_on_hold", SWITCH_FALSE, -1));
