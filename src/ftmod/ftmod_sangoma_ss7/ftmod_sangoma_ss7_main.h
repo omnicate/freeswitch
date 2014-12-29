@@ -443,6 +443,7 @@ typedef struct sng_isup_ckt {
 	uint8_t			transparent_iam;
 	uint8_t			cpg_on_progress_media;
 	uint8_t			cpg_on_progress;
+	uint8_t			ignore_alert_on_cpg;
 	uint8_t			itx_auto_reply;
 	uint8_t			bearcap_check;
 	void			*obj;

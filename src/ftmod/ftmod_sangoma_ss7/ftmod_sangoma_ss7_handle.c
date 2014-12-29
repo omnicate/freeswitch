@@ -470,10 +470,18 @@ ftdm_status_t handle_con_sta(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 				/* need to grab the sp instance id */ 
 				sngss7_info->spInstId = spInstId;
 
+				/* RFC3398 - implementation -
+				 * ACM - Called Party Status indicator - Subscriber free then 180
+				 * ACM - In-Band media - 183
+				 */
+
 				if (siCnStEvnt->bckCallInd.eh.pres == PRSNT_NODEF) {
 					if (siCnStEvnt->bckCallInd.cadPtyStatInd.pres == PRSNT_NODEF) {
 						if (siCnStEvnt->bckCallInd.cadPtyStatInd.val == CADSTAT_NOIND ) {
-							next_state = FTDM_CHANNEL_STATE_PROGRESS;
+							/* RFC3398 - section 7.2.5 explain Early ACM requirement where
+							 * GW has to send 183 instead of 180 in case if the Called Party's
+							 * Status Indicator is set to 00 (no indication). */
+							next_state = FTDM_CHANNEL_STATE_PROGRESS_MEDIA;
 						} else if (siCnStEvnt->bckCallInd.cadPtyStatInd.val == CADSTAT_SUBFREE) {
 							next_state = FTDM_CHANNEL_STATE_RINGING;
 						}
@@ -538,6 +546,8 @@ ftdm_status_t handle_con_sta(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 		case FTDM_CHANNEL_STATE_RING:
 		case FTDM_CHANNEL_STATE_RINGING:
 
+			SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Rx CPG in state: %s \n", sngss7_info->circuit->cic, ftdm_channel_state2str (ftdmchan->state));
+
 			sngss7_info->spInstId = spInstId;
 			if (siCnStEvnt->evntInfo.eh.pres == PRSNT_NODEF && 
 				siCnStEvnt->evntInfo.evntInd.pres == PRSNT_NODEF) {
@@ -553,7 +563,11 @@ ftdm_status_t handle_con_sta(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 							ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_PROGRESS_MEDIA);
 						}
 					}
-					else if (ftdmchan->state != FTDM_CHANNEL_STATE_RINGING) {
+					else if ((ftdmchan->state == FTDM_CHANNEL_STATE_PROGRESS_MEDIA) && 
+						 (g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].ignore_alert_on_cpg == FTDM_TRUE)) {
+						/* #10999 Ignore 180 after 183..on ACM we have already sent 183, hence ignore 180..*/ 
+						break;
+					} else if (ftdmchan->state != FTDM_CHANNEL_STATE_RINGING) {
 						sngss7_send_signal(sngss7_info, FTDM_SIGEVENT_ALERTING);
 					}
 					break;

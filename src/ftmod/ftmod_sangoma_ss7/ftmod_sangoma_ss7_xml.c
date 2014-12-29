@@ -135,8 +135,9 @@ typedef struct sng_ccSpan
 	uint32_t		min_digits;
 	uint32_t		transparent_iam_max_size;
 	uint8_t			transparent_iam;
-	uint8_t         cpg_on_progress_media;
-	uint8_t         cpg_on_progress;
+	uint8_t         	cpg_on_progress_media;
+	uint8_t         	cpg_on_progress;
+	uint8_t         	ignore_alert_on_cpg;
 	uint8_t			itx_auto_reply;
 	uint8_t			bearcap_check;
 	uint32_t		t3;
@@ -2190,6 +2191,9 @@ static int ftmod_ss7_parse_cc_span(ftdm_conf_node_t *cc_span)
 		} else if (!strcasecmp(parm->var, "cpg_on_progress_media")) {
 			sng_ccSpan.cpg_on_progress_media = ftdm_true(parm->val);
 			SS7_DEBUG("Found cpg_on_progress_media %d\n", sng_ccSpan.cpg_on_progress_media);
+		} else if (!strcasecmp(parm->var, "ignore_alert_on_cpg")) {
+			sng_ccSpan.ignore_alert_on_cpg = ftdm_true(parm->val);
+			SS7_DEBUG("Found ignore_alert_on_cpg %d\n", sng_ccSpan.ignore_alert_on_cpg);
 		} else if (!strcasecmp(parm->var, "cpg_on_progress")) {
 			sng_ccSpan.cpg_on_progress = ftdm_true(parm->val);
 			SS7_DEBUG("Found cpg_on_progress %d\n", sng_ccSpan.cpg_on_progress);
@@ -3284,9 +3288,10 @@ static int ftmod_ss7_fill_in_ccSpan(sng_ccSpan_t *ccSpan)
 		g_ftdm_sngss7_data.cfg.isupCkt[x].bearcap_check					= ccSpan->bearcap_check;
 		g_ftdm_sngss7_data.cfg.isupCkt[x].itx_auto_reply				= ccSpan->itx_auto_reply;
 		g_ftdm_sngss7_data.cfg.isupCkt[x].transparent_iam				= ccSpan->transparent_iam;
-		g_ftdm_sngss7_data.cfg.isupCkt[x].transparent_iam_max_size		= ccSpan->transparent_iam_max_size;
-		g_ftdm_sngss7_data.cfg.isupCkt[x].cpg_on_progress_media			= ccSpan->cpg_on_progress_media;
-		g_ftdm_sngss7_data.cfg.isupCkt[x].cpg_on_progress	 		    = ccSpan->cpg_on_progress;
+		g_ftdm_sngss7_data.cfg.isupCkt[x].transparent_iam_max_size			= ccSpan->transparent_iam_max_size;
+		g_ftdm_sngss7_data.cfg.isupCkt[x].cpg_on_progress_media				= ccSpan->cpg_on_progress_media;
+		g_ftdm_sngss7_data.cfg.isupCkt[x].cpg_on_progress	 		    	= ccSpan->cpg_on_progress;
+		g_ftdm_sngss7_data.cfg.isupCkt[x].ignore_alert_on_cpg				= ccSpan->ignore_alert_on_cpg;
 
 		if (ccSpan->t3 == 0) {
 			g_ftdm_sngss7_data.cfg.isupCkt[x].t3			= 1200;
