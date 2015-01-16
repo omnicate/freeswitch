@@ -32,9 +32,7 @@
  * mod_freetdm.c -- FreeTDM Endpoint Module
  *
  */
-#include <switch.h>
-#include "freetdm.h"
-#include "private/ftdm_core.h"
+#include "mod_freetdm.h"
 
 //#define CUDATEL_DEBUG
 #ifdef CUDATEL_DEBUG
@@ -65,17 +63,6 @@ SWITCH_MODULE_DEFINITION(mod_freetdm, mod_freetdm_load, mod_freetdm_shutdown, NU
 switch_endpoint_interface_t *freetdm_endpoint_interface;
 
 static switch_memory_pool_t *module_pool = NULL;
-
-typedef enum {
-	ANALOG_OPTION_NONE = 0,
-	ANALOG_OPTION_3WAY = (1 << 0),
-	ANALOG_OPTION_CALL_SWAP = (1 << 1)
-} analog_option_t;
-
-typedef enum {
-	FTDM_LIMIT_RESET_ON_TIMEOUT = 0,
-	FTDM_LIMIT_RESET_ON_ANSWER = 1
-} limit_reset_event_t;
 
 typedef enum {
 	TFLAG_IO = (1 << 0),
@@ -132,34 +119,9 @@ struct private_object {
 	
 };
 
-/* private data attached to FTDM channels (only FXS for now) */
-typedef struct chan_pvt {
-	unsigned int flags;
-} chan_pvt_t;
-
 typedef struct private_object private_t;
 
-struct span_config {
-	ftdm_span_t *span;
-	char dialplan[80];
-	char context[80];
-	char dial_regex[256];
-	char fail_dial_regex[256];
-	char hold_music[256];
-	char type[256];	
-	analog_option_t analog_options;
-	const char *limit_backend;
-	int limit_calls;
-	int limit_seconds;
-	limit_reset_event_t limit_reset_event;
-	/* digital codec and digital sampling rate are used to configure the codec
-	 * when bearer capability is set to unrestricted digital */
-	const char *digital_codec;
-	int digital_sampling_rate;
-	chan_pvt_t pvts[FTDM_MAX_CHANNELS_SPAN];
-};
-
-static struct span_config SPAN_CONFIG[FTDM_MAX_SPANS_INTERFACE] = {{0}};
+struct span_config SPAN_CONFIG[FTDM_MAX_SPANS_INTERFACE] = {{0}};
 
 static switch_status_t channel_on_init(switch_core_session_t *session);
 static switch_status_t channel_on_hangup(switch_core_session_t *session);
@@ -3835,7 +3797,21 @@ static switch_status_t load_config(int reload)
 		}
 	}
 
-	if ((spans = switch_xml_child(cfg, "sangoma_pri_spans"))) { 
+	/* Configure transparent span if present */
+	/* NOTE: Transparent span must be configured before all other spans &
+	 * transparent must be open before configuring any signalling module,
+	 * as transparent channels cannot be part of any other signalling module.
+	 * It is the responsibility of each signalling module to skip transparent
+	 * channel while configuration, if the channel is already in open state
+	 */
+	if ((spans = switch_xml_child(cfg, "transparent_spans"))) {
+		if (parse_transparent_spans(cfg, spans) != FTDM_SUCCESS) {
+			LOAD_ERROR("Failed configuring transparent spans!\n");
+			goto end;
+		}
+	}
+
+	if ((spans = switch_xml_child(cfg, "sangoma_pri_spans"))) {
 		parse_bri_pri_spans(cfg, spans);
 	}
 
@@ -3899,7 +3875,7 @@ static switch_status_t load_config(int reload)
                 b_span_found = 0;
                 for (int i = 0; i < FTDM_MAX_SPANS_INTERFACE; i++) {
                     if (SPAN_CONFIG[i].span) {
-                        if (!strcasecmp(name, SPAN_CONFIG[i].span->name)) {
+                        if (!strcasecmp(name, ftdm_span_get_name(SPAN_CONFIG[i].span))) {
                             b_span_found = 1;
                             break;
                         }
@@ -4418,7 +4394,6 @@ static switch_status_t load_config(int reload)
 		}
 	}
 
-
 	if ((spans = switch_xml_child(cfg, "libpri_spans"))) {
 		for (myspan = switch_xml_child(spans, "span"); myspan; myspan = myspan->next) {
 			char *name = (char *) switch_xml_attr(myspan, "name");
@@ -4566,6 +4541,18 @@ static switch_status_t load_config(int reload)
 		}
 	}
 
+	/* Start transparent span */
+	/* NOTE: If in case the span is not part of any other signalling module then
+	 * start the span as tranparent span can be a part of another signalling
+	 * module */
+	if ((spans = switch_xml_child(cfg, "transparent_spans"))) {
+		if (transparent_span_start(cfg, spans) != FTDM_SUCCESS) {
+			LOAD_ERROR("Failed to start transparent spans!\n");
+			goto end;
+		}
+	}
+
+end:
 	if (globals.crash_on_assert) {
 		ftdm_log(FTDM_LOG_WARNING, "Crash on assert enabled\n");
 		ftdm_global_set_crash_policy(FTDM_CRASH_ON_ASSERT);
@@ -5006,7 +4993,7 @@ FTDM_CLI_DECLARE(ftdm_cmd_destroy)
 		goto end;
 	}
 	
-    SPAN_CONFIG[span->span_id].span = NULL;
+    SPAN_CONFIG[ftdm_span_get_id(span)].span = NULL;
     status = ftdm_span_delete(span);
 
 	stream->write_function(stream, status == FTDM_SUCCESS ? "+OK\n" : "-ERR failure\n");

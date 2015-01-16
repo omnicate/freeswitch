@@ -2672,6 +2672,10 @@ static ftdm_status_t ftdm_sangoma_ss7_start(ftdm_span_t * span)
 		/* extract the channel structure and sngss7 channel data */
 		ftdmchan = span->channels[x];
 
+		if (ftdm_test_flag(ftdmchan, FTDM_CHANNEL_OPEN)) {
+			continue;
+		}
+
 		/* if there is no sig mod data move along */
 		if (ftdmchan->call_data == NULL) continue;
 
