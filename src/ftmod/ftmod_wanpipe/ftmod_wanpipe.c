@@ -1433,6 +1433,13 @@ static FIO_GET_ALARMS_FUNCTION(wanpipe_get_alarms)
 		} 
 	}
 
+	/* Ignore Open Circuit Alaram */
+	if (alarms & WAN_TE_BIT_ALARM_LIU_OC) {
+		ftdmchan->alarm_flags = FTDM_ALARM_NONE;
+		alarms = FTDM_ALARM_NONE;
+		ftdm_clear_flag_locked(ftdmchan, FTDM_CHANNEL_IN_ALARM);
+	}
+
 	if (alarms) {
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Unmapped wanpipe alarm(0x%x): %s\n", alarms, DECODE_WAN_ALARM(alarms));
 	}
