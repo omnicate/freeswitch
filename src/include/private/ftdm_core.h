@@ -90,6 +90,7 @@
 	(expr && ( !strcasecmp(expr, "yes") ||		\
 			   !strcasecmp(expr, "on") ||		\
 			   !strcasecmp(expr, "true") ||		\
+			   !strcasecmp(expr, "enable") ||	\
 			   !strcasecmp(expr, "enabled") ||	\
 			   !strcasecmp(expr, "active") ||	\
 			   atoi(expr))) ? 1 : 0
