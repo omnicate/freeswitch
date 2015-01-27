@@ -728,7 +728,7 @@ static int ftmod_ss7_parse_sng_gen(ftdm_conf_node_t *sng_gen, char* operating_mo
 		} else if (!strcasecmp(parm->var, "traffic-increment-rate")) {
 			if (g_ftdm_sngss7_data.cfg.sng_acc) {
 				g_ftdm_sngss7_data.cfg.accCfg.trf_inc_rate = atoi(parm->val);
-				SS7_DEBUG("Found Traffic reduction rate = %d for Automatic Congestion Control feature\n", g_ftdm_sngss7_data.cfg.accCfg.trf_inc_rate);
+				SS7_DEBUG("Found Traffic incremnent rate = %d for Automatic Congestion Control feature\n", g_ftdm_sngss7_data.cfg.accCfg.trf_inc_rate);
 			} else {
 				SS7_DEBUG("Found invalid configurable parameter Traffic increment rate as Automatic congestion feature is not enable\n");
 			}
@@ -747,9 +747,20 @@ static int ftmod_ss7_parse_sng_gen(ftdm_conf_node_t *sng_gen, char* operating_mo
 					SS7_DEBUG("Found invalid configurable parameter Congestion Level 2 Traffic Reduction Rate as Automatic congestion feature is not enable\n");
 				}
 		} else if (!strcasecmp(parm->var, "set-isup-message-priority")) {
+			if (!strcasecmp(parm->val, "default")) {
+				g_ftdm_sngss7_data.cfg.set_msg_priority = 7;
+				SS7_DEBUG("Found ISUP message prioriy = %d\n", g_ftdm_sngss7_data.cfg.set_msg_priority);
+			} else if (!strcasecmp(parm->val, "all-zeros")) {
+				g_ftdm_sngss7_data.cfg.set_msg_priority = 0;
+				SS7_DEBUG("Found ISUP message prioriy = %d\n", g_ftdm_sngss7_data.cfg.set_msg_priority);
+			} else if (!strcasecmp(parm->val, "all-ones")) {
+				g_ftdm_sngss7_data.cfg.set_msg_priority = 87381;
+				SS7_DEBUG("Found ISUP message prioriy = %d\n", g_ftdm_sngss7_data.cfg.set_msg_priority);
+			} else {
+				SS7_ERROR("Invalid ISUP message prioriy = %s\n", parm->val);
+				return FTDM_FAIL;
+			}
 			g_ftdm_sngss7_data.cfg.msg_priority = 1;
-			g_ftdm_sngss7_data.cfg.set_msg_priority	= atoi(parm->val);
-			SS7_DEBUG("ISUP message prioriy = %d\n", g_ftdm_sngss7_data.cfg.set_msg_priority);
 		} else if (!strcasecmp(parm->var, "link_failure_action")) {
 			g_ftdm_sngss7_data.cfg.link_failure_action = atoi(parm->val);
 			if ((g_ftdm_sngss7_data.cfg.link_failure_action == SNGSS7_ACTION_RELEASE_CALLS) || 
