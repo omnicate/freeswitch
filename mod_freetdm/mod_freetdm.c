@@ -739,14 +739,14 @@ static switch_status_t channel_send_dtmf(switch_core_session_t *session, const s
 		switch_channel_t *channel = switch_core_session_get_channel(session);
 		const char *regenerate_oob_tones = NULL;
 		assert(channel != NULL);
-		regenerate_oob_tones = switch_channel_get_variable(channel,"fax_regenerate_oob_tones");
+		regenerate_oob_tones = switch_channel_get_variable(channel, "fax_regenerate_oob_tones");
 		// FAX out of band tones, force echo canceller to be disabled....
 		ftdm_channel_command(tech_pvt->ftdmchan, FTDM_COMMAND_DISABLE_ECHOCANCEL, &x);
 		ftdm_channel_command(tech_pvt->ftdmchan, FTDM_COMMAND_DISABLE_ECHOTRAIN, &x);
 		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "Echo Canceller Disabled\n");
 		// check if we're asked to regenerate them...
-		if (!zstr(regenerate_oob_tones) && switch_true(regenerate_oob_tones)) {
-			snprintf (tmp, sizeof(tmp),"(%u)%c",dtmf->duration,dtmf->digit);
+		if (switch_true(regenerate_oob_tones)) {
+			snprintf (tmp, sizeof(tmp), "(%u)%c", dtmf->duration, dtmf->digit);
 		} else {
 			tmp[0] = '\0';
 		}
