@@ -279,12 +279,12 @@ ftdm_status_t sngisdn_activate_trace(ftdm_span_t *span, sngisdn_tracetype_t trac
 				if (sngisdn_debug_q931(AENA, SADBG) != FTDM_SUCCESS) {
 					ftdm_log(FTDM_LOG_ERROR, "s%d Failed to enable q931 trace\n");
 				} else {
-					ftdm_log(FTDM_LOG_INFO, "ISDN stack trace enable\n");
+					ftdm_log(FTDM_LOG_INFO, "ISDN q931 stack trace enable\n");
 				}
 				if (sngisdn_debug_q921(AENA, SADBG) != FTDM_SUCCESS) {
-					ftdm_log(FTDM_LOG_ERROR, "s%d Failed to enable q931 trace\n");
+					ftdm_log(FTDM_LOG_ERROR, "s%d Failed to enable q921 trace\n");
 				} else {
-					ftdm_log(FTDM_LOG_INFO, "ISDN stack trace enable\n");
+					ftdm_log(FTDM_LOG_INFO, "ISDN q921 stack trace enable\n");
 				}
 			break;
 
@@ -292,12 +292,12 @@ ftdm_status_t sngisdn_activate_trace(ftdm_span_t *span, sngisdn_tracetype_t trac
 				if (sngisdn_debug_q931(ADISIMM, SADBG) != FTDM_SUCCESS) {
 					ftdm_log(FTDM_LOG_ERROR, "s%d Failed to enable q931 trace\n");
 				} else {
-					ftdm_log(FTDM_LOG_INFO, "ISDN stack trace disable\n");
+					ftdm_log(FTDM_LOG_INFO, "ISDN q931 stack trace disable\n");
 				}
 				if (sngisdn_debug_q921(ADISIMM, SADBG) != FTDM_SUCCESS) {
-					ftdm_log(FTDM_LOG_ERROR, "s%d Failed to enable q931 trace\n");
+					ftdm_log(FTDM_LOG_ERROR, "s%d Failed to enable q921 trace\n");
 				} else {
-					ftdm_log(FTDM_LOG_INFO, "ISDN stack trace disable\n");
+					ftdm_log(FTDM_LOG_INFO, "ISDN q921 stack trace disable\n");
 				}
 			break;
 	}
