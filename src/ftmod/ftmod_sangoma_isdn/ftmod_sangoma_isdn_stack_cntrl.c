@@ -46,6 +46,7 @@ ftdm_status_t sngisdn_cntrl_q931(ftdm_span_t *span, uint8_t action, uint8_t suba
 ftdm_status_t sngisdn_cntrl_q921(ftdm_span_t *span, uint8_t action, uint8_t subaction);
 /* Stack logging enable */
 ftdm_status_t sngisdn_debug_q931(uint8_t action, uint8_t subaction);
+ftdm_status_t sngisdn_debug_q921(uint8_t action, uint8_t subaction);
 
 
 extern ftdm_sngisdn_data_t	g_sngisdn_data;
@@ -280,10 +281,20 @@ ftdm_status_t sngisdn_activate_trace(ftdm_span_t *span, sngisdn_tracetype_t trac
 				} else {
 					ftdm_log(FTDM_LOG_INFO, "ISDN stack trace enable\n");
 				}
+				if (sngisdn_debug_q921(AENA, SADBG) != FTDM_SUCCESS) {
+					ftdm_log(FTDM_LOG_ERROR, "s%d Failed to enable q931 trace\n");
+				} else {
+					ftdm_log(FTDM_LOG_INFO, "ISDN stack trace enable\n");
+				}
 			break;
 
 		case SNGISDN_STACK_TRACE_DISABLE:
 				if (sngisdn_debug_q931(ADISIMM, SADBG) != FTDM_SUCCESS) {
+					ftdm_log(FTDM_LOG_ERROR, "s%d Failed to enable q931 trace\n");
+				} else {
+					ftdm_log(FTDM_LOG_INFO, "ISDN stack trace disable\n");
+				}
+				if (sngisdn_debug_q921(ADISIMM, SADBG) != FTDM_SUCCESS) {
 					ftdm_log(FTDM_LOG_ERROR, "s%d Failed to enable q931 trace\n");
 				} else {
 					ftdm_log(FTDM_LOG_INFO, "ISDN stack trace disable\n");
@@ -321,6 +332,39 @@ ftdm_status_t sngisdn_debug_q931(uint8_t action, uint8_t subaction)
 	cntrl.t.cntrl.par.inDbg.dbgMask = 0xFFFF;
 
 	if(sng_isdn_q931_cntrl(&pst, &cntrl)) {
+		return FTDM_FAIL;
+	}
+	return FTDM_SUCCESS;
+}
+
+ftdm_status_t sngisdn_debug_q921(uint8_t action, uint8_t subaction)
+{
+	BdMngmt cntrl;
+	Pst pst;
+
+	/* initalize the post structure */
+	stack_pst_init(&pst);
+
+	/* insert the destination Entity */
+	pst.dstEnt = ENTLD;
+
+	/* initalize the control structure */
+	memset(&cntrl, 0, sizeof(cntrl));
+
+	/* initalize the control header */
+	stack_hdr_init(&cntrl.hdr);
+
+	cntrl.hdr.msgType = TCNTRL;		/* configuration */
+	cntrl.hdr.entId.ent = ENTLD;		/* entity */
+	cntrl.hdr.entId.inst = S_INST;		/* instance */
+	cntrl.hdr.elmId.elmnt = STGEN;		/* general configuration */
+
+	cntrl.t.cntrl.action = action;
+	cntrl.t.cntrl.subAction = subaction;
+
+	cntrl.t.cntrl.s.bdDbg.dbgMask = 0xFFFF;
+
+	if(sng_isdn_q921_cntrl(&pst, &cntrl)) {
 		return FTDM_FAIL;
 	}
 	return FTDM_SUCCESS;
