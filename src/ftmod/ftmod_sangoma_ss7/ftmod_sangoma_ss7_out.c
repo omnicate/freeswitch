@@ -204,6 +204,9 @@ void ft_to_sngss7_iam (ftdm_channel_t * ftdmchan)
 		if (SNGSS7_SWITCHTYPE_ANSI(g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].switchType)) {
 			/* User Service Info A */
 			copy_usrServInfoA_to_sngss7(ftdmchan, &iam.usrServInfoA);
+		} else {
+			/* User Service Info */
+			copy_usrServInfoA_to_sngss7(ftdmchan, &iam.usrServInfo);
 		}
 		
 		/* Called Number information */
