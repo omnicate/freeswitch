@@ -2208,6 +2208,142 @@ ftdm_status_t copy_txMedReq_to_sngss7(ftdm_channel_t *ftdmchan, SiTxMedReq *txMe
 	return FTDM_SUCCESS;
 }
 
+ftdm_status_t copy_usrServInfoA_from_sngss7(ftdm_channel_t *ftdmchan, SiUsrServInfo *usrServInfoA)
+{
+	char var[64];
+	sngss7_chan_data_t *sngss7_info = ftdmchan->call_data;
+
+	if (usrServInfoA->eh.pres != PRSNT_NODEF) {
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI not present %s\n","");
+		return FTDM_SUCCESS;
+	}
+
+	if (usrServInfoA->infoTranCap.pres == PRSNT_NODEF ) {
+		switch(usrServInfoA->infoTranCap.val)
+		{
+			case ITC_SPEECH:
+				sprintf(var,"%s", "SPEECH");
+				break;
+			case ITC_UNRDIG:
+				sprintf(var,"%s", "UNRESTRICTED");
+				break;
+			case ITC_RESDIG:
+				sprintf(var,"%s", "RESTRICTED");
+				break;
+			case ITC_A31KHZ:
+				sprintf(var,"%s", "31KHZ");
+				break;
+			case ITC_A7KHZ:
+				sprintf(var,"%s", "7KHZ");
+				break;
+			case ITC_A15KHZ:
+				sprintf(var,"%s", "15KHZ");
+				break;
+			case ITC_VIDEO:
+				sprintf(var,"%s", "VIDEO");
+				break;
+			default:
+				ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI transmission capability parameter is wrong : %d. Setting to default 31KHZ. \n", usrServInfoA->infoTranCap.val );
+				sprintf(var,"%s", "31KHZ");
+				break;
+		}
+		sngss7_add_var(sngss7_info, "ss7_iam_usi_trans_cap", var); 
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI transmission capability parameter : %s \n", var); 
+	}
+
+	if (usrServInfoA->cdeStand.pres == PRSNT_NODEF ) {
+		sprintf(var,"%d", usrServInfoA->cdeStand.val);
+		sngss7_add_var(sngss7_info, "ss7_iam_usi_code_standard", var);	
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI coding standard is : %s \n", var);
+	}
+
+	if (usrServInfoA->tranMode.pres	== PRSNT_NODEF) {
+		sprintf(var,"%d", usrServInfoA->tranMode.val);
+		sngss7_add_var(sngss7_info, "ss7_iam_usi_trans_mode", var);	
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI transfer mode is: %s \n", var );
+	}
+
+	if (usrServInfoA->infoTranRate0.pres == PRSNT_NODEF) {
+		sprintf(var,"%d", usrServInfoA->infoTranRate0.val);
+		sngss7_add_var(sngss7_info, "ss7_iam_usi_trans_rate_0", var);	
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI trans rate 0 is: %s \n", var );
+	}
+
+	if (usrServInfoA->infoTranRate1.pres == PRSNT_NODEF) {
+		sprintf(var,"%d", usrServInfoA->infoTranRate1.val);
+		sngss7_add_var(sngss7_info, "ss7_iam_usi_trans_rate_1", var);	
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI trans rate 1 is: %s \n", var );
+	}
+
+	if (usrServInfoA->lyr1Ident.pres == PRSNT_NODEF) {
+		sprintf(var,"%d", usrServInfoA->lyr1Ident.val);
+		sngss7_add_var(sngss7_info, "ss7_iam_usi_layer1_ident", var);	
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI layer 1 indentification is: %s \n", var );
+	}
+
+	if (usrServInfoA->usrInfLyr1Prot.pres == PRSNT_NODEF) {
+		sprintf(var,"%d", usrServInfoA->usrInfLyr1Prot.val);
+		sngss7_add_var(sngss7_info, "ss7_iam_usi_layer1_prot", var);	
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI layer 1 protocol is: %s \n", var );
+	}
+
+	if (usrServInfoA->lyr2Ident.pres == PRSNT_NODEF) {
+		sprintf(var,"%d", usrServInfoA->lyr2Ident.val);
+		sngss7_add_var(sngss7_info, "ss7_iam_usi_layer2_ident", var);	
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI layer 2 indentification is: %s \n", var );
+	}
+
+	if (usrServInfoA->usrInfLyr2Prot.pres == PRSNT_NODEF) {
+		sprintf(var,"%d", usrServInfoA->usrInfLyr2Prot.val);
+		sngss7_add_var(sngss7_info, "ss7_iam_usi_layer2_prot", var);	
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI layer 2 Protocol is: %s \n", var );
+	}
+
+	if (usrServInfoA->lyr3Ident.pres == PRSNT_NODEF) {
+		sprintf(var,"%d", usrServInfoA->lyr3Ident.val);
+		sngss7_add_var(sngss7_info, "ss7_iam_usi_layer3_ident", var);	
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI layer 3 indentification is: %s \n", var );
+	}
+
+	if (usrServInfoA->usrInfLyr3Prot.pres == PRSNT_NODEF) {
+		sprintf(var,"%d", usrServInfoA->usrInfLyr3Prot.val);
+		sngss7_add_var(sngss7_info, "ss7_iam_usi_layer3_prot", var);	
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI layer 3 Protocol is: %s \n", var );
+	}
+
+	if (usrServInfoA->chanStruct.pres == PRSNT_NODEF) {
+		sprintf(var,"%d", usrServInfoA->chanStruct.val);
+		sngss7_add_var(sngss7_info, "ss7_iam_usi_chan_struct", var);	
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI channel structure is: %s \n", var );
+	}
+
+	if (usrServInfoA->config.pres == PRSNT_NODEF) {
+		sprintf(var,"%d", usrServInfoA->config.val);
+		sngss7_add_var(sngss7_info, "ss7_iam_usi_config", var);	
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI configuration is: %s \n", var );
+	}
+
+	if (usrServInfoA->establish.pres == PRSNT_NODEF) {
+		sprintf(var,"%d", usrServInfoA->establish.val);
+		sngss7_add_var(sngss7_info, "ss7_iam_usi_establish", var);	
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI establishment is: %s \n", var );
+	}
+
+	if (usrServInfoA->symmetry.pres == PRSNT_NODEF) {
+		sprintf(var,"%d", usrServInfoA->symmetry.val);
+		sngss7_add_var(sngss7_info, "ss7_iam_usi_symmetry", var);	
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI symmetry is: %s \n", var );
+	}
+
+	if (usrServInfoA->rateMultiplier.pres == PRSNT_NODEF) {
+		sprintf(var,"%d", usrServInfoA->rateMultiplier.val);
+		sngss7_add_var(sngss7_info, "ss7_iam_usi_rate_multiplier", var);	
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "USI rate multipier is: %s \n", var );
+	}
+
+	return FTDM_SUCCESS;
+}
+
 ftdm_status_t copy_usrServInfoA_to_sngss7(ftdm_channel_t *ftdmchan, SiUsrServInfo *usrServInfoA)
 {
 	const char *val = NULL;

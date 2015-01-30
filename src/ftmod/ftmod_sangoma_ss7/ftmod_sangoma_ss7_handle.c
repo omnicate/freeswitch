@@ -228,6 +228,10 @@ ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 			copy_divtlineid_from_sngss7(ftdmchan, &siConEvnt->lstDvrtLineId);
 #endif
 
+			if (SNGSS7_SWITCHTYPE_ANSI(g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].switchType)) {
+				copy_usrServInfoA_from_sngss7(ftdmchan, &siConEvnt->usrServInfoA);
+			}
+			copy_usrServInfoA_from_sngss7(ftdmchan, &siConEvnt->usrServInfo);
 			copy_cgPtyCat_from_sngss7(ftdmchan, &siConEvnt->cgPtyCat);
 			copy_cdPtyNum_from_sngss7(ftdmchan, &siConEvnt->cdPtyNum);
 			copy_usr2UsrInfo_from_sngss7(ftdmchan, &siConEvnt->usr2UsrInfo);
