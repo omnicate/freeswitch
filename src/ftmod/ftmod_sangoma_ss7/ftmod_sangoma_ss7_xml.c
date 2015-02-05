@@ -107,6 +107,7 @@ typedef struct sng_timeslot
 	int	 siglink;
 	int	 gap;
 	int	 hole;
+	int 	 transparent;
 }sng_timeslot_t;
 
 typedef struct sng_span
@@ -191,8 +192,8 @@ static int ftmod_ss7_parse_cc_span(ftdm_conf_node_t *cc_span);
 
 static int ftmod_ss7_fill_in_relay_channel(sng_relay_t *relay_channel);
 static int ftmod_ss7_fill_in_mtp1_link(sng_mtp1_link_t *mtp1Link);
-static int ftmod_ss7_fill_in_mtp2_link(sng_mtp2_link_t *mtp1Link);
-static int ftmod_ss7_fill_in_mtp3_link(sng_mtp3_link_t *mtp1Link);
+static int ftmod_ss7_fill_in_mtp2_link(sng_mtp2_link_t *mtp2Link);
+static int ftmod_ss7_fill_in_mtp3_link(sng_mtp3_link_t *mtp3Link);
 static int ftmod_ss7_fill_in_mtpLinkSet(sng_link_set_t *mtpLinkSet);
 static int ftmod_ss7_fill_in_mtp3_route(sng_route_t *mtp3_route);
 static int ftmod_ss7_fill_in_nsap(sng_route_t *mtp3_route);
@@ -1077,7 +1078,7 @@ static int ftmod_ss7_parse_mtp2_link(ftdm_conf_node_t *mtp2_link)
 	int					 	i;
 	int						ret;
 
-	/* initalize the mtp1Link structure */
+	/* initalize the mtp2Link structure */
 	memset(&mtp2Link, 0x0, sizeof(mtp2Link));
 
 	/* confirm that we are looking at an mtp2_link */
@@ -3197,12 +3198,11 @@ static int ftmod_ss7_fill_in_ccSpan(sng_ccSpan_t *ccSpan)
 {
 	sng_timeslot_t		timeslot;
 	sngss7_chan_data_t	*ss7_info = NULL;
-	ftdm_span_t 		*ftdmspan = NULL;
-	ftdm_channel_t 		*ftdmchan = NULL;
-	ftdm_bool_t 		chan_skip = FTDM_FALSE;
 	int			x;
 	int			count = 1;
 	int			flag;
+	int 			trans_idx = 0;
+	int 			idx = 0;
 
 	while (ccSpan->ch_map[0] != '\0') {
 	/**************************************************************************/
@@ -3217,39 +3217,29 @@ static int ftmod_ss7_fill_in_ccSpan(sng_ccSpan_t *ccSpan)
 		x = (ccSpan->procId * 1000) + 1;
 		flag = 0;
 		while (flag == 0) {
-			chan_skip = FTDM_FALSE;
-
-			/* If the channel is not a signalling or a unsed channel then only check,
-			 * if the channel is transparent one */
-			if ((!timeslot.siglink) && (!timeslot.gap)) {
-				/* Get ftdm channel using ccSpan->id (span_id) & count (chan_id).
-				 * If channel is already in open state then, skip this channel
-				 * and don't include this channel in CIC distribution, as this
-				 * might be a transparent channel and it can not be a part of SS7 */
-				if (FTDM_SUCCESS == ftdm_span_find(ccSpan->id, &ftdmspan)) {
-					if (!ftdmspan) {
-						SS7_ERROR("Failed to get span with id %d!\n", ccSpan->id);
-						return FTDM_FAIL;
-					} else {
-						ftdmchan = ftdm_span_get_channel_ph(ftdmspan, timeslot.channel);
-						/* since d(signalling channel) is not stored in span channel list
-						 * thus, in such case no need to find ftdmchan */
-						if (!ftdmchan) {
-							SS7_ERROR("No %d channel ID present for span %d!\n", ccSpan->id, timeslot.channel);
-							return FTDM_FAIL;
-						}
+			/* Skip channel if it is a transparent one */
+			if (timeslot.transparent) {
+				for (idx = 0; idx < MAX_TRANSPARENT_CKTS; idx++) {
+					if (!g_ftdm_sngss7_data.cfg.transCkt[idx].ccSpan_id) {
+						break;
 					}
-				} else {
-					SS7_ERROR("Failed to get span with id %d!\n", ccSpan->id);
-					return FTDM_FAIL;
-				}
 
-				if (ftdm_test_flag(ftdmchan, FTDM_CHANNEL_OPEN)) {
-					chan_skip = FTDM_TRUE;
-					break;
+					/* since we always try to create circuit id for each span thus, in case of transparent
+					 * circuit if the circuit is already configured please increment count by one in order
+					 * to avoid invalid circuit ID creation
+					 * for e.g. if channel 14 & 15 are transparent and if circuit id for channel 16 is
+					 * already created then in case if the same code is repeated for another span
+					 * configuration count must increase when same channel circuit creation is repeated
+					 * NOTE: Count must increase as count is consider as channel ID */
+					if ((g_ftdm_sngss7_data.cfg.transCkt[idx].ccSpan_id == ccSpan->id) &&
+					    (g_ftdm_sngss7_data.cfg.transCkt[idx].chan_id == timeslot.channel) &&
+					    (g_ftdm_sngss7_data.cfg.transCkt[idx].next_cktId = (x))) {
+						count++;
+						break;
+					}
 				}
+				break;
 			}
-
 		/**********************************************************************/
 			/* check the id value ( 0 = new, 0 > circuit can be existing) */
 			if (g_ftdm_sngss7_data.cfg.isupCkt[x].id == 0) {
@@ -3292,7 +3282,11 @@ static int ftmod_ss7_fill_in_ccSpan(sng_ccSpan_t *ccSpan)
 		} /* while (flag == 0) */
 
 		/* Skip CIC configuration for transparent channel */
-		if (chan_skip == FTDM_TRUE) {
+		if (timeslot.transparent) {
+			g_ftdm_sngss7_data.cfg.transCkt[trans_idx].ccSpan_id = ccSpan->id;
+			g_ftdm_sngss7_data.cfg.transCkt[trans_idx].chan_id = timeslot.channel;
+			g_ftdm_sngss7_data.cfg.transCkt[trans_idx++].next_cktId = x;
+			SS7_DEBUG("Ignoring circuit as channel configured as transparent %d\n", timeslot.channel);
 			continue;
 		}
 
@@ -3434,6 +3428,7 @@ static int ftmod_ss7_fill_in_circuits(sng_span_t *sngSpan)
 	sng_isup_ckt_t		*isupCkt = NULL;
 	sngss7_chan_data_t	*ss7_info = NULL;
 	ftdm_bool_t 		chan_skip = FTDM_FALSE;
+	int 			trans_idx = 0;
 	int			flag;
 	int			i;
 	int			x;
@@ -3442,6 +3437,7 @@ static int ftmod_ss7_fill_in_circuits(sng_span_t *sngSpan)
 	for (i = 1; i < (ftdmspan->chan_count+1); i++) {
 	/**************************************************************************/
 		
+		chan_skip = FTDM_FALSE;
 		/* extract the ftdmchan pointer */
 		ftdmchan = ftdmspan->channels[i];
 
@@ -3451,14 +3447,61 @@ static int ftmod_ss7_fill_in_circuits(sng_span_t *sngSpan)
 		while (g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0) {
 		/**********************************************************************/
 			if (g_ftdm_sngss7_data.cfg.isupCkt[x].chan != ftdmchan->physical_chan_id)
-			chan_skip = FTDM_FALSE;
+				chan_skip = FTDM_FALSE;
 			/* Skip CIC distribution if the channel is not an unsed channel and the channel is already open,
 			 * as this might be a transparent channel */
 			if (!(g_ftdm_sngss7_data.cfg.isupCkt[x].type == SNG_CKT_HOLE) && (ftdm_test_flag(ftdmchan, FTDM_CHANNEL_OPEN))) {
-				SS7_INFO_CHAN(ftdmchan, "Skipping this channel in CIC configuration as this channel is a tranparent channel!\n","");
+				/* If the physical channel Id is same as that of ISUP circuit channel ID then only check
+				 * whether this channel is configured as tranaparent channel as per SS7 ISUP ccSpan channel map */
+				if (g_ftdm_sngss7_data.cfg.isupCkt[x].chan == ftdmchan->physical_chan_id) {
+					/* If transparent circuit is present in transCkt structure then please skip the channel as this is
+					 * transparent channel but if it is not present then return Failure due to invalid configuration */
+					for (trans_idx = 0; trans_idx < MAX_TRANSPARENT_CKTS; trans_idx++) {
+						if (!g_ftdm_sngss7_data.cfg.transCkt[trans_idx].ccSpan_id) {
+							if (g_ftdm_sngss7_data.cfg.isupCkt[x].ccSpanId == sngSpan->ccSpanId) {
+								SS7_ERROR_CHAN(ftdmchan, "Invalid Configuration. Transparent circuit must not be a part of CIC distribution!%s\n","");
+								return FTDM_FAIL;
+							} else {
+								chan_skip = FTDM_TRUE;
+								break;
+							}
+						}
+
+						if ((g_ftdm_sngss7_data.cfg.transCkt[trans_idx].ccSpan_id == sngSpan->ccSpanId) &&
+						    (g_ftdm_sngss7_data.cfg.transCkt[trans_idx].chan_id == ftdmchan->physical_chan_id)) {
+							chan_skip = FTDM_TRUE;
+							break;
+						} else {
+							chan_skip = FTDM_FALSE;
+						}
+					}
+
+					if (chan_skip == FTDM_FALSE) {
+						SS7_ERROR_CHAN(ftdmchan, "Invalid Configuration. Transparent circuit must not be a part of CIC distribution!%s\n","");
+						return FTDM_FAIL;
+					}
+				}
+
+				SS7_INFO_CHAN(ftdmchan, "Skipping this channel in CIC configuration as this is a tranparent channel!\n","");
 				x++;
 				chan_skip = FTDM_TRUE;
 				continue;
+			} else {
+				/* If transparent circuit is configured in SS7 module but due to any reason trasparent
+				 * span is not present in freetdm.conf.xml then please failure with proper information */
+				for (trans_idx = 0; trans_idx < MAX_TRANSPARENT_CKTS; trans_idx++) {
+					if (!g_ftdm_sngss7_data.cfg.transCkt[trans_idx].ccSpan_id) {
+						break;
+					}
+
+					if (g_ftdm_sngss7_data.cfg.transCkt[trans_idx].ccSpan_id == sngSpan->ccSpanId) {
+						if ((g_ftdm_sngss7_data.cfg.transCkt[trans_idx].chan_id == ftdmchan->physical_chan_id) &&
+						    (g_ftdm_sngss7_data.cfg.transCkt[trans_idx].next_cktId == x)) {
+							SS7_ERROR_CHAN(ftdmchan, "Transparent circuit found in SS7 configuration but transparent channel is not configured!%s\n","");
+							return FTDM_FAIL;
+						}
+					}
+				}
 			}
 
 			/* pull out the circuit to make it easier to work with */
@@ -3647,6 +3690,24 @@ static int ftmod_ss7_next_timeslot(char *ch_map, sng_timeslot_t *timeslot)
 			/* consume all digits until a comma as this is the channel */
 		} else {
 			SS7_ERROR("Found an illegal channel map character after signal link flag = \"%c\"!\n", ch_map[x]);
+			return FTDM_FAIL;
+		}
+		break;
+	/**************************************************************************/
+	case 'T':
+	case 't':   /* we have a transparent channel */
+		timeslot->transparent = 1;
+
+		/* check what comes next either a comma or a number */
+		x++;
+		if (ch_map[x] == ',') {
+			timeslot->hole = 1;
+			SS7_DEBUG(" Found a transparent channel in the channel map with a hole in the cic map\n");
+		} else if (isdigit(ch_map[x])) {
+			SS7_DEBUG(" Found a transparent channel thus considering it as a hole in the cic map\n");
+			/* consume all digits until a comma as this is the channel */
+		} else {
+			SS7_ERROR("Found an illegal channel map character after transpaent channel flag = \"%c\"!\n", ch_map[x]);
 			return FTDM_FAIL;
 		}
 		break;
