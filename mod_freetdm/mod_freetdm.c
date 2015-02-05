@@ -1733,6 +1733,11 @@ static switch_call_cause_t channel_outgoing_channel(switch_core_session_t *sessi
 		}
 
 		/********** SS7-UK : Divert line id End  *********/
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-User-User");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "isdn.user-user", sipvar);
+		}
 	}
 
 	if (switch_test_flag(outbound_profile, SWITCH_CPF_SCREEN)) {
