@@ -440,9 +440,9 @@ void ft_to_sngss7_acm (ftdm_channel_t * ftdmchan)
 	acm.bckCallInd.end2EndInfoInd.pres	= PRSNT_NODEF;
 	acm.bckCallInd.end2EndInfoInd.val	= E2EINF_NOINFO;
 
-	isdnUsrPrtInd = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "acm_bi_isdnuserpart_ind");
 	acm.bckCallInd.isdnUsrPrtInd.pres	= PRSNT_NODEF;
 	acm.bckCallInd.isdnUsrPrtInd.val	= ISUP_NOTUSED;
+	isdnUsrPrtInd = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "acm_bi_isdnuserpart_ind");
 	if (!ftdm_strlen_zero(isdnUsrPrtInd)) {
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found user supplied backward indicator ISDN User part indicator value \"%s\"\n", isdnUsrPrtInd);
 		if (!strcasecmp(isdnUsrPrtInd, "NULL")) {
@@ -450,7 +450,11 @@ void ft_to_sngss7_acm (ftdm_channel_t * ftdmchan)
 		} else if (atoi(isdnUsrPrtInd) == 1 ) {
 			acm.bckCallInd.isdnUsrPrtInd.val	= ISUP_USED;
 		}
+	} else {
+		acm.bckCallInd.isdnUsrPrtInd.val	= ISUP_USED;
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "User supplied backward indicator ISDN User part indicator NOT FOUND..using default value \"%d\"\n", acm.bckCallInd.isdnUsrPrtInd.val);
 	}
+
 
 	backwardInd = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "acm_bi_iup");
 	if (!ftdm_strlen_zero(backwardInd)) {
