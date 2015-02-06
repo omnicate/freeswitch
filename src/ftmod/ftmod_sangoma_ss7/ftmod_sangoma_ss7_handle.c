@@ -119,13 +119,13 @@ ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 		if( siConEvnt->usrServInfo.eh.pres == PRSNT_NODEF && 
 			siConEvnt->usrServInfo.usrInfLyr1Prot.pres == PRSNT_NODEF &&
 			siConEvnt->usrServInfo.usrInfLyr1Prot.val != 0x02 /* ulaw */ ) {
-			SS7_ERROR("Codec other than ulaw being used on T1");
+			SS7_ERROR("Codec other than ulaw being used on T1\n");
 		}
 	} else if( ftdmchan->span->trunk_type == FTDM_TRUNK_E1 ) {
 		if( siConEvnt->usrServInfo.eh.pres == PRSNT_NODEF && 
 			siConEvnt->usrServInfo.usrInfLyr1Prot.pres == PRSNT_NODEF &&
 			siConEvnt->usrServInfo.usrInfLyr1Prot.val != 0x03 /* alaw */ ) {
-			SS7_ERROR("Codec other than alaw being used on E1");
+			SS7_ERROR("Codec other than alaw being used on E1\n");
 		}
 	} else {
 		SS7_ERROR("Wrong circuit type. circuit = %d\n", circuit);
