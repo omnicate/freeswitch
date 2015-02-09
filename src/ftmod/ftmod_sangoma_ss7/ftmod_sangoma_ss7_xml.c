@@ -107,6 +107,7 @@ typedef struct sng_timeslot
 	int	 siglink;
 	int	 gap;
 	int	 hole;
+	int 	 transparent;
 }sng_timeslot_t;
 
 typedef struct sng_span
@@ -135,8 +136,9 @@ typedef struct sng_ccSpan
 	uint32_t		min_digits;
 	uint32_t		transparent_iam_max_size;
 	uint8_t			transparent_iam;
-	uint8_t         cpg_on_progress_media;
-	uint8_t         cpg_on_progress;
+	uint8_t         	cpg_on_progress_media;
+	uint8_t         	cpg_on_progress;
+	uint8_t         	ignore_alert_on_cpg;
 	uint8_t			itx_auto_reply;
 	uint8_t			bearcap_check;
 	uint32_t		t3;
@@ -153,6 +155,8 @@ typedef struct sng_ccSpan
 } sng_ccSpan_t;
 
 int cmbLinkSetId;
+/* Total number of cics configured */
+uint32_t nmb_cics_cfg = 0;
 /******************************************************************************/
 
 /* PROTOTYPES *****************************************************************/
@@ -188,8 +192,8 @@ static int ftmod_ss7_parse_cc_span(ftdm_conf_node_t *cc_span);
 
 static int ftmod_ss7_fill_in_relay_channel(sng_relay_t *relay_channel);
 static int ftmod_ss7_fill_in_mtp1_link(sng_mtp1_link_t *mtp1Link);
-static int ftmod_ss7_fill_in_mtp2_link(sng_mtp2_link_t *mtp1Link);
-static int ftmod_ss7_fill_in_mtp3_link(sng_mtp3_link_t *mtp1Link);
+static int ftmod_ss7_fill_in_mtp2_link(sng_mtp2_link_t *mtp2Link);
+static int ftmod_ss7_fill_in_mtp3_link(sng_mtp3_link_t *mtp3Link);
 static int ftmod_ss7_fill_in_mtpLinkSet(sng_link_set_t *mtpLinkSet);
 static int ftmod_ss7_fill_in_mtp3_route(sng_route_t *mtp3_route);
 static int ftmod_ss7_fill_in_nsap(sng_route_t *mtp3_route);
@@ -715,14 +719,49 @@ static int ftmod_ss7_parse_sng_gen(ftdm_conf_node_t *sng_gen, char* operating_mo
 				g_ftdm_sngss7_data.cfg.sng_acc = 0;
 			}
 			SS7_DEBUG("Found Automatic Congestion Control configuration = %s\n", parm->val);
-		} else if (!strcasecmp(parm->var, "acc-q-size")) {
-			sngss7_queue.ss7_call_qsize = atoi(parm->val);
-		} else if (!strcasecmp(parm->var, "acc-dequeue-rate")) {
-			sngss7_queue.call_dequeue_rate = atoi(parm->val);
+	       } else if (!strcasecmp(parm->var, "traffic-reduction-rate")) {
+			if (g_ftdm_sngss7_data.cfg.sng_acc) {
+				g_ftdm_sngss7_data.cfg.accCfg.trf_red_rate = atoi(parm->val);
+				SS7_DEBUG("Found Traffic reduction rate = %d for Automatic Congestion Control feature\n", g_ftdm_sngss7_data.cfg.accCfg.trf_red_rate);
+			} else {
+				SS7_DEBUG("Found invalid configurable parameter Traffic reduction rate as Automatic congestion feature is not enable\n");
+			}
+		} else if (!strcasecmp(parm->var, "traffic-increment-rate")) {
+			if (g_ftdm_sngss7_data.cfg.sng_acc) {
+				g_ftdm_sngss7_data.cfg.accCfg.trf_inc_rate = atoi(parm->val);
+				SS7_DEBUG("Found Traffic incremnent rate = %d for Automatic Congestion Control feature\n", g_ftdm_sngss7_data.cfg.accCfg.trf_inc_rate);
+			} else {
+				SS7_DEBUG("Found invalid configurable parameter Traffic increment rate as Automatic congestion feature is not enable\n");
+			}
+		} else if (!strcasecmp(parm->var, "first-level-reduction-rate")) {
+				if (g_ftdm_sngss7_data.cfg.sng_acc) {
+					g_ftdm_sngss7_data.cfg.accCfg.cnglvl1_red_rate = atoi(parm->val);
+					SS7_DEBUG("Found Congestion Level 1 traffic reduction rate = %d for Automatic Congestion Control feature\n", g_ftdm_sngss7_data.cfg.accCfg.cnglvl1_red_rate);
+				} else {
+					SS7_DEBUG("Found invalid configurable parameter Congestion Level 1 Traffic Reduction Rate as Automatic congestion feature is not enable\n");
+				}
+		} else if (!strcasecmp(parm->var, "second-level-reduction-rate")) {
+				if (g_ftdm_sngss7_data.cfg.sng_acc) {
+					g_ftdm_sngss7_data.cfg.accCfg.cnglvl2_red_rate = atoi(parm->val);
+					SS7_DEBUG("Found Congestion Level 2 traffic reduction rate = %d for Automatic Congestion Control feature\n", g_ftdm_sngss7_data.cfg.accCfg.cnglvl2_red_rate);
+				} else {
+					SS7_DEBUG("Found invalid configurable parameter Congestion Level 2 Traffic Reduction Rate as Automatic congestion feature is not enable\n");
+				}
 		} else if (!strcasecmp(parm->var, "set-isup-message-priority")) {
+			if (!strcasecmp(parm->val, "default")) {
+				g_ftdm_sngss7_data.cfg.set_msg_priority = 7;
+				SS7_DEBUG("Found ISUP message prioriy = %d\n", g_ftdm_sngss7_data.cfg.set_msg_priority);
+			} else if (!strcasecmp(parm->val, "all-zeros")) {
+				g_ftdm_sngss7_data.cfg.set_msg_priority = 0;
+				SS7_DEBUG("Found ISUP message prioriy = %d\n", g_ftdm_sngss7_data.cfg.set_msg_priority);
+			} else if (!strcasecmp(parm->val, "all-ones")) {
+				g_ftdm_sngss7_data.cfg.set_msg_priority = 87381;
+				SS7_DEBUG("Found ISUP message prioriy = %d\n", g_ftdm_sngss7_data.cfg.set_msg_priority);
+			} else {
+				SS7_ERROR("Invalid ISUP message prioriy = %s\n", parm->val);
+				return FTDM_FAIL;
+			}
 			g_ftdm_sngss7_data.cfg.msg_priority = 1;
-			g_ftdm_sngss7_data.cfg.set_msg_priority	= atoi(parm->val);
-			SS7_DEBUG("ISUP message prioriy = %d\n", g_ftdm_sngss7_data.cfg.set_msg_priority);
 		} else if (!strcasecmp(parm->var, "link_failure_action")) {
 			g_ftdm_sngss7_data.cfg.link_failure_action = atoi(parm->val);
 			if ((g_ftdm_sngss7_data.cfg.link_failure_action == SNGSS7_ACTION_RELEASE_CALLS) || 
@@ -742,19 +781,12 @@ static int ftmod_ss7_parse_sng_gen(ftdm_conf_node_t *sng_gen, char* operating_mo
 		parm = parm + 1;
 	} /* for (i = 0; i < num_parms; i++) */
 
+	/* Set default configuration for Automatic congestion control feature if any parameter is not configured properly */
+	ftmod_ss7_acc_default_config();
+
 	if (!g_ftdm_sngss7_data.cfg.max_cpu_usage) {
 		g_ftdm_sngss7_data.cfg.max_cpu_usage = 80;
 		SS7_DEBUG("Assigning default value to maximum cpu usage limit = %d\n", g_ftdm_sngss7_data.cfg.max_cpu_usage);
-	}
-
-	if (!sngss7_queue.ss7_call_qsize) {
-		/* set call queue size to default value i.e. ACC_QUEUE_SIZE */
-		sngss7_queue.ss7_call_qsize = ACC_QUEUE_SIZE;
-	}
-
-	if (!sngss7_queue.call_dequeue_rate) {
-		/* set call dequeue rate to default value i.e. ACC_DEQUEUE_RATE in ms */
-		sngss7_queue.call_dequeue_rate = ACC_DEQUEUE_RATE;
 	}
 
 	return FTDM_SUCCESS;
@@ -1046,7 +1078,7 @@ static int ftmod_ss7_parse_mtp2_link(ftdm_conf_node_t *mtp2_link)
 	int					 	i;
 	int						ret;
 
-	/* initalize the mtp1Link structure */
+	/* initalize the mtp2Link structure */
 	memset(&mtp2Link, 0x0, sizeof(mtp2Link));
 
 	/* confirm that we are looking at an mtp2_link */
@@ -1627,6 +1659,8 @@ static int ftmod_ss7_parse_mtp_route(ftdm_conf_node_t *mtp_route, ftdm_span_t *s
 		return FTDM_FAIL;
 	} 
 
+	/* Initializing max bucket size to 0 */
+	mtpRoute.max_bkt_size = 0;
 	SS7_DEBUG("Parsing \"mtp_route\"...\n");
 
 	for (i = 0; i < num_parms; i++) {
@@ -1680,6 +1714,13 @@ static int ftmod_ss7_parse_mtp_route(ftdm_conf_node_t *mtp_route, ftdm_span_t *s
 				mtpRoute.tfrReq = 0;
 			}
 			SS7_DEBUG("Found an mtp3 tfrReq = %d\n",mtpRoute.tfrReq);
+		} else if (!strcasecmp(parm->var, "acc-max-bucket")) {
+			if (g_ftdm_sngss7_data.cfg.sng_acc) {
+				mtpRoute.max_bkt_size = atoi(parm->val);
+				SS7_DEBUG("Found Maximum Bucket Size = %d for Automatic Congestion Control feature\n", mtpRoute.max_bkt_size);
+			} else {
+				SS7_DEBUG("Found invalid configurable parameter Max Bucket Size as Automatic congestion feature is not enable\n");
+			}
 		} else if (!strcasecmp(parm->var, "mtp3.t8")) {
 			mtpRoute.t8 = atoi(parm->val);
 			SS7_DEBUG("Found an mtp3 t8 = %d\n",mtpRoute.t8);
@@ -1716,6 +1757,9 @@ static int ftmod_ss7_parse_mtp_route(ftdm_conf_node_t *mtp_route, ftdm_span_t *s
 		} else if (!strcasecmp(parm->var, "dpc.t30")) {
 			mtpRoute.t30 = atoi(parm->val);
 			SS7_DEBUG("Found ACC t30 Timer = %d\n",mtpRoute.t30);
+		} else if (!strcasecmp(parm->var, "dpc.acc-call-rate")) {
+			mtpRoute.call_rate = atoi(parm->val);
+			SS7_DEBUG("Found ACC call rate Timer = %d\n",mtpRoute.call_rate);
 		} else {
 			SS7_WARN("Found an invalid parameter \"%s\"!Ignoring it.\n", parm->var);
 		}
@@ -2086,6 +2130,8 @@ static int ftmod_ss7_parse_cc_span(ftdm_conf_node_t *cc_span)
 	int						i;
 	int						ret;
 
+	/* To get number of CIC's configured per DPC */
+	nmb_cics_cfg = 0;
 	/* initalize the ccSpan structure */
 	memset(&sng_ccSpan, 0x0, sizeof(sng_ccSpan));
 
@@ -2157,6 +2203,9 @@ static int ftmod_ss7_parse_cc_span(ftdm_conf_node_t *cc_span)
 		} else if (!strcasecmp(parm->var, "cpg_on_progress_media")) {
 			sng_ccSpan.cpg_on_progress_media = ftdm_true(parm->val);
 			SS7_DEBUG("Found cpg_on_progress_media %d\n", sng_ccSpan.cpg_on_progress_media);
+		} else if (!strcasecmp(parm->var, "ignore_alert_on_cpg")) {
+			sng_ccSpan.ignore_alert_on_cpg = ftdm_true(parm->val);
+			SS7_DEBUG("Found ignore_alert_on_cpg %d\n", sng_ccSpan.ignore_alert_on_cpg);
 		} else if (!strcasecmp(parm->var, "cpg_on_progress")) {
 			sng_ccSpan.cpg_on_progress = ftdm_true(parm->val);
 			SS7_DEBUG("Found cpg_on_progress %d\n", sng_ccSpan.cpg_on_progress);
@@ -2327,6 +2376,8 @@ static int ftmod_ss7_parse_cc_span(ftdm_conf_node_t *cc_span)
 		/* default the status to PAUSED */
 		sngss7_set_flag(&g_ftdm_sngss7_data.cfg.isupIntf[sng_ccSpan.isupInf], SNGSS7_PAUSED);
 	}
+
+	sng_acc_assign_max_bucket(sng_ccSpan.isupInf, nmb_cics_cfg);
 
 	return FTDM_SUCCESS;
 }
@@ -3147,9 +3198,11 @@ static int ftmod_ss7_fill_in_ccSpan(sng_ccSpan_t *ccSpan)
 {
 	sng_timeslot_t		timeslot;
 	sngss7_chan_data_t	*ss7_info = NULL;
-	int					x;
-	int					count = 1;
-	int					flag;
+	int			x;
+	int			count = 1;
+	int			flag;
+	int 			trans_idx = 0;
+	int 			idx = 0;
 
 	while (ccSpan->ch_map[0] != '\0') {
 	/**************************************************************************/
@@ -3164,9 +3217,37 @@ static int ftmod_ss7_fill_in_ccSpan(sng_ccSpan_t *ccSpan)
 		x = (ccSpan->procId * 1000) + 1;
 		flag = 0;
 		while (flag == 0) {
+			/* Skip channel if it is a transparent one */
+			if (timeslot.transparent) {
+				for (idx = 0; idx < MAX_TRANSPARENT_CKTS; idx++) {
+					if (!g_ftdm_sngss7_data.cfg.transCkt[idx].ccSpan_id) {
+						break;
+					}
+
+					/* since we always try to create circuit id for each span thus, in case of transparent
+					 * circuit if the circuit is already configured please increment count by one in order
+					 * to avoid invalid circuit ID creation
+					 * for e.g. if channel 14 & 15 are transparent and if circuit id for channel 16 is
+					 * already created then in case if the same code is repeated for another span
+					 * configuration count must increase when same channel circuit creation is repeated
+					 * NOTE: Count must increase as count is consider as channel ID */
+					if ((g_ftdm_sngss7_data.cfg.transCkt[idx].ccSpan_id == ccSpan->id) &&
+					    (g_ftdm_sngss7_data.cfg.transCkt[idx].chan_id == timeslot.channel) &&
+					    (g_ftdm_sngss7_data.cfg.transCkt[idx].next_cktId = (x))) {
+						count++;
+						break;
+					}
+				}
+				break;
+			}
 		/**********************************************************************/
 			/* check the id value ( 0 = new, 0 > circuit can be existing) */
 			if (g_ftdm_sngss7_data.cfg.isupCkt[x].id == 0) {
+				if (timeslot.channel > count) {
+					count = timeslot.channel;
+				}
+
+				nmb_cics_cfg++;
 				/* we're at the end of the list of circuitsl aka this is new */
 				SS7_DEBUG("Found a new circuit %d, ccSpanId=%d, chan=%d\n",
 							x, 
@@ -3200,6 +3281,15 @@ static int ftmod_ss7_fill_in_ccSpan(sng_ccSpan_t *ccSpan)
 		/**********************************************************************/
 		} /* while (flag == 0) */
 
+		/* Skip CIC configuration for transparent channel */
+		if (timeslot.transparent) {
+			g_ftdm_sngss7_data.cfg.transCkt[trans_idx].ccSpan_id = ccSpan->id;
+			g_ftdm_sngss7_data.cfg.transCkt[trans_idx].chan_id = timeslot.channel;
+			g_ftdm_sngss7_data.cfg.transCkt[trans_idx++].next_cktId = x;
+			SS7_DEBUG("Ignoring circuit as channel configured as transparent %d\n", timeslot.channel);
+			continue;
+		}
+
 		/* prepare the global info sturcture */
 		ss7_info = ftdm_calloc(1, sizeof(sngss7_chan_data_t));
 		ss7_info->ftdmchan = NULL;
@@ -3223,7 +3313,7 @@ static int ftmod_ss7_fill_in_ccSpan(sng_ccSpan_t *ccSpan)
 			g_ftdm_sngss7_data.cfg.isupCkt[x].type		= SNG_CKT_HOLE;
 		} else {
 			g_ftdm_sngss7_data.cfg.isupCkt[x].type		= SNG_CKT_VOICE;
-			
+
 			/* throw the flag to indicate that we need to start call control */
 			sngss7_set_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_CC_PRESENT);
 		}
@@ -3248,9 +3338,10 @@ static int ftmod_ss7_fill_in_ccSpan(sng_ccSpan_t *ccSpan)
 		g_ftdm_sngss7_data.cfg.isupCkt[x].bearcap_check					= ccSpan->bearcap_check;
 		g_ftdm_sngss7_data.cfg.isupCkt[x].itx_auto_reply				= ccSpan->itx_auto_reply;
 		g_ftdm_sngss7_data.cfg.isupCkt[x].transparent_iam				= ccSpan->transparent_iam;
-		g_ftdm_sngss7_data.cfg.isupCkt[x].transparent_iam_max_size		= ccSpan->transparent_iam_max_size;
-		g_ftdm_sngss7_data.cfg.isupCkt[x].cpg_on_progress_media			= ccSpan->cpg_on_progress_media;
-		g_ftdm_sngss7_data.cfg.isupCkt[x].cpg_on_progress	 		    = ccSpan->cpg_on_progress;
+		g_ftdm_sngss7_data.cfg.isupCkt[x].transparent_iam_max_size			= ccSpan->transparent_iam_max_size;
+		g_ftdm_sngss7_data.cfg.isupCkt[x].cpg_on_progress_media				= ccSpan->cpg_on_progress_media;
+		g_ftdm_sngss7_data.cfg.isupCkt[x].cpg_on_progress	 		    	= ccSpan->cpg_on_progress;
+		g_ftdm_sngss7_data.cfg.isupCkt[x].ignore_alert_on_cpg				= ccSpan->ignore_alert_on_cpg;
 
 		if (ccSpan->t3 == 0) {
 			g_ftdm_sngss7_data.cfg.isupCkt[x].t3			= 1200;
@@ -3333,17 +3424,20 @@ move_along:
 static int ftmod_ss7_fill_in_circuits(sng_span_t *sngSpan)
 {
 	ftdm_channel_t		*ftdmchan = NULL;
-	ftdm_span_t			*ftdmspan = sngSpan->span;
+	ftdm_span_t		*ftdmspan = sngSpan->span;
 	sng_isup_ckt_t		*isupCkt = NULL;
 	sngss7_chan_data_t	*ss7_info = NULL;
-	int					flag;
-	int					i;
-	int					x;
+	ftdm_bool_t 		chan_skip = FTDM_FALSE;
+	int 			trans_idx = 0;
+	int			flag;
+	int			i;
+	int			x;
 
 	/* go through all the channels on ftdm span */
 	for (i = 1; i < (ftdmspan->chan_count+1); i++) {
 	/**************************************************************************/
 		
+		chan_skip = FTDM_FALSE;
 		/* extract the ftdmchan pointer */
 		ftdmchan = ftdmspan->channels[i];
 
@@ -3352,6 +3446,64 @@ static int ftmod_ss7_fill_in_circuits(sng_span_t *sngSpan)
 		flag = 0;
 		while (g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0) {
 		/**********************************************************************/
+			if (g_ftdm_sngss7_data.cfg.isupCkt[x].chan != ftdmchan->physical_chan_id)
+				chan_skip = FTDM_FALSE;
+			/* Skip CIC distribution if the channel is not an unsed channel and the channel is already open,
+			 * as this might be a transparent channel */
+			if (!(g_ftdm_sngss7_data.cfg.isupCkt[x].type == SNG_CKT_HOLE) && (ftdm_test_flag(ftdmchan, FTDM_CHANNEL_OPEN))) {
+				/* If the physical channel Id is same as that of ISUP circuit channel ID then only check
+				 * whether this channel is configured as tranaparent channel as per SS7 ISUP ccSpan channel map */
+				if (g_ftdm_sngss7_data.cfg.isupCkt[x].chan == ftdmchan->physical_chan_id) {
+					/* If transparent circuit is present in transCkt structure then please skip the channel as this is
+					 * transparent channel but if it is not present then return Failure due to invalid configuration */
+					for (trans_idx = 0; trans_idx < MAX_TRANSPARENT_CKTS; trans_idx++) {
+						if (!g_ftdm_sngss7_data.cfg.transCkt[trans_idx].ccSpan_id) {
+							if (g_ftdm_sngss7_data.cfg.isupCkt[x].ccSpanId == sngSpan->ccSpanId) {
+								SS7_ERROR_CHAN(ftdmchan, "Invalid Configuration. Transparent circuit must not be a part of CIC distribution!%s\n","");
+								return FTDM_FAIL;
+							} else {
+								chan_skip = FTDM_TRUE;
+								break;
+							}
+						}
+
+						if ((g_ftdm_sngss7_data.cfg.transCkt[trans_idx].ccSpan_id == sngSpan->ccSpanId) &&
+						    (g_ftdm_sngss7_data.cfg.transCkt[trans_idx].chan_id == ftdmchan->physical_chan_id)) {
+							chan_skip = FTDM_TRUE;
+							break;
+						} else {
+							chan_skip = FTDM_FALSE;
+						}
+					}
+
+					if (chan_skip == FTDM_FALSE) {
+						SS7_ERROR_CHAN(ftdmchan, "Invalid Configuration. Transparent circuit must not be a part of CIC distribution!%s\n","");
+						return FTDM_FAIL;
+					}
+				}
+
+				SS7_INFO_CHAN(ftdmchan, "Skipping this channel in CIC configuration as this is a tranparent channel!\n","");
+				x++;
+				chan_skip = FTDM_TRUE;
+				continue;
+			} else {
+				/* If transparent circuit is configured in SS7 module but due to any reason trasparent
+				 * span is not present in freetdm.conf.xml then please failure with proper information */
+				for (trans_idx = 0; trans_idx < MAX_TRANSPARENT_CKTS; trans_idx++) {
+					if (!g_ftdm_sngss7_data.cfg.transCkt[trans_idx].ccSpan_id) {
+						break;
+					}
+
+					if (g_ftdm_sngss7_data.cfg.transCkt[trans_idx].ccSpan_id == sngSpan->ccSpanId) {
+						if ((g_ftdm_sngss7_data.cfg.transCkt[trans_idx].chan_id == ftdmchan->physical_chan_id) &&
+						    (g_ftdm_sngss7_data.cfg.transCkt[trans_idx].next_cktId == x)) {
+							SS7_ERROR_CHAN(ftdmchan, "Transparent circuit found in SS7 configuration but transparent channel is not configured!%s\n","");
+							return FTDM_FAIL;
+						}
+					}
+				}
+			}
+
 			/* pull out the circuit to make it easier to work with */
 			isupCkt = &g_ftdm_sngss7_data.cfg.isupCkt[x];
 
@@ -3382,6 +3534,11 @@ static int ftmod_ss7_fill_in_circuits(sng_span_t *sngSpan)
 			}
 		/**********************************************************************/
 		} /* while (g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0) */
+
+		/* skip this channel as it is suppose not to be included in ISUP CIC */
+		if (chan_skip == FTDM_TRUE) {
+			continue;
+		}
 
 		/* check we found the ckt or not */
 		if (!flag) {
@@ -3537,6 +3694,24 @@ static int ftmod_ss7_next_timeslot(char *ch_map, sng_timeslot_t *timeslot)
 		}
 		break;
 	/**************************************************************************/
+	case 'T':
+	case 't':   /* we have a transparent channel */
+		timeslot->transparent = 1;
+
+		/* check what comes next either a comma or a number */
+		x++;
+		if (ch_map[x] == ',') {
+			timeslot->hole = 1;
+			SS7_DEBUG(" Found a transparent channel in the channel map with a hole in the cic map\n");
+		} else if (isdigit(ch_map[x])) {
+			SS7_DEBUG(" Found a transparent channel thus considering it as a hole in the cic map\n");
+			/* consume all digits until a comma as this is the channel */
+		} else {
+			SS7_ERROR("Found an illegal channel map character after transpaent channel flag = \"%c\"!\n", ch_map[x]);
+			return FTDM_FAIL;
+		}
+		break;
+	/**************************************************************************/
 	case '1':
 	case '2':
 	case '3':
@@ -3679,9 +3854,13 @@ static int ftmod_ss7_fill_in_acc_timer(sng_route_t *mtp3_route, ftdm_span_t *spa
 {
 	uint32_t t29_val = 0;
 	uint32_t t30_val = 0;
+	uint32_t acc_call_rate = 0;
 	ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong = NULL;
 	char dpc[MAX_DPC_CONFIGURED];
 	char *dpc_key=NULL;
+#ifdef ACC_TEST
+	char file_path[512] = { 0 };
+#endif
 
 	memset(dpc, 0 , sizeof(dpc));
 
@@ -3701,12 +3880,54 @@ static int ftmod_ss7_fill_in_acc_timer(sng_route_t *mtp3_route, ftdm_span_t *spa
 	/* prepare automatic congestion control structure */
 	sngss7_rmt_cong->sngss7_rmtCongLvl = 0;
 	sngss7_rmt_cong->dpc = mtp3_route->dpc;
+	sngss7_rmt_cong->call_blk_rate = 0;
+	sngss7_rmt_cong->calls_allowed = 0;
+	sngss7_rmt_cong->calls_passed = 0;
+	sngss7_rmt_cong->calls_received = 0;
+	sngss7_rmt_cong->calls_rejected = 0;
+	sngss7_rmt_cong->loc_calls_rejected = 0;
+	sngss7_rmt_cong->max_bkt_size = 0;
+	/* Gives the average calls per second when acc is enable */
+	sngss7_rmt_cong->avg_call_rate = 0;
+
+#ifdef ACC_TEST
+	sngss7_rmt_cong->iam_recv = 0;
+	sngss7_rmt_cong->iam_pri_recv = 0;
+	sngss7_rmt_cong->iam_trans = 0;
+	sngss7_rmt_cong->iam_pri_trans = 0;
+	sngss7_rmt_cong->rel_recv = 0;
+	sngss7_rmt_cong->rel_rcl1_recv = 0;
+	sngss7_rmt_cong->rel_rcl2_recv = 0;
+	sngss7_rmt_cong->log_file_ptr = NULL;
+	sngss7_rmt_cong->debug_idx = 0;
+#endif
 
 	sprintf(dpc, "%d", sngss7_rmt_cong->dpc);
 	if (hashtable_search(ss7_rmtcong_lst, (void *)dpc)) {
 		SS7_DEBUG("DPC[%d] is already inserted in the hash tablearsing\n", mtp3_route->dpc);
 		ftdm_safe_free(sngss7_rmt_cong);
 		return FTDM_SUCCESS;
+	}
+
+	/* initializing global active calls during congestion */
+	sngss7_rmt_cong->ss7_active_calls = create_hashtable(MAX_DPC_CONFIGURED, ftdm_hash_hashfromstring, ftdm_hash_equalkeys);
+
+	if (!sngss7_rmt_cong->ss7_active_calls) {
+		SS7_DEBUG("NSG-ACC: Failed to create hash list for ss7_active_calls \n");
+		ftdm_safe_free(sngss7_rmt_cong);
+		return FTDM_SUCCESS;
+	} else {
+		SS7_DEBUG("NSG-ACC: ss7_active_calls hash list successfully created for dpc[%d]\n", dpc);
+	}
+
+	/* Create mutex */
+	ftdm_mutex_create(&sngss7_rmt_cong->mutex);
+
+	if (mtp3_route->max_bkt_size) {
+		sngss7_rmt_cong->max_bkt_size = mtp3_route->max_bkt_size;
+		SS7_DEBUG("Found user supplied max bucket size as %d for DPC[%d]\n", sngss7_rmt_cong->max_bkt_size, mtp3_route->dpc);
+	} else {
+		SS7_DEBUG("No user supplied max bucket size for DPC[%d]\n", mtp3_route->dpc);
 	}
 
 	/* Timer for ACC Feature in ms can be 300-600ms */
@@ -3723,12 +3944,18 @@ static int ftmod_ss7_fill_in_acc_timer(sng_route_t *mtp3_route, ftdm_span_t *spa
 		t30_val	= mtp3_route->t30;
 	}
 
+	/* Timer for getting calls per call rate timer expiry */
+	if (mtp3_route->call_rate == 0) {
+		acc_call_rate = 50;
+	} else {
+		acc_call_rate = mtp3_route->call_rate;
+	}
+
 	/* prepare the timer structures */
 	sngss7_rmt_cong->t29.tmr_sched	= ((sngss7_span_data_t *)(span->signal_data))->sched;
 	sngss7_rmt_cong->t29.counter	= 1;
 	sngss7_rmt_cong->t29.beat	= (t29_val) * 100;	/* beat is in ms, t29 is in 100ms */
 	sngss7_rmt_cong->t29.callback	= handle_route_t29;
-	sngss7_rmt_cong->t29.tmr_running = 0x00;
 	sngss7_rmt_cong->t29.sngss7_rmt_cong = sngss7_rmt_cong;
 
 	/* prepare the timer structures */
@@ -3736,8 +3963,23 @@ static int ftmod_ss7_fill_in_acc_timer(sng_route_t *mtp3_route, ftdm_span_t *spa
 	sngss7_rmt_cong->t30.counter	= 1;
 	sngss7_rmt_cong->t30.beat	= (t30_val) * 100; /* beat is in ms, t30 is in 100ms */
 	sngss7_rmt_cong->t30.callback	= handle_route_t30;
-	sngss7_rmt_cong->t30.tmr_running = 0x00;
 	sngss7_rmt_cong->t30.sngss7_rmt_cong = sngss7_rmt_cong;
+
+	/* prepare the timer structures */
+	sngss7_rmt_cong->acc_call_rate.tmr_sched	= ((sngss7_span_data_t *)(span->signal_data))->sched;
+	sngss7_rmt_cong->acc_call_rate.counter		= 1;
+	sngss7_rmt_cong->acc_call_rate.beat		= (acc_call_rate) * 100; /* beat is in ms, acc_call_rate is in 100ms */
+	sngss7_rmt_cong->acc_call_rate.callback		= handle_route_acc_call_rate;
+	sngss7_rmt_cong->acc_call_rate.sngss7_rmt_cong 	= sngss7_rmt_cong;
+
+#ifdef ACC_TEST
+	/* prepare the timer structures */
+	sngss7_rmt_cong->acc_debug.tmr_sched	= ((sngss7_span_data_t *)(span->signal_data))->sched;
+	sngss7_rmt_cong->acc_debug.counter	= 1;
+	sngss7_rmt_cong->acc_debug.beat		= 10 * 100; /* beat is in ms, t30 is in 100ms */
+	sngss7_rmt_cong->acc_debug.callback	= handle_route_acc_debug;
+	sngss7_rmt_cong->acc_debug.sngss7_rmt_cong = sngss7_rmt_cong;
+#endif
 
 	memset(dpc, 0 , sizeof(dpc));
 	sprintf(dpc, "%d", sngss7_rmt_cong->dpc);
@@ -3748,8 +3990,57 @@ static int ftmod_ss7_fill_in_acc_timer(sng_route_t *mtp3_route, ftdm_span_t *spa
 	hashtable_insert(ss7_rmtcong_lst, (void *)dpc_key, sngss7_rmt_cong, HASHTABLE_FLAG_FREE_KEY);
 	SS7_DEBUG("DPC[%d] successfully inserted in ACC hash list\n", sngss7_rmt_cong->dpc);
 
+#ifdef ACC_TEST
+	memset(file_path, 0, sizeof(file_path));
+	/* creating the file in which ACC debugs needs to be written */
+	snprintf(file_path, sizeof(file_path), "/tmp/acc_debug-%d.txt", sngss7_rmt_cong->dpc);
+
+	SS7_DEBUG("NSG-ACC: Open %s file and writting Call statistics in to it\n", file_path);
+	if ((sngss7_rmt_cong->log_file_ptr = fopen(file_path, "a")) == NULL) {
+		SS7_ERROR("NSG-ACC: Failed to Open Log File.\n");
+		return FTDM_FAIL;
+	} else {
+		SS7_DEBUG("NSG-ACC: %s file is open successfully\n", file_path);
+	}
+
+	/* if timer is not started start the ACC DEBUG Timer */
+	if (sngss7_rmt_cong->acc_debug.tmr_id) {
+		SS7_DEBUG("NSG-ACC: ACC DEBUG Timer is already running for DPC[%d]\n", sngss7_rmt_cong->dpc);
+	} else {
+		SS7_DEBUG("NSG-ACC: Starting ACC DEBUG Timer for DPC[%d]\n", sngss7_rmt_cong->dpc);
+		if (ftdm_sched_timer (sngss7_rmt_cong->acc_debug.tmr_sched,
+					"acc_debug",
+					sngss7_rmt_cong->acc_debug.beat,
+					sngss7_rmt_cong->acc_debug.callback,
+					&sngss7_rmt_cong->acc_debug,
+					&sngss7_rmt_cong->acc_debug.tmr_id)) {
+			SS7_ERROR ("NSG-ACC: Unable to schedule ACC DEBUG Timer\n");
+		} else {
+			SS7_INFO("NSG-ACC: ACC DEBUG Timer started with timer-id[%d] for dpc[%d]\n", sngss7_rmt_cong->t29.tmr_id, sngss7_rmt_cong->dpc);
+		}
+	}
+#endif
+
+	/* if timer is not started, start ACC Call rate timer in order to calculate number of average calls
+	 * per socnd depending upon the number of call received with in call rate timer beat time */
+	if (sngss7_rmt_cong->acc_call_rate.tmr_id) {
+		SS7_DEBUG("NSG-ACC: ACC DEBUG Timer is already running for DPC[%d]\n", sngss7_rmt_cong->dpc);
+	} else {
+		SS7_DEBUG("NSG-ACC: Starting ACC DEBUG Timer for DPC[%d]\n", sngss7_rmt_cong->dpc);
+		if (ftdm_sched_timer (sngss7_rmt_cong->acc_call_rate.tmr_sched,
+					"acc_call_rate",
+					sngss7_rmt_cong->acc_call_rate.beat,
+					sngss7_rmt_cong->acc_call_rate.callback,
+					&sngss7_rmt_cong->acc_call_rate,
+					&sngss7_rmt_cong->acc_call_rate.tmr_id)) {
+			SS7_ERROR ("NSG-ACC: Unable to schedule ACC Call Rate Timer\n");
+		} else {
+			SS7_INFO("NSG-ACC: ACC Call Rate Timer started with timer-id[%d] for dpc[%d]\n", sngss7_rmt_cong->t29.tmr_id, sngss7_rmt_cong->dpc);
+		}
+	}
 	return FTDM_SUCCESS;
 }
+
 /******************************************************************************/
 
 /******************************************************************************/

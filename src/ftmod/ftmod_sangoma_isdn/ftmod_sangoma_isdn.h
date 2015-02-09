@@ -114,6 +114,8 @@ typedef enum {
 	SNGISDN_TRACE_DISABLE = 0,
 	SNGISDN_TRACE_Q921 = 1,
 	SNGISDN_TRACE_Q931 = 2,
+	SNGISDN_STACK_TRACE_ENABLE = 3,
+	SNGISDN_STACK_TRACE_DISABLE = 4,
 } sngisdn_tracetype_t;
 
 typedef enum {

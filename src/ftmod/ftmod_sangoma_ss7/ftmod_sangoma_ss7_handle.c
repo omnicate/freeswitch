@@ -54,8 +54,7 @@ ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 ftdm_status_t handle_con_sta(uint32_t suInstId, uint32_t spInstId, uint32_t circuit, SiCnStEvnt *siCnStEvnt, uint8_t evntType);
 ftdm_status_t handle_con_cfm(uint32_t suInstId, uint32_t spInstId, uint32_t circuit, SiConEvnt *siConEvnt);
 ftdm_status_t handle_rel_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circuit, SiRelEvnt *siRelEvnt);
-/* Check whether remote is congested or not */
-ftdm_status_t ftdm_check_acc(sngss7_chan_data_t *sngss7_info, SiRelEvnt *siRelEvnt, ftdm_channel_t *ftdmchan);
+ftdm_status_t handle_peer_rel_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circuit, SiRelEvnt *siRelEvnt);
 
 ftdm_status_t handle_rel_cfm(uint32_t suInstId, uint32_t spInstId, uint32_t circuit, SiRelEvnt *siRelEvnt);
 ftdm_status_t handle_dat_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circuit, SiInfoEvnt *siInfoEvnt);
@@ -101,10 +100,11 @@ ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 	sngss7_chan_data_t *sngss7_info = NULL;
 	ftdm_channel_t *ftdmchan = NULL;
 	char var[FTDM_DIGITS_LIMIT];
+	char val[64];
 	ftdm_status_t status = FTDM_FAIL;
-	int skip_acc = 0;
-	
+
 	memset(var, '\0', sizeof(var));
+	memset(val, 0, sizeof(val));
 
 	ftdm_running_return(FTDM_FAIL);
 
@@ -119,13 +119,13 @@ ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 		if( siConEvnt->usrServInfo.eh.pres == PRSNT_NODEF && 
 			siConEvnt->usrServInfo.usrInfLyr1Prot.pres == PRSNT_NODEF &&
 			siConEvnt->usrServInfo.usrInfLyr1Prot.val != 0x02 /* ulaw */ ) {
-			SS7_ERROR("Codec other than ulaw being used on T1");
+			SS7_ERROR("Codec other than ulaw being used on T1\n");
 		}
 	} else if( ftdmchan->span->trunk_type == FTDM_TRUNK_E1 ) {
 		if( siConEvnt->usrServInfo.eh.pres == PRSNT_NODEF && 
 			siConEvnt->usrServInfo.usrInfLyr1Prot.pres == PRSNT_NODEF &&
 			siConEvnt->usrServInfo.usrInfLyr1Prot.val != 0x03 /* alaw */ ) {
-			SS7_ERROR("Codec other than alaw being used on E1");
+			SS7_ERROR("Codec other than alaw being used on E1\n");
 		}
 	} else {
 		SS7_ERROR("Wrong circuit type. circuit = %d\n", circuit);
@@ -221,12 +221,17 @@ ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 			copy_redirgNum_from_sngss7(ftdmchan, &siConEvnt->redirgNum);
 			copy_redirgInfo_from_sngss7(ftdmchan, &siConEvnt->redirInfo);
 			copy_genNmb_from_sngss7(ftdmchan, &siConEvnt->genNmb);
+			copy_genNmbR_from_sngss7(ftdmchan, &siConEvnt->genNmbR);
 #ifdef SS7_UK
 			copy_presNmb_from_sngss7(ftdmchan, &siConEvnt->presntNum);
 			copy_nflxl_from_sngss7(ftdmchan, &siConEvnt->natFwdCalIndLnk);
 			copy_divtlineid_from_sngss7(ftdmchan, &siConEvnt->lstDvrtLineId);
 #endif
 
+			if (SNGSS7_SWITCHTYPE_ANSI(g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].switchType)) {
+				copy_usrServInfoA_from_sngss7(ftdmchan, &siConEvnt->usrServInfoA);
+			}
+			copy_usrServInfoA_from_sngss7(ftdmchan, &siConEvnt->usrServInfo);
 			copy_cgPtyCat_from_sngss7(ftdmchan, &siConEvnt->cgPtyCat);
 			copy_cdPtyNum_from_sngss7(ftdmchan, &siConEvnt->cdPtyNum);
 			copy_usr2UsrInfo_from_sngss7(ftdmchan, &siConEvnt->usr2UsrInfo);
@@ -249,23 +254,34 @@ ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 				}
 			}
 
+			/* By default there will be no message priority */
+			sngss7_info->priority = FTDM_FALSE;
 			/* Check for self congestion or remote congestion */
 			if (g_ftdm_sngss7_data.cfg.sng_acc) {
 				if ((siConEvnt->cgPtyCat.eh.pres == PRSNT_NODEF) &&
 					(siConEvnt->cgPtyCat.cgPtyCat.pres == PRSNT_NODEF)) {
 
-					if (ftdmchan->caller_data.cpc == FTDM_CPC_PRIORITY) {
-						skip_acc = 1;
+					/* TODO - confirm priority cpc value  */
+					if (siConEvnt->cgPtyCat.cgPtyCat.val == CAT_PRIOR) {
+						SS7_DEBUG_CHAN(ftdmchan,"Allow message even if there is congestion as the message has a priority level%s\n", " ");
 
+						snprintf(val, sizeof(val), "%d", siConEvnt->cgPtyCat.cgPtyCat.val);
+						ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Setting Priority as %s\n", val);
+						sngss7_add_var(sngss7_info, "ss7_iam_priority", val);
+
+						sngss7_info->priority = FTDM_TRUE;
 					}
 				}
 
-				if (!skip_acc) {
+				if (!(sngss7_info->priority)) {
 					status = ftdm_sangoma_ss7_get_congestion_status(ftdmchan);
 					if ((status == FTDM_SUCCESS) || (status == FTDM_BREAK)) {
 						break;
 					}
 				}
+
+				/* Increased number of received calls */
+				ftdm_sangoma_ss7_received_call(ftdmchan);
 			}
 
 			/* fill in the TMR/bearer capability */
@@ -359,7 +375,17 @@ ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 				/* set the state of the channel to collecting...the rest is done by the chan monitor */
 				ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_COLLECT);
 			}
+			/* Add Calling party number also for dialplan */
+		         sprintf(var, "%s", ftdmchan->caller_data.cid_num.digits);
+			 sngss7_add_var(sngss7_info, "ss7_clg_num", var);
 
+#ifdef ACC_TEST
+			if (sngss7_info->priority == FTDM_FALSE) {
+				sng_increment_acc_statistics(ftdmchan, ACC_IAM_RECV_DEBUG);
+			} else {
+				sng_increment_acc_statistics(ftdmchan, ACC_IAM_PRI_RECV_DEBUG);
+			}
+#endif
 			SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Rx IAM clg = \"%s\" (NADI=%d), cld = \"%s\" (NADI=%d)\n",
 							sngss7_info->circuit->cic,
 							ftdmchan->caller_data.cid_num.digits,
@@ -448,10 +474,18 @@ ftdm_status_t handle_con_sta(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 				/* need to grab the sp instance id */ 
 				sngss7_info->spInstId = spInstId;
 
+				/* RFC3398 - implementation -
+				 * ACM - Called Party Status indicator - Subscriber free then 180
+				 * ACM - In-Band media - 183
+				 */
+
 				if (siCnStEvnt->bckCallInd.eh.pres == PRSNT_NODEF) {
 					if (siCnStEvnt->bckCallInd.cadPtyStatInd.pres == PRSNT_NODEF) {
 						if (siCnStEvnt->bckCallInd.cadPtyStatInd.val == CADSTAT_NOIND ) {
-							next_state = FTDM_CHANNEL_STATE_PROGRESS;
+							/* RFC3398 - section 7.2.5 explain Early ACM requirement where
+							 * GW has to send 183 instead of 180 in case if the Called Party's
+							 * Status Indicator is set to 00 (no indication). */
+							next_state = FTDM_CHANNEL_STATE_PROGRESS_MEDIA;
 						} else if (siCnStEvnt->bckCallInd.cadPtyStatInd.val == CADSTAT_SUBFREE) {
 							next_state = FTDM_CHANNEL_STATE_RINGING;
 						}
@@ -516,12 +550,28 @@ ftdm_status_t handle_con_sta(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 		case FTDM_CHANNEL_STATE_RING:
 		case FTDM_CHANNEL_STATE_RINGING:
 
+			SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Rx CPG in state: %s \n", sngss7_info->circuit->cic, ftdm_channel_state2str (ftdmchan->state));
+
 			sngss7_info->spInstId = spInstId;
 			if (siCnStEvnt->evntInfo.eh.pres == PRSNT_NODEF && 
 				siCnStEvnt->evntInfo.evntInd.pres == PRSNT_NODEF) {
 				switch (siCnStEvnt->evntInfo.evntInd.val) {
 				case EV_ALERT:
-					if (ftdmchan->state != FTDM_CHANNEL_STATE_RINGING) {
+					/* #10999 - Even if Event indicator says alert , we also need to see 
+					 * if CPG has in-band information present in Optional BCI parameter */
+					if (siCnStEvnt->optBckCalInd.eh.pres == PRSNT_NODEF && 
+							siCnStEvnt->optBckCalInd.inbndInfoInd.pres == PRSNT_NODEF && 
+							siCnStEvnt->optBckCalInd.inbndInfoInd.val) {
+						SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Rx CPG with In-band information in Optional BCI params\n", sngss7_info->circuit->cic);
+						if (ftdmchan->state != FTDM_CHANNEL_STATE_PROGRESS_MEDIA) {
+							ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_PROGRESS_MEDIA);
+						}
+					}
+					else if ((ftdmchan->state == FTDM_CHANNEL_STATE_PROGRESS_MEDIA) && 
+						 (g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].ignore_alert_on_cpg == FTDM_TRUE)) {
+						/* #10999 Ignore 180 after 183..on ACM we have already sent 183, hence ignore 180..*/ 
+						break;
+					} else if (ftdmchan->state != FTDM_CHANNEL_STATE_RINGING) {
 						sngss7_send_signal(sngss7_info, FTDM_SIGEVENT_ALERTING);
 					}
 					break;
@@ -801,104 +851,6 @@ ftdm_status_t handle_con_cfm(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 }
 
 /******************************************************************************/
-ftdm_status_t ftdm_check_acc(sngss7_chan_data_t *sngss7_info, SiRelEvnt *siRelEvnt, ftdm_channel_t *ftdmchan)
-{
-	/* Contains Information w.r.t. congested DPC */
-	ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong = NULL;
-	uint32_t dpc = g_ftdm_sngss7_data.cfg.isupIntf[sngss7_info->circuit->infId].dpc;
-	char hash_dpc[MAX_DPC_CONFIGURED];
-
-	memset(hash_dpc, 0 , sizeof(hash_dpc));
-	if (!dpc) {
-		SS7_INFO_CHAN(ftdmchan,"[CIC:%d] Invalid DPC[%d]\n", sngss7_info->circuit->cic, dpc);
-		return FTDM_FAIL;
-	}
-
-	/* Check if remote exchange is congested */
-	if (siRelEvnt->autoCongLvl.eh.pres) {
-		if (siRelEvnt->autoCongLvl.auCongLvl.pres) {
-			sprintf(hash_dpc, "%d", g_ftdm_sngss7_data.cfg.isupIntf[sngss7_info->circuit->infId].dpc);
-
-			sngss7_rmt_cong = hashtable_search(ss7_rmtcong_lst, (void *)hash_dpc);
-
-			if (!sngss7_rmt_cong) {
-				SS7_INFO_CHAN(ftdmchan,"DPC[%d] is not preset in ACC hash list\n", dpc);
-				return FTDM_FAIL;
-			}
-
-			/* * If remote congestion is not known at all then mark remote congestion level value and start t29 & t30 timers
-			 *   and then release the call. */
-			if ((!sngss7_rmt_cong->sngss7_rmtCongLvl) && (sngss7_rmt_cong->dpc == dpc)) {
-				sngss7_rmt_cong->sngss7_rmtCongLvl = siRelEvnt->autoCongLvl.auCongLvl.val;
-				SS7_INFO_CHAN(ftdmchan,"Received automatic congestion from remote dpc[%d] with congestion level as[%d]\n", sngss7_rmt_cong->dpc, sngss7_rmt_cong->sngss7_rmtCongLvl);
-			} else {
-				/* * Check If remote congestion is already known and t29 timer is already running then do nothing & release call
-				 *   normally. */
-				if (sngss7_rmt_cong->dpc == dpc) {
-					if (sngss7_rmt_cong->t29.tmr_running) {
-						return FTDM_SUCCESS;
-					} else if ((sngss7_rmt_cong->t30.tmr_id) && (sngss7_rmt_cong->sngss7_rmtCongLvl < 2)) {
-
-						/*
-						 * * If remote congestion is already known & t29 timer is not running & t30 timer is in running state & remote
-						 *   congestion level is less than 2 then increase the remote congestion level value by 1 & restart t29 & t30
-						 *   timers  and then release the call.
-						 */
-						sngss7_rmt_cong->sngss7_rmtCongLvl++;
-					}
-				}
-			}
-
-			/* Restart T29/T30 if we received REL in congested state */
-			SS7_INFO_CHAN(ftdmchan,"Starting T29 Timer for [%d]msec due to remote congestion level[%d] present at dpc[%d]\n", sngss7_rmt_cong->t29.beat, sngss7_rmt_cong->dpc, sngss7_rmt_cong->sngss7_rmtCongLvl);
-			/* Start T29 & T30 timer */
-			if (ftdm_sched_timer (sngss7_rmt_cong->t29.tmr_sched,
-						"t29",
-						sngss7_rmt_cong->t29.beat,
-						sngss7_rmt_cong->t29.callback,
-						&sngss7_rmt_cong->t29,
-						&sngss7_rmt_cong->t29.tmr_id)) {
-				SS7_ERROR ("Unable to schedule timer T29\n");
-				return FTDM_SUCCESS;
-			} else {
-				sngss7_rmt_cong->t29.tmr_running = 0x01;
-				SS7_INFO_CHAN(ftdmchan,"T29 Timer started with timer-id[%d] for dpc[%d]\n", sngss7_rmt_cong->t29.tmr_id, sngss7_rmt_cong->dpc);
-			}
-
-			SS7_INFO_CHAN(ftdmchan,"Starting T30 Timer for [%d]msec due to remote congestion level[%d] present at dpc[%d]\n", sngss7_rmt_cong->t30.beat, sngss7_rmt_cong->dpc, sngss7_rmt_cong->sngss7_rmtCongLvl);
-			if (ftdm_sched_timer (sngss7_rmt_cong->t30.tmr_sched,
-						"t30",
-						sngss7_rmt_cong->t30.beat,
-						sngss7_rmt_cong->t30.callback,
-						&sngss7_rmt_cong->t30,
-						&sngss7_rmt_cong->t30.tmr_id)) {
-				SS7_ERROR ("Unable to schedule timer T30. Thus, stopping T29 Timer also.\n");
-
-				/* Kill t29 timer if active */
-				if (sngss7_rmt_cong->t29.tmr_running) {
-					if (ftdm_sched_cancel_timer (sngss7_rmt_cong->t29.tmr_sched, sngss7_rmt_cong->t29.tmr_id)) {
-						SS7_ERROR ("Unable to Cancle timer T29 timer\n");
-					} else {
-						sngss7_rmt_cong->t29.tmr_running = 0x00;
-						sngss7_rmt_cong->t29.tmr_id = 0;
-					}
-				}
-			} else {
-				sngss7_rmt_cong->t30.tmr_running = 0x01;
-				SS7_INFO_CHAN(ftdmchan,"T30 Timer started with timer-id[%d] for dpc[%d]\n", sngss7_rmt_cong->t30.tmr_id, sngss7_rmt_cong->dpc);
-			}
-
-		}
-		/* Remove ACC parameter from RELEASE Message */
-		siRelEvnt->autoCongLvl.eh.pres = NOTPRSNT;
-		siRelEvnt->autoCongLvl.auCongLvl.pres = NOTPRSNT;
-		siRelEvnt->autoCongLvl.auCongLvl.val = NOTPRSNT;
-	}
-
-	return FTDM_SUCCESS;
-}
-
-/******************************************************************************/
 ftdm_status_t handle_rel_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circuit, SiRelEvnt *siRelEvnt)
 {
 	SS7_FUNC_TRACE_ENTER(__FUNCTION__);
@@ -914,10 +866,8 @@ ftdm_status_t handle_rel_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 	}
 	ftdm_mutex_lock(ftdmchan->mutex);
 
-	if (g_ftdm_sngss7_data.cfg.sng_acc) {
-		/* check for Automatic Congestion level */
-		ftdm_check_acc(sngss7_info, siRelEvnt, ftdmchan);
-	}
+	/* check for Automatic Congestion level */
+	ftdm_check_acc(sngss7_info, siRelEvnt, ftdmchan);
 
 	SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Rx REL cause=%d\n",
 							sngss7_info->circuit->cic, 
@@ -1008,6 +958,34 @@ ftdm_status_t handle_rel_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 		}
 		break;
 	}
+
+	ftdm_mutex_unlock(ftdmchan->mutex);
+	SS7_FUNC_TRACE_EXIT(__FUNCTION__);
+	return FTDM_SUCCESS;
+}
+
+/******************************************************************************/
+ftdm_status_t handle_peer_rel_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circuit, SiRelEvnt *siRelEvnt)
+{
+	SS7_FUNC_TRACE_ENTER(__FUNCTION__);
+
+	sngss7_chan_data_t  *sngss7_info ;
+	ftdm_channel_t	  *ftdmchan;
+
+	ftdm_running_return(FTDM_FAIL);
+	if (extract_chan_data(circuit, &sngss7_info, &ftdmchan)) {
+		SS7_ERROR("Failed to extract channel data for circuit = %d!\n", circuit);
+		SS7_FUNC_TRACE_EXIT(__FUNCTION__);
+		return FTDM_FAIL;
+	}
+	ftdm_mutex_lock(ftdmchan->mutex);
+
+	/* check for Automatic Congestion level */
+	ftdm_check_acc(sngss7_info, siRelEvnt, ftdmchan);
+
+	SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Tx REL cause=%d\n",
+							sngss7_info->circuit->cic,
+							siRelEvnt->causeDgn.causeVal.val);
 
 	ftdm_mutex_unlock(ftdmchan->mutex);
 	SS7_FUNC_TRACE_EXIT(__FUNCTION__);
@@ -1408,7 +1386,9 @@ ftdm_status_t handle_reattempt(uint32_t suInstId, uint32_t spInstId, uint32_t ci
 		/* Reject the call if self exchange is congested */
 		if (siStaEvnt->causeDgn.causeVal.val == SIT_CCSWTCHCONG) {
 			/* hangup the call if the circuit is in congested state */
-			ftdmchan->caller_data.hangup_cause = FTDM_CAUSE_SWITCH_CONGESTION;
+			/* PUSHKAR TODO: Need to made this as a configurable parameter */
+			/*ftdmchan->caller_data.hangup_cause = FTDM_CAUSE_SWITCH_CONGESTION;*/
+			ftdmchan->caller_data.hangup_cause = FTDM_CAUSE_NORMAL_CIRCUIT_CONGESTION;
 			/* set flag to indicate this hangup is started due to congestion */
 			sngss7_set_call_flag (sngss7_info, FLAG_CONG_REL);
 			if (ftdm_queue_enqueue(sngss7_reject_queue.sngss7_call_rej_queue, ftdmchan)) {
@@ -2349,6 +2329,10 @@ ftdm_status_t handle_ucic(uint32_t suInstId, uint32_t spInstId, uint32_t circuit
 	curr = iter;
 	for (curr = iter; curr; curr = ftdm_iterator_next(curr)) {
 		ftdm_channel_t *fchan = ftdm_iterator_current(curr);
+
+		if (ftdm_test_flag(fchan, FTDM_CHANNEL_OPEN)) {
+			continue;
+		}
 
 		ftdm_channel_lock(fchan);
 

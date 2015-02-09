@@ -1485,6 +1485,15 @@ FT_DECLARE(void) ftdm_channel_replace_token(ftdm_channel_t *ftdmchan, const char
 	}
 }
 
+FT_DECLARE(ftdm_status_t) ftdm_get_span_running_status(ftdm_span_t *ftdmspan)
+{
+	if ((ftdm_test_flag(ftdmspan, FTDM_SPAN_STARTED) && !ftdm_test_flag(ftdmspan, FTDM_SPAN_STOP_THREAD))) {
+		return FTDM_SUCCESS;
+	} else {
+		return FTDM_FAIL;
+	}
+}
+
 FT_DECLARE(void) ftdm_channel_set_private(ftdm_channel_t *ftdmchan, void *pvt)
 {
 	ftdmchan->user_private = pvt;
@@ -1979,7 +1988,7 @@ FT_DECLARE(ftdm_status_t) ftdm_channel_open_by_span(uint32_t span_id, ftdm_direc
 	return status;
 }
 
-FT_DECLARE(ftdm_status_t) ftdm_channel_open_chan(ftdm_channel_t *ftdmchan)
+static ftdm_status_t _ftdm_channel_open_chan(ftdm_channel_t *ftdmchan)
 {
 	ftdm_status_t status = FTDM_FAIL;
 
@@ -2161,6 +2170,14 @@ done:
 	if (status != FTDM_SUCCESS) {
 		ftdm_log(FTDM_LOG_ERROR, "Failed to open channel %d:%d\n", span_id, chan_id);
 	}
+
+	return status;
+}
+
+FT_DECLARE(ftdm_status_t) ftdm_channel_open_chan(ftdm_channel_t *ftdmchan)
+{
+	ftdm_status_t status;
+	status = _ftdm_channel_open_chan(ftdmchan);
 
 	return status;
 }

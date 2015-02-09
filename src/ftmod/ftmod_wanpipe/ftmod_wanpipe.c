@@ -1433,6 +1433,12 @@ static FIO_GET_ALARMS_FUNCTION(wanpipe_get_alarms)
 		} 
 	}
 
+	/* Ignore Open Circuit Alaram */
+	if (alarms == WAN_TE_BIT_ALARM_LIU_OC) {
+		ftdmchan->alarm_flags = FTDM_ALARM_NONE;
+		alarms = FTDM_ALARM_NONE;
+	}
+
 	if (alarms) {
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Unmapped wanpipe alarm(0x%x): %s\n", alarms, DECODE_WAN_ALARM(alarms));
 	}
@@ -1588,7 +1594,13 @@ static __inline__ ftdm_status_t wanpipe_channel_process_event(ftdm_channel_t *fc
 			if (tdm_api->wp_tdm_cmd.event.wp_api_event_alarm) {
 				ftdm_log_chan(fchan, FTDM_LOG_DEBUG, "Got wanpipe alarm (0x%x): %s\n", tdm_api->wp_tdm_cmd.event.wp_api_event_alarm,
 						DECODE_WAN_ALARM(tdm_api->wp_tdm_cmd.event.wp_api_event_alarm));
-				*event_id = FTDM_OOB_ALARM_TRAP;
+				/* Check if "OPEN CIRCUIT" Alarm, If yes then ignore that one */
+				if (tdm_api->wp_tdm_cmd.event.wp_api_event_alarm == WAN_TE_BIT_ALARM_LIU_OC) {
+					ftdm_log_chan_msg(fchan, FTDM_LOG_DEBUG, "Ignored Open Circuit Alarm \n");
+					*event_id = FTDM_OOB_ALARM_CLEAR;
+				} else {
+					*event_id = FTDM_OOB_ALARM_TRAP;
+				}
 			} else {
 				ftdm_log_chan_msg(fchan, FTDM_LOG_DEBUG, "Wanpipe alarms cleared\n");
 				*event_id = FTDM_OOB_ALARM_CLEAR;

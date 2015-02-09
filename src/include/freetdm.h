@@ -471,7 +471,7 @@ typedef enum {
 	FTDM_SIGEVENT_RAW, /*!< Signalling specific event */
 	FTDM_SIGEVENT_INVALID, /*!<Invalid */
 } ftdm_signal_event_t;
-#define SIGNAL_STRINGS "START", "STOP", "RELEASED", "UP", "FLASH", "PROCEED", "RINGING", "PROGRESS", \
+#define SIGNAL_STRINGS "START", "STOP", "RELEASED", "UP", "FLASH", "PROCEED", "RINGING", "ALERTING", "PROGRESS", \
 		"PROGRESS_MEDIA", "ALARM_TRAP", "ALARM_CLEAR", \
 		"COLLECTED_DIGIT", "ADD_CALL", "RESTART", "SIGSTATUS_CHANGED", "FACILITY", \
 		"TRACE", "TRACE_RAW", "INDICATION_COMPLETED", "DIALING", "TRANSFER_COMPLETED", "SMS", "IO_INDATA", "RAW", "INVALID"
@@ -1125,8 +1125,15 @@ FT_DECLARE(ftdm_status_t) ftdm_span_set_sig_status(ftdm_span_t *span, ftdm_signa
 /*! \brief Get span signaling status (ie: whether protocol layer is up or down) */
 FT_DECLARE(ftdm_status_t) ftdm_span_get_sig_status(ftdm_span_t *span, ftdm_signaling_status_t *status);
 
+/*!
+ * \brief Get span runnning status i.e. whether span is in start state or not
+ *
+ * \param ftdmspan for which need to check is span is already started
+ *
+ */
+FT_DECLARE(ftdm_status_t) ftdm_get_span_running_status(ftdm_span_t *ftdmspan);
 
-/*! 
+/*!
  * \brief Set user private data in the channel
  *
  * \param ftdmchan The channel where the private data will be stored
@@ -1381,6 +1388,16 @@ FT_DECLARE(ftdm_status_t) ftdm_group_channel_use_count(ftdm_group_t *group, uint
 FT_DECLARE(uint32_t) ftdm_group_get_id(const ftdm_group_t *group);
 
 /*! 
+ * \brief Open a channel specifying the chan id (required before placing a call on the channel)
+ *
+ * \param ftdmchan Pointer to store the channel once is open
+ *
+ * \retval FTDM_SUCCESS success (the channel was found and is available)
+ * \retval FTDM_FAIL failure (channel was not found or not available)
+ */
+FT_DECLARE(ftdm_status_t) ftdm_channel_open_chan(ftdm_channel_t *ftdmchan);
+
+/*!
  * \brief Open a channel specifying the span id and chan id (required before placing a call on the channel)
  *
  * \warning Try using ftdm_call_place instead if you plan to place a call after opening the channel

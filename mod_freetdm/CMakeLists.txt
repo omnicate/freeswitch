@@ -18,7 +18,14 @@ SET(mod_freetdm_INCLUDES
 INCLUDE_DIRECTORIES(${mod_freetdm_INCLUDES})
 
 LINK_DIRECTORIES(${PROJECT_SOURCE_DIR}/..)
-ADD_LIBRARY(${PROJECT_NAME} SHARED mod_freetdm.c)
+
+# lib sources
+SET(mod_freetdm_SOURCES
+	${PROJECT_SOURCE_DIR}/mod_freetdm.c
+	${PROJECT_SOURCE_DIR}/tdm_transparent.c
+)
+
+ADD_LIBRARY(${PROJECT_NAME} SHARED ${mod_freetdm_SOURCES})
 TARGET_LINK_LIBRARIES(${PROJECT_NAME} freetdm -fPIC -Werror -fvisibility=hidden)
 
 IF(DEFINED WIN32)

@@ -1673,6 +1673,9 @@ static ftdm_status_t handle_show_acc_status(ftdm_stream_handle_t *stream, char *
 	void *val = NULL;
 	ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong = NULL;
 
+	stream->write_function(stream, "***************************************************************************************************************************\n");
+	stream->write_function(stream, "                                          Automatic Congestion Control Statistics                                          \n");
+	stream->write_function(stream, "***************************************************************************************************************************");
 	for (i = hashtable_first(ss7_rmtcong_lst); i; i = hashtable_next(i)) {
 		hashtable_this(i, &key, NULL, &val);
 		if (!key || !val) {
@@ -1682,12 +1685,25 @@ static ftdm_status_t handle_show_acc_status(ftdm_stream_handle_t *stream, char *
 		sngss7_rmt_cong = (ftdm_sngss7_rmt_cong_t *)val;
 		/* Check if any entry is present in ACC hastable */
 		if(sngss7_rmt_cong) {
-			stream->write_function(stream, "| DPC=%2d | Congestion Level=%2d | T29 Timer Status= %s | T30 Timer Status= %s |",
-					sngss7_rmt_cong->dpc,
+			stream->write_function(stream, "\n***************************************************************************************************************************\n");
+			stream->write_function(stream, " \t\t\t\t\t For DPC = %d \t\t\t\t\t\n", sngss7_rmt_cong->dpc);
+			stream->write_function(stream, "***************************************************************************************************************************\n");
+			stream->write_function(stream, "| Congestion Level = %d |\n| Average Calls/second = %d |\n| Calls Bucket Size = %d |\n| Calls Active = %d |\n| Call Block Rate = %d% |\n| Total Number of Calls allowed = %d |\n",
 					sngss7_rmt_cong->sngss7_rmtCongLvl,
-					SNGSS7_DECODE_ACC_STATUS(sngss7_rmt_cong->t29.tmr_running),
-					SNGSS7_DECODE_ACC_STATUS(sngss7_rmt_cong->t30.tmr_running));
-			}
+					sngss7_rmt_cong->avg_call_rate,
+					sngss7_rmt_cong->max_bkt_size,
+					sngss7_rmt_cong->calls_allowed,
+					sngss7_rmt_cong->call_blk_rate,
+					sngss7_rmt_cong->calls_passed);
+
+			stream->write_function(stream, "| Total Numbers of Calls Rejected Due to Remote Congestion = %d |\n| Total Numbers of Calls Rejected Due to Local Congestion = %d |\n| T29 Timer Status= %s |\n| T30 Timer Status= %s |\n",
+					sngss7_rmt_cong->calls_rejected,
+					sngss7_rmt_cong->loc_calls_rejected,
+					SNGSS7_DECODE_ACC_STATUS(sngss7_rmt_cong->t29.tmr_id),
+					SNGSS7_DECODE_ACC_STATUS(sngss7_rmt_cong->t30.tmr_id));
+		}
+
+
 	}
 	stream->write_function(stream, "\n");
 
@@ -1702,6 +1718,20 @@ static ftdm_status_t handle_show_acc_config(ftdm_stream_handle_t *stream, char *
 	void *val = NULL;
 	ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong = NULL;
 
+	stream->write_function(stream, "***************************************************************************************************************************\n");
+	stream->write_function(stream, "                                        Automatic Congestion Control Configuration                                         \n");
+	stream->write_function(stream, "***************************************************************************************************************************\n\n");
+	stream->write_function(stream, "                                                    Global Configuration                                                   \n");
+	stream->write_function(stream, "***************************************************************************************************************************\n");
+	stream->write_function(stream, "| Max Cpu Usage = %d |\n| Traffic Reduction Rate =%d% |\n| Traffic increment rate = %d% |\n",
+			g_ftdm_sngss7_data.cfg.max_cpu_usage,
+			g_ftdm_sngss7_data.cfg.accCfg.trf_red_rate,
+			g_ftdm_sngss7_data.cfg.accCfg.trf_inc_rate);
+
+	stream->write_function(stream, "| Call Control Rate on Congestion Level 1 = %d% |\n| Call Control Rate on Congestion Level 2 = %d% |\n",
+			g_ftdm_sngss7_data.cfg.accCfg.cnglvl1_red_rate,
+			g_ftdm_sngss7_data.cfg.accCfg.cnglvl2_red_rate);
+
 	for (i = hashtable_first(ss7_rmtcong_lst); i; i = hashtable_next(i)) {
 		hashtable_this(i, &key, NULL, &val);
 		if (!key || !val) {
@@ -1711,17 +1741,15 @@ static ftdm_status_t handle_show_acc_config(ftdm_stream_handle_t *stream, char *
 		sngss7_rmt_cong = (ftdm_sngss7_rmt_cong_t *)val;
 		/* Check if any entry is present in ACC hastable */
 		if(sngss7_rmt_cong) {
+			stream->write_function(stream, "\n***************************************************************************************************************************\n");
+			stream->write_function(stream, " \t\t\t\t\t For DPC = %d \t\t\t\t\t\n", sngss7_rmt_cong->dpc);
 			stream->write_function(stream, "***************************************************************************************************************************\n");
-			stream->write_function(stream, "                                        Automatic Congestion Control Configuration                                         \n");
-			stream->write_function(stream, "***************************************************************************************************************************\n");
-			stream->write_function(stream, "| Max Cpu Usage = %d| ACC Call Queue Size = %d| Call Dequeue Rate = %dmsec| T29 Timer Value = %dmsec| T30 Timer Value = %dmsec|",
-					g_ftdm_sngss7_data.cfg.max_cpu_usage,
-					sngss7_queue.ss7_call_qsize,
-					sngss7_queue.call_dequeue_rate,
+
+			stream->write_function(stream, "| Call Rate Timer = %dmsec |\n| Max Bucket Size = %d |\n| T29 Timer Value = %dmsec |\n| T30 Timer Value = %dmsec |\n",
+					sngss7_rmt_cong->acc_call_rate.beat,
+					sngss7_rmt_cong->max_bkt_size,
 					sngss7_rmt_cong->t29.beat,
 					sngss7_rmt_cong->t30.beat);
-
-			break;
 		}
 	}
 	stream->write_function(stream, "\n");

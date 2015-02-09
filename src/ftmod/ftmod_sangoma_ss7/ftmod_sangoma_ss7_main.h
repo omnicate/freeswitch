@@ -63,6 +63,7 @@
 #define MAX_CIC_LENGTH			5
 #define MAX_CIC_MAP_LENGTH		1000 
 #define MAX_SCTP_LINK 			100
+#define MAX_TRANSPARENT_CKTS 		100
 
 #define SNGSS7_EVENT_QUEUE_SIZE	100
 #define SNGSS7_PEER_CHANS_QUEUE_SIZE 100
@@ -73,10 +74,24 @@
 #define SNGSS7_SWITCHTYPE_ANSI(switchtype)	(switchtype == LSI_SW_ANS88) || \
 											(switchtype == LSI_SW_ANS92) || \
 											(switchtype == LSI_SW_ANS95)
-#define ACC_QUEUE_SIZE 		15
-#define ACC_DEQUEUE_RATE 	200
+/* Default values w.r.t. Automatic Congestion Control */
+#define MAX_BUCKET_SIZE 	100
+#define CALL_CONTROL_RATE 	10
+#define LVL1_CALL_CNTRL_RATE 	50
+#define LVL2_CALL_CNTRL_RATE 	90
 #define MAX_DPC_CONFIGURED 	25
+
 #define DEFAULT_MSG_PRIORITY    7
+
+#ifdef ACC_TEST
+#define ACC_IAM_RECV_DEBUG 	1
+#define ACC_IAM_PRI_RECV_DEBUG  2
+#define ACC_IAM_TRANS_DEBUG 	3
+#define ACC_IAM_TRANS_PRI_DEBUG 4
+#define ACC_REL_RECV_DEBUG 	5
+#define ACC_REL_RECV_ACL1_DEBUG 6
+#define ACC_REL_RECV_ACL2_DEBUG 7
+#endif
 
 #define sngss7_flush_queue(queue) \
 			do { \
@@ -157,7 +172,7 @@ typedef enum {
 
 #define SNGSS7_DECODE_ACC_STATUS(status) \
 ((status == 0))		?"INACTIVE" : \
-((status == 1))		?"ACTIVE" :\
+((status != 0))		?"ACTIVE" :\
 "Unknown Automatic Congestion Control Timer Status"
 
 typedef struct sng_mtp2_error_type {
@@ -198,9 +213,9 @@ typedef struct sng_mtp1_link {
 	uint32_t	id;
 	uint32_t	span;
 	uint32_t	chan;
-    char        span_name[MAX_NAME_LEN];
-    ftdm_channel_t *ftdmchan;
-    uint8_t     extSeqNum;
+	char        span_name[MAX_NAME_LEN];
+	ftdm_channel_t *ftdmchan;
+	uint8_t     extSeqNum;
 } sng_mtp1_link_t;
 
 typedef struct sng_mtp2_link {
@@ -339,6 +354,7 @@ typedef struct sng_route {
 	uint32_t		nwId;
 	uint32_t		isSTP;
 	uint32_t		dir;
+	uint32_t 	  	max_bkt_size; /* Maximum bucket allocated per DPC basis for ACC */
 	uint32_t		t6;
 	uint32_t		t8;
 	uint32_t		t10;
@@ -350,8 +366,9 @@ typedef struct sng_route {
 	uint32_t		t21;
 	uint32_t		t25;
 	uint32_t		t26;
-	uint32_t 		t29; /* Timers per DPC basis for Automatic Congestion Control */
-	uint32_t 		t30; /* Timers per DPC basis for Automatic Congestion Control */
+	uint32_t 		t29; 	   /* Timers per DPC basis for Automatic Congestion Control */
+	uint32_t 		t30; 	   /* Timers per DPC basis for Automatic Congestion Control */
+	uint32_t 		call_rate; /* Timers per DPC basis in order to calculate average CPS */
 	uint32_t		lsetSel;
 	uint32_t		slsLnk;
 	uint32_t		tfrReq;
@@ -427,6 +444,7 @@ typedef struct sng_isup_ckt {
 	uint8_t			transparent_iam;
 	uint8_t			cpg_on_progress_media;
 	uint8_t			cpg_on_progress;
+	uint8_t			ignore_alert_on_cpg;
 	uint8_t			itx_auto_reply;
 	uint8_t			bearcap_check;
 	void			*obj;
@@ -496,6 +514,12 @@ typedef struct sng_relay {
 	uint32_t		procId;
 } sng_relay_t;
 
+/* Transparent circuit infomation */
+typedef struct sng_transparent_ckt {
+	int next_cktId;
+	int ccSpan_id;
+	int chan_id;
+} sng_transparent_ckt_t;
 /**********************************************
 sctp structures and data definitions
 **********************************************/
@@ -517,7 +541,12 @@ typedef struct sng_sctp_cfg {
 	sng_sctp_link_t		linkCfg[MAX_SCTP_LINK+1];
 } sng_sctp_cfg_t;
 
-
+typedef struct sng_acc_cfg {
+	uint32_t trf_red_rate;
+	uint32_t trf_inc_rate;
+	uint32_t cnglvl1_red_rate;
+	uint32_t cnglvl2_red_rate;
+} sng_acc_cfg_t;
 
 typedef struct sng_ss7_cfg {
 	uint32_t		spc;
@@ -536,13 +565,15 @@ typedef struct sng_ss7_cfg {
 	sng_route_t		mtpRoute[MAX_MTP_ROUTES+1];
 	sng_isup_inf_t		isupIntf[MAX_ISUP_INFS+1];
 	sng_isup_ckt_t		isupCkt[10000]; 	/* KONRAD - only need 2000 ( and 0-1000 aren't used) since other servers are registerd else where */
+	sng_transparent_ckt_t 	transCkt[MAX_TRANSPARENT_CKTS];
 	sng_nsap_t		nsap[MAX_NSAPS+1];
 	sng_isap_t		isap[MAX_ISAPS+1];
 	sng_glare_resolution	glareResolution;
 	uint32_t		force_inr;
 	sng_m2ua_gbl_cfg_t 	g_m2ua_cfg;
 	sng_sctp_cfg_t		sctpCfg;
-	int 			sng_acc;
+	uint32_t 		sng_acc;
+	sng_acc_cfg_t		accCfg;
 	int 			msg_priority;
 	uint32_t 		set_msg_priority;
 	int			link_failure_action;
@@ -577,12 +608,6 @@ typedef struct ftdm_sngss7_data {
 	int			stack_logging_enable;
 } ftdm_sngss7_data_t;
 
-typedef struct ftdm_sngss7_call_queue {
-	ftdm_queue_t 	*sngss7_call_queue;
-	uint32_t 	ss7_call_qsize;
-	uint32_t	call_dequeue_rate;
-} ftdm_sngss7_call_queue_t;
-
 typedef struct ftdm_sngss7_call_reject_queue {
 	ftdm_queue_t    *sngss7_call_rej_queue;
 	uint32_t        ss7_call_rej_qsize;
@@ -594,16 +619,45 @@ typedef struct sng_acc_tmr {
 	int 			beat;
 	int 			counter;
 	ftdm_sched_callback_t   callback;
-	int 			tmr_running;
 	void  			*sngss7_rmt_cong;
 } sng_acc_tmr_t;
 
 typedef struct ftdm_sngss7_rmt_cong {
 	uint32_t       	  sngss7_rmtCongLvl;
 	uint32_t       	  dpc;
+	uint32_t 	  call_blk_rate;
+	uint32_t 	  calls_allowed;
+	uint32_t 	  calls_received;
+	uint32_t 	  max_bkt_size;
+	uint32_t 	  avg_call_rate;			/* Get the average calls per second when ACC feature is enable */
+	/* Pushkar changes for counter */
+	uint32_t 	  calls_passed;
+	uint32_t 	  calls_rejected;
+	uint32_t 	  loc_calls_rejected;
+	ftdm_mutex_t 	  *mutex;
+#ifdef ACC_TEST
+	uint32_t          iam_recv;
+	uint32_t          iam_pri_recv;
+	uint32_t          iam_trans;
+	uint32_t 	  iam_pri_trans;
+	uint32_t          rel_recv;
+	uint32_t          rel_rcl1_recv;
+	uint32_t          rel_rcl2_recv;
+	uint32_t 	  debug_idx;
+	FILE 		  *log_file_ptr;
+	sng_acc_tmr_t 	  acc_debug;
+#endif
+	/* changes end */
 	sng_acc_tmr_t     t29;
 	sng_acc_tmr_t     t30;
+	sng_acc_tmr_t     acc_call_rate;
+	ftdm_hash_t *ss7_active_calls;				/* Hash list of all active calls as per block rate */
 } ftdm_sngss7_rmt_cong_t;
+
+typedef struct ftdm_sngss7_active_calls {
+	uint32_t       	  span_id;
+	uint32_t 	  chan_id;
+} ftdm_sngss7_active_calls_t;
 
 typedef enum{
 	SNG_SS7_OPR_MODE_NONE,
@@ -688,6 +742,7 @@ typedef struct sngss7_chan_data {
 	sngss7_group_data_t		tx_grs;
 	sngss7_group_data_t		ucic;
 	ftdm_queue_t 				*event_queue;
+	ftdm_bool_t 			priority;
 	struct sngss7_chan_data     *peer_data;
 	uint8_t peer_event_transfer_cnt;
     sngss7_api_data_t       api_data;
@@ -739,10 +794,14 @@ typedef enum {
 
 typedef enum {
 	FLAG_CONG_REL			= (1 << 0),  /* Releasing call due to congestion */
+	FLAG_PRI_CALL			= (1 << 1),  /* Set If the incoming call is a priority call */
+	FLAG_NRML_CALL 			= (1 << 2)  /* Set If there is no congestion when call is received */
 } sng_call_flag_t;
 
 #define CALL_FLAGS_STRING \
-	"CONG_REL",
+	"CONG_REL", \
+	"PRI_CALL", \
+	"NRML_CALL"
 FTDM_STR2ENUM_P(ftmod_ss7_call_state2flag, ftmod_ss7_call_flag2str, sng_call_flag_t)
 
 
@@ -933,9 +992,10 @@ extern uint32_t				sngss7_id;
 extern ftdm_sched_t			*sngss7_sched;
 extern int				cmbLinkSetId;
 /* variables w.r.t ACC feature */
-extern ftdm_sngss7_call_queue_t		sngss7_queue;
 extern ftdm_sngss7_call_reject_queue_t 	sngss7_reject_queue;
 extern ftdm_hash_t 			*ss7_rmtcong_lst;
+extern ftdm_hash_t 			*ss7_active_calls;
+uint32_t 				nmb_cics_cfg;
 
 /******************************************************************************/
 
@@ -1094,6 +1154,7 @@ ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 ftdm_status_t handle_con_sta(uint32_t suInstId, uint32_t spInstId, uint32_t circuit, SiCnStEvnt *siCnStEvnt, uint8_t evntType);
 ftdm_status_t handle_con_cfm(uint32_t suInstId, uint32_t spInstId, uint32_t circuit, SiConEvnt *siConEvnt);
 ftdm_status_t handle_rel_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circuit, SiRelEvnt *siRelEvnt);
+ftdm_status_t handle_peer_rel_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circuit, SiRelEvnt *siRelEvnt);
 ftdm_status_t ftdm_check_acc(sngss7_chan_data_t *sngss7_info, SiRelEvnt *siRelEvnt, ftdm_channel_t *ftdmchan);
 ftdm_status_t handle_rel_cfm(uint32_t suInstId, uint32_t spInstId, uint32_t circuit, SiRelEvnt *siRelEvnt);
 ftdm_status_t handle_dat_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circuit, SiInfoEvnt *siInfoEvnt);
@@ -1172,6 +1233,7 @@ ftdm_status_t copy_presNmb_from_sngss7(ftdm_channel_t *ftdmchan, SiPresentNum *g
 ftdm_status_t copy_paramcompatibility_to_sngss7(ftdm_channel_t *ftdmchan, SiParmCompInfo *parmCom);
 ftdm_status_t copy_genNmb_to_sngss7(ftdm_channel_t *ftdmchan, SiGenNum *genNmb);
 ftdm_status_t copy_genNmb_from_sngss7(ftdm_channel_t *ftdmchan, SiGenNum *genNmb);
+ftdm_status_t copy_genNmbR_from_sngss7(ftdm_channel_t *ftdmchan, SiGenNum *genNmbR);
 ftdm_status_t copy_cgPtyCat_to_sngss7(ftdm_channel_t *ftdmchan, SiCgPtyCat *cgPtyCat);
 ftdm_status_t copy_cgPtyCat_from_sngss7(ftdm_channel_t *ftdmchan, SiCgPtyCat *cgPtyCat);
 ftdm_status_t copy_accTrnspt_to_sngss7(ftdm_channel_t *ftdmchan, SiAccTrnspt *accTrnspt);
@@ -1180,6 +1242,7 @@ ftdm_status_t copy_fwdCallInd_hex_from_sngss7(ftdm_channel_t *ftdmchan, SiFwdCal
 ftdm_status_t copy_fwdCallInd_to_sngss7(ftdm_channel_t *ftdmchan, SiFwdCallInd *fwdCallInd);
 ftdm_status_t copy_txMedReq_to_sngss7(ftdm_channel_t *ftdmchan, SiTxMedReq *txMedReq);
 ftdm_status_t copy_usrServInfoA_to_sngss7(ftdm_channel_t *ftdmchan, SiUsrServInfo *usrServInfoA);
+ftdm_status_t copy_usrServInfoA_from_sngss7(ftdm_channel_t *ftdmchan, SiUsrServInfo *usrServInfoA);
 ftdm_status_t copy_NatureOfConnection_from_sngss7(ftdm_channel_t *ftdmchan, SiNatConInd *natConInd );
 ftdm_status_t copy_NatureOfConnection_to_sngss7(ftdm_channel_t *ftdmchan, SiNatConInd *natConInd);
 
@@ -1252,11 +1315,31 @@ void handle_isup_t10(void *userdata);
 void handle_isup_t39(void *userdata);
 void handle_route_t29(void *userdata);
 void handle_route_t30(void *userdata);
+void handle_route_acc_call_rate(void *userdata);
+#ifdef ACC_TEST
+void handle_route_acc_debug(void *userdata);
+#endif
 void handle_wait_bla_timeout(void *userdata);
 void handle_wait_uba_timeout(void *userdata);
 void handle_tx_ubl_on_rx_bla_timer(void *userdata);
 void handle_wait_rsca_timeout(void *userdata);
 void handle_disable_ubl_timeout(void *userdata);
+
+/* in ftdm_sangoma_ss7_acc.c */
+ftdm_status_t ftmod_ss7_acc_default_config(void);
+ftdm_status_t sng_acc_assign_max_bucket(uint32_t intfId, uint32_t cics_cfg);
+ftdm_status_t ftdm_sangoma_ss7_get_congestion_status(ftdm_channel_t *ftdmchan);
+ftdm_status_t ftdm_check_acc(sngss7_chan_data_t *sngss7_info, SiRelEvnt *siRelEvnt, ftdm_channel_t *ftdmchan);
+ftdm_status_t sng_acc_handle_call_rate(ftdm_bool_t inc, ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong, ftdm_channel_t *ftdmchan);
+#ifdef ACC_TEST
+ftdm_status_t sng_prnt_acc_debug(uint32_t dpc);
+ftdm_status_t sng_increment_acc_statistics(ftdm_channel_t *ftdmchan, uint32_t acc_debug_lvl);
+#endif
+ftdm_sngss7_rmt_cong_t* sng_acc_get_cong_struct(ftdm_channel_t *ftdmchan);
+ftdm_status_t sng_acc_free_active_calls_hashlist(ftdm_sngss7_rmt_cong_t *sngss7_rmt_cong);
+ftdm_status_t sng_acc_rmv_active_call(ftdm_channel_t *ftdmchan);
+ftdm_status_t ftdm_sangoma_ss7_received_call(ftdm_channel_t *ftdmchan);
+void sngss7_free_acc(void);
 
 #if JZ_BLO_TIMER
 void handle_disable_tx_ubl_timeout_on_tx_blo(void *userdata);
