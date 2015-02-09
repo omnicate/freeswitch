@@ -63,6 +63,7 @@
 #define MAX_CIC_LENGTH			5
 #define MAX_CIC_MAP_LENGTH		1000 
 #define MAX_SCTP_LINK 			100
+#define MAX_TRANSPARENT_CKTS 		100
 
 #define SNGSS7_EVENT_QUEUE_SIZE	100
 #define SNGSS7_PEER_CHANS_QUEUE_SIZE 100
@@ -477,6 +478,12 @@ typedef struct sng_relay {
 	uint32_t		procId;
 } sng_relay_t;
 
+/* Transparent circuit infomation */
+typedef struct sng_transparent_ckt {
+	int next_cktId;
+	int ccSpan_id;
+	int chan_id;
+} sng_transparent_ckt_t;
 /**********************************************
 sctp structures and data definitions
 **********************************************/
@@ -516,6 +523,7 @@ typedef struct sng_ss7_cfg {
 	sng_route_t			mtpRoute[MAX_MTP_ROUTES+1];
 	sng_isup_inf_t		isupIntf[MAX_ISUP_INFS+1];
 	sng_isup_ckt_t		isupCkt[10000]; 	/* KONRAD - only need 2000 ( and 0-1000 aren't used) since other servers are registerd else where */
+	sng_transparent_ckt_t 	transCkt[MAX_TRANSPARENT_CKTS];
 	sng_nsap_t			nsap[MAX_NSAPS+1];
 	sng_isap_t			isap[MAX_ISAPS+1];	
 	sng_glare_resolution	glareResolution;
