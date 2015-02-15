@@ -1,0 +1,143 @@
+InterceptModule DEFINITIONS ::= BEGIN
+
+IP-value ::= CHOICE
+{
+	iPBinaryAddress [1] OCTET STRING (SIZE(4..16)),
+	-- In case of IPv6, the Prefix Length is provided by the "iPv6PrefixLength"
+	-- In case of IPv4, the netmask is provided by the "iPv4SubnetMask"
+	iPTextAddress [2] IA5String (SIZE(7..45)),
+	-- In case of IPv6, the delivered iPTextAddress field could include a complete
+	-- single IPv6-Address or an IPv6-Prefix for a subnetwork on the target side.
+	-- In case of IPv4, the delivered iPTextAddress field could include a single
+	-- IPv4 address or an IPv4address/netmask, for example "192.168.1.1" or "192.168.1.1/24"
+	...
+}
+
+IPAddress ::= SEQUENCE
+{
+	iP-type [1] ENUMERATED
+	{
+		iPV4(0),
+		iPV6(1),
+		...
+	},
+	iP-value [2] IP-value,
+	iP-assignment [3] ENUMERATED
+	{
+		static(1),
+		-- The static coding shall be used to report a static address.
+		dynamic(2),
+		-- The dynamic coding shall be used to report a dynamically allocated address.
+		notKnown(3),
+		-- The notKnown coding shall be used to report other then static or dynamically
+		-- allocated IP addresses.
+		...
+	} OPTIONAL,
+	...,
+	iPv6PrefixLength [4] INTEGER (1..128) OPTIONAL,
+	-- Indicates the length of the prefix delegated by the CSP to the subscriber
+	-- example: 60 if IP address is “2001:db8:0:85a3::ac1f:8001/60”
+	-- Mandatory in case where the iP-value contains an IPv6 binary value
+	iPv4SubnetMask [5] OCTET STRING (SIZE(4)) OPTIONAL
+	-- For IPv4 addresses, this indicates the subnetmask to be applied to the iP-value field.
+	-- The subnet mask is intended to be presented as a binary value, e.g. "ff ff ff f8" to
+	-- represent the dotted-decimal subnet mask of "255.255.255.248" corresponding to
+	-- a /29 CIDR-format subnet mask
+}
+
+Network-Element-Identifier ::= CHOICE
+{
+	e164-Format [1] OCTET STRING (SIZE (1..25)),
+	-- E164 address of the node in international format. Coded in the same format as the
+	-- calling party number parameter of the ISUP (parameter part: EN 300 356 [5])
+	x25-Format [2] OCTET STRING (SIZE (1..25)),
+	-- X25 address
+	iP-Format [3] OCTET STRING (SIZE (1..25)),
+	-- IP address
+	dNS-Format [4] OCTET STRING (SIZE (1..25)),
+	-- DNS address
+	...,
+	iP-Address [5] IPAddress
+}
+
+Network-Identifier ::= SEQUENCE
+{
+	operator-Identifier [0] OCTET STRING (SIZE (1..5)),
+	-- It is a notification of the NWO/AP/SvP in ASCII- characters
+	-- The parameter is mandatory
+	network-Element-Identifier [1] Network-Element-Identifier OPTIONAL,
+	...
+}
+
+CommunicationIdentifier ::= SEQUENCE
+{
+	communication-Identity-Number [0] OCTET STRING (SIZE (1..8)) OPTIONAL,
+	-- Temporary Identifier of an intercepted call to uniquely identify an intercepted call
+	-- within the node. This parameter is mandatory if there is associated
+	-- information sent over HI3interface (CClink, data,..) or when
+	-- CommunicationIdentifier is used for IRI other than IRI-Report-record
+	-- This parameter was called "call-Identity-Number" in V1.1.1 of ES 201 671 [i.5].
+	-- The individual digits of the communication-Identity-Number shall be represented in
+	-- ASCII format, e.g. "12345678" = 8 octets 0x31 0x32 0x33 0x34 0x35 0x36 0x37 0x38.
+	network-Identifier [1] Network-Identifier,
+	...
+}
+
+Direction-Indication ::= ENUMERATED
+{
+	mono-mode(0),
+	cc-from-target(1),
+	cc-from-other-party(2),
+	...,
+	direction-unknown(3)
+}
+
+Service-Information ::= SET
+{
+	high-layer-capability [0] OCTET STRING (SIZE(1)) OPTIONAL,
+	-- HLC (octet 4 only)
+	-- Protocol: EN 300 403-1 [6]
+	tMR [1] OCTET STRING (SIZE(1)) OPTIONAL,
+	-- Transmission Medium Requirement
+	-- Protocol: ISUP EN 300 356 [5]
+	bearerServiceCode [2] OCTET STRING (SIZE(1)) OPTIONAL,
+	teleServiceCode [3] OCTET STRING (SIZE(1)) OPTIONAL
+	-- from MAP, 3GPP TS 09.02 [32]
+}
+
+CC-Link-Identifier ::= OCTET STRING (SIZE (1..8))
+-- Depending on a network option, this parameter may be used to identify a CClink
+-- in case of multiparty calls.
+-- The individual digits of the communication-Identity-Number shall be represented in
+-- ASCII format, e.g. "12345678" = 8 octets 0x31 0x32 0x33 0x34 0x35 0x36 0x37 0x38.
+
+LawfulInterceptionIdentifier ::= OCTET STRING (SIZE (1..25))
+-- It is recommended to use ASCII characters in "a"…"z", "A"…"Z", "-", "_", ".", and "0"…"9".
+-- For subaddress option only "0"..."9" shall be used
+
+-- =============================
+-- Object Identifier Definitions
+-- =============================
+-- LawfulIntercept DomainId
+lawfulInterceptDomainId OBJECT IDENTIFIER ::= {itu-t(0) identified-organization(4) etsi(0)
+securityDomain(2) lawfulIntercept(2)}
+-- hi3 Domain
+hi3CCLinkId OBJECT IDENTIFIER ::= {lawfulInterceptDomainId hi3(2) ccLinkLI(4)}
+hi3CCLinkIdOperationId OBJECT IDENTIFIER ::= {hi3CCLinkId version4(4)}
+
+LawfulInterceptionData ::= SEQUENCE
+{
+	domainID [0] OBJECT IDENTIFIER (hi3CCLinkIdOperationId) OPTIONAL,
+	-- Once using FTP delivery mechanism
+	lawfullInterceptionIdentifier [1] LawfulInterceptionIdentifier,
+	communicationIdentifier [2] CommunicationIdentifier,
+	cC-Link-Identifier [3] CC-Link-Identifier OPTIONAL,
+	direction-Indication [4] Direction-Indication,
+	bearer-capability [5] OCTET STRING (SIZE(1..12)) OPTIONAL,
+	-- transport the Bearer capability information element (value part)
+	-- Protocol: EN 300 403-1 [6]
+	service-Information [7] Service-Information OPTIONAL,
+	...
+}
+
+END
