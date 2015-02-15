@@ -33,6 +33,7 @@
  */
 
 #include "ftmod_sangoma_isdn.h"
+#include <LawfulInterceptionData.h> /* LawfulInterceptionData ASN.1 type */
 #define SNGISDN_Q931_FACILITY_IE_ID 0x1C
 
 /* ftmod_sangoma_isdn specific enum look-up functions */
@@ -828,6 +829,115 @@ ftdm_status_t set_redir_num(ftdm_channel_t *ftdmchan, RedirNmb *redirNmb)
 	return FTDM_SUCCESS;
 }
 
+static const char *direction_str[] = {
+	"mono-mode",
+	"cc-from-target",
+	"cc-from-other-party",
+	"direction-unknown"
+};
+static e_Direction_Indication direction_from_str(const char *direction)
+{
+	uint8_t i = 0;
+	e_Direction_Indication dir = Direction_Indication_direction_unknown;
+	for (i = 0; i < 3; i++) {
+		if (!strcasecmp(direction_str[i], direction)) {
+			dir = i;
+			break;
+		}
+	}
+	return dir;
+}
+
+struct li_buffer {
+	char *buf;
+	size_t size;
+};
+
+static int write_li_data(const void *buffer, size_t size, void *app_key)
+{
+	struct li_buffer *li_buf = app_key;
+	li_buf->buf = ftdm_calloc(1, size);
+	li_buf->size = size;
+	memcpy(li_buf->buf, buffer, size);
+	return 0;
+}
+
+ftdm_status_t set_lawful_interception(ftdm_channel_t *ftdmchan, ConEvnt *conEvnt)
+{
+	struct li_buffer li_buf = { 0 };
+	const char *string = NULL;
+	char encode_err[512];
+	size_t encode_err_len = sizeof(encode_err);
+	LawfulInterceptionData_t *li_data = NULL;
+	asn_enc_rval_t ec;
+
+	string = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "isdn.li.id");
+	if (ftdm_strlen_zero(string)) {
+		goto done;
+	}
+
+	li_data = ftdm_calloc(1, sizeof(LawfulInterceptionData_t));
+	if (OCTET_STRING_fromString((OCTET_STRING_t *)&li_data->lawfullInterceptionIdentifier, string) == -1) {
+		ftdm_log(FTDM_LOG_ERROR, "Failed encoding lawful interception identifier\n");
+		goto done;
+	}
+
+	string = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "isdn.li.communication_identity_number");
+	if (!ftdm_strlen_zero(string)) {
+		li_data->communicationIdentifier.communication_Identity_Number = OCTET_STRING_new_fromBuf(&asn_DEF_OCTET_STRING, string, -1);
+		if (!li_data->communicationIdentifier.communication_Identity_Number) {
+			ftdm_log(FTDM_LOG_ERROR, "Failed encoding communication identity number\n");
+			goto done;
+		}
+	}
+
+	string = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "isdn.li.cc_link_identifier");
+	if (!ftdm_strlen_zero(string)) {
+		li_data->cC_Link_Identifier = OCTET_STRING_new_fromBuf(&asn_DEF_CC_Link_Identifier, string, -1);
+		if (!li_data->cC_Link_Identifier) {
+			ftdm_log(FTDM_LOG_ERROR, "Failed encoding cc link identifier\n");
+			goto done;
+		}
+	}
+
+	string = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "isdn.li.direction");
+	if (!ftdm_strlen_zero(string)) {
+		li_data->direction_Indication = direction_from_str(string);
+	}
+
+	string = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "isdn.li.operator_id");
+	if (!ftdm_strlen_zero(string)) {
+		if (OCTET_STRING_fromString((OCTET_STRING_t *)&li_data->communicationIdentifier.network_Identifier.operator_Identifier, string) == -1) {
+			ftdm_log(FTDM_LOG_ERROR, "Failed encoding operator identifier\n");
+			goto done;
+		}
+	}
+
+	if (asn_check_constraints(&asn_DEF_LawfulInterceptionData, li_data, encode_err, &encode_err_len)) {
+			ftdm_log(FTDM_LOG_ERROR, "ASN constraints error: %s\n", encode_err);
+			goto done;
+	}
+
+	ec = der_encode(&asn_DEF_LawfulInterceptionData, li_data, write_li_data, &li_buf);
+	if (ec.encoded == -1) {
+			ftdm_log(FTDM_LOG_ERROR, "Failed encoding lawful interception information\n");
+			goto done;
+	}
+
+	conEvnt->usrUsr.eh.pres = PRSNT_NODEF;
+	//conEvnt->usrUsr.protocolDisc.pres = PRSNT_NODEF;
+	//conEvnt->usrUsr.protocolDisc.val = PD_IA5;
+	conEvnt->usrUsr.usrInfo.pres = PRSNT_NODEF;
+	conEvnt->usrUsr.usrInfo.len = li_buf.size;
+	memcpy(conEvnt->usrUsr.usrInfo.val, li_buf.buf, li_buf.size);
+	/* How do we know conEvnt has enough info to store the buffer in usrInfo.val ? */
+
+done:
+	if (li_data) {
+		ASN_STRUCT_FREE(asn_DEF_LawfulInterceptionData, li_data);
+	}
+	return FTDM_SUCCESS;
+}
 
 ftdm_status_t set_calling_name(ftdm_channel_t *ftdmchan, ConEvnt *conEvnt)
 {

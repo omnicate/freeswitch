@@ -1738,6 +1738,32 @@ static switch_call_cause_t channel_outgoing_channel(switch_core_session_t *sessi
 		if (sipvar) {
 			ftdm_usrmsg_add_var(&usrmsg, "isdn.user-user", sipvar);
 		}
+
+		/* Lawful Interception Information */
+		sipvar = switch_channel_get_variable(channel, "sip_h_P-LI-LIID");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "isdn.li.id", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_P-LI-CIN");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "isdn.li.communication_identity_number", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_P-LI-CCLID");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "isdn.li.cc_link_identifier", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_P-LI-Direction");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "isdn.li.direction", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_P-LI-OPID");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "isdn.li.operator_id", sipvar);
+		}
 	}
 
 	if (switch_test_flag(outbound_profile, SWITCH_CPF_SCREEN)) {
