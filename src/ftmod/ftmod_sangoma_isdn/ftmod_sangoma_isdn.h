@@ -279,6 +279,7 @@ typedef struct sngisdn_span_data {
 	uint8_t			cid_name_method;
 	uint8_t			send_cid_name;
 	uint8_t                 send_connect_ack;
+	uint8_t			lawful_interception_user_info;
 	ftdm_channel_t 		*phy_channels[NUM_E1_CHANNELS_PER_SPAN]; /* Channels ordered by physical channel id */
 
 	int32_t			timer_t301;

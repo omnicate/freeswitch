@@ -130,6 +130,48 @@ static uint8_t _get_ftdm_val(ftdm2trillium_t *vals, unsigned int num_vals, uint8
 	return default_val;
 }
 
+static const char *direction_str[] = {
+	"mono-mode",
+	"cc-from-target",
+	"cc-from-other-party",
+	"direction-unknown"
+};
+static e_Direction_Indication direction_from_str(const char *direction)
+{
+	uint8_t i = 0;
+	e_Direction_Indication dir = Direction_Indication_direction_unknown;
+	for (i = 0; i < ftdm_array_len(direction_str); i++) {
+		if (!strcasecmp(direction_str[i], direction)) {
+			dir = i;
+			break;
+		}
+	}
+	return dir;
+}
+
+static const char *direction_to_str(e_Direction_Indication d)
+{
+	if (d > ftdm_array_len(direction_str)) {
+		return direction_str[ftdm_array_len(direction_str)-1];
+	}
+	return direction_str[d];
+}
+
+struct li_buffer {
+	char *buf;
+	size_t size;
+};
+
+static int write_li_data(const void *buffer, size_t size, void *app_key)
+{
+	struct li_buffer *li_buf = app_key;
+	li_buf->buf = ftdm_calloc(1, size);
+	li_buf->size = size;
+	memcpy(li_buf->buf, buffer, size);
+	return 0;
+}
+
+
 void clear_call_data(sngisdn_chan_data_t *sngisdn_info)
 {
 	uint32_t cc_id = ((sngisdn_span_data_t*)sngisdn_info->ftdmchan->span->signal_data)->cc_id;
@@ -509,7 +551,9 @@ ftdm_status_t get_called_subaddr(ftdm_channel_t *ftdmchan, CdPtySad *cdPtySad)
 
 ftdm_status_t get_user_to_user(ftdm_channel_t *ftdmchan, UsrUsr *usrUsr)
 {
-	char val[255];
+	char val[sizeof(usrUsr->usrInfo.val)*2];
+	sngisdn_chan_data_t *chandata = ftdmchan->call_data;
+	sngisdn_span_data_t *signal_data = (sngisdn_span_data_t*) ftdmchan->span->signal_data;
 
 	if (usrUsr->eh.pres != PRSNT_NODEF) {
 		return FTDM_FAIL;
@@ -523,15 +567,45 @@ ftdm_status_t get_user_to_user(ftdm_channel_t *ftdmchan, UsrUsr *usrUsr)
 
 	ftdm_url_encode((char*)usrUsr->usrInfo.val, val, usrUsr->usrInfo.len);
 
-	sngisdn_add_var((sngisdn_chan_data_t*)ftdmchan->call_data, "isdn.user-user", val);
+	sngisdn_add_var(chandata, "isdn.user-user", val);
 
 	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Received Encoded User-User Information [ %s]\n", val);
 
-	if (usrUsr->protocolDisc.pres == PRSNT_NODEF)
-	{
+	if (usrUsr->protocolDisc.pres == PRSNT_NODEF) {
 		snprintf(val, sizeof(val), "%d", usrUsr->protocolDisc.val);
-		sngisdn_add_var((sngisdn_chan_data_t*)ftdmchan->call_data, "isdn.user-user-pd", val);
+		sngisdn_add_var(chandata, "isdn.user-user-pd", val);
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Received User-User IE : Protocol Discriminator [ %s]\n", val);
+	}
+
+	if (signal_data->lawful_interception_user_info != SNGISDN_OPT_FALSE) {
+		LawfulInterceptionData_t *dec_li_data = NULL;
+		asn_dec_rval_t rval;
+		rval = ber_decode(0, &asn_DEF_LawfulInterceptionData, (void **)&dec_li_data, usrUsr->usrInfo.val, usrUsr->usrInfo.len);
+		if (rval.code != RC_OK) {
+			ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "LI-decode error at byte %ld\n", rval.consumed);
+		} else {
+			#define set_li_element(element, var) \
+				memcpy(strbuf, (element)->buf, (element)->size > sizeof(strbuf) ? sizeof(strbuf) : (element)->size); \
+				strbuf[(element)->size] = 0; \
+				sngisdn_add_var(chandata, #var, strbuf);
+
+			char strbuf[512];
+
+			set_li_element(&dec_li_data->lawfullInterceptionIdentifier, "isdn.li.id");
+
+			if (dec_li_data->communicationIdentifier.communication_Identity_Number) {
+				set_li_element(dec_li_data->communicationIdentifier.communication_Identity_Number, "isdn.li.communication_identity_number");
+			}
+
+			if (dec_li_data->cC_Link_Identifier) {
+				set_li_element(dec_li_data->cC_Link_Identifier, "isdn.li.cc_link_identifier");
+			}
+
+			snprintf(strbuf, sizeof(strbuf), "%s", direction_to_str(dec_li_data->direction_Indication));
+			sngisdn_add_var(chandata, "isdn.li.direction", strbuf);
+
+			set_li_element(&dec_li_data->communicationIdentifier.network_Identifier.operator_Identifier, "isdn.li.operator_id");
+		}
 	}
 
 	return FTDM_SUCCESS;
@@ -829,39 +903,6 @@ ftdm_status_t set_redir_num(ftdm_channel_t *ftdmchan, RedirNmb *redirNmb)
 	return FTDM_SUCCESS;
 }
 
-static const char *direction_str[] = {
-	"mono-mode",
-	"cc-from-target",
-	"cc-from-other-party",
-	"direction-unknown"
-};
-static e_Direction_Indication direction_from_str(const char *direction)
-{
-	uint8_t i = 0;
-	e_Direction_Indication dir = Direction_Indication_direction_unknown;
-	for (i = 0; i < 3; i++) {
-		if (!strcasecmp(direction_str[i], direction)) {
-			dir = i;
-			break;
-		}
-	}
-	return dir;
-}
-
-struct li_buffer {
-	char *buf;
-	size_t size;
-};
-
-static int write_li_data(const void *buffer, size_t size, void *app_key)
-{
-	struct li_buffer *li_buf = app_key;
-	li_buf->buf = ftdm_calloc(1, size);
-	li_buf->size = size;
-	memcpy(li_buf->buf, buffer, size);
-	return 0;
-}
-
 ftdm_status_t set_lawful_interception(ftdm_channel_t *ftdmchan, ConEvnt *conEvnt)
 {
 	struct li_buffer li_buf = { 0 };
@@ -914,23 +955,31 @@ ftdm_status_t set_lawful_interception(ftdm_channel_t *ftdmchan, ConEvnt *conEvnt
 	}
 
 	if (asn_check_constraints(&asn_DEF_LawfulInterceptionData, li_data, encode_err, &encode_err_len)) {
-			ftdm_log(FTDM_LOG_ERROR, "ASN constraints error: %s\n", encode_err);
-			goto done;
+		ftdm_log(FTDM_LOG_ERROR, "ASN constraints error: %s\n", encode_err);
+		goto done;
 	}
 
 	ec = der_encode(&asn_DEF_LawfulInterceptionData, li_data, write_li_data, &li_buf);
 	if (ec.encoded == -1) {
-			ftdm_log(FTDM_LOG_ERROR, "Failed encoding lawful interception information\n");
-			goto done;
+		ftdm_log(FTDM_LOG_ERROR, "Failed encoding lawful interception information\n");
+		goto done;
+	}
+
+	if (li_buf.size >= sizeof(conEvnt->usrUsr.usrInfo.val)) {
+		ftdm_log(FTDM_LOG_ERROR, "Lawful interception data is too large!\n");
+		goto done;
 	}
 
 	conEvnt->usrUsr.eh.pres = PRSNT_NODEF;
-	//conEvnt->usrUsr.protocolDisc.pres = PRSNT_NODEF;
-	//conEvnt->usrUsr.protocolDisc.val = PD_IA5;
 	conEvnt->usrUsr.usrInfo.pres = PRSNT_NODEF;
 	conEvnt->usrUsr.usrInfo.len = li_buf.size;
 	memcpy(conEvnt->usrUsr.usrInfo.val, li_buf.buf, li_buf.size);
-	/* How do we know conEvnt has enough info to store the buffer in usrInfo.val ? */
+
+	string = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "isdn.user-user-pd");
+	if (!ftdm_strlen_zero(string)) {
+		conEvnt->usrUsr.protocolDisc.pres = PRSNT_NODEF;
+		conEvnt->usrUsr.protocolDisc.val = atoi(string);
+	}
 
 done:
 	if (li_data) {

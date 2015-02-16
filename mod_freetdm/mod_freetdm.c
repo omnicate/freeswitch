@@ -1739,6 +1739,11 @@ static switch_call_cause_t channel_outgoing_channel(switch_core_session_t *sessi
 			ftdm_usrmsg_add_var(&usrmsg, "isdn.user-user", sipvar);
 		}
 
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-User-User-PD");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "isdn.user-user-pd", sipvar);
+		}
+
 		/* Lawful Interception Information */
 		sipvar = switch_channel_get_variable(channel, "sip_h_P-LI-LIID");
 		if (sipvar) {
@@ -2385,6 +2390,29 @@ ftdm_status_t ftdm_channel_from_event(ftdm_sigmsg_t *sigmsg, switch_core_session
 		var_value = ftdm_sigmsg_get_var(sigmsg, "isdn.user-user");
 		if (!ftdm_strlen_zero(var_value)) {
 			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-User-User", "%s", var_value);
+		}
+
+		/* Lawful Interception Information */
+		{
+			int i = 0;
+			struct sip_tdm_varmap {
+				const char *isdnvar;
+				const char *sipvar;
+			};
+			struct sip_tdm_varmap isdn_varmap[] = {
+				{ "isdn.li.id", "sip_h_P-LI-LIID" },
+				{ "isdn.li.communication_identity_number", "sip_h_P-LI-CIN" },
+				{ "isdn.li.cc_link_identifier", "sip_h_P-LI-CCLID" },
+				{ "isdn.li.direction", "sip_h_P-LI-Direction" },
+				{ "isdn.li.operator_id", "sip_h_P-LI-OPID" },
+			};
+
+			for (i = 0; i < ftdm_array_len(isdn_varmap); i++) {
+				var_value = ftdm_sigmsg_get_var(sigmsg, isdn_varmap[i].isdnvar);
+				if (!ftdm_strlen_zero(var_value)) {
+					switch_channel_set_variable_printf(channel, isdn_varmap[i].sipvar, "%s", var_value);
+				}
+			}
 		}
 	}
 
