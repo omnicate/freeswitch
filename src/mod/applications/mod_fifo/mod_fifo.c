@@ -1242,7 +1242,7 @@ static switch_status_t messagehook (switch_core_session_t *session, switch_core_
 			switch_time_t ts;
 			switch_time_exp_t tm;
 			switch_size_t retsize;
-			const char *ced_name, *ced_number, *cid_name, *cid_number, *outbound_id;
+			const char *ced_name, *ced_number, *cid_name, *cid_number;
 
 			if (switch_channel_test_app_flag_key(FIFO_APP_KEY, consumer_channel, FIFO_APP_BRIDGE_TAG)) {
 				goto end;
@@ -1598,9 +1598,8 @@ static void *SWITCH_THREAD_FUNC outbound_ringall_thread_run(switch_thread_t *thr
 	}
 
 	if (switch_event_create_subclass(&event, SWITCH_EVENT_CUSTOM, FIFO_EVENT) == SWITCH_STATUS_SUCCESS) {
-		switch_core_session_t *session;
 		if (id && (session = switch_core_session_locate(id))) {
-			switch_channel_t *channel = switch_core_session_get_channel(session);
+			channel = switch_core_session_get_channel(session);
 
 			switch_channel_set_variable(channel, "fifo_originate_uuid", uuid_str);
 			switch_channel_event_set_data(channel, event);
@@ -2898,7 +2897,6 @@ SWITCH_STANDARD_APP(fifo_function)
 		const char *url = NULL;
 		const char *caller_uuid = NULL;
 		const char *outbound_id = switch_channel_get_variable(channel, "fifo_outbound_uuid");
-		switch_event_t *event;
 		const char *cid_name = NULL, *cid_number = NULL;
 
 		//const char *track_use_count = switch_channel_get_variable(channel, "fifo_track_use_count");
@@ -4460,14 +4458,13 @@ static switch_status_t load_config(int reload, int del_all)
 	switch_cache_db_release_db_handle(&dbh);
 
 	if (!reload) {
-		char *sql= "update fifo_outbound set start_time=0,stop_time=0,ring_count=0,use_count=0,outbound_call_count=0,outbound_fail_count=0 where static=0";
+		sql = "update fifo_outbound set start_time=0,stop_time=0,ring_count=0,use_count=0,outbound_call_count=0,outbound_fail_count=0 where static=0";
 		fifo_execute_sql_queued(&sql, SWITCH_FALSE, SWITCH_TRUE);
 		fifo_init_use_count();
 	}
 
 	if (reload) {
 		switch_hash_index_t *hi;
-		fifo_node_t *node;
 		void *val;
 		switch_mutex_lock(globals.mutex);
 		for (hi = switch_core_hash_first(globals.fifo_hash); hi; hi = switch_core_hash_next(&hi)) {
@@ -4631,7 +4628,6 @@ static switch_status_t load_config(int reload, int del_all)
 
 	switch_xml_free(xml);
 	if (reload) {
-		fifo_node_t *node;
 		switch_mutex_lock(globals.mutex);
 		for (node = globals.nodes; node; node = node->next) {
 			if (node->ready == -1) {
