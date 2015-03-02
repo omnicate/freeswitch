@@ -817,55 +817,55 @@ SWITCH_DECLARE(unsigned char) switch_console_complete(const char *line, const ch
 		char *dupdup = strdup(dup);
 		int x, argc = 0;
 		char *argv[10] = { 0 };
-		switch_stream_handle_t stream = { 0 };
-		SWITCH_STANDARD_STREAM(stream);
+		switch_stream_handle_t std_stream = { 0 };
+		SWITCH_STANDARD_STREAM(std_stream);
 		switch_assert(dupdup);
 
 		argc = switch_separate_string(dupdup, ' ', argv, (sizeof(argv) / sizeof(argv[0])));
 
 		if (h.words == 0) {
-			stream.write_function(&stream, "select distinct a1 from complete where " "a1 not in (select name from interfaces where hostname='%s') %s ",
+			std_stream.write_function(&std_stream, "select distinct a1 from complete where " "a1 not in (select name from interfaces where hostname='%s') %s ",
 								  switch_core_get_hostname(), argc ? "and" : "");
 		} else {
 			if (switch_cache_db_get_type(db) == SCDB_TYPE_CORE_DB) {
-				stream.write_function(&stream, "select distinct a%d,'%q','%q' from complete where ", h.words + 1, switch_str_nil(dup), switch_str_nil(lp));
+				std_stream.write_function(&std_stream, "select distinct a%d,'%q','%q' from complete where ", h.words + 1, switch_str_nil(dup), switch_str_nil(lp));
 			} else {
-				stream.write_function(&stream, "select distinct a%d,'%q','%w' from complete where ", h.words + 1, switch_str_nil(dup), switch_str_nil(lp));
+				std_stream.write_function(&std_stream, "select distinct a%d,'%q','%w' from complete where ", h.words + 1, switch_str_nil(dup), switch_str_nil(lp));
 			}
 		}
 
 		for (x = 0; x < argc && x < 11; x++) {
 			if (h.words + 1 > argc) {
 				if (switch_cache_db_get_type(db) == SCDB_TYPE_CORE_DB) {
-					stream.write_function(&stream, "(a%d like '::%%' or a%d = '' or a%d = '%q')%q",
+					std_stream.write_function(&std_stream, "(a%d like '::%%' or a%d = '' or a%d = '%q')%q",
 										  x + 1, x + 1, x + 1, switch_str_nil(argv[x]), x == argc - 1 ? "" : " and ");
 				} else {
-					stream.write_function(&stream, "(a%d like '::%%' or a%d = '' or a%d = '%w')%w",
+					std_stream.write_function(&std_stream, "(a%d like '::%%' or a%d = '' or a%d = '%w')%w",
 										  x + 1, x + 1, x + 1, switch_str_nil(argv[x]), x == argc - 1 ? "" : " and ");
 				}
 			} else {
 				if (switch_cache_db_get_type(db) == SCDB_TYPE_CORE_DB) {
-					stream.write_function(&stream, "(a%d like '::%%' or a%d = '' or a%d like '%q%%')%q",
+					std_stream.write_function(&std_stream, "(a%d like '::%%' or a%d = '' or a%d like '%q%%')%q",
 										  x + 1, x + 1, x + 1, switch_str_nil(argv[x]), x == argc - 1 ? "" : " and ");
 				} else {
-					stream.write_function(&stream, "(a%d like '::%%' or a%d = '' or a%d like '%w%%')%w",
+					std_stream.write_function(&std_stream, "(a%d like '::%%' or a%d = '' or a%d like '%w%%')%w",
 										  x + 1, x + 1, x + 1, switch_str_nil(argv[x]), x == argc - 1 ? "" : " and ");
 				}
 			}
 		}
 
-		stream.write_function(&stream, " and hostname='%s' order by a%d", switch_core_get_hostname(), h.words + 1);
+		std_stream.write_function(&std_stream, " and hostname='%s' order by a%d", switch_core_get_hostname(), h.words + 1);
 		
-		switch_cache_db_execute_sql_callback(db, stream.data, comp_callback, &h, &errmsg);
+		switch_cache_db_execute_sql_callback(db, std_stream.data, comp_callback, &h, &errmsg);
 
 		if (errmsg) {
-			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "error [%s][%s]\n", (char *) stream.data, errmsg);
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "error [%s][%s]\n", (char *) std_stream.data, errmsg);
 			free(errmsg);
 			ret = CC_ERROR;
 		}
 
 		switch_safe_free(dupdup);
-		switch_safe_free(stream.data);
+		switch_safe_free(std_stream.data);
 
 		if (ret == CC_ERROR) {
 			goto end;
@@ -887,10 +887,10 @@ SWITCH_DECLARE(unsigned char) switch_console_complete(const char *line, const ch
 
 	if (h.xml) {
 		switch_xml_t x_write = switch_xml_add_child_d(h.xml, "write", h.xml_off++);
-		char buf[32];
+		char buf_len[32];
 
-		snprintf(buf, sizeof(buf), "%d", h.len);
-		switch_xml_set_attr_d_buf(x_write, "length", buf);
+		snprintf(buf_len, sizeof(buf_len), "%d", h.len);
+		switch_xml_set_attr_d_buf(x_write, "length", buf_len);
 
 		if (h.hits == 1 && !zstr(h.last)) {
 			switch_xml_set_txt_d(x_write, h.last);
