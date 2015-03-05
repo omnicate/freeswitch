@@ -427,7 +427,7 @@ void sngisdn_process_cnst_ind (sngisdn_event_data_t *sngisdn_event)
 								ftdm_log_chan_msg(ftdmchan, FTDM_LOG_DEBUG, "Early media override on alert\n");
 								sngisdn_set_flag(sngisdn_info, FLAG_MEDIA_READY);
 							}
-							if (ftdmchan->state == FTDM_CHANNEL_STATE_PROCEED) {
+							if ((ftdmchan->state == FTDM_CHANNEL_STATE_PROCEED) || (ftdmchan->state == FTDM_CHANNEL_STATE_DIALING)) {
 								ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_RINGING);
 							}
 							break;
