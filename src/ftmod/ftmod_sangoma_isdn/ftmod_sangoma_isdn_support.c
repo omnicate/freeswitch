@@ -1665,6 +1665,70 @@ ftdm_status_t sngisdn_show_span(ftdm_stream_handle_t *stream, ftdm_span_t *span,
 	return FTDM_SUCCESS;
 }
 
+ftdm_status_t sngisdn_show_span_status(ftdm_stream_handle_t *stream, ftdm_span_t *span)
+{
+	ftdm_signaling_status_t sigstatus;
+	ftdm_alarm_flag_t alarmbits = FTDM_ALARM_NONE;
+	ftdm_channel_t *fchan;
+	uint32_t chan_idx = 0;
+
+	fchan = ftdm_span_get_channel(span, 1);
+	if (fchan) {
+		ftdm_channel_get_alarms(fchan, &alarmbits);
+	}
+
+	ftdm_span_get_sig_status(span, &sigstatus);
+
+	stream->write_function(stream, "\n***********************************************************************\n");
+	stream->write_function(stream, "Span Information: \n");
+	stream->write_function(stream, "|span name: %s| physical status: %s| signalling status: %s|\n\n",
+			span->name, alarmbits ? "ALARMED" : "OK",
+			ftdm_signaling_status2str(sigstatus));
+
+	fchan = ((sngisdn_span_data_t*)span->signal_data)->dchan;
+
+	if (fchan) {
+		ftdm_channel_get_alarms(fchan, &alarmbits);
+		stream->write_function(stream, "Signalling Channel Information: \n");
+		stream->write_function(stream, "span = %2d|chan = %2d|phy_status = %4s|SIGNALLING LINK|\n\n",
+				span->span_id, fchan->physical_chan_id, alarmbits ? "ALARMED" : "OK");
+	}
+
+	stream->write_function(stream, "Voice Channels Information: \n");
+	for (chan_idx = 1; chan_idx < span->chan_count; chan_idx++) {
+		fchan = span->channels[chan_idx];
+		alarmbits = FTDM_ALARM_NONE;
+
+		if (fchan) {
+			ftdm_channel_get_alarms(fchan, &alarmbits);
+
+			ftdm_channel_get_sig_status(fchan, &sigstatus);
+
+			stream->write_function(stream, "span = %2d|chan = %2d|phy_status = %4s|sig_status = %4s|state = %s|\n",
+					span->span_id, fchan->physical_chan_id, alarmbits ? "ALARMED" : "OK",
+					ftdm_signaling_status2str(sigstatus),
+					ftdm_channel_state2str(fchan->state));
+		}
+	}
+
+	stream->write_function(stream, "***********************************************************************\n");
+
+	return FTDM_SUCCESS;
+}
+
+ftdm_status_t sngisdn_show_span_all_status(ftdm_stream_handle_t *stream, ftdm_span_t *span)
+{
+	uint32_t span_idx = 0;
+
+	for(span_idx = 1; span_idx <= MAX_L1_LINKS; span_idx++) {
+		if (g_sngisdn_data.spans[span_idx]) {
+			sngisdn_show_span_status(stream, g_sngisdn_data.spans[span_idx]->ftdm_span);
+		}
+	}
+
+	return FTDM_SUCCESS;
+}
+
 ftdm_status_t sngisdn_show_spans(ftdm_stream_handle_t *stream, uint8_t xml)
 {
 	int i;	
