@@ -96,7 +96,7 @@ fi
 
 # attempt to compile freetdm
 echo "Build freetdm and mod_freetdm now..."
-make all mod_freetdm || exit 1
+#make  mod_freetdm || exit 1
 echo "freetdm built OK"
 
 major=$(echo "$VERSION" | cut -d. -f1)
