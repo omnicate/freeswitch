@@ -158,19 +158,22 @@ static const char *direction_to_str(e_Direction_Indication d)
 }
 
 struct li_buffer {
-	char *buf;
+	uint8_t *buf;
 	size_t size;
+	size_t max_size;
 };
 
 static int write_li_data(const void *buffer, size_t size, void *app_key)
 {
 	struct li_buffer *li_buf = app_key;
-	li_buf->buf = ftdm_calloc(1, size);
-	li_buf->size = size;
-	memcpy(li_buf->buf, buffer, size);
+	if ((li_buf->size + size) > li_buf->max_size) {
+		ftdm_log(FTDM_LOG_ERROR, "Target lawful interception buffer exceeded\n");
+		return -1;
+	}
+	memcpy(&li_buf->buf[li_buf->size], buffer, size);
+	li_buf->size += size;
 	return 0;
 }
-
 
 void clear_call_data(sngisdn_chan_data_t *sngisdn_info)
 {
@@ -556,6 +559,7 @@ ftdm_status_t get_user_to_user(ftdm_channel_t *ftdmchan, UsrUsr *usrUsr)
 	sngisdn_span_data_t *signal_data = (sngisdn_span_data_t*) ftdmchan->span->signal_data;
 
 	if (usrUsr->eh.pres != PRSNT_NODEF) {
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "User-User IE not present\n", usrUsr->usrInfo.pres);
 		return FTDM_FAIL;
 	}
 	memset(val, 0, sizeof(val));
@@ -578,36 +582,37 @@ ftdm_status_t get_user_to_user(ftdm_channel_t *ftdmchan, UsrUsr *usrUsr)
 	}
 
 	if (signal_data->lawful_interception_user_info != SNGISDN_OPT_FALSE) {
+		char strbuf[512] = { 0 };
 		LawfulInterceptionData_t *dec_li_data = NULL;
 		asn_dec_rval_t rval;
 		rval = ber_decode(0, &asn_DEF_LawfulInterceptionData, (void **)&dec_li_data, usrUsr->usrInfo.val, usrUsr->usrInfo.len);
 		if (rval.code != RC_OK) {
-			ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "LI-decode error at byte %ld\n", rval.consumed);
-		} else {
-			#define set_li_element(element, var) \
-				memcpy(strbuf, (element)->buf, (element)->size > sizeof(strbuf) ? sizeof(strbuf) : (element)->size); \
-				strbuf[(element)->size] = 0; \
-				sngisdn_add_var(chandata, #var, strbuf);
-
-			char strbuf[512];
-
-			set_li_element(&dec_li_data->lawfullInterceptionIdentifier, "li.id");
-
-			if (dec_li_data->communicationIdentifier.communication_Identity_Number) {
-				set_li_element(dec_li_data->communicationIdentifier.communication_Identity_Number, "li.communication_identity_number");
-			}
-
-			if (dec_li_data->cC_Link_Identifier) {
-				set_li_element(dec_li_data->cC_Link_Identifier, "li.cc_link_identifier");
-			}
-
-			snprintf(strbuf, sizeof(strbuf), "%s", direction_to_str(dec_li_data->direction_Indication));
-			sngisdn_add_var(chandata, "li.direction", strbuf);
-
-			set_li_element(&dec_li_data->communicationIdentifier.network_Identifier.operator_Identifier, "li.operator_id");
+			ftdm_log_chan(ftdmchan, FTDM_LOG_ERROR, "LI-decode error at byte %ld\n", rval.consumed);
+			goto done;
 		}
-	}
+		#define set_li_element(element, var) \
+			memcpy(strbuf, (element)->buf, (element)->size > sizeof(strbuf) ? sizeof(strbuf) : (element)->size); \
+			strbuf[(element)->size] = 0; \
+			sngisdn_add_var(chandata, var, strbuf);
 
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "LI-decoded %ld bytes\n", rval.consumed);
+
+		set_li_element(&dec_li_data->lawfullInterceptionIdentifier, "li.id");
+
+		if (dec_li_data->communicationIdentifier.communication_Identity_Number) {
+			set_li_element(dec_li_data->communicationIdentifier.communication_Identity_Number, "li.communication_identity_number");
+		}
+
+		if (dec_li_data->cC_Link_Identifier) {
+			set_li_element(dec_li_data->cC_Link_Identifier, "li.cc_link_identifier");
+		}
+
+		snprintf(strbuf, sizeof(strbuf), "%s", direction_to_str(dec_li_data->direction_Indication));
+		sngisdn_add_var(chandata, "li.direction", strbuf);
+
+		set_li_element(&dec_li_data->communicationIdentifier.network_Identifier.operator_Identifier, "li.operator_id");
+	}
+done:
 	return FTDM_SUCCESS;
 }
 
@@ -959,25 +964,25 @@ ftdm_status_t set_lawful_interception(ftdm_channel_t *ftdmchan, ConEvnt *conEvnt
 		goto done;
 	}
 
+	li_buf.buf = conEvnt->usrUsr.usrInfo.val;
+	li_buf.max_size = sizeof(conEvnt->usrUsr.usrInfo.val);
+	li_buf.size = 0;
 	ec = der_encode(&asn_DEF_LawfulInterceptionData, li_data, write_li_data, &li_buf);
 	if (ec.encoded == -1) {
 		ftdm_log(FTDM_LOG_ERROR, "Failed encoding lawful interception information\n");
 		goto done;
 	}
 
-	if (li_buf.size >= sizeof(conEvnt->usrUsr.usrInfo.val)) {
-		ftdm_log(FTDM_LOG_ERROR, "Lawful interception data is too large!\n");
-		goto done;
-	}
-
 	conEvnt->usrUsr.eh.pres = PRSNT_NODEF;
 	conEvnt->usrUsr.usrInfo.pres = PRSNT_NODEF;
 	conEvnt->usrUsr.usrInfo.len = li_buf.size;
-	memcpy(conEvnt->usrUsr.usrInfo.val, li_buf.buf, li_buf.size);
+	conEvnt->usrUsr.protocolDisc.pres = PRSNT_NODEF;
+	conEvnt->usrUsr.protocolDisc.val = PD_USER;
+	xer_fprint(stderr, &asn_DEF_LawfulInterceptionData, li_data);
+	ftdm_log(FTDM_LOG_DEBUG, "Successfully encoded lawful interception data in %zd bytes\n", li_buf.size);
 
 	string = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "isdn.user-user-pd");
 	if (!ftdm_strlen_zero(string)) {
-		conEvnt->usrUsr.protocolDisc.pres = PRSNT_NODEF;
 		conEvnt->usrUsr.protocolDisc.val = atoi(string);
 	}
 
@@ -1165,16 +1170,10 @@ ftdm_status_t set_called_subaddr(ftdm_channel_t *ftdmchan, CdPtySad *cdPtySad)
 
 ftdm_status_t set_user_user_ie(ftdm_channel_t *ftdmchan, UsrUsr *usrUsr)
 {
-
 	const char *val = NULL;
 
 	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "isdn.user-user");
-	if (ftdm_strlen_zero(val)) {
-		usrUsr->eh.pres 	= NOTPRSNT;
-		usrUsr->protocolDisc.pres = NOTPRSNT;
-		usrUsr->usrInfo.pres    = NOTPRSNT;
-	}
-	else {
+	if (!ftdm_strlen_zero(val)) {
 		char *val_dec = NULL;
 		ftdm_size_t val_len = strlen (val);
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found isdn.user-user IE encoded : %s\n", val);
