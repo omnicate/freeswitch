@@ -1747,27 +1747,27 @@ static switch_call_cause_t channel_outgoing_channel(switch_core_session_t *sessi
 		/* Lawful Interception Information */
 		sipvar = switch_channel_get_variable(channel, "sip_h_P-LI-LIID");
 		if (sipvar) {
-			ftdm_usrmsg_add_var(&usrmsg, "isdn.li.id", sipvar);
+			ftdm_usrmsg_add_var(&usrmsg, "li.id", sipvar);
 		}
 
 		sipvar = switch_channel_get_variable(channel, "sip_h_P-LI-CIN");
 		if (sipvar) {
-			ftdm_usrmsg_add_var(&usrmsg, "isdn.li.communication_identity_number", sipvar);
+			ftdm_usrmsg_add_var(&usrmsg, "li.communication_identity_number", sipvar);
 		}
 
 		sipvar = switch_channel_get_variable(channel, "sip_h_P-LI-CCLID");
 		if (sipvar) {
-			ftdm_usrmsg_add_var(&usrmsg, "isdn.li.cc_link_identifier", sipvar);
+			ftdm_usrmsg_add_var(&usrmsg, "li.cc_link_identifier", sipvar);
 		}
 
 		sipvar = switch_channel_get_variable(channel, "sip_h_P-LI-Direction");
 		if (sipvar) {
-			ftdm_usrmsg_add_var(&usrmsg, "isdn.li.direction", sipvar);
+			ftdm_usrmsg_add_var(&usrmsg, "li.direction", sipvar);
 		}
 
 		sipvar = switch_channel_get_variable(channel, "sip_h_P-LI-OPID");
 		if (sipvar) {
-			ftdm_usrmsg_add_var(&usrmsg, "isdn.li.operator_id", sipvar);
+			ftdm_usrmsg_add_var(&usrmsg, "li.operator_id", sipvar);
 		}
 	}
 
@@ -2400,11 +2400,11 @@ ftdm_status_t ftdm_channel_from_event(ftdm_sigmsg_t *sigmsg, switch_core_session
 				const char *sipvar;
 			};
 			struct sip_tdm_varmap isdn_varmap[] = {
-				{ "isdn.li.id", "sip_h_P-LI-LIID" },
-				{ "isdn.li.communication_identity_number", "sip_h_P-LI-CIN" },
-				{ "isdn.li.cc_link_identifier", "sip_h_P-LI-CCLID" },
-				{ "isdn.li.direction", "sip_h_P-LI-Direction" },
-				{ "isdn.li.operator_id", "sip_h_P-LI-OPID" },
+				{ "li.id", "sip_h_P-LI-LIID" },
+				{ "li.communication_identity_number", "sip_h_P-LI-CIN" },
+				{ "li.cc_link_identifier", "sip_h_P-LI-CCLID" },
+				{ "li.direction", "sip_h_P-LI-Direction" },
+				{ "li.operator_id", "sip_h_P-LI-OPID" },
 			};
 
 			for (i = 0; i < ftdm_array_len(isdn_varmap); i++) {

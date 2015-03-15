@@ -591,20 +591,20 @@ ftdm_status_t get_user_to_user(ftdm_channel_t *ftdmchan, UsrUsr *usrUsr)
 
 			char strbuf[512];
 
-			set_li_element(&dec_li_data->lawfullInterceptionIdentifier, "isdn.li.id");
+			set_li_element(&dec_li_data->lawfullInterceptionIdentifier, "li.id");
 
 			if (dec_li_data->communicationIdentifier.communication_Identity_Number) {
-				set_li_element(dec_li_data->communicationIdentifier.communication_Identity_Number, "isdn.li.communication_identity_number");
+				set_li_element(dec_li_data->communicationIdentifier.communication_Identity_Number, "li.communication_identity_number");
 			}
 
 			if (dec_li_data->cC_Link_Identifier) {
-				set_li_element(dec_li_data->cC_Link_Identifier, "isdn.li.cc_link_identifier");
+				set_li_element(dec_li_data->cC_Link_Identifier, "li.cc_link_identifier");
 			}
 
 			snprintf(strbuf, sizeof(strbuf), "%s", direction_to_str(dec_li_data->direction_Indication));
-			sngisdn_add_var(chandata, "isdn.li.direction", strbuf);
+			sngisdn_add_var(chandata, "li.direction", strbuf);
 
-			set_li_element(&dec_li_data->communicationIdentifier.network_Identifier.operator_Identifier, "isdn.li.operator_id");
+			set_li_element(&dec_li_data->communicationIdentifier.network_Identifier.operator_Identifier, "li.operator_id");
 		}
 	}
 
@@ -912,7 +912,7 @@ ftdm_status_t set_lawful_interception(ftdm_channel_t *ftdmchan, ConEvnt *conEvnt
 	LawfulInterceptionData_t *li_data = NULL;
 	asn_enc_rval_t ec;
 
-	string = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "isdn.li.id");
+	string = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "li.id");
 	if (ftdm_strlen_zero(string)) {
 		goto done;
 	}
@@ -923,7 +923,7 @@ ftdm_status_t set_lawful_interception(ftdm_channel_t *ftdmchan, ConEvnt *conEvnt
 		goto done;
 	}
 
-	string = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "isdn.li.communication_identity_number");
+	string = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "li.communication_identity_number");
 	if (!ftdm_strlen_zero(string)) {
 		li_data->communicationIdentifier.communication_Identity_Number = OCTET_STRING_new_fromBuf(&asn_DEF_OCTET_STRING, string, -1);
 		if (!li_data->communicationIdentifier.communication_Identity_Number) {
@@ -932,7 +932,7 @@ ftdm_status_t set_lawful_interception(ftdm_channel_t *ftdmchan, ConEvnt *conEvnt
 		}
 	}
 
-	string = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "isdn.li.cc_link_identifier");
+	string = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "li.cc_link_identifier");
 	if (!ftdm_strlen_zero(string)) {
 		li_data->cC_Link_Identifier = OCTET_STRING_new_fromBuf(&asn_DEF_CC_Link_Identifier, string, -1);
 		if (!li_data->cC_Link_Identifier) {
@@ -941,12 +941,12 @@ ftdm_status_t set_lawful_interception(ftdm_channel_t *ftdmchan, ConEvnt *conEvnt
 		}
 	}
 
-	string = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "isdn.li.direction");
+	string = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "li.direction");
 	if (!ftdm_strlen_zero(string)) {
 		li_data->direction_Indication = direction_from_str(string);
 	}
 
-	string = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "isdn.li.operator_id");
+	string = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "li.operator_id");
 	if (!ftdm_strlen_zero(string)) {
 		if (OCTET_STRING_fromString((OCTET_STRING_t *)&li_data->communicationIdentifier.network_Identifier.operator_Identifier, string) == -1) {
 			ftdm_log(FTDM_LOG_ERROR, "Failed encoding operator identifier\n");

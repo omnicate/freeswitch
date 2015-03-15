@@ -1526,12 +1526,207 @@ ftdm_status_t copy_cgPtyCat_from_sngss7(ftdm_channel_t *ftdmchan, SiCgPtyCat *cg
 	return FTDM_SUCCESS;
 }
 
+#define write_bcd(val) \
+        do { \
+                p = nib / 2; \
+                if (p > max_p) { \
+                        fprintf(stderr, "Max size reached\n"); \
+                        return; \
+                } \
+                subAddrIE[p] |= ((val << s) & m); \
+                fprintf(stderr, "[%d] %d m(0x%1X) s(0x%1X)\n", p, i, m, s); \
+                m = (m == 0x0F) ? 0xF0 : 0x0F; \
+                s = (s == 0) ? 4 : 0; \
+                nib++; \
+        } while (0);
+static void bcd_encode(const char *digits,
+                char *subAddrIE,
+                int *shift,
+                int *mask,
+                int *nibcnt,
+                int max_p)
+{
+	/* TODO: get rid of shift/mask, we can use the nibcnt to determine it */
+	int s = *shift;
+	int m = *mask;
+	int p = 0;
+	int nib = *nibcnt;
+	int i = 0;
+	char tmp[2] = { 0 };
+	const char *c = digits;
+
+	//fprintf(stderr, "%p\n", subAddrIE);
+	while (c && *c) {
+		tmp[0] = *c;
+		i = atoi(tmp);
+		write_bcd(i);
+		c++;
+	}
+
+	/* Add the field separator */
+	i = 0xF;
+	write_bcd(i);
+
+	/* Store context for subsequent calls */
+	*shift = s;
+	*mask = m;
+	*nibcnt = nib;
+}
+
+struct _direction_map {
+	const char *var;
+	const char *val;
+} li_direction_map[] = {
+	{ "mono-mode", "0" },
+	{ "cc-from-target", "1" },
+	{ "cc-from-other-party", "2" },
+	{ "direction-unknown", "3" },
+};
+
+static const char *li_direction_str2val(const char *dir)
+{
+	int i = 0;
+	for (i = 0; i < ftdm_array_len(li_direction_map); i++) {
+		if (!strcasecmp(dir, li_direction_map[i].var)) {
+			return li_direction_map[i].val;
+		}
+	}
+	return "3";
+}
+
+static void append_ie_to_transport(SiAccTrnspt *accTrnspt, char *subAddrIE)
+{
+	/* check if the clg_subAddr has already been added */
+	if (accTrnspt->eh.pres == PRSNT_NODEF) {
+		/* append the subAddrIE */
+		memcpy(&accTrnspt->infoElmts.val[accTrnspt->infoElmts.len], subAddrIE, (subAddrIE[1] + 2));
+		accTrnspt->infoElmts.len = accTrnspt->infoElmts.len + subAddrIE[1] + 2;
+	} else {
+		/* fill in from the beginning */
+		accTrnspt->eh.pres = PRSNT_NODEF;
+		accTrnspt->infoElmts.pres = PRSNT_NODEF;
+		memcpy(accTrnspt->infoElmts.val, subAddrIE, (subAddrIE[1] + 2));
+		accTrnspt->infoElmts.len = subAddrIE[1] + 2;
+	}
+}
+
+#define MAX_SUBADDR 20 /* According to notes on table 4-10/Q.931 */
+static void encode_li_cgpty_subAddrIE(ftdm_channel_t *ftdmchan, SiAccTrnspt *accTrnspt, char *subAddrIE, int max_len)
+{
+	const char *id = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "li.id");
+	const char *direction = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "li.direction");
+	const char *dirval = ftdm_strlen_zero(direction) ? "" : li_direction_str2val(direction);
+	int p = 0;
+	int shift = 0;
+	int mask = 0x0F;
+	int nibcnt = 0;
+	int odd = 0;
+
+	max_len = max_len > MAX_SUBADDR ? MAX_SUBADDR : max_len;
+	memset(subAddrIE, 0, max_len);
+
+	/* calling party subaddress IE identifier */
+	subAddrIE[p] = 0x6d;
+
+	p = 3; /* Subaddress information starts at the fourth octet */
+
+	/* Encode the LIID */
+	bcd_encode(id, &subAddrIE[p], &shift, &mask, &nibcnt, max_len);
+
+	/* Encode the direction */
+	bcd_encode(dirval, &subAddrIE[p], &shift, &mask, &nibcnt, max_len);
+
+	/* Set length field */
+	p = 1;
+	subAddrIE[p] = !(nibcnt % 2) ? (nibcnt / 2) : ((nibcnt / 2) + 1);
+
+	/* Type of subaddress and odd/even indicator are at the same octet*/
+	p = 2;
+
+	/* Set the MSB (ext) */
+	subAddrIE[p] |= 0x80;
+
+	/* Set Type of subaddress */
+	subAddrIE[p] |= (0x2 << 4) & 0x70; /* 0x2 is type 010 (user-defined) in bit positions 567 */
+
+	/* Set Odd/Even indicator */
+	odd = (nibcnt % 2) ? 1 : 0;
+	subAddrIE[p] |= (odd << 3) & 0x8;
+
+	append_ie_to_transport(accTrnspt, subAddrIE);
+}
+
+static void encode_li_cdpty_subAddrIE(ftdm_channel_t *ftdmchan, SiAccTrnspt *accTrnspt, char *subAddrIE, int max_len)
+{
+	const char *operator_id = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "li.operator_id");
+	const char *cin = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "li.communication_identity_number");
+	const char *cclid = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "li.cc_link_identifier");
+	int p = 0;
+	int shift = 0;
+	int mask = 0x0F;
+	int nibcnt = 0;
+	int odd = 0;
+
+	max_len = max_len > MAX_SUBADDR ? MAX_SUBADDR : max_len;
+	memset(subAddrIE, 0, max_len);
+
+	/* called party subaddress IE identifier */
+	subAddrIE[p] = 0x71;
+
+	p = 3; /* Subaddress information starts at the fourth octet */
+
+	/* Encode the operator id */
+	bcd_encode(operator_id, &subAddrIE[p], &shift, &mask, &nibcnt, max_len);
+
+	/* Encode the communication identity number */
+	bcd_encode(cin, &subAddrIE[p], &shift, &mask, &nibcnt, max_len);
+
+	/* Encode the cc link identifier */
+	bcd_encode(cclid, &subAddrIE[p], &shift, &mask, &nibcnt, max_len);
+
+	/* Set length field */
+	p = 1;
+	subAddrIE[p] = !(nibcnt % 2) ? (nibcnt / 2) : ((nibcnt / 2) + 1);
+
+	/* Type of subaddress and odd/even indicator are at the same octet*/
+	p = 2;
+
+	/* Set the MSB (ext) */
+	subAddrIE[p] |= 0x80;
+
+	/* Set Type of subaddress */
+	subAddrIE[p] |= (0x2 << 4) & 0x70; /* 0x2 is type 010 (user-defined) in bit positions 567 */
+
+	/* Set Odd/Even indicator */
+	odd = (nibcnt % 2) ? 1 : 0;
+	subAddrIE[p] |= (odd << 3) & 0x8;
+
+	append_ie_to_transport(accTrnspt, subAddrIE);
+}
+
 ftdm_status_t copy_accTrnspt_to_sngss7(ftdm_channel_t *ftdmchan, SiAccTrnspt *accTrnspt)
 {
-	const char			*clg_subAddr = NULL;
-	const char			*cld_subAddr = NULL;
-	char 				subAddrIE[MAX_SIZEOF_SUBADDR_IE];
+	/* TODO: change subAddrIE to uint8_t */
+	const char *clg_subAddr = NULL;
+	const char *cld_subAddr = NULL;
+	const char *li_id = NULL;
+	char subAddrIE[MAX_SIZEOF_SUBADDR_IE] = { 0 };
 	
+	/* check if the user would like us to send encoded lawful interception information  */
+	li_id = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "li.id");
+	if (!ftdm_strlen_zero(li_id)) {
+		ftdm_log_chan_msg(ftdmchan, FTDM_LOG_DEBUG, "Found user supplied lawful interception information\n");
+
+		/* First encode the LIID and Direction in the calling party subaddress */
+		encode_li_cgpty_subAddrIE(ftdmchan, accTrnspt, subAddrIE, sizeof(subAddrIE) - 1);
+
+		/* Now encode the Operator ID, CIN and CCLID in the called party subaddress */
+		encode_li_cdpty_subAddrIE(ftdmchan, accTrnspt, subAddrIE, sizeof(subAddrIE) - 1);
+
+		/* Lawful interception info done, do not check for explicit calling/called subaddress info */
+		goto done;
+	}
+
 	/* check if the user would like us to send a clg_sub-address */
 	clg_subAddr = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_clg_subaddr");
 	if (!ftdm_strlen_zero(clg_subAddr)) {
@@ -1608,6 +1803,8 @@ ftdm_status_t copy_accTrnspt_to_sngss7(ftdm_channel_t *ftdmchan, SiAccTrnspt *ac
 			}
 		}
 	} /* if ((cld_subAddr != NULL) && (*cld_subAddr)) */
+
+done:
 	return FTDM_SUCCESS;
 }
 
