@@ -368,11 +368,13 @@ ftdm_status_t sngisdn_stack_cfg_q921_msap(ftdm_span_t *span)
 
 	if (signal_data->signalling == SNGISDN_SIGNALING_NET) {
 		cfg.t.cfg.s.bdMSAP.logInt      = 1;         /* logical interface = 0 = user, 1= network */
-		cfg.t.cfg.s.bdMSAP.setUpArb    = PASSIVE;       /* set up arbitration */
 	} else {
 		cfg.t.cfg.s.bdMSAP.logInt      = 0;         /* logical interface = 0 = user, 1= network */
-		cfg.t.cfg.s.bdMSAP.setUpArb    = ACTIVE;       /* set up arbitration */
 	}
+
+	/* by default setUpArb is set to true i.e. both NET/CPE will trigger association request i.e.
+	 * generate SABME, if the links are not in Connected/UP state */
+	cfg.t.cfg.s.bdMSAP.setUpArb    = ACTIVE;       /* set up arbitration */
 
 	/* Overwrite setUpArb value if user forced it */
 	if (signal_data->setup_arb == SNGISDN_OPT_TRUE) {
