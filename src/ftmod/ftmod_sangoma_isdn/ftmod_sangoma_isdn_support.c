@@ -1668,11 +1668,33 @@ ftdm_status_t sngisdn_show_span(ftdm_stream_handle_t *stream, ftdm_span_t *span,
 ftdm_status_t sngisdn_show_span_status(ftdm_stream_handle_t *stream, ftdm_span_t *span)
 {
 	ftdm_signaling_status_t sigstatus;
-	ftdm_alarm_flag_t alarmbits;
+	ftdm_alarm_flag_t alarmbits = FTDM_ALARM_NONE;
 	ftdm_channel_t *fchan;
 	uint32_t chan_idx = 0;
 
-	stream->write_function(stream, "***********************************************************************\n");
+	fchan = ftdm_span_get_channel(span, 1);
+	if (fchan) {
+		ftdm_channel_get_alarms(fchan, &alarmbits);
+	}
+
+	ftdm_span_get_sig_status(span, &sigstatus);
+
+	stream->write_function(stream, "\n***********************************************************************\n");
+	stream->write_function(stream, "Span Information: \n");
+	stream->write_function(stream, "|span name: %s| physical status: %s| signalling status: %s|\n\n",
+			span->name, alarmbits ? "ALARMED" : "OK",
+			ftdm_signaling_status2str(sigstatus));
+
+	fchan = ((sngisdn_span_data_t*)span->signal_data)->dchan;
+
+	if (fchan) {
+		ftdm_channel_get_alarms(fchan, &alarmbits);
+		stream->write_function(stream, "Signalling Channel Information: \n");
+		stream->write_function(stream, "span = %2d|chan = %2d|phy_status = %4s|SIGNALLING LINK|\n\n",
+				span->span_id, fchan->physical_chan_id, alarmbits ? "ALARMED" : "OK");
+	}
+
+	stream->write_function(stream, "Voice Channels Information: \n");
 	for (chan_idx = 1; chan_idx < span->chan_count; chan_idx++) {
 		fchan = span->channels[chan_idx];
 		alarmbits = FTDM_ALARM_NONE;
@@ -1689,13 +1711,6 @@ ftdm_status_t sngisdn_show_span_status(ftdm_stream_handle_t *stream, ftdm_span_t
 		}
 	}
 
-	fchan = ((sngisdn_span_data_t*)span->signal_data)->dchan;
-
-	if (fchan) {
-		ftdm_channel_get_alarms(fchan, &alarmbits);
-		stream->write_function(stream, "span = %2d|chan = %2d|phy_status = %4s|SIGNALLING LINK|\n",
-				span->span_id, fchan->physical_chan_id, alarmbits ? "ALARMED" : "OK");
-	}
 	stream->write_function(stream, "***********************************************************************\n");
 
 	return FTDM_SUCCESS;
