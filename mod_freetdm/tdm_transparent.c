@@ -545,6 +545,7 @@ static void *tchan_msg_handler(ftdm_thread_t * me, void *obj)
 	/* poll realted variables */
 	ftdm_channel_t *ftdmchan_poll[FTDM_MAX_CHANNELS_PHYSICAL_SPAN] = { 0 };
 	ftdm_status_t poll_status = FTDM_FAIL;
+	switch_status_t swtch_poll_status = SWITCH_STATUS_FALSE;
 	const switch_pollfd_t *sock_fd = NULL;
 
 	tchan_hw_link_status_t link_status = TCHAN_HW_LINK_DISCONNECTED;
@@ -706,11 +707,11 @@ udp_poll:
 
 		/* poll for certain time on all socket fds present  and check if any data is present then write the same on to the
 		 * channel as configured */
-		poll_status = switch_pollset_poll(SPAN_CONFIG[span_id].tchan_gen.pollset, waitms, &num_sockfd, &sock_fd);
+		swtch_poll_status = switch_pollset_poll(SPAN_CONFIG[span_id].tchan_gen.pollset, waitms, &num_sockfd, &sock_fd);
 
-		if (poll_status!= SWITCH_STATUS_SUCCESS && poll_status != SWITCH_STATUS_TIMEOUT) {
+		if (swtch_poll_status!= SWITCH_STATUS_SUCCESS && swtch_poll_status != SWITCH_STATUS_TIMEOUT) {
 			ftdm_log(FTDM_LOG_ERROR, "Poll on UDP Socket failed!\n");
-		} else if (poll_status == SWITCH_STATUS_TIMEOUT) {
+		} else if (swtch_poll_status == SWITCH_STATUS_TIMEOUT) {
 			ftdm_log(FTDM_LOG_DEBUG, "Poll TIMEOUT on UDP Socket!\n");
 		}
 
