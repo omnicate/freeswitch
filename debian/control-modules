@@ -545,7 +545,7 @@ Build-Depends: libogg-dev, libvorbis-dev
 Module: formats/mod_sndfile
 Description: mod_sndfile
  Adds mod_sndfile.
-Build-Depends: libflac-dev, libogg-dev, libvorbis-dev
+Build-Depends: libsndfile1-dev, libflac-dev, libogg-dev, libvorbis-dev
 
 Module: formats/mod_ssml
 Description: mod_ssml

@@ -1210,6 +1210,9 @@ PKG_CHECK_MODULES([LDNS], [libldns >= 1.6.6],[
       AC_MSG_RESULT([no]); AM_CONDITIONAL([HAVE_LDNS],[false])
     fi],[
     AM_CONDITIONAL([HAVE_LDNS],[true])])])
+PKG_CHECK_MODULES([SNDFILE], [sndfile >= 1.0.20],[
+  AM_CONDITIONAL([HAVE_SNDFILE],[true])],[
+  AC_MSG_RESULT([no]); AM_CONDITIONAL([HAVE_SNDFILE],[false])])
 
 PKG_CHECK_MODULES([MEMCACHED], [libmemcached >= 0.31],[
   AM_CONDITIONAL([HAVE_MEMCACHED],[true])
@@ -1709,7 +1712,6 @@ fi
 AC_CONFIG_SUBDIRS([libs/ilbc])
 AC_CONFIG_SUBDIRS([libs/iksemel])
 AC_CONFIG_SUBDIRS([libs/libdingaling])
-AC_CONFIG_SUBDIRS([libs/libsndfile])
 AC_CONFIG_SUBDIRS([libs/sofia-sip])
 AC_CONFIG_SUBDIRS([libs/freetdm])
 AC_CONFIG_SUBDIRS([libs/unimrcp])

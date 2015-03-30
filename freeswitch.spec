@@ -188,6 +188,7 @@ BuildRequires: bison
 BuildRequires: net-snmp-devel
 BuildRequires: libmemcached-devel
 BuildRequires: portaudio-devel
+BuildRequires: libsndfile-devel
 %if %{build_py26_esl}
 BuildRequires: python26-devel
 Requires: python26
@@ -212,6 +213,7 @@ Requires: libtiff
 Requires: python
 Requires: libtheora
 Requires: libxml2
+Requires: libsndfile
 
 %if %{?suse_version:1}0
 %if 0%{?suse_version} > 910
