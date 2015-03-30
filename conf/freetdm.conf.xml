@@ -598,5 +598,28 @@ with the signaling protocols that you can run on top of your I/O interfaces.
 			</channel>
 		</span>
 	</transparent_spans>
+
+	<!--
+		SANGOMA ISDN passive tapping spans
+		ISDN Tapping SPAN is required when we need to passively tap E1/T1 messages
+	-->
+	<sangoma_isdn_tap_spans>
+		<span name="tap1" cfgprofile="E1 PRI CPE">
+			<!-- The peer span name used to tap the link -->
+			<param name="peerspan" value="tap2"/>
+
+			<!--
+				To enable bi-directional call control that is to generate SIP INVITE
+				as soon as SETUP/PROCEED/PROGRESS/ALERT  any of these messages are
+				received and 200 K is being sent on receipt of CONNECT
+			-->
+			<!-- <param name="tapmode" value="bi-dir" /> -->
+
+			<!-- switch parameters (required), where to send calls to -->
+			<param name="dialplan" value="XML"/>
+			<param name="context" value="default"/>
+		</span>
+	</sangoma_isdn_tap_spans>
+
 </configuration>
 

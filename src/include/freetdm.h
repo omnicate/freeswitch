@@ -794,6 +794,7 @@ struct ftdm_memory_handler {
 #define FIO_SPAN_DESTROY_ARGS (ftdm_span_t *span)
 #define FIO_COMMAND_ARGS (ftdm_channel_t *ftdmchan, ftdm_command_t command, void *obj)
 #define FIO_WAIT_ARGS (ftdm_channel_t *ftdmchan, ftdm_wait_flag_t *flags, int32_t to)
+#define FIO_WAIT_MULTIPLE_ARGS (ftdm_channel_t *ftdmchan[], ftdm_wait_flag_t poll_events[], uint32_t num_chans,  uint32_t ms)
 #define FIO_GET_ALARMS_ARGS (ftdm_channel_t *ftdmchan)
 #define FIO_READ_ARGS (ftdm_channel_t *ftdmchan, void *data, ftdm_size_t *datalen)
 #define FIO_WRITE_ARGS (ftdm_channel_t *ftdmchan, void *data, ftdm_size_t *datalen)
@@ -841,6 +842,7 @@ typedef ftdm_status_t (*fio_span_destroy_t) FIO_SPAN_DESTROY_ARGS ;
 typedef ftdm_status_t (*fio_get_alarms_t) FIO_GET_ALARMS_ARGS ;
 typedef ftdm_status_t (*fio_command_t) FIO_COMMAND_ARGS ;
 typedef ftdm_status_t (*fio_wait_t) FIO_WAIT_ARGS ;
+typedef ftdm_status_t (*fio_wait_multiple_t) FIO_WAIT_MULTIPLE_ARGS ;
 typedef ftdm_status_t (*fio_read_t) FIO_READ_ARGS ;
 typedef ftdm_status_t (*fio_write_t) FIO_WRITE_ARGS ;
 typedef ftdm_status_t (*fio_io_load_t) FIO_IO_LOAD_ARGS ;
@@ -875,6 +877,7 @@ typedef ftdm_status_t (*fio_api_t) FIO_API_ARGS ;
 #define FIO_GET_ALARMS_FUNCTION(name) ftdm_status_t name FIO_GET_ALARMS_ARGS
 #define FIO_COMMAND_FUNCTION(name) ftdm_status_t name FIO_COMMAND_ARGS
 #define FIO_WAIT_FUNCTION(name) ftdm_status_t name FIO_WAIT_ARGS
+#define FIO_WAIT_MULTIPLE_FUNCTION(name) ftdm_status_t name FIO_WAIT_MULTIPLE_ARGS
 #define FIO_READ_FUNCTION(name) ftdm_status_t name FIO_READ_ARGS
 #define FIO_WRITE_FUNCTION(name) ftdm_status_t name FIO_WRITE_ARGS
 #define FIO_IO_LOAD_FUNCTION(name) ftdm_status_t name FIO_IO_LOAD_ARGS
@@ -898,6 +901,7 @@ struct ftdm_io_interface {
 	fio_get_alarms_t get_alarms; /*!< Get hardware alarms */
 	fio_command_t command; /*!< Execute an I/O command on the channel */
 	fio_wait_t wait; /*!< Wait for events on the channel */
+	fio_wait_multiple_t wait_multiple; /*!<Waiti/Poll for events on multiple channels */
 	fio_read_t read; /*!< Read data from the channel */
 	fio_write_t write; /*!< Write data to the channel */
 	fio_span_poll_event_t poll_event; /*!< Poll for events on the whole span */
@@ -1506,6 +1510,21 @@ FT_DECLARE(ftdm_status_t) ftdm_channel_command(ftdm_channel_t *ftdmchan, ftdm_co
  * \retval FTDM_FAIL failure (no suitable channel was found available)
  */
 FT_DECLARE(ftdm_status_t) ftdm_channel_wait(ftdm_channel_t *ftdmchan, ftdm_wait_flag_t *flags, int32_t timeout);
+
+/*!
+ * \brief Wait for an event for mutiple channels
+ *
+ * \param ftdmchan The channels to wait events for
+ * \param poll_events Array of events to poll for, for each channel
+ * \param num_chans Number of channel on which events needs to be checked
+ * \param ms Timeout in milli seconds
+ *
+ * \retval FTDM_SUCCESS success (at least one event available)
+ * \retval FTDM_TIMEOUT Timed out waiting for events
+ * \retval FTDM_FAIL failure
+ * \retval FTDM_BREAK if in case read event is not present
+ */
+FT_DECLARE(ftdm_status_t) ftdm_channel_wait_multiple(ftdm_channel_t *ftdmchan[], ftdm_wait_flag_t poll_events[], uint32_t num_chans, uint32_t ms);
 
 /*! 
  * \brief Read data from a channel

@@ -181,6 +181,50 @@ AC_ARG_WITH([pritap],
 HAVE_PRITAP="${enable_pritap}"
 AM_CONDITIONAL([HAVE_PRITAP],[test "${enable_pritap}" = "yes"])
 
+
+##
+# Sangoma ISDN Tapping module
+#
+HAVE_SNG_ISDNTAP="no"
+AC_MSG_RESULT([${as_nl}<<>> Sangoma ISDN Decoder Lib stack])
+AC_CHECK_LIB([sng_decoder], [sng_decoder_lib_init], [HAVE_SNG_ISDNTAP="yes"])
+AC_MSG_RESULT([checking whether to build ftmod_sangoma_isdn_tap... ${HAVE_SNG_ISDNTAP}])
+AM_CONDITIONAL([HAVE_SNG_ISDNTAP], [test "${HAVE_SNG_ISDNTAP}" = "yes"])
+
+if test "${HAVE_SNG_ISDNTAP}" = "yes"; then
+        if test "${build}" = "${host}"
+        then
+                case "${host}" in
+                x86_64-*)
+                        # X86_64 machines need additional flags when compiling against isdn_tap
+                        CFLAGS="$CFLAGS -DBIT_64 -DALIGN_64BIT"
+                        ;;
+                esac
+        fi
+fi
+
+##
+# Sangoma ISUP Tapping module
+#
+HAVE_SNG_ISUPTAP="no"
+AC_MSG_RESULT([${as_nl}<<>> Sangoma ISUP Decoder Lib stack])
+AC_CHECK_LIB([sng_decoder], [sng_decoder_lib_init], [HAVE_SNG_ISUPTAP="yes"])
+AC_MSG_RESULT([checking whether to build ftmod_sangoma_isup_tap... ${HAVE_SNG_ISUPTAP}])
+AM_CONDITIONAL([HAVE_SNG_ISUPTAP], [test "${HAVE_SNG_ISUPTAP}" = "yes"])
+
+if test "${HAVE_SNG_ISUPTAP}" = "yes"; then
+        if test "${build}" = "${host}"
+        then
+                case "${host}" in
+                x86_64-*)
+                        # X86_64 machines need additional flags when compiling against isup_tap
+                        CFLAGS="$CFLAGS -DBIT_64 -DALIGN_64BIT"
+                        ;;
+                esac
+        fi
+fi
+
+
 ##
 # OpenR2 stack
 #
@@ -466,6 +510,9 @@ AC_MSG_RESULT([
 	ftmod_r2........................... ${HAVE_OPENR2}
 	ftmod_gsm.......................... ${HAVE_WAT}
 	ftmod_pritap....................... ${HAVE_PRITAP}
+	ftmod_sangoma_isdn_tap............. ${HAVE_SNG_ISDNTAP}
+	ftmod_sangoma_isup_tap............. ${HAVE_SNG_ISUPTAP}
+
   I/O:
 	ftmod_wanpipe...................... ${HAVE_LIBSANGOMA}
 	ftmod_misdn........................ ${HAVE_MISDN}

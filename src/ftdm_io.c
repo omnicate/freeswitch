@@ -3753,6 +3753,26 @@ FT_DECLARE(ftdm_status_t) ftdm_channel_wait(ftdm_channel_t *ftdmchan, ftdm_wait_
 	return status;
 }
 
+FT_DECLARE(ftdm_status_t) ftdm_channel_wait_multiple(ftdm_channel_t *ftdmchan[], ftdm_wait_flag_t poll_events[], uint32_t num_chans, uint32_t ms)
+{
+	uint32_t idx = 0;
+	ftdm_status_t status = FTDM_FAIL;
+
+	/* We expect that all channels must belong to the same I/O type */
+	ftdm_assert_return(ftdmchan[idx] != NULL, FTDM_FAIL, "Null channel\n");
+	ftdm_assert_return(ftdmchan[idx]->fio != NULL, FTDM_FAIL, "Null io interface\n");
+	ftdm_assert_return(ftdmchan[idx]->fio->wait_multiple != NULL, FTDM_NOTIMPL, "wait method not implemented\n");
+
+	status = ftdmchan[idx]->fio->wait_multiple(ftdmchan, poll_events, num_chans, ms);
+	if (status == FTDM_TIMEOUT) {
+		/* num_chans is the poller length which is better then null terminated array */
+		/* make sure that the poll_events are cleared on timeout */
+		memset(poll_events, 0, num_chans * sizeof(*poll_events));
+	}
+
+	return status;
+}
+
 /*******************************/
 FIO_CODEC_FUNCTION(fio_slin2ulaw)
 {
