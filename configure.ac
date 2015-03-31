@@ -1223,6 +1223,10 @@ PKG_CHECK_MODULES([BROADVOICE], [broadvoice >= 0.1.0],[
   AM_CONDITIONAL([HAVE_BROADVOICE],[true])],[
   AC_MSG_RESULT([no]); AM_CONDITIONAL([HAVE_BROADVOICE],[false])])
 
+PKG_CHECK_MODULES([ILBC], [ilbc >= 0.0.1],[
+  AM_CONDITIONAL([HAVE_ILBC],[true])],[
+  AC_MSG_RESULT([no]); AM_CONDITIONAL([HAVE_ILBC],[false])])
+
 PKG_CHECK_MODULES([MEMCACHED], [libmemcached >= 0.31],[
   AM_CONDITIONAL([HAVE_MEMCACHED],[true])
   MEMCACHED_LIBS="${MEMCACHED_LIBS} -lpthread"
@@ -1718,7 +1722,6 @@ fi
 if test "$use_system_aprutil" != "yes"; then
    AC_CONFIG_SUBDIRS([libs/apr-util])
 fi
-AC_CONFIG_SUBDIRS([libs/ilbc])
 AC_CONFIG_SUBDIRS([libs/iksemel])
 AC_CONFIG_SUBDIRS([libs/libdingaling])
 AC_CONFIG_SUBDIRS([libs/sofia-sip])

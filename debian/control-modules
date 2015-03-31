@@ -320,6 +320,7 @@ Module: codecs/mod_ilbc
 Section: non-free/comm
 Description: mod_ilbc
  Adds mod_ilbc.
+Build-Depends: libilbc-dev
 
 Module: codecs/mod_isac
 Description: mod_isac
