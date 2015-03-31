@@ -288,10 +288,6 @@ Description: mod_bv
  Adds mod_bv.
 Build-Depends: libbroadvoice-dev
 
-Module: codecs/mod_celt
-Description: mod_celt
- Adds mod_celt.
-
 Module: codecs/mod_codec2
 Description: mod_codec2
  Adds mod_codec2.

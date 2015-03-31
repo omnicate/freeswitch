@@ -1555,7 +1555,6 @@ AC_CONFIG_FILES([Makefile
 		src/mod/codecs/mod_amrwb/Makefile
 		src/mod/codecs/mod_b64/Makefile
 		src/mod/codecs/mod_bv/Makefile
-		src/mod/codecs/mod_celt/Makefile
 		src/mod/codecs/mod_codec2/Makefile
 		src/mod/codecs/mod_com_g729/Makefile
 		src/mod/codecs/mod_dahdi_codec/Makefile
