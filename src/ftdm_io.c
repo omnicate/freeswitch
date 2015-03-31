@@ -6239,7 +6239,7 @@ static void ftdm_group_add(ftdm_group_t *group)
 	} else {
 		globals.groups = group;
 	}
-	hashtable_insert(globals.group_hash, (void *)group->name, group, HASHTABLE_FLAG_NONE);
+	hashtable_insert(globals.group_hash, (void *)group->name, group, HASHTABLE_FLAG_FREE_KEY | HASHTABLE_FLAG_FREE_VALUE);
 
 	ftdm_mutex_unlock(globals.group_mutex);
 }
@@ -7035,7 +7035,11 @@ static ftdm_status_t ftdm_call_set_call_id(ftdm_channel_t *fchan, ftdm_caller_da
 		}
 	}
 
-	ftdm_assert_return(globals.call_ids[current_call_id] == NULL, FTDM_FAIL, "We ran out of call ids\n"); 
+	/* unlock mutex to avoid deadlock */
+	if (globals.call_ids[current_call_id] == NULL) {
+		ftdm_mutex_unlock(globals.call_id_mutex);
+		ftdm_assert_return(globals.call_ids[current_call_id] == NULL, FTDM_FAIL, "We ran out of call ids\n");
+	}
 
 	globals.last_call_id = current_call_id;
 	caller_data->call_id = current_call_id;
