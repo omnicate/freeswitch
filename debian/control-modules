@@ -348,6 +348,7 @@ Module: codecs/mod_siren
 Section: non-free/comm
 Description: mod_siren
  Adds mod_siren.
+Build-Depends: libg7221-dev
 
 Module: codecs/mod_skel_codec
 Description: mod_skel_codec
