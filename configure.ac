@@ -1214,6 +1214,10 @@ PKG_CHECK_MODULES([SNDFILE], [sndfile >= 1.0.20],[
   AM_CONDITIONAL([HAVE_SNDFILE],[true])],[
   AC_MSG_RESULT([no]); AM_CONDITIONAL([HAVE_SNDFILE],[false])])
 
+PKG_CHECK_MODULES([SILK], [silk >= 1.0.8],[
+  AM_CONDITIONAL([HAVE_SILK],[true])],[
+  AC_MSG_RESULT([no]); AM_CONDITIONAL([HAVE_SILK],[false])])
+
 PKG_CHECK_MODULES([MEMCACHED], [libmemcached >= 0.31],[
   AM_CONDITIONAL([HAVE_MEMCACHED],[true])
   MEMCACHED_LIBS="${MEMCACHED_LIBS} -lpthread"
@@ -1719,7 +1723,6 @@ AC_CONFIG_SUBDIRS([libs/tiff-4.0.2])
 AC_CONFIG_SUBDIRS([libs/spandsp])
 AC_CONFIG_SUBDIRS([libs/broadvoice])
 AC_CONFIG_SUBDIRS([libs/libg722_1])
-AC_CONFIG_SUBDIRS([libs/silk])
 AC_CONFIG_SUBDIRS([libs/libcodec2])
 if test "x${enable_zrtp}" = "xyes"; then
    AC_CONFIG_SUBDIRS([libs/libzrtp])

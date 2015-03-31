@@ -340,6 +340,7 @@ Build-Depends: libsngtc-dev
 Module: codecs/mod_silk
 Description: mod_silk
  Adds mod_silk.
+Build-Depends: libsilk-dev
 
 Module: codecs/mod_siren
 Section: non-free/comm
