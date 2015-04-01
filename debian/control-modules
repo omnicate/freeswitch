@@ -213,6 +213,7 @@ Description: Sonar ping timer
 Module: applications/mod_soundtouch
 Description: Soundtouch
  This module implements example media bugs.
+Build-Depends: libsoundtouch-dev
 
 Module: applications/mod_spandsp
 Description: SpanDSP
