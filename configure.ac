@@ -1275,6 +1275,34 @@ AS_IF([test "x$enable_core_libedit_support" != "xno"],[
       AC_MSG_ERROR([You need to either install libedit-dev (>= 2.11) or configure with --disable-core-libedit-support])
       ])])])
 
+dnl ---------------------------------------------------------------------------
+dnl - OpenLDAP SDK
+dnl ---------------------------------------------------------------------------
+
+AC_CHECK_LIB(ldap, ldap_search, with_ldap=yes)
+dnl Check for other libraries we need to link with to get the main routines.
+test "$with_ldap" != "yes" && { AC_CHECK_LIB(ldap, ldap_open, [with_ldap=yes with_ldap_lber=yes], , -llber) }
+test "$with_ldap" != "yes" && { AC_CHECK_LIB(ldap, ldap_open, [with_ldap=yes with_ldap_lber=yes with_ldap_krb=yes], , -llber -lkrb) }
+test "$with_ldap" != "yes" && { AC_CHECK_LIB(ldap, ldap_open, [with_ldap=yes with_ldap_lber=yes with_ldap_krb=yes with_ldap_des=yes], , -llber -lkrb -ldes) }
+test "$with_ldap_lber" != "yes" && { AC_CHECK_LIB(lber, ber_pvt_opt_on, with_ldap_lber=yes) }
+
+if test "$with_ldap" = "yes"; then
+   if test "$with_ldap_des" = "yes" ; then
+      OPENLDAP_LIBS="${OPENLDAP_LIBS} -ldes"
+   fi
+   if test "$with_ldap_krb" = "yes" ; then
+      OPENLDAP_LIBS="${OPENLDAP_LIBS} -lkrb"
+   fi
+   if test "$with_ldap_lber" = "yes" ; then
+      OPENLDAP_LIBS="${OPENLDAP_LIBS} -llber"
+   fi
+   OPENLDAP_LIBS="${OPENLDAP_LIBS} -lldap"
+fi
+
+AM_CONDITIONAL([HAVE_LDAP],[test "x$with_ldap" == "xyes"])
+
+AC_SUBST(OPENLDAP_LIBS)
+
 AS_IF([test "x$enable_core_libedit_support" != "xno"], [
   # If making changes here, don't forget to run autoheader and
   # update libs/esl/src/include/esl_config_auto.h.in manually.

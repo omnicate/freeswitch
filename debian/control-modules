@@ -381,6 +381,7 @@ Description: mod_dialplan_xml
 Module: directories/mod_ldap
 Description: mod_ldap
  Adds mod_ldap.
+Build-Depends: libldap2-dev
 
 ## mod/endpoints
 
@@ -727,7 +728,7 @@ Description: mod_xml_curl
 Module: xml_int/mod_xml_ldap
 Description: mod_xml_ldap
  Adds mod_xml_ldap.
-Build-Depends: libsasl2-dev
+Build-Depends: libldap2-dev, libsasl2-dev
 
 Module: xml_int/mod_xml_radius
 Description: mod_xml_radius
