@@ -1285,12 +1285,7 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 		{
 			SS7_DEBUG_CHAN(ftdmchan, "Received the end of pulsing character %s\n", "");
 
-			if (1) {
-				SS7_DEBUG("Received the end of pulsing character in native bridge thus donot remove it from destination number\n", "");
-				if (!sngss7_test_ckt_flag(sngss7_info, FLAG_FULL_NUMBER)) {
-					sngss7_set_ckt_flag(sngss7_info, FLAG_FULL_NUMBER);
-				}
-			} else if (!sngss7_test_ckt_flag(sngss7_info, FLAG_FULL_NUMBER)) {
+			if (!sngss7_test_ckt_flag(sngss7_info, FLAG_FULL_NUMBER)) {
 				/* remove the ST */
 				ftdmchan->caller_data.dnis.digits[i-1] = '\0';
 				sngss7_set_ckt_flag(sngss7_info, FLAG_FULL_NUMBER);
