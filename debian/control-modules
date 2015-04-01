@@ -330,6 +330,7 @@ Description: mod_mp4v
 Module: codecs/mod_opus
 Description: mod_opus
  Adds mod_opus.
+Build-Depends: libopus-dev
 
 Module: codecs/mod_sangoma_codec
 Description: mod_sangoma_codec
