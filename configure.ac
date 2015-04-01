@@ -1231,6 +1231,10 @@ PKG_CHECK_MODULES([G7221], [g722_1 >= 0.2.0],[
   AM_CONDITIONAL([HAVE_G7221],[true])],[
   AC_MSG_RESULT([no]); AM_CONDITIONAL([HAVE_G7221],[false])])
 
+PKG_CHECK_MODULES([CODEC2], [codec2 >= 0.2],[
+  AM_CONDITIONAL([HAVE_CODEC2],[true])],[
+  AC_MSG_RESULT([no]); AM_CONDITIONAL([HAVE_CODEC2],[false])])
+
 PKG_CHECK_MODULES([MEMCACHED], [libmemcached >= 0.31],[
   AM_CONDITIONAL([HAVE_MEMCACHED],[true])
   MEMCACHED_LIBS="${MEMCACHED_LIBS} -lpthread"
@@ -1732,7 +1736,6 @@ AC_CONFIG_SUBDIRS([libs/freetdm])
 AC_CONFIG_SUBDIRS([libs/unimrcp])
 AC_CONFIG_SUBDIRS([libs/tiff-4.0.2])
 AC_CONFIG_SUBDIRS([libs/spandsp])
-AC_CONFIG_SUBDIRS([libs/libcodec2])
 if test "x${enable_zrtp}" = "xyes"; then
    AC_CONFIG_SUBDIRS([libs/libzrtp])
 fi

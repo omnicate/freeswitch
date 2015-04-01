@@ -291,6 +291,7 @@ Build-Depends: libbroadvoice-dev
 Module: codecs/mod_codec2
 Description: mod_codec2
  Adds mod_codec2.
+Build-Depends: libcodec2-dev
 
 Module: codecs/mod_com_g729
 Description: mod_com_g729
