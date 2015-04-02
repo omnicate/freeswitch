@@ -136,8 +136,7 @@ Build-Depends: libmemcached-dev
 Module: applications/mod_mongo
 Description: MongoDB
  This module provides an interface to MongoDB.
-Build-Depends: scons, libboost-dev, libboost-system-dev,
- libboost-date-time-dev, libboost-thread-dev, libboost-filesystem-dev, libmongoc-dev
+Build-Depends: libmongoc-dev
 
 Module: applications/mod_mp4
 Section: contrib/comm
