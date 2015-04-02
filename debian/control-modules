@@ -182,10 +182,6 @@ Module: applications/mod_rss
 Description: RSS browser
  This module provides an RSS browser.
 
-Module: applications/mod_skel
-Description: Framework demo module
- This module demonstrates how to build an add-on module.
-
 Module: applications/mod_sms
 Description: Astract SMS
  This module provides an abstract facility for interfacing with SMS
@@ -195,10 +191,6 @@ Module: applications/mod_snapshot
 Description: Snapshot
  This module can record a sliding window of audio and take snapshots
  to disk.
-
-Module: applications/mod_snipe_hunt
-Description: Snipe hunt
- This is a framework demo module.
 
 Module: applications/mod_snom
 Description: SNOM specific features
@@ -348,10 +340,6 @@ Section: non-free/comm
 Description: mod_siren
  Adds mod_siren.
 Build-Depends: libg7221-dev
-
-Module: codecs/mod_skel_codec
-Description: mod_skel_codec
- Adds mod_skel_codec.
 
 Module: codecs/mod_theora
 Description: mod_theora
