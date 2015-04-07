@@ -208,7 +208,6 @@ void handle_route_t30(void *userdata)
 				SS7_DEBUG("NSG-ACC: Congestion Ended for dpc[%d] with Total number of call rejected[%d] and calls passed[%d]\n", sngss7_rmt_cong->dpc, sngss7_rmt_cong->calls_rejected, sngss7_rmt_cong->calls_passed);
 				sngss7_rmt_cong->call_blk_rate = 0;
 				sngss7_rmt_cong->calls_allowed = 0;
-				/* Pushkar changes for counter */
 				sngss7_rmt_cong->calls_passed = 0;
 				sngss7_rmt_cong->calls_rejected = 0;
 				sngss7_rmt_cong->loc_calls_rejected = 0;

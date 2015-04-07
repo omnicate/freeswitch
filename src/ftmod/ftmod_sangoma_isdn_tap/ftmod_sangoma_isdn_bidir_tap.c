@@ -30,7 +30,7 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  * Contributors: Pushkar Singh <psingh@sangoma.com>
- *				 James Zhang <jzhang@sangoma.com>
+ *		 James Zhang <jzhang@sangoma.com>
  *
  */
 
@@ -92,7 +92,7 @@ ftdm_status_t sangoma_isdn_bidir_tap_generate_invite(sngisdn_tap_t *tap, passive
 	if (ftdm_test_flag(peerfchan, FTDM_CHANNEL_INUSE)) {
 		reuse_chan_con_recv++;
 		ftdm_log_chan(peerfchan, FTDM_LOG_NOTICE,
-					  "[%s:%d Callref- %d] Channel is already in use ..state[%s]. Thus, clearing inuse flag!\n",
+					  "[%s:%d Callref- %d] Channel is already in use ..state[%s]. Clearing inuse flag!\n",
 					  peertap->span->name, pcall->chanId, crv, ftdm_channel_state2str(peerfchan->state));
 
 		if (ftdm_test_flag(pchan, FTDM_CHANNEL_OPEN)) {
@@ -152,8 +152,15 @@ ftdm_status_t sangoma_isdn_bidir_tap_handle_event_con(sngisdn_tap_t *tap, uint8_
 		/* We have not found peerpcall, that means on A leg we didnt receive any setup
 		 * This can happen due to syncronization/timing issue where we process B leg first then A leg */
 
+		/* Check if the same call referece is already present in hash list */
+		sprintf(call_ref, "%d", crv);
+		if (hashtable_search(peertap->pend_call_lst, (void *)call_ref)) {
+			ftdm_log(FTDM_LOG_CRIT, "Call with call referece %d is already inserted in the hash table\n", crv);
+			return FTDM_SUCCESS;
+		}
+
 		/* Add the call inforamtion in to call hash list based on call reference value if it is not present */
-		ftdm_log(FTDM_LOG_DEBUG, "[%s Callref- %d] Peercall not found thus, entring it in hash list\n", tap->span->name, crv, SNG_DECODE_ISDN_EVENT(msgType));
+		ftdm_log(FTDM_LOG_DEBUG, "[%s Callref- %d] Inserting peercall in hash list\n", tap->span->name, crv, SNG_DECODE_ISDN_EVENT(msgType));
 		call_info = ftdm_calloc(sizeof(*call_info), 1);
 		if (!call_info) {
 			ftdm_log(FTDM_LOG_ERROR, "Unable to allocate memory with crv = %d in peer tap call list for span %s\n", crv, tap->span->name);
@@ -167,14 +174,6 @@ ftdm_status_t sangoma_isdn_bidir_tap_handle_event_con(sngisdn_tap_t *tap, uint8_
 		call_info->recv_con = FTDM_FALSE;
 		call_info->recv_setup = FTDM_FALSE;
 		call_info->tap_proceed = FTDM_FALSE;
-
-		/* Check if the same call referece is already present in hash list */
-		sprintf(call_ref, "%d", crv);
-		if (hashtable_search(peertap->pend_call_lst, (void *)call_ref)) {
-			ftdm_log(FTDM_LOG_CRIT, "Call with call referece %d is already inserted in the hash table\n", crv);
-			ftdm_safe_free(call_info);
-			return FTDM_SUCCESS;
-		}
 
 		/* Fill in the call reference value */
 		call_info->callref_val = crv;
@@ -209,12 +208,12 @@ ftdm_status_t sangoma_isdn_bidir_tap_handle_event_con(sngisdn_tap_t *tap, uint8_
 		}
 
 		if (intfCb->chan_id) {
-			ftdm_log(FTDM_LOG_DEBUG, "[%s:%d Callref- %d] Found channel ID in CONNECT message thus, donot wait for SETUP",
+			ftdm_log(FTDM_LOG_DEBUG, "[%s:%d Callref- %d] Donot wait for SETUP as channel ID in present CONNECT message",
 				 tap->span->name, intfCb->chan_id, crv);
 
 			peerpcall = sangoma_isdn_tap_create_pcall(peertap, msgType, intfCb, crv);
 			if (!peerpcall) {
-				ftdm_log(FTDM_LOG_DEBUG, "[%s:%d Callref- %d] Failed to create pcall. So, Lets wait for SETUP to be received",
+				ftdm_log(FTDM_LOG_DEBUG, "[%s:%d Callref- %d] Failed to create pcall wait for SETUP message to be received",
 					 peertap->span->name, intfCb->chan_id, crv);
 
 				return FTDM_FAIL;
@@ -229,14 +228,14 @@ ftdm_status_t sangoma_isdn_bidir_tap_handle_event_con(sngisdn_tap_t *tap, uint8_
 			/* Get the channel on which SETUP is received and then generate an Invite */
 			if (peerpcall->chan_pres == FTDM_FALSE) {
 				ftdm_log(FTDM_LOG_DEBUG,
-					 "[%s Callref- %d] Since %s is the first event received for this call. Thus, generating SIP INVITE\n",
+					 "[%s Callref- %d] Generating SIP INVITE as %s is the first event received for this call \n",
 					 peertap->span->name, crv, SNG_DECODE_ISDN_EVENT(msgType));
 
 				sangoma_isdn_bidir_tap_generate_invite(peertap, peerpcall, crv);
 			}
 
 		} else {
-			ftdm_log(FTDM_LOG_DEBUG, "[%s Callref- %d] %s event received before SETUP, thus holding its processing\n",
+			ftdm_log(FTDM_LOG_DEBUG, "[%s Callref- %d] %s event received before SETUP, holding its processing\n",
 				 tap->span->name, crv, SNG_DECODE_ISDN_EVENT(msgType));
 
 			ftdm_log(FTDM_LOG_DEBUG,
@@ -346,7 +345,7 @@ ftdm_status_t sangoma_isdn_bidir_tap_handle_event_con(sngisdn_tap_t *tap, uint8_
 	/* Setup flag as call is connected */
 	pcall->tap_msg.call_con = 1;
 
-	/* As it is connected message thus, there will be no called/calling party address */
+	/* No called/calling party address is present in CONNECT message */
 	memset(pcall->tap_msg.called_num, 0, sizeof(pcall->tap_msg.called_num));
 	memset(pcall->tap_msg.calling_num, 0, sizeof(pcall->tap_msg.calling_num));
 
@@ -381,11 +380,11 @@ ftdm_status_t sangoma_isdn_bidir_tap_handle_event_con(sngisdn_tap_t *tap, uint8_
 		} else {
 			early_connect_recv++;
 			ftdm_log_chan(fchan, FTDM_LOG_INFO, "[%s:%d Callref- %d] Waiting to change channel state to %s\n",
-						  tap->span->name, pcall->chanId, crv, ftdm_channel_state2str(fchan->state));
+				      tap->span->name, pcall->chanId, crv, ftdm_channel_state2str(fchan->state));
 		}
 	} else {
 			ftdm_log_chan(fchan, FTDM_LOG_INFO, "[%s:%d Callref- %d] Waiting to receive 200 OK to move channel state to UP\n",
-						  tap->span->name, pcall->chanId, crv);
+				      tap->span->name, pcall->chanId, crv);
 	}
 	ftdm_channel_unlock(pcall->fchan);
 
@@ -394,7 +393,7 @@ ftdm_status_t sangoma_isdn_bidir_tap_handle_event_con(sngisdn_tap_t *tap, uint8_
 
 	ftdm_channel_lock(peerfchan);
 	ftdm_log_chan(peerfchan, FTDM_LOG_INFO, "[%s:%d Callref- %d] PeerTap call was answered in state %s\n",
-				  peertap->span->name, peerpcall->chanId, crv, ftdm_channel_state2str(peerfchan->state));
+		      peertap->span->name, peerpcall->chanId, crv, ftdm_channel_state2str(peerfchan->state));
 
 	ftdm_set_pflag(peerfchan, ISDN_TAP_NETWORK_ANSWER);
 
@@ -405,11 +404,11 @@ ftdm_status_t sangoma_isdn_bidir_tap_handle_event_con(sngisdn_tap_t *tap, uint8_
 			ftdm_set_state(peerfchan, FTDM_CHANNEL_STATE_UP);
 		} else {
 			early_connect_recv++;
-			ftdm_log_chan(fchan, FTDM_LOG_INFO, "[%s:%d Callref- %d] Waiting to change channel state to %s\n",
-						  peertap->span->name, peerpcall->chanId, crv, ftdm_channel_state2str(peerfchan->state));
+			ftdm_log_chan(peerfchan, FTDM_LOG_INFO, "[%s:%d Callref- %d] Waiting to change channel state to %s\n",
+				      peertap->span->name, peerpcall->chanId, crv, ftdm_channel_state2str(peerfchan->state));
 		}
 	} else {
-			ftdm_log_chan(fchan, FTDM_LOG_INFO, "[%s:%d Callref- %d] Waiting to receive 200 OK to move channel state to UP\n",
+			ftdm_log_chan(peerfchan, FTDM_LOG_INFO, "[%s:%d Callref- %d] Waiting to receive 200 OK to move channel state to UP\n",
 						  peertap->span->name, peerpcall->chanId, crv);
 	}
 	ftdm_channel_unlock(peerfchan);
@@ -547,6 +546,30 @@ ftdm_channel_t *sangoma_isdn_bidir_tap_get_fchan(sngisdn_tap_t *tap, passive_cal
 			}
 		}
 
+		/* check if the channel is in INVALID state then please change the state */
+		if ((fchan->state != FTDM_CHANNEL_STATE_DOWN) && (fchan->state < FTDM_CHANNEL_STATE_TERMINATING)) {
+			ftdm_log_chan(fchan, FTDM_LOG_INFO, "Bi-directional tap Channel in state [%s]. Changing state to TERMINATING!\n", ftdm_channel_state2str(fchan->state));
+			ftdm_set_state(fchan, FTDM_CHANNEL_STATE_TERMINATING);
+		} else if (fchan->state == FTDM_CHANNEL_STATE_HANGUP) {
+			ftdm_log_chan_msg(fchan, FTDM_LOG_INFO, "Bi-directional tap Channel is in HANGUP state please move channel to DOWN state\n");
+			ftdm_set_state(fchan, FTDM_CHANNEL_STATE_DOWN);
+		}
+
+		if (fchan->state != FTDM_CHANNEL_STATE_DOWN) {
+			/* unlock channel here */
+			ftdm_channel_unlock(fchan);
+			/* update channel_state */
+			sangoma_isdn_tap_check_state(tap->span);
+
+			/* wait until channel moves to DOWN state in order to process
+			 * INVITE properly as if after INVITE peer channel moves to
+			 * DOWN state then it may lead to loss of SIP Call */
+			while (fchan->state != FTDM_CHANNEL_STATE_DOWN) {
+				/* until channel moves to down state */
+			}
+			ftdm_channel_lock(fchan);
+		}
+
 		if (ftdm_channel_open_chan(fchan) != FTDM_SUCCESS) {
 			ftdm_log_chan(fchan, FTDM_LOG_ERROR, "Could not open tap channel %s\n","");
 			err = 1;
@@ -558,10 +581,12 @@ ftdm_channel_t *sangoma_isdn_bidir_tap_get_fchan(sngisdn_tap_t *tap, passive_cal
 	memset(fchan->caller_data.cid_num.digits, 0, sizeof(fchan->caller_data.cid_num.digits));
 	memset(fchan->caller_data.dnis.digits, 0, sizeof(fchan->caller_data.dnis.digits));
 	memset(fchan->caller_data.cid_name, 0, sizeof(fchan->caller_data.cid_name));
+	fchan->caller_data.call_reference = 0;
 
 	ftdm_set_string(fchan->caller_data.cid_num.digits, pcall->callingnum.digits);
 	ftdm_set_string(fchan->caller_data.cid_name, pcall->callingnum.digits);
 	ftdm_set_string(fchan->caller_data.dnis.digits, pcall->callednum.digits);
+	fchan->caller_data.call_reference = pcall->callref_val;
 
 	if (call_dir == CALL_DIRECTION_INBOUND) {
 		ftdm_clear_flag(fchan, FTDM_CHANNEL_OUTBOUND);

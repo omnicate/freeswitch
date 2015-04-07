@@ -51,6 +51,7 @@ static int g_decoder_lib_init;
 /* extern variables */
 sng_decoder_event_interface_t    sng_event;
 ftdm_io_interface_t ftdm_sngisdn_tap_interface;
+ftdm_sngisdn_tap_data_t g_sngisdn_tap_data;
 
 /* Global counters to get the exact number of calls received/tapped/released etc. */
 uint64_t setup_recv;
@@ -403,7 +404,7 @@ ftdm_status_t state_advance(ftdm_channel_t *ftdmchan)
 				/* Destroy the peer data first */
 				if (fchan->call_data) {
 					if(tap->tap_mode == ISDN_TAP_BI_DIRECTION) {
-						ftdm_log_chan(fchan, FTDM_LOG_DEBUG, "ISDN Tapping is running is SIP mode. Thus, not closing peer channel! %s\n", "");
+						ftdm_log_chan(fchan, FTDM_LOG_DEBUG, "Do not close peer channel as ISDN Tapping is running is Bi-Directional mode! %s\n", "");
 					} else {
 						ftdm_channel_t *peerchan = fchan->call_data;
 						ftdm_channel_t *pchan = peerchan;
@@ -443,6 +444,10 @@ ftdm_status_t state_advance(ftdm_channel_t *ftdmchan)
 						break;
 					}
 				}
+				if (!(pcall = sangoma_isdn_tap_get_pcall_bychanId(tap, ftdmchan->physical_chan_id))) {
+					ftdm_log_chan_msg(ftdmchan, FTDM_LOG_DEBUG, "No pcall present!\n");
+					break;
+				}
 
 				/* Start Tapping Call as call is in connected state */
 				sigmsg.event_id = FTDM_SIGEVENT_UP;
@@ -453,7 +458,7 @@ ftdm_status_t state_advance(ftdm_channel_t *ftdmchan)
 				if ((status = ftdm_span_send_signal(ftdmchan->span, &sigmsg) != FTDM_SUCCESS)) {
 					ftdm_set_state_locked(ftdmchan, FTDM_CHANNEL_STATE_HANGUP);
 				}
-				ftdm_log_chan_msg(ftdmchan, FTDM_LOG_INFO, "SIGEVENT_UP Sent!\n");
+				ftdm_log_chan(ftdmchan, FTDM_LOG_INFO, "[Callref- %d]SIGEVENT_UP Sent!\n", pcall->callref_val);
 			}
 			break;
 
@@ -483,6 +488,7 @@ ftdm_status_t state_advance(ftdm_channel_t *ftdmchan)
 						ftdm_set_string(peerchan->caller_data.cid_num.digits, ftdmchan->caller_data.cid_num.digits);
 						ftdm_set_string(peerchan->caller_data.cid_name, ftdmchan->caller_data.cid_name);
 						ftdm_set_string(peerchan->caller_data.dnis.digits, ftdmchan->caller_data.dnis.digits);
+						peerchan->caller_data.call_reference = ftdmchan->caller_data.call_reference;
 					}
 
 					snprintf(variable_val, sizeof(variable_val), "%d", peerchan->span_id);
@@ -548,6 +554,7 @@ ftdm_status_t state_advance(ftdm_channel_t *ftdmchan)
 					break;
 				}
 
+				ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "[Callref- %d] RINGING received for channel\n", pcall->callref_val);
 				if (pcall->recv_conn == FTDM_TRUE) {
 					late_invite_recv++;
 					ftdm_log_chan_msg(ftdmchan, FTDM_LOG_DEBUG, "Changing state to UP as connect is already being processed!\n");
@@ -754,6 +761,55 @@ passive_call_t *sangoma_isdn_tap_get_pcall_bychanId(sngisdn_tap_t *tap, int chan
 
 	ftdm_log(FTDM_LOG_DEBUG, "pcall with physical channel %d not present at all\n", chan_id);
 	ftdm_mutex_unlock(tap->pcalls_lock);
+
+	return NULL;
+}
+
+/**********************************************************************************
+ * Fun   : sangoma_isdn_tap_get_nfas_pcall_bycrv()
+ *
+ * Desc  : It mainly gives the pcall structure depending up on the nfas group to
+ * 	   which tap is belonges to depeding upon all the spans present in that
+ * 	   nfas group span list and call reference passed.
+ *
+ * Ret   : tap->pcalls | NULL
+ ***********************************************************************************/
+static passive_call_t *sangoma_isdn_tap_get_nfas_pcall_bycrv(sngisdn_tap_t **tap, int crv)
+{
+	sngisdn_tap_t *call_tap = NULL;
+	sngisdn_tap_t *sig_tap = NULL;
+	passive_call_t *pcall = NULL;
+	ftdm_span_t *span = NULL;
+	int idx = 0;
+
+	if (!tap) {
+		ftdm_log(FTDM_LOG_ERROR, "Invalid tap value\n");
+		return NULL;
+	}
+
+	sig_tap = *tap;
+
+	for (idx = 0; idx < sig_tap->nfas.trunk->num_tap_spans; idx++) {
+		if (!sig_tap->nfas.trunk->tap_spans[idx]) {
+			ftdm_log(FTDM_LOG_ERROR, "[%s Callref- %d]No ISDN NFAS Tap span found at index %d\n",
+				 sig_tap->span->name, crv, idx);
+			return NULL;
+		}
+
+		span = sig_tap->nfas.trunk->tap_spans[idx];
+		call_tap = span->signal_data;
+
+		pcall = sangoma_isdn_tap_get_pcall_bycrv(call_tap, crv);
+
+		if (pcall) {
+			*tap = call_tap;
+
+			ftdm_log(FTDM_LOG_DEBUG, "[%s Callref- %d]Found pcall at index %d\n",
+				 call_tap->span->name, crv, idx);
+			return pcall;
+		}
+	}
+
 	return NULL;
 }
 
@@ -1087,7 +1143,7 @@ static void sangoma_isdn_tap_check_stale_conevt(sngisdn_tap_t *tap)
 			memset(call_ref, 0, sizeof(call_ref));
 			sprintf(call_ref, "%d", call_info->callref_val);
 
-			ftdm_log(FTDM_LOG_CRIT, "[%s Callref- %d] Found Stale CONNECT event in the hash list. Thus removing that.\n", tap->span->name, call_info->callref_val);
+			ftdm_log(FTDM_LOG_CRIT, "[%s Callref- %d] Removing Stale call as found one in CONNECT hash list.\n", tap->span->name, call_info->callref_val);
 			hashtable_remove(tap->pend_call_lst, (void *)call_ref);
 			ftdm_safe_free(call_info);
 		}
@@ -1219,10 +1275,12 @@ static __inline__ ftdm_channel_t *sangoma_isdn_tap_get_fchan(sngisdn_tap_t *tap,
 	memset(fchan->caller_data.cid_num.digits, 0, sizeof(fchan->caller_data.cid_num.digits));
 	memset(fchan->caller_data.dnis.digits, 0, sizeof(fchan->caller_data.dnis.digits));
 	memset(fchan->caller_data.cid_name, 0, sizeof(fchan->caller_data.cid_name));
+	fchan->caller_data.call_reference = 0;
 
 	ftdm_set_string(fchan->caller_data.cid_num.digits, pcall->callingnum.digits);
 	ftdm_set_string(fchan->caller_data.cid_name, pcall->callingnum.digits);
 	ftdm_set_string(fchan->caller_data.dnis.digits, pcall->callednum.digits);
+	fchan->caller_data.call_reference = pcall->callref_val;
 
 done:
 	if (fchan) {
@@ -1244,7 +1302,7 @@ done:
  *
  * Ret   : void
 **********************************************************************************/
-static __inline__ void send_protocol_raw_data(isdn_tap_msg_info_t *data, ftdm_channel_t *ftdmchan)
+void send_protocol_raw_data(isdn_tap_msg_info_t *data, ftdm_channel_t *ftdmchan)
 {
 	void *mydata;
 	ftdm_sigmsg_t	sig;
@@ -1277,14 +1335,14 @@ static __inline__ void send_protocol_raw_data(isdn_tap_msg_info_t *data, ftdm_ch
 **********************************************************************************/
 static void handle_isdn_passive_event(sngisdn_tap_t *tap, uint8_t msgType, sng_decoder_interface_t *intfCb)
 {
-	passive_call_t *pcall = NULL;
-	int crv = 0;
+	sngisdn_tap_t *peertap = tap->peerspan->signal_data;
 	ftdm_bool_t is_con_recv = FTDM_FALSE;
 	ftdm_status_t status = FTDM_FAIL;
-
-	sngisdn_tap_t *peertap = tap->peerspan->signal_data;
 	sngisdn_tap_t *tmp_tap = NULL;
 	time_t curr_time = time(NULL);
+	passive_call_t *pcall = NULL;
+	ftdm_span_t *span = NULL;
+	int crv = 0;
 
 	if (!intfCb) {
 		ftdm_log(FTDM_LOG_ERROR, "handle_isdn_passive_event failed.Invalid intfCb \n");
@@ -1295,8 +1353,61 @@ static void handle_isdn_passive_event(sngisdn_tap_t *tap, uint8_t msgType, sng_d
 
 	if (intfCb->chan_id) {
 		ftdm_log(FTDM_LOG_DEBUG, "[%s:%d Callref- %d] Channel Id present for message %s\n",
-				 tap->span->name, intfCb->chan_id, crv, SNG_DECODE_ISDN_EVENT(msgType));
+			 tap->span->name, intfCb->chan_id, crv, SNG_DECODE_ISDN_EVENT(msgType));
 	}
+
+	if (tap->nfas.trunk) {
+		if ((intfCb->interface_id < 0) && (intfCb->chan_id)) {
+			ftdm_log(FTDM_LOG_ERROR, "[%s:%d Callref- %d] Invalid Interface ID %d for message %s\n",
+					tap->span->name, intfCb->chan_id, crv, intfCb->interface_id, SNG_DECODE_ISDN_EVENT(msgType));
+			return;
+		}
+
+		if (intfCb->interface_id > -1) {
+			if (!tap->nfas.trunk->tap_spans[intfCb->interface_id]) {
+				ftdm_log(FTDM_LOG_ERROR, "[%s:%d Callref- %d] NFAS group %s does not have logical span ID %d for message %s\n",
+						tap->span->name, intfCb->chan_id, crv, tap->nfas.trunk->name, intfCb->interface_id, SNG_DECODE_ISDN_EVENT(msgType));
+				return;
+			} else {
+				span = tap->nfas.trunk->tap_spans[intfCb->interface_id];
+
+				tap = span->signal_data;
+				peertap = tap->peerspan->signal_data;
+			}
+		} else {
+			pcall = sangoma_isdn_tap_get_nfas_pcall_bycrv(&tap, crv);
+			if (!pcall) {
+				pcall = sangoma_isdn_tap_get_nfas_pcall_bycrv(&peertap, crv);
+				if (!pcall) {
+					switch (msgType) {
+						case Q931_SETUP:
+						case Q931_SETUP_ACK:
+						case Q931_PROGRESS:
+						case Q931_PROCEEDING:
+						case Q931_ALERTING:
+						case Q931_INFORMATION:
+						case Q931_CONNECT:
+						case Q931_DISCONNECT:
+						case Q931_RELEASE:
+							ftdm_log(FTDM_LOG_NOTICE, "[%s Callref- %d] No tap/span found for %s message\n",
+									tap->span->name, crv, SNG_DECODE_ISDN_EVENT(msgType));
+							break;
+
+						default:
+							break;
+					}
+				} else {
+					ftdm_log(FTDM_LOG_DEBUG, "[%s Callref- %d] Call found on tap peerspan\n", peertap->span->name, crv);
+				}
+				tap = peertap->peerspan->signal_data;
+			} else {
+				ftdm_log(FTDM_LOG_DEBUG, "[%s Callref- %d] Call found on tap span\n", tap->span->name, crv);
+			}
+			peertap = tap->peerspan->signal_data;
+		}
+	}
+
+	pcall = NULL;
 
 	switch (msgType) {
 		case Q931_SETUP:
@@ -1330,7 +1441,7 @@ static void handle_isdn_passive_event(sngisdn_tap_t *tap, uint8_t msgType, sng_d
 					} else {
 						msg_recv_aft_time++;
 						ftdm_log(FTDM_LOG_DEBUG,
-							 "[%s:%d Callref- %d] SETUP is received after %d seconds of CONNECT message is received thus, creating a new one\n",
+							 "[%s:%d Callref- %d] Creating a new pcall as SETUP is received after %d seconds of CONNECT message is received\n",
 							 tap->span->name, intfCb->chan_id, crv, SNG_TAP_SUBEQUENT_MSG_TME_DURATION);
 					}
 				} else {
@@ -1354,7 +1465,7 @@ static void handle_isdn_passive_event(sngisdn_tap_t *tap, uint8_t msgType, sng_d
 						goto done;
 					} else {
 						msg_recv_aft_time++;
-						ftdm_log(FTDM_LOG_DEBUG, "[%s:%d Callref- %d] SETUP is received after %d seconds thus, creating a new one\n",
+						ftdm_log(FTDM_LOG_DEBUG, "[%s:%d Callref- %d] Creating a new pcall SETUP is received after %d seconds\n",
 							 tap->span->name, intfCb->chan_id, crv, SNG_TAP_SUBEQUENT_MSG_TME_DURATION);
 					}
 				}
@@ -1404,7 +1515,7 @@ done:
 				ftdm_log(FTDM_LOG_DEBUG,"[%s:%d Callref- %d] Sending CONNECT event, as CONNECT is already received earlier\n",
 					 tap->span->name, intfCb->chan_id, crv);
 
-				/* Since CONNECT is already being received for this SETUP message, thus now processing connect message 
+				/* Since CONNECT is already being received for this SETUP message, therefore, processing connect message 
 				 * in order to start tapping calls */
 				if(tap->tap_mode == ISDN_TAP_BI_DIRECTION) {
 					sangoma_isdn_bidir_tap_handle_event_con(tap, msgType, intfCb, crv);
@@ -1431,7 +1542,7 @@ done:
 			 */
 			/* check if channel Id is present in message? If channel Id is not present then no need to process message */
 			/* Since we only start tapping when we received CONNECT and we would require channel ID in order to start tapping when received connect
-			 * messages thus, when any of the messages i.e. PROGRESS, PROCEED, ALERT, SETUP_ACK is received we will check if the same call reference
+			 * messages therefore, when any of the messages i.e. PROGRESS, PROCEED, ALERT, SETUP_ACK is received we will check if the same call reference
 			 * is present and for that call reference tapping is being started or not. There may be three condition as given below:
 			 * 1) if crv is not present in the hash list then please check the following:
 			 *	  1.1) if pcall is present and connect is received befor 5 seconds then release the call and create a new one else 
@@ -1466,7 +1577,7 @@ done:
 							} else {
 								msg_recv_aft_time++;
 								ftdm_log(FTDM_LOG_DEBUG,
-									 "[%s:%d Callref- %d] %s is received after %d seconds of CONNECT message is received. Thus, creating a new one\n",
+									 "[%s:%d Callref- %d] Creating a new pcall as %s is received after %d seconds of CONNECT message is received.\n",
 									 SNG_DECODE_ISDN_EVENT(msgType), peertap->span->name, intfCb->chan_id, crv, SNG_TAP_SUBEQUENT_MSG_TME_DURATION);
 							}
 						} else if (pcall->recv_setup) {
@@ -1478,7 +1589,7 @@ done:
 							} else {
 								msg_recv_aft_time++;
 								ftdm_log(FTDM_LOG_DEBUG,
-									 "[%s:%d Callref- %d] %s is received after %d seconds of SETUP message is received. Thus, creating a new one\n",
+									 "[%s:%d Callref- %d] Creating a new pcall as %s is received after %d seconds of SETUP message is received.\n",
 									 SNG_DECODE_ISDN_EVENT(msgType), peertap->span->name, intfCb->chan_id, crv, SNG_TAP_SUBEQUENT_MSG_TME_DURATION);
 							}
 						}
@@ -1512,7 +1623,7 @@ done:
 					pcall->t_msg_recv = time(NULL);
 
 					msgType = Q931_CONNECT;
-					/* Since CONNECT is already being received for this call reference value, thus now processing connect message
+					/* Since CONNECT is already being received for this call reference value, therefore, processing connect message
 					 * in order to start tapping calls */
 					if(tap->tap_mode == ISDN_TAP_BI_DIRECTION) {
 						sangoma_isdn_bidir_tap_handle_event_con(tap, msgType, intfCb, crv);
@@ -1712,7 +1823,7 @@ static ftdm_status_t sangoma_isdn_tap_handle_event_con(sngisdn_tap_t *tap, uint8
 		}
 
 		if (intfCb->chan_id) {
-			ftdm_log(FTDM_LOG_DEBUG, "[%s:%d Callref- %d] Found channel ID in CONNECT message thus, donot wait for SETUP", tap->span->name, intfCb->chan_id, crv);
+			ftdm_log(FTDM_LOG_DEBUG, "[%s:%d Callref- %d] Found channel ID in CONNECT message\n", tap->span->name, intfCb->chan_id, crv);
 
 			peerpcall = sangoma_isdn_tap_create_pcall(peertap, msgType, intfCb, crv);
 			if (!peerpcall) {
@@ -1727,7 +1838,7 @@ static ftdm_status_t sangoma_isdn_tap_handle_event_con(sngisdn_tap_t *tap, uint8
 
 			connect_recv_with_chanId++;
 		} else {
-			ftdm_log(FTDM_LOG_DEBUG, "[%s Callref- %d] %s event received before SETUP, thus holding its processing\n",
+			ftdm_log(FTDM_LOG_DEBUG, "[%s Callref- %d] Hold event processing as %s event is received before SETUP\n",
 					tap->span->name, crv, SNG_DECODE_ISDN_EVENT(msgType));
 
 			ftdm_log(FTDM_LOG_DEBUG,
@@ -1848,7 +1959,7 @@ static ftdm_status_t sangoma_isdn_tap_handle_event_con(sngisdn_tap_t *tap, uint8
 	/* Setup flag as call is connected */
 	pcall->tap_msg.call_con = 1;
 
-	/* As it is connected message thus, there will be no called/calling party address */
+	/* No called/calling party address is present in CONNECT message */
 	memset(pcall->tap_msg.called_num, 0, sizeof(pcall->tap_msg.called_num));
 	memset(pcall->tap_msg.calling_num, 0, sizeof(pcall->tap_msg.calling_num));
 
@@ -1869,6 +1980,13 @@ static ftdm_status_t sangoma_isdn_tap_handle_event_con(sngisdn_tap_t *tap, uint8
 				"[%s:%d Callref- %d] Received answer, but we never got a channel\n",
 				tap->span->name, pcall->chanId, crv);
 		return FTDM_FAIL;
+	}
+
+	if ((tap->mixaudio == ISDN_TAP_MIX_BOTH) && !(fchan->caller_data.cid_num.digits)) {
+		ftdm_set_string(fchan->caller_data.cid_num.digits, peerpcall->callingnum.digits);
+		ftdm_set_string(fchan->caller_data.cid_name, peerpcall->callingnum.digits);
+		ftdm_set_string(fchan->caller_data.dnis.digits, peerpcall->callednum.digits);
+		fchan->caller_data.call_reference = crv;
 	}
 
 	/* Once Call is answered then only change channel state to UP */
@@ -1916,8 +2034,33 @@ static ftdm_status_t sangoma_isdn_tap_handle_event_con(sngisdn_tap_t *tap, uint8
 static ftdm_status_t sangoma_isdn_tap_rel_stale_call(sngisdn_tap_t *tap, int chan_id)
 {
 	passive_call_t *pcall = NULL;
+	ftdm_channel_t *fchan = NULL;
 
 	if (!(pcall = sangoma_isdn_tap_get_pcall_bychanId(tap, chan_id))) {
+		/* change channel state as channel is already released by pcall */
+		if ((tap->tap_mode == ISDN_TAP_BI_DIRECTION) || (tap->nfas.trunk)) {
+			if (NULL == (fchan = sangoma_isdn_tap_get_fchan_by_chanid(tap, chan_id))) {
+				ftdm_log_chan_msg(fchan, FTDM_LOG_ERROR, "Channel not found\n");
+				goto done;
+			}
+
+			ftdm_channel_lock(fchan);
+			if (fchan->last_state == FTDM_CHANNEL_STATE_HANGUP) {
+				ftdm_set_state(fchan, FTDM_CHANNEL_STATE_DOWN);
+
+				ftdm_log_chan_msg(fchan, FTDM_LOG_NOTICE, "Changing channel state to DOWN\n");
+			} else if ((fchan->state < FTDM_CHANNEL_STATE_TERMINATING) && (fchan->state != FTDM_CHANNEL_STATE_DOWN)) {
+				ftdm_set_state(fchan, FTDM_CHANNEL_STATE_TERMINATING);
+
+				ftdm_log_chan_msg(fchan, FTDM_LOG_NOTICE, "Changing channel state to TERMINATING\n");
+			}
+			ftdm_channel_unlock(fchan);
+
+			/* update span state */
+			sangoma_isdn_tap_check_state(tap->span);
+		}
+
+done:
 		ftdm_log(FTDM_LOG_DEBUG, "[%s:%d] No Stale pcall present\n", tap->span->name, chan_id);
 		return FTDM_FAIL;
 	}
@@ -1943,6 +2086,7 @@ static ftdm_status_t sangoma_isdn_tap_handle_event_rel(sngisdn_tap_t *tap, uint8
 {
 	passive_call_t *pcall = NULL;
 	ftdm_channel_t *fchan = NULL;
+	passive_call_t *peerpcall = NULL;
 	ftdm_channel_t *peerfchan = NULL;
 
 	sngisdn_tap_t *peertap = tap->peerspan->signal_data;
@@ -1969,6 +2113,14 @@ static ftdm_status_t sangoma_isdn_tap_handle_event_rel(sngisdn_tap_t *tap, uint8
 
 	if (pcall->fchan) {
 		fchan = pcall->fchan;
+
+		if (tap->indicate_event == FTDM_TRUE) {
+			ftdm_log(FTDM_LOG_DEBUG, "Tap Message sent to application on receipt of %s event on span[%d] chan[%d]\n",
+				 SNG_DECODE_ISDN_EVENT(msgType), fchan->span_id, fchan->chan_id);
+			/* Sending Call raw data to application */
+			send_protocol_raw_data( &pcall->tap_msg, pcall->fchan);
+		}
+
 		ftdm_channel_lock(fchan);
 		if (fchan->state < FTDM_CHANNEL_STATE_TERMINATING) {
 			ftdm_set_state(fchan, FTDM_CHANNEL_STATE_TERMINATING);
@@ -1987,6 +2139,17 @@ static ftdm_status_t sangoma_isdn_tap_handle_event_rel(sngisdn_tap_t *tap, uint8
 	}
 
 	if (peerfchan) {
+		if (peertap->indicate_event == FTDM_TRUE) {
+			if ((peerpcall = sangoma_isdn_tap_get_pcall_bycrv(peertap, crv))) {
+				if (peerfchan->span_id == peerpcall->fchan->span_id) {
+					ftdm_log(FTDM_LOG_DEBUG, "Peer tap Message sent to application on receipt of %s event on span[%d] chan[%d]\n",
+							SNG_DECODE_ISDN_EVENT(msgType), peerfchan->span_id, peerfchan->chan_id);
+					/* Sending peer call raw data to application */
+					send_protocol_raw_data( &peerpcall->tap_msg, peerpcall->fchan);
+				}
+			}
+		}
+
 		ftdm_channel_lock(peerfchan);
 		if (peerfchan->state < FTDM_CHANNEL_STATE_TERMINATING) {
 			ftdm_set_state(peerfchan, FTDM_CHANNEL_STATE_TERMINATING);
@@ -2025,6 +2188,60 @@ static void sangoma_isdn_tap_check_event(ftdm_span_t *span)
 }
 
 /**********************************************************************************
+ * Fun   : ftdm_sangoma_isdn_tap_voice_span_run()
+ *
+ * Desc  : Run the sngidsn_tap voice span  thread and only check change of state
+ * 	   as this is a pure voice span & signalling is getting taken care of by
+ * 	   other tap span thread
+ *
+ * Ret   : void | NULL
+**********************************************************************************/
+static void *ftdm_sangoma_isdn_tap_voice_span_run(ftdm_thread_t *me, void *obj)
+{
+	ftdm_span_t *span = (ftdm_span_t *) obj;
+	sngisdn_tap_t *tap = span->signal_data;
+	sngisdn_tap_t *peer_tap = NULL;
+	ftdm_span_t *peer_span = NULL;
+
+	ftdm_log(FTDM_LOG_DEBUG, "Tapping ISDN pure voice thread started on span %s\n", span->name);
+	ftdm_set_flag(span, FTDM_SPAN_IN_THREAD);
+
+	peer_span = tap->peerspan;
+	peer_tap = peer_span->signal_data;
+
+	if (!tap) {
+		ftdm_log(FTDM_LOG_ERROR, "Invalid Tap value\n");
+		goto done;
+	}
+
+	if (!ftdm_test_flag(tap, ISDN_TAP_MASTER)) {
+		ftdm_log(FTDM_LOG_DEBUG, "Running dummy thread on pure voice span %s\n", span->name);
+		while (ftdm_running() && !ftdm_test_flag(span, FTDM_SPAN_STOP_THREAD)) {
+			/* We are not using this thread at all, hence just keep on sleeping */
+			ftdm_sleep(100);
+		}
+	} else {
+		ftdm_log(FTDM_LOG_DEBUG, "Master tapping thread on pure voice span %s\n", span->name);
+
+		while (ftdm_running() && !ftdm_test_flag(span, FTDM_SPAN_STOP_THREAD)) {
+			sangoma_isdn_tap_check_state(span);
+			sangoma_isdn_tap_check_state(peer_span);
+			ftdm_sleep(10);
+		} /* end of while */
+	} /* end of if */
+
+done:
+	ftdm_log(FTDM_LOG_DEBUG, "Tapping ISDN pure voice thread ended on span %s\n", span->name);
+
+	ftdm_clear_flag(span, FTDM_SPAN_IN_THREAD);
+	ftdm_clear_flag(tap, ISDN_TAP_MASTER);
+
+	sangoma_isdn_tap_free_hashlist(tap);
+
+	return NULL;
+}
+
+/**********************************************************************************
  * Fun   : ftdm_sangoma_isdn_tap_run()
  * 
  * Desc  : Run the sngidsn_tap thread and always keep on monitoring on the messages
@@ -2036,9 +2253,9 @@ static void sangoma_isdn_tap_check_event(ftdm_span_t *span)
 static void *ftdm_sangoma_isdn_tap_run(ftdm_thread_t *me, void *obj)
 {
 	ftdm_span_t *span = (ftdm_span_t *) obj;
-	ftdm_span_t *peer = NULL;
 	sngisdn_tap_t *tap = span->signal_data;
 	sngisdn_tap_t *peer_tap = NULL;
+	ftdm_span_t *peer = NULL;
 
 	/* Variables for required for polling */
 	ftdm_channel_t *chan_poll[2] = { 0 };
@@ -2061,8 +2278,6 @@ static void *ftdm_sangoma_isdn_tap_run(ftdm_thread_t *me, void *obj)
 
 	ftdm_log(FTDM_LOG_DEBUG, "Tapping ISDN thread started on span %s\n", span->name);
 
-	tap->span = span;
-
 	ftdm_set_flag(span, FTDM_SPAN_IN_THREAD);
 
 	if (ftdm_channel_open(span->span_id, tap->dchan->chan_id, &tap->dchan) != FTDM_SUCCESS) {
@@ -2084,14 +2299,31 @@ static void *ftdm_sangoma_isdn_tap_run(ftdm_thread_t *me, void *obj)
 	peer_tap = peer->signal_data;
 
 	if (!ftdm_test_flag(tap, ISDN_TAP_MASTER)) {
-		ftdm_log(FTDM_LOG_DEBUG, "Running dummy thread on span %s\n", span->name);
+		if (tap->nfas.sigchan == SNGISDN_NFAS_DCHAN_BACKUP) {
+			ftdm_log(FTDM_LOG_DEBUG, "Running dummy thread on backup span %s\n", span->name);
+		} else {
+			ftdm_log(FTDM_LOG_DEBUG, "Running dummy thread on span %s\n", span->name);
+		}
+
 		while (ftdm_running() && !ftdm_test_flag(span, FTDM_SPAN_STOP_THREAD)) {
 			/* We are not using this thread at all, hence just keep on sleeping */
 			ftdm_sleep(100);
 		}
 	} else {
-		ftdm_log(FTDM_LOG_DEBUG, "Master tapping thread on span %s (fd1=%d, fd2=%d)\n", span->name,
-				tap->dchan->sockfd, peer_tap->dchan->sockfd);
+		if (tap->nfas.trunk) {
+			while ((tap->nfas.trunk->num_tap_spans != tap->nfas.trunk->num_spans_configured)) {
+				/* wait untill all NFAS spans are started */
+				continue;
+			}
+		}
+
+		if (tap->nfas.sigchan == SNGISDN_NFAS_DCHAN_BACKUP) {
+			ftdm_log(FTDM_LOG_DEBUG, "Master tapping thread on backup span %s (fd1=%d, fd2=%d)\n",
+				 span->name, tap->dchan->sockfd, peer_tap->dchan->sockfd);
+		} else {
+			ftdm_log(FTDM_LOG_DEBUG, "Master tapping thread on span %s (fd1=%d, fd2=%d)\n",
+				 span->name, tap->dchan->sockfd, peer_tap->dchan->sockfd);
+		}
 
 		while (ftdm_running() && !ftdm_test_flag(span, FTDM_SPAN_STOP_THREAD)) {
 			waitms = 10;
@@ -2407,6 +2639,166 @@ static void ftdm_sangoma_isdn_tap_dchan_set_queue_size(ftdm_channel_t *dchan)
 }
 
 /**********************************************************************************
+ * Fun   : sangoma_isdn_tap_parse_trunkgroup()
+ *
+ * Desc  : Set NFAS trunkgroup information
+ *
+ * Ret   : FTDM_SUCCESS | FTDM_FAIL
+**********************************************************************************/
+static ftdm_status_t sangoma_isdn_tap_parse_trunkgroup(const char *_trunkgroup)
+{
+	ftdm_status_t ret = FTDM_SUCCESS;
+	uint8_t num_tap_spans = 0;
+	char *backup_span = NULL;
+	char *dchan_span  = NULL;
+	char *trunkgroup  = NULL;
+	char *name 	  = NULL;
+	char *val 	  = NULL;
+	int idx 	  = 0;
+
+	trunkgroup =  ftdm_strdup(_trunkgroup);
+
+	/* NFAS format: {nfas-name, num_chans, dchan_span-name, [backup_span-name]} */
+	for (val = strtok(trunkgroup, ","); val; val = strtok(NULL, ",")) {
+		while (*val == ' ') {
+			val++;
+		}
+
+		switch(idx++) {
+			case 0:
+				name = ftdm_strdup(val);
+				break;
+			case 1:
+				num_tap_spans = atoi(val);
+				break;
+			case 2:
+				dchan_span = ftdm_strdup(val);
+				break;
+			case 3:
+				backup_span = ftdm_strdup(val);
+		}
+	}
+
+	if (!(name) || !(dchan_span) || (num_tap_spans <= 0)) {
+		ftdm_log(FTDM_LOG_ERROR, "Invalid tap parameters for trunkgroup: %s\n", _trunkgroup);
+		ret = FTDM_FAIL;
+		goto done;
+	}
+
+	for (idx = 0; idx < g_sngisdn_tap_data.num_nfas; idx++) {
+		if (!ftdm_strlen_zero(g_sngisdn_tap_data.nfas[idx].name) &&
+		    !strcasecmp(g_sngisdn_tap_data.nfas[idx].name, name)) {
+			/* This trunkgroup is already configured */
+			goto done;
+		}
+	}
+
+	/* Configure Trunk group as does not found in the configured list */
+	strncpy(g_sngisdn_tap_data.nfas[idx].name, name, sizeof(g_sngisdn_tap_data.nfas[idx].name));
+	g_sngisdn_tap_data.nfas[idx].num_tap_spans = num_tap_spans;
+	strncpy(g_sngisdn_tap_data.nfas[idx].dchan_span_name, dchan_span, sizeof(g_sngisdn_tap_data.nfas[idx].dchan_span_name));
+
+	if (backup_span) {
+		strncpy(g_sngisdn_tap_data.nfas[idx].backup_span_name, backup_span, sizeof(g_sngisdn_tap_data.nfas[idx].backup_span_name));
+	}
+
+	g_sngisdn_tap_data.num_nfas++;
+
+done:
+	ftdm_safe_free(trunkgroup);
+	ftdm_safe_free(name);
+	ftdm_safe_free(dchan_span);
+	ftdm_safe_free(backup_span);
+	return ret;
+}
+
+/**********************************************************************************
+ * Fun   : sangoma_isdn_tap_parse_spanmap()
+ *
+ * Desc  : Set NFAS span map information i.e. to which group nfas span is mapped to
+ *         what is the logical span Id of that particular span
+ *
+ * Ret   : FTDM_SUCCESS | FTDM_FAIL
+**********************************************************************************/
+static ftdm_status_t sangoma_isdn_tap_parse_spanmap(const char *_spanmap, ftdm_span_t *span)
+{
+	sngisdn_tap_t *tap = (sngisdn_tap_t*) span->signal_data;
+	ftdm_status_t ret = FTDM_SUCCESS;
+	uint8_t logical_span_id = 0;
+	char *spanmap = NULL;
+	char *name = NULL;
+	char *val = NULL;
+	int idx = 0;
+
+	spanmap = ftdm_strdup(_spanmap);
+
+	/* Format - {nfas-group-name, logical-span-id} */
+	for (val = strtok(spanmap, ","); val; val = strtok(NULL, ",")) {
+		while (*val == ' ') {
+			val++;
+		}
+
+		switch(idx++) {
+			case 0:
+				name = ftdm_strdup(val);
+				break;
+			case 1:
+				logical_span_id = atoi(val);
+				break;
+
+			default:
+				break;
+		}
+	}
+
+	if (!name) {
+		ftdm_log(FTDM_LOG_ERROR, "Invalid tap spanmap syntax %s\n", _spanmap);
+		ret = FTDM_FAIL;
+		goto done;
+	}
+
+	for (idx = 0; idx < g_sngisdn_tap_data.num_nfas; idx++) {
+		if (!ftdm_strlen_zero(g_sngisdn_tap_data.nfas[idx].name) &&
+		    !strcasecmp(g_sngisdn_tap_data.nfas[idx].name, name)) {
+			tap->nfas.trunk = &g_sngisdn_tap_data.nfas[idx];
+			break;
+		}
+	}
+
+	if (!tap->nfas.trunk) {
+		ftdm_log(FTDM_LOG_ERROR, "Could not find trunkgroup with name %s\n", name);
+		ret = FTDM_FAIL;
+		goto done;
+	}
+
+	/* Fill in self span first */
+	if (tap->nfas.trunk->tap_spans[logical_span_id]) {
+		ftdm_log(FTDM_LOG_ERROR, "trunkgroup:%s already had a span with logical span id:%d for span %s\n", name, logical_span_id, tap->span->name);
+	} else {
+		tap->nfas.trunk->tap_spans[logical_span_id] = span;
+		tap->nfas.interface_id = logical_span_id;
+	}
+
+	tap->nfas.sigchan = SNGISDN_NFAS_DCHAN_NONE;
+
+	if (!strcasecmp(tap->span->name, tap->nfas.trunk->dchan_span_name)) {
+		tap->nfas.sigchan = SNGISDN_NFAS_DCHAN_PRIMARY;
+		tap->nfas.trunk->dchan = tap;
+	}
+
+	if (!strcasecmp(tap->span->name, tap->nfas.trunk->backup_span_name)) {
+		tap->nfas.sigchan = SNGISDN_NFAS_DCHAN_BACKUP;
+		tap->nfas.trunk->backup = tap;
+	}
+
+	tap->nfas.trunk->num_spans_configured++;
+done:
+	ftdm_safe_free(spanmap);
+	ftdm_safe_free(name);
+	return ret;
+}
+
+/**********************************************************************************
  * Fun   : ftdm_sangoma_isdn_tap_start()
  *
  * Desc  : Start configured sngisdn_tap span
@@ -2439,7 +2831,12 @@ static ftdm_status_t ftdm_sangoma_isdn_tap_start(ftdm_span_t *span)
 		/* our peer already started, we're the master */
 		ftdm_set_flag(tap, ISDN_TAP_MASTER);
 	}
-	ret = ftdm_thread_create_detached(ftdm_sangoma_isdn_tap_run, span);
+
+	if ((!tap->nfas.trunk) || (tap->nfas.sigchan != SNGISDN_NFAS_DCHAN_NONE)) {
+		ret = ftdm_thread_create_detached(ftdm_sangoma_isdn_tap_run, span);
+	} else {
+		ret = ftdm_thread_create_detached(ftdm_sangoma_isdn_tap_voice_span_run, span);
+	}
 
 	if (ret != FTDM_SUCCESS) {
 		return ret;
@@ -2461,6 +2858,7 @@ static FIO_CONFIGURE_SPAN_SIGNALING_FUNCTION(ftdm_sangoma_isdn_tap_configure_spa
 	sngisdn_tap_mix_mode_t mixaudio = ISDN_TAP_MIX_NULL;
 	sngisdn_tap_iface_t iface = ISDN_TAP_IFACE_UNKNOWN;
 	sngisd_tap_mode_t tapmode = ISDN_TAP_NORMAL;	/* By default tapping mode will be NORMAL i.e. single way/E1-T1 tapping */
+	ftdm_bool_t event_ind = FTDM_FALSE;		/* By default set event indication to false */
 	ftdm_channel_t *dchan = NULL;
 	ftdm_span_t *peerspan = NULL;
 	sngisdn_tap_t *tap = NULL;
@@ -2471,27 +2869,39 @@ static FIO_CONFIGURE_SPAN_SIGNALING_FUNCTION(ftdm_sangoma_isdn_tap_configure_spa
 	int intf = NETWORK; 				/* default */
 	uint32_t idx = 0;
 
+	tap = ftdm_calloc(1, sizeof(*tap));
+	if (!tap) {
+		return FTDM_FAIL;
+	}
+
+	span->signal_data = tap;
+
+	tap->nfas.trunk = NULL;
+	tap->span = span;
+
 	if (span->trunk_type >= FTDM_TRUNK_NONE) {
 		ftdm_log(FTDM_LOG_WARNING, "Invalid trunk type '%s' defaulting to T1.\n", ftdm_trunk_type2str(span->trunk_type));
 		span->trunk_type = FTDM_TRUNK_T1;
 	}
 
-	for (idx = 1; idx <= span->chan_count; idx++) {
-		if (span->channels[idx]->type == FTDM_CHAN_TYPE_DQ921) {
-			dchan = span->channels[idx];
-			break;
-		}
-	}
+	/* Find out if NFAS is enabled first */
+	for (paramindex = 0; ftdm_parameters[paramindex].var; paramindex++) {
+		ftdm_log(FTDM_LOG_DEBUG, "Sangoma ISDN Tapping key = value, %s = %s\n", ftdm_parameters[paramindex].var, ftdm_parameters[paramindex].val);
+		var = ftdm_parameters[paramindex].var;
+		val = ftdm_parameters[paramindex].val;
 
-	if (!dchan) {
-		ftdm_log(FTDM_LOG_ERROR, "No d-channel specified in freetdm.conf!\n");
-		return FTDM_FAIL;
+		if (!strcasecmp(var, "trunkgroup")) {
+			if (sangoma_isdn_tap_parse_trunkgroup(val) != FTDM_SUCCESS) {
+				ftdm_log(FTDM_LOG_ERROR, "Invalid tapping trunkgoup %s info for span %s!\n", val, span->name);
+				return FTDM_FAIL;
+			}
+		}
 	}
 
 	for (paramindex = 0; ftdm_parameters[paramindex].var; paramindex++) {
 		var = ftdm_parameters[paramindex].var;
 		val = ftdm_parameters[paramindex].val;
-		ftdm_log(FTDM_LOG_DEBUG, "Tapping ISDN key=value, %s=%s\n", var, val);
+		ftdm_log(FTDM_LOG_DEBUG, "Sangoma ISDN Tapping key=value, %s=%s\n", var, val);
 
 		if (!strcasecmp(var, "debug")) {
 			debug = val;
@@ -2548,26 +2958,54 @@ static FIO_CONFIGURE_SPAN_SIGNALING_FUNCTION(ftdm_sangoma_isdn_tap_configure_spa
 				tap_dchan_queue_size = ISDN_TAP_DCHAN_QUEUE_LEN;
 			}
 			ftdm_log(FTDM_LOG_INFO, "TX/RX Queue size '%d' is received by user configuration for span '%s'\n", tap_dchan_queue_size, span->name);
+		} else if (!strcasecmp(var, "spanmap")) {
+			if (sangoma_isdn_tap_parse_spanmap(val, span) != FTDM_SUCCESS) {
+				ftdm_log(FTDM_LOG_ERROR, "Invalid tap NFAS configuration span_map '%s' for span '%s'\n", val, span->name);
+				return FTDM_FAIL;
+			}
+		} else if (!strcasecmp(var, "trunkgroup")) {
+				/*  Nothing to do as this is already being done */
+		} else if (!strcasecmp(var, "call_info_indication")) {
+			if (ftdm_true(val)) {
+				event_ind = FTDM_TRUE;
+				ftdm_log(FTDM_LOG_DEBUG, "Setting call infomation indication to TRUE for span '%s'\n", span->name);
+			} else {
+				event_ind = FTDM_FALSE;
+				ftdm_log(FTDM_LOG_DEBUG, "Setting call infomation indication to FALSE for span '%s'\n", span->name);
+			}
 		} else {
 			ftdm_log(FTDM_LOG_ERROR,  "Unknown isdn tapping parameter [%s]\n", var);
 		}
 	}
+
+	/* get d channel as this is not a pure voice span */
+	if ((!tap->nfas.trunk) || (tap->nfas.sigchan != SNGISDN_NFAS_DCHAN_NONE)) {
+		for (idx = 1; idx <= span->chan_count; idx++) {
+			if (span->channels[idx]->type == FTDM_CHAN_TYPE_DQ921) {
+				dchan = span->channels[idx];
+				break;
+			}
+		}
+
+		if (!dchan) {
+			ftdm_log(FTDM_LOG_ERROR, "No d-channel specified in freetdm.conf!\n");
+			return FTDM_FAIL;
+		}
+
+		tap->dchan = dchan;
+	}
+
 
 	if (!peerspan) {
 		ftdm_log(FTDM_LOG_ERROR, "No valid peerspan was specified!\n");
 		return FTDM_FAIL;
 	}
 
-	tap = ftdm_calloc(1, sizeof(*tap));
-	if (!tap) {
-		return FTDM_FAIL;
-	}
-
 	/* initializing tap call hash lists */
-    tap->pend_call_lst = create_hashtable(FTDM_MAX_CHANNELS_PHYSICAL_SPAN, ftdm_hash_hashfromstring, ftdm_hash_equalkeys);
+	tap->pend_call_lst = create_hashtable(FTDM_MAX_CHANNELS_PHYSICAL_SPAN, ftdm_hash_hashfromstring, ftdm_hash_equalkeys);
 
+	tap->indicate_event = event_ind;
 	tap->debug = parse_debug(debug);
-	tap->dchan = dchan;
 	tap->peerspan = peerspan;
 	tap->mixaudio = mixaudio;
 	tap->iface = iface;
@@ -2581,7 +3019,7 @@ static FIO_CONFIGURE_SPAN_SIGNALING_FUNCTION(ftdm_sangoma_isdn_tap_configure_spa
 		return FTDM_FAIL;
 	}
 
-	/* Initialize Q931 Message Decoder  as decoder control block has to be per tap basis */
+	/* Initialize Q931 Message Decoder as decoder control block has to be per tap basis */
 	if (q931_decoder_init(intf, tap->decCb)) {
 		/* Free the allocated memory for q931 decoder control block */
 		if (tap->decCb) {
@@ -2604,7 +3042,6 @@ static FIO_CONFIGURE_SPAN_SIGNALING_FUNCTION(ftdm_sangoma_isdn_tap_configure_spa
 
 	span->signal_cb = sig_cb;
 
-	span->signal_data = tap;
 	span->signal_type = FTDM_SIGTYPE_ISDN;
 	span->outgoing_call = sangoma_isdn_tap_outgoing_call;
 
@@ -2637,6 +3074,9 @@ static FIO_CONFIGURE_SPAN_SIGNALING_FUNCTION(ftdm_sangoma_isdn_tap_configure_spa
 
 	/* Enabling Channel IO Stats on span basis */
 	ftdm_sangoma_isdn_tap_io_stats(NULL, span, "enable");
+
+	/* main tap list in global structure */
+	g_sngisdn_tap_data.tap_spans[g_sngisdn_tap_data.num_spans_configured++] = tap;
 
 	ftdm_log(FTDM_LOG_DEBUG, "Configured tap for span [%d]!\n", span->span_id);
 	return FTDM_SUCCESS;
@@ -2939,10 +3379,19 @@ static ftdm_status_t ftdm_sangoma_isdn_tap_show_span_status(ftdm_stream_handle_t
 {
 	ftdm_alarm_flag_t alarmbits = FTDM_ALARM_NONE;
 	ftdm_signaling_status_t sigstatus;
-	ftdm_channel_t *fchan;
+	ftdm_channel_t *sig_chan = NULL;
+	ftdm_channel_t *fchan = NULL;
 	uint32_t chan_idx = 0;
 
-	for (chan_idx = 1; chan_idx < span->chan_count; chan_idx++) {
+	sig_chan = ((sngisdn_tap_t *)span->signal_data)->dchan;
+
+	if (sig_chan) {
+		stream->write_function(stream, "SIGNALLING SPAN %s status ->\n", span->name);
+	} else {
+		stream->write_function(stream, "PURE VOICE SPAN %s status ->\n", span->name);
+	}
+
+	for (chan_idx = 1; chan_idx <= span->chan_count; chan_idx++) {
 		fchan = span->channels[chan_idx];
 		alarmbits = FTDM_ALARM_NONE;
 
@@ -2951,16 +3400,61 @@ static ftdm_status_t ftdm_sangoma_isdn_tap_show_span_status(ftdm_stream_handle_t
 
 			ftdm_channel_get_sig_status(fchan, &sigstatus);
 
-			stream->write_function(stream, "span = %2d|chan = %2d|phy_status = %4s|sig_status = %4s|state = %s|\n",
-					span->span_id, fchan->physical_chan_id, alarmbits ? "ALARMED" : "OK",
-					ftdm_signaling_status2str(sigstatus),
-					ftdm_channel_state2str(fchan->state));
+			if ((sig_chan) && (sig_chan->span_id == fchan->span_id) && (sig_chan->chan_id == fchan->chan_id)) {
+				stream->write_function(stream, "span = %2d|chan = %2d|phy_status = %4s|SIGNALLING LINK|state = %s|\n",
+						       span->span_id, fchan->physical_chan_id, alarmbits ? "ALARMED" : "OK",
+						       ftdm_channel_state2str(fchan->state));
+			} else {
+				stream->write_function(stream, "span = %2d|chan = %2d|phy_status = %4s|sig_status = %4s|state = %s|\n",
+						       span->span_id, fchan->physical_chan_id, alarmbits ? "ALARMED" : "OK",
+						       ftdm_signaling_status2str(sigstatus),
+						       ftdm_channel_state2str(fchan->state));
+			}
 		}
 	}
 
 	stream->write_function(stream, "***********************************************************************\n");
 
 	return FTDM_SUCCESS;
+}
+
+/**********************************************************************************
+ * Fun   : ftdm_sangoma_isdn_tap_show_nfas_config()
+ *
+ * Desc  : Print nfas configuration if present
+ *
+ * Ret   : FTDM_SUCCESS | FTDM_FAIL
+**********************************************************************************/
+static ftdm_status_t ftdm_sangoma_isdn_tap_show_nfas_config(ftdm_stream_handle_t *stream, sngisdn_tap_t *tap)
+{
+	sngisdn_tap_t *nfas_tap = NULL;
+	ftdm_span_t *span = NULL;
+	int idx = 0;
+
+	stream->write_function(stream, "***********************************************************************\n");
+	if (!tap->nfas.trunk) {
+		stream->write_function(stream, "Span %s is not configured as NFAS span\n", tap->span->name);
+		return FTDM_FAIL;
+	}
+
+	stream->write_function(stream, "NFAS Group: %s\n", tap->nfas.trunk->name);
+
+	for (idx = 0; idx < tap->nfas.trunk->num_tap_spans; idx++) {
+		if (!tap->nfas.trunk->tap_spans[idx]) {
+			ftdm_log(FTDM_LOG_ERROR, "No ISDN NFAS Tap span found at index %d for span %s\n",
+					 idx, tap->span->name);
+			return FTDM_FAIL;
+		}
+
+		span = tap->nfas.trunk->tap_spans[idx];
+		nfas_tap = span->signal_data;
+
+		stream->write_function(stream, "Span = %s| logical span ID = %d| Span Type = %s|\n",
+				nfas_tap->span->name, idx, SNG_ISDN_TAP_GET_NFAS_SPAN_TYPE(nfas_tap->nfas.sigchan));
+	}
+
+	return FTDM_SUCCESS;
+
 }
 
 /**********************************************************************************
@@ -2999,12 +3493,16 @@ ftdm_status_t ftdm_sangoma_isdn_tap_io_stats(ftdm_stream_handle_t *stream, ftdm_
 		if (!strcasecmp("enable", cmd)) {
 			enable = 1;
 			ftdm_channel_command(ftdmchan, FTDM_COMMAND_SWITCH_IOSTATS, &enable);
-			ftdm_log_chan_msg(ftdmchan, FTDM_LOG_DEBUG, "Enabling IO STATS\n");
+			if (stream) {
+				stream->write_function(stream, "IO STATS Enable successfully for span %d chan %d\n", ftdmchan->span_id, ftdmchan->chan_id);
+			}
 		} else if (!strcasecmp("disable", cmd)) {
 			enable = 0;
 			ftdm_channel_command(ftdmchan, FTDM_COMMAND_SWITCH_IOSTATS, &enable);
+			stream->write_function(stream, "IO STATS Disable successfully for span %d chan %d\n", ftdmchan->span_id, ftdmchan->chan_id);
 		} else if (!strcasecmp("flush", cmd)) {
 			ftdm_channel_command(ftdmchan, FTDM_COMMAND_FLUSH_IOSTATS, NULL);
+			stream->write_function(stream, "IO STATS Flushed successfully for span %d chan %d\n", ftdmchan->span_id, ftdmchan->chan_id);
 		} else if (!strcasecmp("show", cmd)) {
 			ftdm_channel_command(ftdmchan, FTDM_COMMAND_GET_IOSTATS, &stats);
 
@@ -3038,6 +3536,7 @@ ftdm_status_t ftdm_sangoma_isdn_tap_io_stats(ftdm_stream_handle_t *stream, ftdm_
 **********************************************************************************/
 COMMAND_HANDLER(show)
 {
+	sngisdn_tap_t *tap = NULL;
 	ftdm_span_t *span = NULL;
 	int span_id = 0;
 
@@ -3048,8 +3547,13 @@ COMMAND_HANDLER(show)
 
 	if (!strcasecmp(argv[0], "span")) {
 		if (!strcasecmp(argv[1], "all")) {
-			/* execute funstion */
-			/* need to include */
+			for (span_id = 0; span_id <= g_sngisdn_tap_data.num_spans_configured; span_id++) {
+				tap = g_sngisdn_tap_data.tap_spans[span_id];
+
+				if (tap) {
+					ftdm_sangoma_isdn_tap_show_span_status(stream, tap->span);
+				}
+			}
 		} else {
 			span_id = atoi(argv[1]);
 
@@ -3065,7 +3569,21 @@ COMMAND_HANDLER(show)
 
 			ftdm_sangoma_isdn_tap_show_span_status(stream, span);
 		}
-	}else {
+	} else if (!strcasecmp(argv[0], "nfas")) {
+		if (!strcasecmp(argv[1], "config")) {
+			for (span_id = 0; span_id <= g_sngisdn_tap_data.num_spans_configured; span_id++) {
+				tap = g_sngisdn_tap_data.tap_spans[span_id];
+
+				if ((tap) && (tap->dchan)) {
+					ftdm_sangoma_isdn_tap_show_nfas_config(stream, tap);
+				}
+			}
+		} else {
+				stream->write_function(stream, "-ERR '%s' is not a valid TAP span\n",  argv[1]);
+				stream->write_function(stream, "-Use: ftdm isdn_tap show nfas config\n",  argv[1]);
+				return FTDM_FAIL;
+		}
+	} else {
 		stream->write_function(stream, "-ERR Invalid Tap command\n",  argv[1]);
 		return FTDM_FAIL;
 	}
@@ -3082,6 +3600,7 @@ COMMAND_HANDLER(show)
 **********************************************************************************/
 COMMAND_HANDLER(io_stats)
 {
+	sngisdn_tap_t *tap = NULL;
 	ftdm_span_t *span = NULL;
 	int span_id = 0;
 
@@ -3093,8 +3612,13 @@ COMMAND_HANDLER(io_stats)
 	if (!strcasecmp(argv[0], "show")) {
 		if (!strcasecmp(argv[1], "span")) {
 			if (!strcasecmp(argv[2], "all")) {
-				/* execute funstion */
-				/* need to include */
+				for (span_id = 0; span_id <= g_sngisdn_tap_data.num_spans_configured; span_id++) {
+					tap = g_sngisdn_tap_data.tap_spans[span_id];
+
+					if (tap) {
+						ftdm_sangoma_isdn_tap_io_stats(stream, tap->span, "show");
+					}
+				}
 			} else {
 				span_id = atoi(argv[2]);
 
@@ -3108,7 +3632,7 @@ COMMAND_HANDLER(io_stats)
 					return FTDM_FAIL;
 				}
 
-				ftdm_sangoma_isdn_tap_io_stats(stream, span,"show");
+				ftdm_sangoma_isdn_tap_io_stats(stream, span, "show");
 			}
 		} else {
 			stream->write_function(stream, "-ERR Invalid Tap io_stats show command '%s'\n",  argv[1]);
@@ -3118,6 +3642,23 @@ COMMAND_HANDLER(io_stats)
 	} else if (!(strcasecmp(argv[0], "enable")) || !(strcasecmp(argv[0], "disable")) || !(strcasecmp(argv[0], "flush"))) {
 		if (!strcasecmp(argv[1], "span")) {
 			if (!strcasecmp(argv[2], "all")) {
+				for (span_id = 0; span_id <= g_sngisdn_tap_data.num_spans_configured; span_id++) {
+					tap = g_sngisdn_tap_data.tap_spans[span_id];
+
+					if (tap) {
+						if (!strcasecmp(argv[0], "enable")) {
+							ftdm_sangoma_isdn_tap_io_stats(stream, tap->span, "enable");
+						} else if (!strcasecmp(argv[0], "disable")) {
+							ftdm_sangoma_isdn_tap_io_stats(stream, tap->span, "disable");
+						} else if (!strcasecmp(argv[0], "flush")) {
+							ftdm_sangoma_isdn_tap_io_stats(stream, tap->span, "flush");
+						} else {
+							stream->write_function(stream, "-ERR Invalid Tap io_stats enable/disable/flush command\n",  argv[1]);
+							stream->write_function(stream, "USAGE -> ftdm sangoma_isdn_tap io_stats <enable/disable/flush> span <all/span_id>\n");
+							return FTDM_FAIL;
+						}
+					}
+				}
 			} else {
 				span_id = atoi(argv[2]);
 
@@ -3156,6 +3697,58 @@ COMMAND_HANDLER(io_stats)
 	return FTDM_SUCCESS;
 }
 
+/* Use this API only for testing purpose */
+/**********************************************************************************
+ * Fun   : COMMAND_HANDLER(reset tap counters)
+ *
+ * Desc  : Reset all tapping related counters
+ *
+ * Ret   : FTDM_SUCCESS
+**********************************************************************************/
+COMMAND_HANDLER(reset)
+{
+	if (!argc) {
+		stream->write_function(stream, "-ERR Invalid Tap reset command\n",  argv[1]);
+		return FTDM_FAIL;
+	}
+
+	if (!strcasecmp(argv[0], "counters")) {
+		setup_recv = 0;
+		setup_recv_invalid_chanId = 0;
+		setup_not_recv = 0;
+		call_proceed_recv = 0;
+		connect_recv = 0;
+		early_connect_recv = 0;
+		late_invite_recv = 0;
+		connect_recv_with_chanId = 0;
+		msg_recv_aft_time = 0;
+		disconnect_recv = 0;
+		release_recv = 0;
+		call_tapped = 0;
+		reuse_chan_con_recv =0;
+		stream->write_function(stream, "**********************************************************\n");
+		stream->write_function(stream, "               Tap Counetrs Reset successfully 			  \n");
+		stream->write_function(stream, "**********************************************************\n");
+		stream->write_function(stream, "    Total Number of Setup Received						   = %d\n", setup_recv);
+		stream->write_function(stream, "    Total Number of Setup Received with invalid channel				   = %d\n", setup_recv_invalid_chanId);
+		stream->write_function(stream, "    Total Number of Setup not Received						   = %d\n", setup_not_recv);
+		stream->write_function(stream, "    Total Number of Call Proceed Received					   = %d\n", call_proceed_recv);
+		stream->write_function(stream, "    Total Number of Connnect Received						   = %d\n", connect_recv);
+		stream->write_function(stream, "    Total Number of Early Connnect Received					   = %d\n", early_connect_recv);
+		stream->write_function(stream, "    Total Number of Late Invite Received					   = %d\n", late_invite_recv);
+		stream->write_function(stream, "    Total Number of Connnect Received with channel				   = %d\n", connect_recv_with_chanId);
+		stream->write_function(stream, "    Total Number of Message received after %d seconds				   = %d\n", SNG_TAP_SUBEQUENT_MSG_TME_DURATION, msg_recv_aft_time);
+		stream->write_function(stream, "    Total Number of Disconnect Received						   = %d\n", disconnect_recv);
+		stream->write_function(stream, "    Total Number of Release Received						   = %d\n", release_recv);
+		stream->write_function(stream, "    Total Number of Tapped files generated					   = %d\n", call_tapped);
+		stream->write_function(stream, "    Total Number of Connect Received where Channel was In-Use			   = %d\n", reuse_chan_con_recv);
+	} else {
+		stream->write_function(stream, "-ERR Invalid Tap command\n",  argv[1]);
+		return FTDM_FAIL;
+	}
+
+	return FTDM_SUCCESS;
+}
 /* command map */
 /**********************************************************************************
  * Fun   : command map structure
@@ -3173,6 +3766,7 @@ struct {
 		COMMAND(statistics, 0),
 		COMMAND(show, 1),
 		COMMAND(io_stats, 2),
+		COMMAND(reset, 1),
 	};
 
 /**********************************************************************************

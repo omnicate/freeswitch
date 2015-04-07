@@ -65,9 +65,10 @@
 /* Syntax message */
 #define FT_SYNTAX "USAGE:\n" \
 "--------------------------------------------------------------------------------\n" \
-"ftdm sangoma_isdn_tap statistics\n" \
-"ftdm sangoma_isdn_tap show span <span_id>\n" \
-"ftdm sangoma_isdn_tap io_stats <show/enable/disable/flush> span <span_id>\n" \
+"ftdm isdn_tap statistics\n" \
+"ftdm isdn_tap show nfas config\n" \
+"ftdm isdn_tap show span <span_id/all>\n" \
+"ftdm isdn_tap io_stats <show/enable/disable/flush> span <span_id/all>\n" \
 "--------------------------------------------------------------------------------\n"
 
 /* Used to declare command handler */
@@ -80,6 +81,14 @@
 
 #define MAX_PCALLS 120
 #define ISDN_TAP_DCHAN_QUEUE_LEN 900
+#define MAX_TAP_SPANS 50
+
+/* NFAS related defines */
+#define MAX_NFAS_GROUPS 16
+#define MAX_NFAS_GROUP_NAME 50
+/* ideally maximum number of NFAS LINK should be 31 but it is set to 16 right to
+ * save some memory */
+#define MAX_SPANS_PER_NFAS_LINK 16
 
 /* command handler function type */
 typedef ftdm_status_t (*fCMD)(ftdm_stream_handle_t *stream, char *argv[], int argc);
@@ -156,6 +165,15 @@ typedef enum {
 	ISDN_TAP_BI_DIRECTION = 1,
 } sngisd_tap_mode_t;
 
+typedef enum {
+	SNGISDN_NFAS_DCHAN_NONE,
+	SNGISDN_NFAS_DCHAN_PRIMARY,
+	SNGISDN_NFAS_DCHAN_BACKUP,
+} sngisdn_tap_nfas_sigchan_t;
+
+struct sngisdn_tap_nfas_data;
+typedef struct sngisdn_tap_nfas_data sngisdn_tap_nfas_data_t;
+
 typedef struct isdn_tap {
 	int32_t flags;
 	struct sngisdn_t *pri;
@@ -171,7 +189,25 @@ typedef struct isdn_tap {
 	sngisdn_tap_iface_t iface;
 	void *decCb;		    /* ISDN Decoder Control Block */
 	ftdm_hash_t *pend_call_lst; /* Hash List for Calls for which connect is already received before SETUP */
+	/* Incuding NFAS functionality */
+	struct nfas_info {
+		sngisdn_tap_nfas_sigchan_t sigchan;
+		sngisdn_tap_nfas_data_t *trunk;
+		uint8_t interface_id;
+	} nfas;
+	ftdm_bool_t indicate_event; /* Indicate event when RELEASE/DISCONNECT is received with all the information about the call */
 } sngisdn_tap_t;
+
+struct sngisdn_tap_nfas_data {
+	char name[MAX_NFAS_GROUP_NAME];
+	char backup_span_name[20];
+	char dchan_span_name[20];
+	sngisdn_tap_t *dchan;		/* Span that contains primary d-channel */
+	sngisdn_tap_t *backup;		/* Span that contains backup d-channel */
+	uint8_t num_tap_spans;		/* Number of spans within this NFAS */
+	uint8_t num_spans_configured;
+	ftdm_span_t *tap_spans[MAX_SPANS_PER_NFAS_LINK + 1]; /* indexed by logical span id */
+};
 
 typedef struct con_call_info {
 	int callref_val;
@@ -181,6 +217,14 @@ typedef struct con_call_info {
 	ftdm_bool_t recv_con;
 	ftdm_bool_t tap_proceed;
 } con_call_info_t;
+
+/* Global sngisdn tap data */
+typedef struct ftdm_sngisdn_tap_data {
+	sngisdn_tap_nfas_data_t nfas[MAX_NFAS_GROUPS + 1];
+	sngisdn_tap_t *tap_spans[MAX_TAP_SPANS];
+	uint8_t num_nfas;
+	uint8_t num_spans_configured;
+}ftdm_sngisdn_tap_data_t;
 
 /********************************************************************************/
 /*                                                                              */
@@ -225,6 +269,10 @@ void sangoma_isdn_tap_check_state(ftdm_span_t *span);
 
 /* release pcall */
 void sangoma_isdn_tap_put_pcall(sngisdn_tap_t *tap, void *callref);
+
+/* send raw data i.e. tap message with all the information on receipt of
+ * RELEASE/DISCONNECT message */
+void send_protocol_raw_data(isdn_tap_msg_info_t *data, ftdm_channel_t *ftdmchan);
 
 /* ftmod_sangoma_isdn_bidir_tap.c Functions ***********************************************************************************************************************/
 /* functions based on ISDN messages */
@@ -317,6 +365,13 @@ ftdm_channel_t *sangoma_isdn_bidir_tap_get_fchan(sngisdn_tap_t *tap, passive_cal
 ((iface) == ISDN_TAP_IFACE_CPE) ? "CPE" : \
 ((iface) == ISDN_TAP_IFACE_NET  ? "NET" : \
 "Unknown interface"
+
+/* ISDN TAP NFAS SPAN TYPE DECODE *********************************************/
+#define SNG_ISDN_TAP_GET_NFAS_SPAN_TYPE(sigchan) \
+((sigchan) == SNGISDN_NFAS_DCHAN_NONE)     ? "VOICE" : \
+((sigchan) == SNGISDN_NFAS_DCHAN_PRIMARY)  ? "PRIMARY SIGNALLING" : \
+((sigchan) == SNGISDN_NFAS_DCHAN_BACKUP)   ? "BACKUP SIGNALLING" : \
+"Unknown NFAS span type"
 
 /********************************************************************************/
 /*                                                                              */
