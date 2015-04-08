@@ -1331,17 +1331,53 @@ static void process_calling_party_subaddr_ie(ftdm_channel_t *ftdmchan, unsigned 
 	int mask = 0x0F;
 	int nibcnt = 0;
 
+	int len = ie[1] + 3;
 	sngss7_chan_data_t *sngss7_info = ftdmchan->call_data;
 
 	/* Decode the LIID */
 	bcd_decode(ftdmchan, &ie[p], ie[1], val, sizeof(val), &shift, &mask, &nibcnt);
 	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Decoded LIID: %s\n", val);
-	sngss7_add_var (sngss7_info, "li.id", val);
+	sngss7_add_var(sngss7_info, "li.id", val);
 
 	/* Decode the direction */
 	bcd_decode(ftdmchan, &ie[p], ie[1], val, sizeof(val), &shift, &mask, &nibcnt);
 	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Decoded Direction: %s/%s\n", val, li_direction_val2str(val));
-	sngss7_add_var (sngss7_info, "li.direction", li_direction_val2str(val));
+	sngss7_add_var(sngss7_info, "li.direction", li_direction_val2str(val));
+
+	/* Save TMR (Transmission Medium Requirement) */
+	if (len >= 19) {
+		snprintf(val, sizeof(val), "%d", ie[18]);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Transmission Medium Requirement: %s\n", val);
+		sngss7_add_var(sngss7_info, "li.tmr", val);
+	}
+
+	/* Save BC (Bearer Capability) */
+	if (len >= 20) {
+		snprintf(val, sizeof(val), "%d", ie[19]);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Bearer Capability: %s\n", val);
+		sngss7_add_var(sngss7_info, "li.bc", val);
+	}
+
+	/* Save HLC (High Layer Compatibility) */
+	if (len >= 21) {
+		snprintf(val, sizeof(val), "%d", ie[20]);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "High Layer Compatibility: %s\n", val);
+		sngss7_add_var(sngss7_info, "li.hlc", val);
+	}
+
+	/* Save MBSC (Mobile Bearer Service Code) */
+	if (len >= 22) {
+		snprintf(val, sizeof(val), "%d", ie[21]);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Mobile Bearer Service Code: %s\n", val);
+		sngss7_add_var(sngss7_info, "li.mbsc", val);
+	}
+
+	/* Save MTSC (Mobile Teleservice Code) */
+	if (len >= 23) {
+		snprintf(val, sizeof(val), "%d", ie[22]);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Mobile Bearer Service Code: %s\n", val);
+		sngss7_add_var(sngss7_info, "li.mtsc", val);
+	}
 }
 
 static void process_called_party_subaddr_ie(ftdm_channel_t *ftdmchan, unsigned char *ie)
@@ -1625,7 +1661,7 @@ ftdm_status_t copy_cgPtyCat_from_sngss7(ftdm_channel_t *ftdmchan, SiCgPtyCat *cg
                 nib++; \
         } while (0);
 static void bcd_encode(const char *digits,
-                char *subAddrIE,
+                uint8_t *subAddrIE,
                 int *shift,
                 int *mask,
                 int *nibcnt,
@@ -1688,7 +1724,7 @@ static void bcd_decode(ftdm_channel_t *ftdmchan, unsigned char *bcdbuf, int bcd_
 	while (c < bufsize) {
 		retrieve_bcd(i);
 		if (i == 0xF) {
-			ftdm_log_chan(ftdmchan, FTDM_LOG_ERROR, "Found bcd end character at nibble %d\n", nib);
+			ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found bcd end character at nibble %d\n", nib);
 			break;
 		}
 		if (i < 0 || i > 9) {
@@ -1739,7 +1775,7 @@ static const char *li_direction_val2str(const char *val)
 	return "3";
 }
 
-static void append_ie_to_transport(SiAccTrnspt *accTrnspt, char *subAddrIE)
+static void append_ie_to_transport(SiAccTrnspt *accTrnspt, uint8_t *subAddrIE)
 {
 	/* check if the clg_subAddr has already been added */
 	if (accTrnspt->eh.pres == PRSNT_NODEF) {
@@ -1756,16 +1792,19 @@ static void append_ie_to_transport(SiAccTrnspt *accTrnspt, char *subAddrIE)
 }
 
 #define MAX_SUBADDR 20 /* According to notes on table 4-10/Q.931 */
-static void encode_li_cgpty_subAddrIE(ftdm_channel_t *ftdmchan, SiAccTrnspt *accTrnspt, char *subAddrIE, int max_len)
+static void encode_li_cgpty_subAddrIE(ftdm_channel_t *ftdmchan, SiAccTrnspt *accTrnspt, uint8_t *subAddrIE, int max_len)
 {
-	const char *id = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "li.id");
-	const char *direction = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "li.direction");
-	const char *dirval = ftdm_strlen_zero(direction) ? "" : li_direction_str2val(direction);
 	int p = 0;
 	int shift = 0;
 	int mask = 0x0F;
 	int nibcnt = 0;
 	int odd = 0;
+	int len = 0;
+	uint8_t octetval = 0;
+	const char *strval = NULL;
+	const char *id = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "li.id");
+	const char *direction = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "li.direction");
+	const char *dirval = ftdm_strlen_zero(direction) ? "" : li_direction_str2val(direction);
 
 	max_len = max_len > MAX_SUBADDR ? MAX_SUBADDR : max_len;
 	memset(subAddrIE, 0, max_len);
@@ -1783,9 +1822,55 @@ static void encode_li_cgpty_subAddrIE(ftdm_channel_t *ftdmchan, SiAccTrnspt *acc
 	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Encoding Direction: %s\n", dirval);
 	bcd_encode(dirval, &subAddrIE[p], &shift, &mask, &nibcnt, max_len);
 
-	/* Set length field */
+	/* Encode TMR (Transmission Medium Requirement) */
+	strval = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "li.tmr");
+	octetval = !ftdm_strlen_zero(strval) ? atoi(strval) : 0xFF;
+	subAddrIE[18] = octetval;
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Stored Transmission Medium Requirement: %d\n", octetval);
+
+	/* Encode BC (Bearer Capability) */
+	strval = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "li.bc");
+	octetval = !ftdm_strlen_zero(strval) ? atoi(strval) : 0xFF;
+	subAddrIE[19] = octetval;
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Stored Bearer Capability: %d\n", octetval);
+
+	/* Encode HLC (High Layer Compatibility) */
+	strval = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "li.hlc");
+	octetval = !ftdm_strlen_zero(strval) ? atoi(strval) : 0xFF;
+	subAddrIE[20] = octetval;
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Stored High Layer Compatibility: %d\n", octetval);
+
+	/* Encode MBSC (Mobile Bearer Service Code) */
+	strval = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "li.mbsc");
+	octetval = !ftdm_strlen_zero(strval) ? atoi(strval) : 0xFF;
+	subAddrIE[21] = octetval;
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Stored Mobile Bearer Service Code: %d\n", octetval);
+
+	/* Encode MTSC (Mobile Teleservice Code) */
+	strval = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "li.mtsc");
+	octetval = !ftdm_strlen_zero(strval) ? atoi(strval) : 0xFF;
+	subAddrIE[22] = octetval;
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Stored Mobile Teleservice Code: %d\n", octetval);
+
+	/* Note that we still add later 3 more bytes to the ie length when appending the ie to the transport for the IE identifier, length and type of subaddr */
+	/* Total length is almost fixed (21 bytes when no mobile codes are available, 23 when they are)  */
+	len = 15;
+	if (subAddrIE[21] == 0xFF && subAddrIE[22] == 0xFF) {
+		/* Take only 3 out of 5 since the last 2 are not available */
+		len += 3;
+	} else if (subAddrIE[22] == 0xFF) {
+		/* Take only 4 out of 5 since the last one is not available */
+		len += 4;
+	} else {
+		/* Take all service octets. Note that subAddrIE[21] might be 0xFF, but
+	           the alternative according to the ETSI spec is to not include the MTSC
+		   value either (e.g take only 3 octets) but I prefer the alternative of
+		   sending all the info we got */
+		len += 5;
+	}
+
 	p = 1;
-	subAddrIE[p] = !(nibcnt % 2) ? (nibcnt / 2) : ((nibcnt / 2) + 1);
+	subAddrIE[p] = len;
 	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Calling party subaddress IE Length: %d\n", subAddrIE[p]);
 
 	/* Type of subaddress and odd/even indicator are at the same octet*/
@@ -1804,7 +1889,7 @@ static void encode_li_cgpty_subAddrIE(ftdm_channel_t *ftdmchan, SiAccTrnspt *acc
 	append_ie_to_transport(accTrnspt, subAddrIE);
 }
 
-static void encode_li_cdpty_subAddrIE(ftdm_channel_t *ftdmchan, SiAccTrnspt *accTrnspt, char *subAddrIE, int max_len)
+static void encode_li_cdpty_subAddrIE(ftdm_channel_t *ftdmchan, SiAccTrnspt *accTrnspt, uint8_t *subAddrIE, int max_len)
 {
 	const char *operator_id = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "li.operator_id");
 	const char *cin = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "li.communication_identity_number");
@@ -1858,7 +1943,6 @@ static void encode_li_cdpty_subAddrIE(ftdm_channel_t *ftdmchan, SiAccTrnspt *acc
 
 ftdm_status_t copy_accTrnspt_to_sngss7(ftdm_channel_t *ftdmchan, SiAccTrnspt *accTrnspt)
 {
-	/* TODO: change subAddrIE to uint8_t */
 	const char *clg_subAddr = NULL;
 	const char *cld_subAddr = NULL;
 	const char *li_id = NULL;
@@ -1867,13 +1951,14 @@ ftdm_status_t copy_accTrnspt_to_sngss7(ftdm_channel_t *ftdmchan, SiAccTrnspt *ac
 	/* check if the user would like us to send encoded lawful interception information  */
 	li_id = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "li.id");
 	if (!ftdm_strlen_zero(li_id)) {
+		uint8_t subaddr_ie[MAX_SIZEOF_SUBADDR_IE];
 		ftdm_log_chan_msg(ftdmchan, FTDM_LOG_DEBUG, "Found user supplied lawful interception information\n");
 
 		/* First encode the LIID and Direction in the calling party subaddress */
-		encode_li_cgpty_subAddrIE(ftdmchan, accTrnspt, subAddrIE, sizeof(subAddrIE) - 1);
+		encode_li_cgpty_subAddrIE(ftdmchan, accTrnspt, subaddr_ie, sizeof(subaddr_ie) - 1);
 
 		/* Now encode the Operator ID, CIN and CCLID in the called party subaddress */
-		encode_li_cdpty_subAddrIE(ftdmchan, accTrnspt, subAddrIE, sizeof(subAddrIE) - 1);
+		encode_li_cdpty_subAddrIE(ftdmchan, accTrnspt, subaddr_ie, sizeof(subaddr_ie) - 1);
 
 		/* Lawful interception info done, do not check for explicit calling/called subaddress info */
 		goto done;

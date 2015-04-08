@@ -1769,6 +1769,31 @@ static switch_call_cause_t channel_outgoing_channel(switch_core_session_t *sessi
 		if (sipvar) {
 			ftdm_usrmsg_add_var(&usrmsg, "li.operator_id", sipvar);
 		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_P-LI-TMR");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "li.tmr", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_P-LI-BC");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "li.bc", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_P-LI-HLC");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "li.hlc", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_P-LI-MBSC");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "li.mbsc", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_P-LI-MTSC");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "li.mtsc", sipvar);
+		}
 	}
 
 	if (switch_test_flag(outbound_profile, SWITCH_CPF_SCREEN)) {
@@ -2405,6 +2430,11 @@ ftdm_status_t ftdm_channel_from_event(ftdm_sigmsg_t *sigmsg, switch_core_session
 				{ "li.cc_link_identifier", "sip_h_P-LI-CCLID" },
 				{ "li.direction", "sip_h_P-LI-Direction" },
 				{ "li.operator_id", "sip_h_P-LI-OPID" },
+				{ "li.tmr", "sip_h_P-LI-TMR" },
+				{ "li.bc", "sip_h_P-LI-BC" },
+				{ "li.hlc", "sip_h_P-LI-HLC" },
+				{ "li.mbsc", "sip_h_P-LI-MBSC" },
+				{ "li.mtsc", "sip_h_P-LI-MTSC" },
 			};
 
 			for (i = 0; i < ftdm_array_len(isdn_varmap); i++) {
