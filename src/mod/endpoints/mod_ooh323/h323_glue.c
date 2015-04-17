@@ -412,7 +412,7 @@ static int onIncomingCall (ooCallData* call)
 			for (alias = call->ourAliases; alias; alias = alias->next) {
 				snprintf(var, 64, "h323_our_aliases_%d", alias->type);
 				switch_channel_set_variable_printf(channel, var, alias->value);
-				if (alias->type == T_H225AliasAddress_h323_ID) {
+				if (alias->type == T_H225AliasAddress_h323_ID || alias->type == T_H225AliasAddress_url_ID) {
 					if (!tech_pvt->destination_number) {
 						tech_pvt->destination_number = switch_core_session_strdup(session, alias->value);
 					}
