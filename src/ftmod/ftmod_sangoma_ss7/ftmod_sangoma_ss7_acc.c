@@ -203,7 +203,6 @@ ftdm_status_t ftdm_sangoma_ss7_get_congestion_status(ftdm_channel_t *ftdmchan)
 		sngss7_rmt_cong->loc_calls_rejected++;
 		SS7_DEBUG_CHAN(ftdmchan, "NSG-ACC: Hanging up call due to High cpu usage of [%d] against configured cpu limit[%d]!\n",
 				cpu_usage, g_ftdm_sngss7_data.cfg.max_cpu_usage);
-		/* PUSHKAR TODO: Need to made this as a configurable parameter */
 		/*ftdmchan->caller_data.hangup_cause = FTDM_CAUSE_SWITCH_CONGESTION;*/
 		ftdmchan->caller_data.hangup_cause = FTDM_CAUSE_NORMAL_CIRCUIT_CONGESTION;
 		sngss7_set_call_flag (sngss7_info, FLAG_CONG_REL);
@@ -244,7 +243,6 @@ ftdm_status_t ftdm_sangoma_ss7_get_congestion_status(ftdm_channel_t *ftdmchan)
 		SS7_DEBUG_CHAN(ftdmchan, "NSG-ACC: Reached maximum level of %d percentage to allow calls\n", (100 - sngss7_rmt_cong->call_blk_rate));
 		SS7_DEBUG_CHAN(ftdmchan, "NSG-ACC: Call is rejected as the remote end is congested having congestion level as %d\n", sngss7_rmt_cong->sngss7_rmtCongLvl);
 
-		/* PUSHKAR TODO: Need to made this as a configurable parameter */
 		/*ftdmchan->caller_data.hangup_cause = FTDM_CAUSE_SWITCH_CONGESTION;*/
 		ftdmchan->caller_data.hangup_cause = FTDM_CAUSE_NORMAL_CIRCUIT_CONGESTION;
 		sngss7_set_call_flag (sngss7_info, FLAG_CONG_REL);
