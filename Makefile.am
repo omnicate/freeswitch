@@ -204,6 +204,25 @@ ftmod_pritap_la_LDFLAGS = -shared -module -avoid-version -lpri
 ftmod_pritap_la_LIBADD  = libfreetdm.la
 endif
 
+if HAVE_SNG_ISDNTAP
+mod_LTLIBRARIES += ftmod_sangoma_isdn_tap.la
+ftmod_sangoma_isdn_tap_la_SOURCES = \
+	$(SRC)/ftmod/ftmod_sangoma_isdn_tap/ftmod_sangoma_isdn_tap.c \
+	$(SRC)/ftmod/ftmod_sangoma_isdn_tap/ftmod_sangoma_isdn_bidir_tap.c
+ftmod_sangoma_isdn_tap_la_CFLAGS  = $(FTDM_CFLAGS) $(AM_CFLAGS) -I/usr/include/sng_decoder
+ftmod_sangoma_isdn_tap_la_LDFLAGS = -shared -module -avoid-version -lsng_decoder
+ftmod_sangoma_isdn_tap_la_LIBADD  = libfreetdm.la
+endif
+
+if HAVE_SNG_ISUPTAP
+mod_LTLIBRARIES += ftmod_sangoma_isup_tap.la
+ftmod_sangoma_isup_tap_la_SOURCES = $(SRC)/ftmod/ftmod_sangoma_isup_tap/ftmod_sangoma_isup_tap.c
+ftmod_sangoma_isup_tap_la_CFLAGS  = $(FTDM_CFLAGS) $(AM_CFLAGS) -I/usr/include/sng_decoder -I/usr/include/wanpipe
+ftmod_sangoma_isup_tap_la_LDFLAGS = -shared -module -avoid-version -lsng_decoder
+ftmod_sangoma_isup_tap_la_LIBADD  = libfreetdm.la
+endif
+
+
 if HAVE_SNG_SS7
 mod_LTLIBRARIES += ftmod_sangoma_ss7.la
 ftmod_sangoma_ss7_la_SOURCES = \

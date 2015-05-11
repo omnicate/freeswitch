@@ -630,7 +630,6 @@ typedef struct ftdm_sngss7_rmt_cong {
 	uint32_t 	  calls_received;
 	uint32_t 	  max_bkt_size;
 	uint32_t 	  avg_call_rate;			/* Get the average calls per second when ACC feature is enable */
-	/* Pushkar changes for counter */
 	uint32_t 	  calls_passed;
 	uint32_t 	  calls_rejected;
 	uint32_t 	  loc_calls_rejected;

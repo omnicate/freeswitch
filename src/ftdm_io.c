@@ -3753,6 +3753,26 @@ FT_DECLARE(ftdm_status_t) ftdm_channel_wait(ftdm_channel_t *ftdmchan, ftdm_wait_
 	return status;
 }
 
+FT_DECLARE(ftdm_status_t) ftdm_channel_wait_multiple(ftdm_channel_t *ftdmchan[], ftdm_wait_flag_t poll_events[], uint32_t num_chans, uint32_t ms)
+{
+	uint32_t idx = 0;
+	ftdm_status_t status = FTDM_FAIL;
+
+	/* We expect that all channels must belong to the same I/O type */
+	ftdm_assert_return(ftdmchan[idx] != NULL, FTDM_FAIL, "Null channel\n");
+	ftdm_assert_return(ftdmchan[idx]->fio != NULL, FTDM_FAIL, "Null io interface\n");
+	ftdm_assert_return(ftdmchan[idx]->fio->wait_multiple != NULL, FTDM_NOTIMPL, "wait method not implemented\n");
+
+	status = ftdmchan[idx]->fio->wait_multiple(ftdmchan, poll_events, num_chans, ms);
+	if (status == FTDM_TIMEOUT) {
+		/* num_chans is the poller length which is better then null terminated array */
+		/* make sure that the poll_events are cleared on timeout */
+		memset(poll_events, 0, num_chans * sizeof(*poll_events));
+	}
+
+	return status;
+}
+
 /*******************************/
 FIO_CODEC_FUNCTION(fio_slin2ulaw)
 {
@@ -6239,7 +6259,7 @@ static void ftdm_group_add(ftdm_group_t *group)
 	} else {
 		globals.groups = group;
 	}
-	hashtable_insert(globals.group_hash, (void *)group->name, group, HASHTABLE_FLAG_NONE);
+	hashtable_insert(globals.group_hash, (void *)group->name, group, HASHTABLE_FLAG_FREE_KEY | HASHTABLE_FLAG_FREE_VALUE);
 
 	ftdm_mutex_unlock(globals.group_mutex);
 }
@@ -7035,7 +7055,11 @@ static ftdm_status_t ftdm_call_set_call_id(ftdm_channel_t *fchan, ftdm_caller_da
 		}
 	}
 
-	ftdm_assert_return(globals.call_ids[current_call_id] == NULL, FTDM_FAIL, "We ran out of call ids\n"); 
+	/* unlock mutex to avoid deadlock */
+	if (globals.call_ids[current_call_id] == NULL) {
+		ftdm_mutex_unlock(globals.call_id_mutex);
+		ftdm_assert_return(globals.call_ids[current_call_id] == NULL, FTDM_FAIL, "We ran out of call ids\n");
+	}
 
 	globals.last_call_id = current_call_id;
 	caller_data->call_id = current_call_id;
