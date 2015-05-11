@@ -483,6 +483,8 @@ struct ftdm_channel {
 	int32_t rxdrops;
 	ftdm_usrmsg_t *usrmsg;
 	ftdm_time_t last_state_change_time;
+
+    uint8_t forward_collect_digit_dtmf;
 };
 
 struct ftdm_span {

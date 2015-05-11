@@ -1161,7 +1161,7 @@ static FIO_WRITE_FUNCTION(wanpipe_write)
 			}
 		}
 		return FTDM_SUCCESS;
-	} 
+	}
 
 	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Failed to write on channel (dtmfbuffer=%i)\n",
 		ftdmchan->dtmf_buffer?ftdm_buffer_inuse(ftdmchan->dtmf_buffer):0);
@@ -1218,6 +1218,113 @@ static FIO_WAIT_FUNCTION(wanpipe_wait)
 	if (inflags & POLLPRI) {
 		*flags |= FTDM_EVENTS;
 	}
+
+	return FTDM_SUCCESS;
+}
+
+/**
+ * \brief Checks/poll/waits for events on a multiple channels of different spans
+ * \param ftdmchan Set of Channels to check for events
+ * \param poll_events Type of events w.r.t. each channels to wait/poll for
+ * \param num_chans Number of channels to check for events for
+ * \param ms Time to wait for event
+ * \return Success if event is waiting or failure if not
+ */
+static FIO_WAIT_MULTIPLE_FUNCTION(wanpipe_wait_multiple)
+{
+#ifdef LIBSANGOMA_VERSION
+	sangoma_status_t sangstatus;
+	sangoma_wait_obj_t *pfds[FTDM_MAX_CHANNELS_SPAN] = { 0 };
+	uint32_t inflags[FTDM_MAX_CHANNELS_SPAN];
+	uint32_t outflags[FTDM_MAX_CHANNELS_SPAN];
+#else
+	struct pollfd pfds[FTDM_MAX_CHANNELS_SPAN];
+#endif
+	uint32_t idx = 0;
+	uint32_t chan_events = 0;
+	uint32_t status = 0;
+
+	for (idx = 0; idx < num_chans; idx++) {
+		/* translate events from ftdm to libsnagoma. if the user don't specify which events to poll the
+		 * channel for, we just use SANG_WAIT_OBJ_HAS_EVENTS */
+		if (poll_events) {
+			if (poll_events[idx] & FTDM_READ) {
+				chan_events = SANG_WAIT_OBJ_HAS_INPUT;
+			}
+			if (poll_events[idx] & FTDM_WRITE) {
+				chan_events |= SANG_WAIT_OBJ_HAS_OUTPUT;
+			}
+			if (poll_events[idx] & FTDM_EVENTS) {
+				chan_events |= SANG_WAIT_OBJ_HAS_EVENTS;
+			}
+		} else {
+			chan_events = SANG_WAIT_OBJ_HAS_EVENTS;
+		}
+
+#ifdef LIBSANGOMA_VERSION
+		if (!ftdmchan[idx]->io_data) {
+			continue; /* should never happen but happens when shutting down */
+		}
+		pfds[idx] = WP_GET_WAITABLE(ftdmchan[idx]);
+		inflags[idx] = chan_events;
+#else
+		memset(&pfds[idx], 0, sizeof(pfds[idx]));
+		pfds[idx].fd = ftdmchan[idx]->sockfd;
+		pfds[idx].events = chan_events;
+#endif
+	}
+
+#ifdef LIBSANGOMA_VERSION
+	sangstatus = sangoma_waitfor_many(pfds, inflags, outflags, idx, ms);
+	if (SANG_STATUS_APIPOLL_TIMEOUT == sangstatus) {
+		status = 0;
+	} else if (SANG_STATUS_SUCCESS == sangstatus) {
+		status = 1; /* hopefully we never need how many changed -_- */
+	} else {
+		ftdm_log(FTDM_LOG_ERROR, "sangoma_waitfor_many failed: %d, %s\n", sangstatus, strerror(errno));
+		status = -1;
+	}
+#else
+	status = poll(pfds, num_chans, ms);
+#endif
+
+	switch (status) {
+		case 0:
+			return FTDM_TIMEOUT;
+			break;
+
+		case 1:
+			for (idx = 0; idx < num_chans; idx++) {
+#ifdef LIBSANGOMA_VERSION
+				if (outflags[idx] & POLLPRI) {
+#else
+				if (pfds[idx].revents & POLLPRI) {
+#endif
+					ftdm_set_io_flag(ftdmchan[idx], FTDM_CHANNEL_IO_EVENT);
+					ftdmchan[idx]->last_event_time = ftdm_current_time_in_ms();
+				}
+#ifdef LIBSANGOMA_VERSION
+				if (outflags[idx] & POLLIN) {
+#else
+				if (pfds[idx].revents & POLLIN) {
+#endif
+					ftdm_set_io_flag(ftdmchan[idx], FTDM_CHANNEL_IO_READ);
+				}
+#ifdef LIBSANGOMA_VERSION
+				if (outflags[idx] & POLLOUT) {
+#else
+				if (pfds[idx].revents & POLLOUT) {
+#endif
+					ftdm_set_io_flag(ftdmchan[idx], FTDM_CHANNEL_IO_WRITE);
+				}
+			}
+			break;
+
+		default:
+			ftdm_log(FTDM_LOG_ERROR, "Sangoma channel poll error: %d, %s\n", sangstatus, strerror(errno));
+			return FTDM_FAIL;
+			break;
+		}
 
 	return FTDM_SUCCESS;
 }
@@ -1811,6 +1918,7 @@ static FIO_IO_LOAD_FUNCTION(wanpipe_init)
 	wanpipe_interface.close = wanpipe_close;
 	wanpipe_interface.command = wanpipe_command;
 	wanpipe_interface.wait = wanpipe_wait;
+	wanpipe_interface.wait_multiple = wanpipe_wait_multiple;
 	wanpipe_interface.read = wanpipe_read;
 	wanpipe_interface.write = wanpipe_write;
 	wanpipe_interface.poll_event = wanpipe_poll_event;

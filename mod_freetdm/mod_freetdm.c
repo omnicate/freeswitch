@@ -686,7 +686,7 @@ static switch_status_t channel_on_soft_execute(switch_core_session_t *session)
 static switch_status_t channel_send_dtmf(switch_core_session_t *session, const switch_dtmf_t *dtmf)
 {
 	private_t *tech_pvt = NULL;
-	char tmp[2] = "";
+	char tmp[100] = "";
 
 	tech_pvt = switch_core_session_get_private(session);
 	assert(tech_pvt != NULL);
@@ -694,10 +694,31 @@ static switch_status_t channel_send_dtmf(switch_core_session_t *session, const s
 	if (switch_test_flag(tech_pvt, TFLAG_DEAD)) {
 		switch_channel_hangup(switch_core_session_get_channel(session), SWITCH_CAUSE_LOSE_RACE);
 		return SWITCH_STATUS_FALSE;
-	} 
+	}
 
-	tmp[0] = dtmf->digit;
-	ftdm_channel_command(tech_pvt->ftdmchan, FTDM_COMMAND_SEND_DTMF, tmp);
+	if (dtmf->digit == 'X' || dtmf->digit == 'Q') {
+		int x = 0;
+		switch_channel_t *channel = switch_core_session_get_channel(session);
+		const char *regenerate_oob_tones = NULL;
+		assert(channel != NULL);
+		regenerate_oob_tones = switch_channel_get_variable(channel, "fax_regenerate_oob_tones");
+		// FAX out of band tones, force echo canceller to be disabled....
+		ftdm_channel_command(tech_pvt->ftdmchan, FTDM_COMMAND_DISABLE_ECHOCANCEL, &x);
+		ftdm_channel_command(tech_pvt->ftdmchan, FTDM_COMMAND_DISABLE_ECHOTRAIN, &x);
+		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "Echo Canceller Disabled\n");
+		// check if we're asked to regenerate them...
+		if (switch_true(regenerate_oob_tones)) {
+			snprintf (tmp, sizeof(tmp), "(%u)%c", dtmf->duration, dtmf->digit);
+		} else {
+			tmp[0] = '\0';
+		}
+	} else {
+		tmp[0] = dtmf->digit;
+	}
+
+	if (tmp[0] != '\0') {
+		ftdm_channel_command(tech_pvt->ftdmchan, FTDM_COMMAND_SEND_DTMF, tmp);
+	}
 		
 	return SWITCH_STATUS_SUCCESS;
 }
@@ -2042,7 +2063,6 @@ ftdm_status_t ftdm_channel_from_event(ftdm_sigmsg_t *sigmsg, switch_core_session
 	
 	if (globals.sip_headers) {
 		switch_channel_set_variable(channel, "sip_h_X-FreeTDM-SpanName", ftdm_channel_get_span_name(sigmsg->channel));
-		switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-TransUUID", "%s",switch_core_session_get_uuid(session));	
 		switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-SpanNumber", "%d", spanid);	
 		switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-ChanNumber", "%d", chanid);
 
@@ -2063,6 +2083,17 @@ ftdm_status_t ftdm_channel_from_event(ftdm_sigmsg_t *sigmsg, switch_core_session
 		switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-RDNIS-Plan", "%d", channel_caller_data->rdnis.plan);
 		switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-CPC", "%s", ftdm_calling_party_category2str(channel_caller_data->cpc));
 
+		var_value = ftdm_sigmsg_get_var(sigmsg, "isdn_tap_peer_span");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-ISDNTAP-PeerSpan", "%s", var_value);
+		} else {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-TransUUID", "%s",switch_core_session_get_uuid(session));
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "isdn_tap_peer_chan");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-ISDNTAP-PeerChan", "%s", var_value);
+		}
 	
 		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_iam_nature_connection_hex");
 		if (!ftdm_strlen_zero(var_value)) {
@@ -3633,6 +3664,141 @@ static void parse_gsm_spans(switch_xml_t cfg, switch_xml_t spans)
 	}
 }
 
+static void parse_isdn_tap_spans(switch_xml_t cfg, switch_xml_t spans)
+{
+	switch_xml_t myspan, param;
+
+	for (myspan = switch_xml_child(spans, "span"); myspan; myspan = myspan->next) {
+		ftdm_status_t zstatus = FTDM_FAIL;
+		const char *context = "default";
+		const char *dialplan = "XML";
+		ftdm_conf_parameter_t spanparameters[FTDM_MAX_SIG_PARAMETERS];
+		char *id = (char *) switch_xml_attr(myspan, "id");
+		char *name = (char *) switch_xml_attr(myspan, "name");
+		char *configname = (char *) switch_xml_attr(myspan, "cfgprofile");
+		ftdm_span_t *span = NULL;
+		uint32_t span_id = 0;
+		unsigned paramindex = 0;
+
+		if (!name && !id) {
+			LOAD_ERROR("sangoma isdn span missing required attribute 'id' or 'name', skipping ...\n");
+			continue;
+		}
+
+		if (name) {
+			zstatus = ftdm_span_find_by_name(name, &span);
+		} else {
+			if (switch_is_number(id)) {
+				span_id = atoi(id);
+				zstatus = ftdm_span_find(span_id, &span);
+			}
+
+			if (zstatus != FTDM_SUCCESS) {
+				zstatus = ftdm_span_find_by_name(id, &span);
+			}
+		}
+
+		if (zstatus != FTDM_SUCCESS) {
+			LOAD_ERROR("Error finding FreeTDM span id:%s name:%s\n", switch_str_nil(id), switch_str_nil(name));
+			continue;
+		}
+
+		if (!span_id) {
+			span_id = ftdm_span_get_id(span);
+		}
+
+		memset(spanparameters, 0, sizeof(spanparameters));
+		paramindex = 0;
+
+		if (configname) {
+			paramindex = add_profile_parameters(cfg, configname, spanparameters, ftdm_array_len(spanparameters));
+			if (paramindex) {
+				ftdm_log(FTDM_LOG_DEBUG, "Added %d parameters from profile %s for span %d\n", paramindex, configname, span_id);
+			}
+		}
+
+		/* some defaults first */
+		SPAN_CONFIG[span_id].limit_backend = "hash";
+		SPAN_CONFIG[span_id].limit_reset_event = FTDM_LIMIT_RESET_ON_TIMEOUT;
+		SPAN_CONFIG[span_id].digital_sampling_rate = 8000;
+
+		for (param = switch_xml_child(myspan, "param"); param; param = param->next) {
+			char *var = (char *) switch_xml_attr_soft(param, "name");
+			char *val = (char *) switch_xml_attr_soft(param, "value");
+
+			if (ftdm_array_len(spanparameters) - 1 == paramindex) {
+				LOAD_ERROR("Too many parameters for ss7 span, ignoring any parameter after %s\n", var);
+				break;
+			}
+
+			if (!strcasecmp(var, "context")) {
+				context = val;
+			} else if (!strcasecmp(var, "dialplan")) {
+				dialplan = val;
+			} else if (!strcasecmp(var, "unrestricted-digital-codec")) {
+				const switch_codec_implementation_t *codec = NULL;
+				int num_codecs;
+				num_codecs = switch_loadable_module_get_codecs_sorted(&codec, 1, &val, 1);
+				if (num_codecs != 1 || !codec) {
+					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,
+					"Failed finding codec %s for unrestricted digital calls\n", val);
+				} else {
+					SPAN_CONFIG[span_id].digital_codec = switch_core_strdup(module_pool, codec->iananame);
+					SPAN_CONFIG[span_id].digital_sampling_rate = codec->samples_per_second;
+					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG,
+						"Unrestricted digital codec is %s at %dhz for span %d\n",
+						SPAN_CONFIG[span_id].digital_codec, SPAN_CONFIG[span_id].digital_sampling_rate, span_id);
+				}
+			} else if (!strcasecmp(var, "call_limit_backend")) {
+				SPAN_CONFIG[span_id].limit_backend = val;
+				ftdm_log(FTDM_LOG_DEBUG, "Using limit backend %s for span %d\n", SPAN_CONFIG[span_id].limit_backend, span_id);
+			} else if (!strcasecmp(var, "call_limit_rate")) {
+				int calls;
+				int seconds;
+				if (sscanf(val, "%d/%d", &calls, &seconds) != 2) {
+					LOAD_ERROR("Invalid %s parameter, format example: 3/1 for 3 calls per second\n", var);
+				} else {
+					if (calls < 1 || seconds < 1) {
+						LOAD_ERROR("Invalid %s parameter value, minimum call limit must be 1 per second\n", var);
+					} else {
+						SPAN_CONFIG[span_id].limit_calls = calls;
+						SPAN_CONFIG[span_id].limit_seconds = seconds;
+					}
+				}
+			} else if (!strcasecmp(var, "call_limit_reset_event")) {
+				if (!strcasecmp(val, "answer")) {
+					SPAN_CONFIG[span_id].limit_reset_event = FTDM_LIMIT_RESET_ON_ANSWER;
+				} else {
+					LOAD_ERROR("Invalid %s parameter value, only accepted event is 'answer'\n", var);
+				}
+			} else {
+				spanparameters[paramindex].var = var;
+				spanparameters[paramindex].val = val;
+				paramindex++;
+			}
+		}
+
+		if (ftdm_configure_span_signaling(span,
+						  "sangoma_isdn_tap",
+						  on_clear_channel_signal,
+						  spanparameters) != FTDM_SUCCESS) {
+			LOAD_ERROR("Error configuring Sangoma ISDN TAPPING FreeTDM span %d\n", span_id);
+			continue;
+		}
+
+		SPAN_CONFIG[span_id].span = span;
+		switch_copy_string(SPAN_CONFIG[span_id].context, context, sizeof(SPAN_CONFIG[span_id].context));
+		switch_copy_string(SPAN_CONFIG[span_id].dialplan, dialplan, sizeof(SPAN_CONFIG[span_id].dialplan));
+		switch_copy_string(SPAN_CONFIG[span_id].type, "Sangoma (ISDN)", sizeof(SPAN_CONFIG[span_id].type));
+		ftdm_log(FTDM_LOG_DEBUG, "Configured Sangoma ISDN Tapping FreeTDM span %d\n", span_id);
+		ftdm_span_start(span);
+	}
+}
+
+static void parse_isup_tap_spans(switch_xml_t cfg, switch_xml_t spans)
+{
+}
+
 static void parse_bri_pri_spans(switch_xml_t cfg, switch_xml_t spans)
 {
 	switch_xml_t myspan, param;
@@ -3814,6 +3980,14 @@ static switch_status_t load_config(int reload)
 			LOAD_ERROR("Failed configuring transparent spans!\n");
 			goto end;
 		}
+	}
+
+	if ((spans = switch_xml_child(cfg, "sangoma_isdn_tap_spans"))) {
+		parse_isdn_tap_spans(cfg, spans);
+	}
+
+	if ((spans = switch_xml_child(cfg, "sangoma_isup_tap_spans"))) {
+		parse_isup_tap_spans(cfg, spans);
 	}
 
 	if ((spans = switch_xml_child(cfg, "sangoma_pri_spans"))) {
