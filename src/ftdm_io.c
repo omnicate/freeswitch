@@ -7056,7 +7056,7 @@ static ftdm_status_t ftdm_call_set_call_id(ftdm_channel_t *fchan, ftdm_caller_da
 	}
 
 	/* unlock mutex to avoid deadlock */
-	if (globals.call_ids[current_call_id] == NULL) {
+	if (globals.call_ids[current_call_id] != NULL) {
 		ftdm_mutex_unlock(globals.call_id_mutex);
 		ftdm_assert_return(globals.call_ids[current_call_id] == NULL, FTDM_FAIL, "We ran out of call ids\n");
 	}
