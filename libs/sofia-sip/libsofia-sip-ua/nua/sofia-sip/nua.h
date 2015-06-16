@@ -92,6 +92,7 @@ typedef enum nua_event_e {
   nua_i_active,			/**< A call has been activated */
   nua_i_terminated,		/**< A call has been terminated */
   nua_i_state,		        /**< Call state has changed */
+  nua_i_closed,                 /**< Underlying socket has been closed */
 
   nua_i_outbound,		/**< Status from outbound processing */
 

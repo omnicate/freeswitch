@@ -27,6 +27,7 @@
  * Michael Jerris <mike@jerris.com>
  * Paul D. Tinsley <pdt at jackhammer.org>
  * Emmanuel Schmidbauer <eschmidbauer@gmail.com>
+ * Eliot Gable <egable@gmail.com>
  *
  *
  * switch_core_sqldb.c -- Main Core Library (statistics tracker)
@@ -3301,6 +3302,22 @@ SWITCH_DECLARE(switch_status_t) switch_core_del_registration(const char *user, c
 	} else {
 		sql = switch_mprintf("delete from registrations where reg_user='%q' and realm='%q' and hostname='%q'", user, realm, switch_core_get_switchname());
 	}
+
+	switch_sql_queue_manager_push(sql_manager.qm, sql, 0, SWITCH_FALSE);
+
+
+	return SWITCH_STATUS_SUCCESS;
+}
+
+SWITCH_DECLARE(switch_status_t) switch_core_del_registration_host(const char *host, const char *port)
+{
+	char *sql;
+
+	if (!switch_test_flag((&runtime), SCF_USE_SQL)) {
+		return SWITCH_STATUS_FALSE;
+	}
+
+	sql = switch_mprintf("delete from registrations where network_ip='%q' and network_port='%q' and hostname='%q'", host, port, switch_core_get_switchname());
 
 	switch_sql_queue_manager_push(sql_manager.qm, sql, 0, SWITCH_FALSE);
 

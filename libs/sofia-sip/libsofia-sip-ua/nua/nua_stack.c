@@ -68,6 +68,7 @@
 
 #include "sofia-sip/nua.h"
 #include "sofia-sip/nua_tag.h"
+#include "sofia-sip/msg_addr.h"
 #include "nua_stack.h"
 
 #include <stddef.h>
@@ -113,6 +114,28 @@ char const nua_internal_error[] = "Internal NUA Error";
 char const nua_application_sdp[] = "application/sdp";
 
 #define NUA_STACK_TIMER_INTERVAL (1000)
+
+int nua_agent_callback(nta_agent_magic_t *context,
+			  nta_agent_t *agent,
+			  msg_t *msg,
+			  sip_t *sip)
+{
+  nua_handle_t *nh = (nua_handle_t *)context;
+  int error = msg_errno(msg);
+
+  SU_DEBUG_5(("%s(%p): calling callback\n",
+	      __func__, (void *)agent));
+
+  switch(error) {
+  case ECONNRESET:
+    nua_stack_event(nh->nh_nua, nh, msg, nua_i_closed, 905, "Connection reset by peer", NULL);
+    break;
+  default:
+    break;
+  }
+
+  return 0;
+}
 
 /* ----------------------------------------------------------------------
  * Initialization & deinitialization
@@ -173,7 +196,7 @@ int nua_stack_init(su_root_t *root, nua_t *nua)
 
   nua->nua_invite_accept = sip_accept_make(home, SDP_MIME_TYPE);
 
-  nua->nua_nta = nta_agent_create(root, NONE, NULL, NULL,
+  nua->nua_nta = nta_agent_create(root, NONE, nua_agent_callback, (nta_agent_magic_t*)dnh,
 				  NTATAG_MERGE_482(1),
 				  NTATAG_CLIENT_RPORT(1),
 				  NTATAG_UA(1),

@@ -216,6 +216,16 @@
     <!-- TLS ciphers default: ALL:!ADH:!LOW:!EXP:!MD5:@STRENGTH  -->
     <param name="tls-ciphers" value="$${sip_tls_ciphers}"/>
 
+    <!--
+       Automatically deregister clients when their TLS socket closes.
+       Useful for mitigating man-in-the-middle attacks when using TLS without
+       client TLS authentication. Without this, an attacker can simply establish a
+       new TLS connection from the same source IP and port as an existing registered
+       user and assume their identity. Client TLS authentication would mitigate this
+       risk, as well.
+      -->
+    <param name="tls-unreg-on-socket-close" value="false"/>
+
     <!-- turn on auto-flush during bridge (skip timer sleep when the socket already has data)
          (reduces delay on latent connections default true, must be disabled explicitly)-->
     <!--<param name="rtp-autoflush-during-bridge" value="false"/>-->

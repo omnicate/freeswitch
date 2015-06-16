@@ -1775,6 +1775,32 @@ static void our_sofia_event_callback(nua_event_t event,
 	case nua_i_subscribe:
 		sofia_presence_handle_sip_i_subscribe(status, phrase, nua, profile, nh, sofia_private, sip, de, tags);
 		break;
+	case nua_i_closed:
+		{
+
+			if (profile->tls_unreg_on_socket_close && de && de->data && de->data->e_msg && de->data->e_msg) {
+				char *sql = NULL;
+				char network_host[256] = {0}, network_port[256] = {0};
+				su_addrinfo_t *addrinfo = msg_addrinfo(de->data->e_msg);
+				su_sockaddr_t *addr = msg_addr(de->data->e_msg);
+			
+				su_getnameinfo(addr, addrinfo->ai_addrlen, &network_host[0], 256, &network_port[0], 256, NI_NUMERICHOST);
+
+				sql = switch_mprintf("select call_id,sip_user,sip_host,contact,status,rpid,expires"
+									 ",user_agent,server_user,server_host,profile_name,network_ip,network_port"
+									 ",0,sip_realm from sip_registrations where network_ip='%q' and network_port='%q'",
+									 network_host, network_port);
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG1, "SOCKET DISCONNECT: %s:%s\n",
+								  network_host, network_port);
+				sofia_glue_execute_sql_callback(profile, profile->dbh_mutex, sql, sofia_reg_del_callback, profile);
+
+				switch_core_del_registration_host(network_host, network_port);
+				nua_handle_destroy(nh);
+				
+			}
+
+		}
+		break;
 	case nua_i_media_error:
 		{
 
@@ -5317,6 +5343,8 @@ switch_status_t config_sofia(sofia_config_t reload, char *profile_name)
 						}
 					} else if (!strcasecmp(var, "tls-only")) {
 						profile->tls_only = switch_true(val);
+					} else if (!strcasecmp(var, "tls-unreg-on-socket-close")) {
+						profile->tls_unreg_on_socket_close = switch_true(val);
 					} else if (!strcasecmp(var, "tls-verify-date")) {
 						profile->tls_verify_date = switch_true(val);
 					} else if (!strcasecmp(var, "tls-verify-depth")) {

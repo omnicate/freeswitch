@@ -130,6 +130,7 @@ typedef struct private_object private_object_t;
 #include <sofia-sip/su_md5.h>
 #include <sofia-sip/su_log.h>
 #include <sofia-sip/su_strlst.h>
+#include <sofia-sip/su_addrinfo.h>
 #include <sofia-sip/nea.h>
 #include <sofia-sip/msg_addr.h>
 #include <sofia-sip/tport_tag.h>
@@ -747,6 +748,7 @@ struct sofia_profile {
 	ka_type_t keepalive;
 	int bind_attempts;
 	int bind_attempt_interval;
+	int tls_unreg_on_socket_close;
 };
 
 
@@ -994,6 +996,7 @@ void sofia_reg_check_ping_expire(sofia_profile_t *profile, time_t now, int inter
 void sofia_reg_check_gateway(sofia_profile_t *profile, time_t now);
 void sofia_sub_check_gateway(sofia_profile_t *profile, time_t now);
 void sofia_reg_unregister(sofia_profile_t *profile);
+int sofia_reg_del_callback(void *pArg, int argc, char **argv, char **columnNames);
 
 
 void sofia_glue_pass_sdp(private_object_t *tech_pvt, char *sdp);

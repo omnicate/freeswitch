@@ -204,7 +204,7 @@ msg_pub_t *msg_object(msg_t const *msg)
  */
 msg_pub_t *msg_public(msg_t const *msg, void *tag)
 {
-  if (msg && msg->m_class->mc_tag == tag)
+  if (msg && msg->m_class && msg->m_class->mc_tag == tag)
     return msg->m_object;
   else
     return NULL;

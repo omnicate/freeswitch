@@ -319,6 +319,7 @@ char const *nua_event_name(nua_event_t event)
   case nua_i_invite: return "nua_i_invite";
   case nua_i_cancel: return "nua_i_cancel";
   case nua_i_ack: return "nua_i_ack";
+  case nua_i_closed: return "nua_i_closed";
 
   case nua_i_register: return "nua_i_register";
   case nua_i_fork: return "nua_i_fork";

@@ -2777,17 +2777,43 @@ void agent_recv_message(nta_agent_t *agent,
 			sip_via_t *tport_via,
 			su_time_t now)
 {
-  sip_t *sip = sip_object(msg);
+  sip_t *sip = NULL;
 
-  if (sip && sip->sip_request) {
-    agent_recv_request(agent, msg, sip, tport);
+  SU_DEBUG_5(("%s(%p): recv_message(%p)\n",
+	      __func__, (void *)agent, (void*)msg));
+
+
+  if (msg) {
+    if (!msg_errno(msg)) {
+      sip = sip_object(msg);
+
+      if (sip && sip->sip_request) {
+	agent_recv_request(agent, msg, sip, tport);
+      }
+      else if (sip && sip->sip_status) {
+	agent_recv_response(agent, msg, sip, tport_via, tport);
+      }
+      else {
+	agent_recv_garbage(agent, msg, tport);
+      }
+
+    } else {    
+      SU_DEBUG_5(("%s(%p): recv_message(%p) tp->closed(%d)\n",
+		  __func__, (void *)agent, (void*)msg, tport_is_closed(tport)));
+
+      if (agent->sa_callback) {
+	SU_DEBUG_5(("%s(%p): calling callback\n",
+		    __func__, (void *)agent));
+
+	/*
+	 * Store message and transport to hook for the duration of the callback
+	 * so that the transport can be obtained by nta_transport().
+	 */
+	(void)agent->sa_callback(agent->sa_magic, agent, msg, NULL);
+      }
+    }
   }
-  else if (sip && sip->sip_status) {
-    agent_recv_response(agent, msg, sip, tport_via, tport);
-  }
-  else {
-    agent_recv_garbage(agent, msg, tport);
-  }
+
 }
 
 #ifdef HAVE_ZLIB_COMPRESS

@@ -40,6 +40,9 @@
 #include "config.h"
 
 #define SU_WAKEUP_ARG_T  struct tport_s
+#define STACK_RECV(tp, msg, now)		       \
+  (tp)->tp_master->mr_tpac->tpac_recv((tp)->tp_master->mr_stack, (tp), \
+				      (msg), (tp)->tp_magic, (now))
 
 #include "tport_internal.h"
 
@@ -351,6 +354,9 @@ int tport_tls_events(tport_t *self, int events)
   int old_mask = tls_events(tlstp->tlstp_context, self->tp_events), mask;
   int ret, error = 0;
 
+  SU_DEBUG_5(("%s(%p): " TPN_FORMAT "\n",
+	      __func__, (void *)self, TPN_ARGS(self->tp_name)));
+
   if (events & SU_WAIT_ERR)
     error = tport_error_event(self);
 
@@ -374,9 +380,13 @@ int tport_tls_events(tport_t *self, int events)
     }
 
     if (ret == 0) { 		/* End-of-stream */
+      msg_t *msg = tport_msg_alloc(self, 0);
       if (self->tp_msg)
 	tport_recv_event(self);
       tport_shutdown0(self, 2);
+      msg_set_address(msg, self->tp_addr, self->tp_addrlen);
+      msg_set_errno(msg, ECONNRESET);
+      STACK_RECV(self, msg, su_now());
     }
 
     if (ret < 0)

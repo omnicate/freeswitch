@@ -27,6 +27,7 @@
  * Luke Dashjr <luke@openmethods.com> (OpenMethods, LLC)
  * Joseph Sullivan <jossulli@amazon.com>
  * Emmanuel Schmidbauer <eschmidbauer@gmail.com>
+ * Eliot Gable <egable@gmail.com>
  *
  * switch_core.h -- Core Library
  *
@@ -2612,6 +2613,16 @@ SWITCH_DECLARE(switch_status_t) switch_core_add_registration(const char *user, c
  \param [out] err - Error if it exists
 */
 SWITCH_DECLARE(switch_status_t) switch_core_del_registration(const char *user, const char *realm, const char *token);
+
+/*!
+ \brief Delete user registration by source host and port combination
+ \param [in] host
+ \param [in] port
+ \param [in] realm
+ \param [out] err - Error if it exists
+*/
+SWITCH_DECLARE(switch_status_t) switch_core_del_registration_host(const char *host, const char *port);
+
 /*!
  \brief Expire user registrations
  \param [in] force delete all registrations
