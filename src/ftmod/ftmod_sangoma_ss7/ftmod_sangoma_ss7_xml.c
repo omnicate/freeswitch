@@ -3442,7 +3442,7 @@ static int ftmod_ss7_fill_in_circuits(sng_span_t *sngSpan)
 		ftdmchan = ftdmspan->channels[i];
 
 		/* find the equivalent channel in the global structure */
-		x = (g_ftdm_sngss7_data.cfg.procId * 1000) + 1;
+		x = ftmod_ss7_get_circuit_start_range(g_ftdm_sngss7_data.cfg.procId);
 		flag = 0;
 		while (g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0) {
 		/**********************************************************************/
@@ -3529,7 +3529,7 @@ static int ftmod_ss7_fill_in_circuits(sng_span_t *sngSpan)
 			x++;
 
 			/* check if we are outside of the range of possible indexes */
-			if (x == ((g_ftdm_sngss7_data.cfg.procId + 1) * 1000)) {
+			if (x == (ftmod_ss7_get_circuit_end_range(g_ftdm_sngss7_data.cfg.procId))) {
 				break;
 			}
 		/**********************************************************************/
@@ -4039,6 +4039,28 @@ static int ftmod_ss7_fill_in_acc_timer(sng_route_t *mtp3_route, ftdm_span_t *spa
 		}
 	}
 	return FTDM_SUCCESS;
+}
+
+/* get circuit start range based on proc ID */
+int ftmod_ss7_get_circuit_start_range(int procId)
+{
+	int start_range = 0;
+	int offset	= (procId -1) * 1000;
+
+	start_range = (offset + (procId * 1000)) + 1;
+
+	return start_range;
+}
+
+/* get circuit end range based on proc ID */
+int ftmod_ss7_get_circuit_end_range(int procId)
+{
+	int end_range = 0;
+	int offset    = 2000;
+
+	end_range = ftmod_ss7_get_circuit_start_range(procId) + offset;
+
+	return end_range;
 }
 
 /******************************************************************************/

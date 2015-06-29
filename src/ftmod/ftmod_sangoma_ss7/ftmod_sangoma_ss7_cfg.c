@@ -440,7 +440,7 @@ int  ft_to_sngss7_cfg_all(void)
 			} /* while (x < (MAX_ISUP_INFS)) */
 		} /* if (sngss7_test_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_ISUP)) */
 
-		x = (g_ftdm_sngss7_data.cfg.procId * 1000) + 1;
+		x = ftmod_ss7_get_circuit_start_range(g_ftdm_sngss7_data.cfg.procId);
 		while (g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0) {
 
 			if (g_ftdm_sngss7_data.cfg.procId > 1) {
