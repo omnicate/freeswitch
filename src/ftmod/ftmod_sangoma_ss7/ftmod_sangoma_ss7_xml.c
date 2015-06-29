@@ -3214,7 +3214,7 @@ static int ftmod_ss7_fill_in_ccSpan(sng_ccSpan_t *ccSpan)
 		}
 
 		/* find a spot for this circuit in the global structure */
-		x = (ccSpan->procId * 1000) + 1;
+		x = ftmod_ss7_get_circuit_start_range(ccSpan->procId);
 		flag = 0;
 		while (flag == 0) {
 			/* Skip channel if it is a transparent one */
@@ -4045,7 +4045,7 @@ static int ftmod_ss7_fill_in_acc_timer(sng_route_t *mtp3_route, ftdm_span_t *spa
 int ftmod_ss7_get_circuit_start_range(int procId)
 {
 	int start_range = 0;
-	int offset	= (procId -1) * 1000;
+	int offset	= (procId -1) * SNG_CIC_MAP_OFFSET;
 
 	start_range = (offset + (procId * 1000)) + 1;
 
@@ -4056,9 +4056,9 @@ int ftmod_ss7_get_circuit_start_range(int procId)
 int ftmod_ss7_get_circuit_end_range(int procId)
 {
 	int end_range = 0;
-	int offset    = 2000;
+	int offset    = SNG_CIC_MAP_OFFSET;
 
-	end_range = ftmod_ss7_get_circuit_start_range(procId) + offset;
+	end_range = ftmod_ss7_get_circuit_start_range(procId) + offset - 1;
 
 	return end_range;
 }
