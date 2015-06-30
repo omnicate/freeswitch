@@ -386,6 +386,12 @@ ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 				sng_increment_acc_statistics(ftdmchan, ACC_IAM_PRI_RECV_DEBUG);
 			}
 #endif
+			if (strlen(ftdmchan->caller_data.cid_num.digits)) {
+				/* Add Calling party number also for dialplan */
+				sprintf(var, "%s", ftdmchan->caller_data.cid_num.digits);
+				sngss7_add_var(sngss7_info, "ss7_clg_num", var);
+			}
+
 			SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Rx IAM clg = \"%s\" (NADI=%d), cld = \"%s\" (NADI=%d)\n",
 							sngss7_info->circuit->cic,
 							ftdmchan->caller_data.cid_num.digits,
