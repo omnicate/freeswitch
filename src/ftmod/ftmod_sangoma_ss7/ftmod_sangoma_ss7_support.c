@@ -192,6 +192,16 @@ cgpty_cli:
 		if (!pres_restrict && siConEvnt->cgPtyNum.addrSig.pres) {
 			/* If presentation is restricted then dont add digits  */
 			if (siConEvnt->cgPtyNum.presRest.pres &&  (siConEvnt->cgPtyNum.presRest.val == PRSNT_RESTRIC)) {
+				copy_tknStr_from_sngss7(siConEvnt->cgPtyNum.addrSig,
+						ftdmchan->caller_data.cid_num.digits,
+						siConEvnt->cgPtyNum.oddEven);
+
+				/* Add Calling party number also for dialplan */
+				sprintf(var, "%s", ftdmchan->caller_data.cid_num.digits);
+				sngss7_add_var(sngss7_info, "ss7_clg_num", var);
+
+				memset (ftdmchan->caller_data.cid_num.digits, 0, sizeof(ftdmchan->caller_data.cid_num.digits));
+
 				SS7_INFO_CHAN(ftdmchan," Presentation Restriction =%d not allowed.%s\n",siConEvnt->cgPtyNum.presRest.val,"");
 			} else if (!clid_found) {
 				/* fill in cid_num */
