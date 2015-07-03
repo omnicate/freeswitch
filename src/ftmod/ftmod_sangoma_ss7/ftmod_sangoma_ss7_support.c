@@ -155,6 +155,21 @@ ftdm_status_t copy_cgPtyNum_from_sngss7(ftdm_channel_t *ftdmchan, SiConEvnt *siC
 	int pres_restrict = 0x00;
 	int clid_found = 0x00;
 	char var[FTDM_DIGITS_LIMIT];
+	char cid_digits[FTDM_DIGITS_LIMIT];
+
+	/* actual cid digit can be filled from presentation number,
+	 * but expose received calling party number to dialplan */
+	if (siConEvnt->cgPtyNum.eh.pres) {
+		if (siConEvnt->cgPtyNum.addrSig.pres) {
+			copy_tknStr_from_sngss7(siConEvnt->cgPtyNum.addrSig,
+					cid_digits,
+					siConEvnt->cgPtyNum.oddEven);
+
+			sprintf(var, "%s", cid_digits);
+			sngss7_add_var(sngss7_info, "ss7_orig_clg_num", var);
+			SS7_INFO_CHAN(ftdmchan," ss7_orig_clg_num[%s]\n", var);
+		}
+	}
 #ifdef SS7_UK
 	/* If presentation IE available then use that instead of calling party IE */
 	if (g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].switchType == LSI_SW_UK) {
@@ -190,6 +205,7 @@ cgpty_cli:
 	/* fill in calling party information */
 	if (siConEvnt->cgPtyNum.eh.pres) {
 		if (!pres_restrict && siConEvnt->cgPtyNum.addrSig.pres) {
+
 			/* If presentation is restricted then dont add digits  */
 			if (siConEvnt->cgPtyNum.presRest.pres &&  (siConEvnt->cgPtyNum.presRest.val == PRSNT_RESTRIC)) {
 				copy_tknStr_from_sngss7(siConEvnt->cgPtyNum.addrSig,
