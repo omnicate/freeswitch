@@ -82,6 +82,213 @@ struct pdf_file_context {
 
 typedef struct pdf_file_context pdf_file_context_t;
 
+typedef enum distort_template_e {
+	T_LEFT,
+	T_RIGHT
+} distort_template_t;
+
+typedef struct imgk_context_s {
+	ImageInfo *image_info;
+	Image *image;
+	ExceptionInfo *exception;
+	int w;
+	int h;
+	distort_template_t template;
+	switch_core_session_t *session;
+} imgk_context_t;
+
+static switch_status_t init_context(imgk_context_t *context)
+{
+    return SWITCH_STATUS_SUCCESS;
+}
+
+static void uninit_context(imgk_context_t *context)
+{
+	if (context->image) DestroyImage(context->image);
+	if (context->exception) DestroyExceptionInfo(context->exception);
+	if (context->image_info) DestroyImageInfo(context->image_info);
+}
+
+static switch_status_t video_thread_callback(switch_core_session_t *session, switch_frame_t *frame, void *user_data)
+{
+	imgk_context_t *context = (imgk_context_t *) user_data;
+	switch_channel_t *channel = switch_core_session_get_channel(session);
+
+	if (!switch_channel_ready(channel)) {
+		return SWITCH_STATUS_FALSE;
+	}
+
+	if (!frame->img) {
+		return SWITCH_STATUS_SUCCESS;
+	}
+
+	if (!context->image_info) {
+		void *pixels = malloc(frame->img->d_w * frame->img->d_h * 3);
+		switch_assert(pixels);
+
+		context->exception = AcquireExceptionInfo();
+		context->image_info = AcquireImageInfo();
+	}
+
+	if ((frame->img->d_w != context->w || frame->img->d_h != context->h) && context->image) {
+		context->image = DestroyImage(context->image);
+	}
+
+	if (!context->image) {
+		uint8_t *pixels = malloc(context->w * context->h * 3);
+		switch_assert(pixels);
+
+		context->image = ConstituteImage(frame->img->d_w, frame->img->d_h, "RGB", CharPixel, pixels, context->exception);
+		free(pixels);
+		pixels = NULL;
+
+		if (context->exception->severity != UndefinedException) {
+			CatchException(context->exception);
+			context->exception->severity = UndefinedException;
+			return SWITCH_STATUS_FALSE;
+		}
+	}
+
+	context->w = frame->img->d_w;
+	context->h = frame->img->d_h;
+
+	if (context->image) {
+		Image *image = NULL;
+		MagickBooleanType ret;
+		double args[16] = { 0.0 };
+		int i = 0;
+		int w = context->w;
+		int h = context->h;
+		uint8_t *pixels = malloc(w * h * 3);
+
+		switch_assert(pixels);
+		I420ToRAW(frame->img->planes[0], frame->img->stride[0],
+				  frame->img->planes[1], frame->img->stride[1],
+				  frame->img->planes[2], frame->img->stride[2],
+				  pixels, frame->img->d_w * 3,
+				  frame->img->d_w, frame->img->d_h);
+		ret = ImportImagePixels(context->image, 0, 0, w, h, "RGB", CharPixel, (void *)pixels);
+		switch_assert(ret == MagickTrue);
+
+		context->template = T_RIGHT;
+
+		if (context->template == T_LEFT) {
+			i += 4;
+			args[i++] = 0;
+			args[i++] = h;
+			args[i++] = 0;
+			args[i++] = h;
+
+			args[i++] = w;
+			args[i++] = 0;
+			args[i++] = w;
+			args[i++] = 0 + h/8;
+
+			args[i++] = w;
+			args[i++] = h;
+			args[i++] = w;
+			args[i++] = h * 7/8;
+		} else if (context->template == T_RIGHT) {
+			args[i++] = 0;
+			args[i++] = 0;
+			args[i++] = 0;
+			args[i++] = h/8;
+
+
+			args[i++] = 0;
+			args[i++] = h;
+			args[i++] = 0;
+			args[i++] = h * 7/8;
+
+			args[i++] = w;
+			args[i++] = 0;
+			args[i++] = w;
+			args[i++] = 0;
+
+			args[i++] = w;
+			args[i++] = h;
+			args[i++] = w;
+			args[i++] = h;
+		}
+
+		SetImageVirtualPixelMethod(context->image, BlackVirtualPixelMethod);
+		image = DistortImage(context->image, PerspectiveDistortion, 16, (const double *)args, MagickFalse, context->exception);
+
+		if (context->exception->severity != UndefinedException) {
+			CatchException(context->exception);
+			context->exception->severity = UndefinedException;
+			return SWITCH_STATUS_FALSE;
+		}
+
+		if (image) {
+			int ret;
+			int width = image->columns;
+			int height = image->rows;
+
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Distorted image %dx%d\n", w, h);
+
+			if (w == frame->img->d_w && h == frame->img->d_h) {
+				ret = ExportImagePixels(image, 0, 0, width, height, "RGB", CharPixel, pixels, context->exception);
+
+				if (ret == MagickFalse && context->exception->severity != UndefinedException) {
+					CatchException(context->exception);
+					free(pixels);
+					return SWITCH_STATUS_FALSE;
+				}
+
+				RAWToI420(pixels, width * 3,
+					frame->img->planes[0], frame->img->stride[0],
+					frame->img->planes[1], frame->img->stride[1],
+					frame->img->planes[2], frame->img->stride[2],
+					frame->img->d_w, frame->img->d_h);
+
+			}
+		}
+		free(pixels);
+	}
+
+	return SWITCH_STATUS_SUCCESS;
+}
+
+
+SWITCH_STANDARD_APP(imgk_start_function)
+{
+	switch_channel_t *channel = switch_core_session_get_channel(session);
+	switch_frame_t *read_frame;
+	imgk_context_t context = { 0 };
+
+	init_context(&context);
+
+	switch_channel_answer(channel);
+	switch_channel_set_flag_recursive(channel, CF_VIDEO_DECODED_READ);
+	switch_channel_set_flag_recursive(channel, CF_VIDEO_ECHO);
+
+	switch_core_session_raw_read(session);
+
+	switch_core_session_set_video_read_callback(session, video_thread_callback, &context);
+
+	while (switch_channel_ready(channel)) {
+		switch_status_t status = switch_core_session_read_frame(session, &read_frame, SWITCH_IO_FLAG_NONE, 0);
+
+		if (!SWITCH_READ_ACCEPTABLE(status)) {
+			break;
+		}
+
+		if (switch_test_flag(read_frame, SFF_CNG)) {
+			continue;
+		}
+
+		memset(read_frame->data, 0, read_frame->datalen);
+		switch_core_session_write_frame(session, read_frame, SWITCH_IO_FLAG_NONE, 0);
+	}
+
+	switch_core_session_set_video_read_callback(session, NULL, NULL);
+
+	uninit_context(&context);
+
+	switch_core_session_reset(session, SWITCH_TRUE, SWITCH_TRUE);
+}
+
 static switch_status_t imagick_file_open(switch_file_handle_t *handle, const char *path)
 {
 	pdf_file_context_t *context;
@@ -374,6 +581,7 @@ static char *supported_formats[SWITCH_MAX_CODECS] = { 0 };
 
 SWITCH_MODULE_LOAD_FUNCTION(mod_imagick_load)
 {
+	switch_application_interface_t *app_interface;
 	switch_file_interface_t *file_interface;
 	int i = 0;
 
@@ -389,6 +597,8 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_imagick_load)
 
 	/* connect my internal structure to the blank pointer passed to me */
 	*module_interface = switch_loadable_module_create_module_interface(pool, modname);
+
+	SWITCH_ADD_APP(app_interface, "imgk", "", "", imgk_start_function, "", SAF_NONE);
 
 	file_interface = (switch_file_interface_t *)switch_loadable_module_create_interface(*module_interface, SWITCH_FILE_INTERFACE);
 	file_interface->interface_name = modname;
