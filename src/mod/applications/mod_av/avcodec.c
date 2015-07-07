@@ -309,6 +309,12 @@ static switch_status_t buffer_h263_packets(h264_codec_context_t *context, switch
 		}
 	}
 
+#if 0
+	if (h->i == 0) {
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Got a H263 Key Frame\n");
+	}
+#endif
+
 	if (0) {
 		static char *h263_src[] = {
 			"NONE",
@@ -518,7 +524,6 @@ static void fs_rtp_parse_h263_rfc2190(h264_codec_context_t *context, AVPacket *p
 			h.f = 0; // Mode A
 			h.sbit = sbits;
 			h.ebit = ebits;
-			h.i = (len == size) ? 0 : 1;
 			nalu->start = buf;
 			nalu->len = len;
 			nalu->h263_header = h;
@@ -529,7 +534,6 @@ static void fs_rtp_parse_h263_rfc2190(h264_codec_context_t *context, AVPacket *p
 			h.f = 1; // Mode B
 			h.ebit = ebits;
 			h.sbit = sbits;
-			h.i = (len == size) ? 0 : 1;
 			nalu->start = buf;
 			nalu->len = len;
 			nalu->h263_header = h;
@@ -658,6 +662,9 @@ static switch_status_t consume_h263_bitstream(h264_codec_context_t *context, swi
 	{
 		uint8_t *p = frame->data;
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "len: %d, mark:%d %02x %02x %02x %02x\n", frame->datalen, frame->m, *p, *(p+1), *(p+2), *(p+3));
+		if (frame->m && (nalu->h263_header.i == 0)) {
+			// switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "Key frame generated!!\n");
+		}
 	}
 #endif
 
