@@ -444,6 +444,7 @@ typedef struct sng_isup_ckt {
 	uint8_t			transparent_iam;
 	uint8_t			cpg_on_progress_media;
 	uint8_t			cpg_on_progress;
+	uint8_t			cpg_on_alert;
 	uint8_t			ignore_alert_on_cpg;
 	uint8_t			itx_auto_reply;
 	uint8_t			bearcap_check;
@@ -1226,11 +1227,12 @@ ftdm_status_t copy_access_transport_to_sngss7(ftdm_channel_t *ftdmchan, SiAccTrn
 ftdm_status_t copy_locPtyNum_to_sngss7(ftdm_channel_t *ftdmchan, SiCgPtyNum *locPtyNum);
 ftdm_status_t copy_locPtyNum_from_sngss7(ftdm_channel_t *ftdmchan, SiCgPtyNum *locPtyNum);
 ftdm_status_t copy_nfci_to_sngss7(ftdm_channel_t *ftdmchan, SiNatFwdCalInd *nfci);
+ftdm_status_t copy_nfci_from_sngss7(ftdm_channel_t *ftdmchan, SiNatFwdCalInd *nfci);
 ftdm_status_t copy_nflxl_to_sngss7(ftdm_channel_t *ftdmchan, SiNatFwdCalIndLnk *nfci);
 ftdm_status_t copy_nflxl_from_sngss7(ftdm_channel_t *ftdmchan, SiNatFwdCalIndLnk *nflxl);
 ftdm_status_t copy_presnum_to_sngss7(ftdm_channel_t *ftdmchan, SiPresentNum *num);
 ftdm_status_t copy_presNmb_from_sngss7(ftdm_channel_t *ftdmchan, SiPresentNum *genNmb);
-ftdm_status_t copy_paramcompatibility_to_sngss7(ftdm_channel_t *ftdmchan, SiParmCompInfo *parmCom);
+ftdm_status_t copy_paramcompatibility_to_sngss7(ftdm_channel_t *ftdmchan, SiConEvnt* iam, SiParmCompInfo *parmCom);
 ftdm_status_t copy_genNmb_to_sngss7(ftdm_channel_t *ftdmchan, SiGenNum *genNmb);
 ftdm_status_t copy_genNmb_from_sngss7(ftdm_channel_t *ftdmchan, SiGenNum *genNmb);
 ftdm_status_t copy_genNmbR_from_sngss7(ftdm_channel_t *ftdmchan, SiGenNum *genNmbR);

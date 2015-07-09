@@ -138,6 +138,7 @@ typedef struct sng_ccSpan
 	uint8_t			transparent_iam;
 	uint8_t         	cpg_on_progress_media;
 	uint8_t         	cpg_on_progress;
+	uint8_t         	cpg_on_alert;
 	uint8_t         	ignore_alert_on_cpg;
 	uint8_t			itx_auto_reply;
 	uint8_t			bearcap_check;
@@ -2209,6 +2210,9 @@ static int ftmod_ss7_parse_cc_span(ftdm_conf_node_t *cc_span)
 		} else if (!strcasecmp(parm->var, "cpg_on_progress")) {
 			sng_ccSpan.cpg_on_progress = ftdm_true(parm->val);
 			SS7_DEBUG("Found cpg_on_progress %d\n", sng_ccSpan.cpg_on_progress);
+		} else if (!strcasecmp(parm->var, "cpg_on_alert")) {
+			sng_ccSpan.cpg_on_alert = ftdm_true(parm->val);
+			SS7_DEBUG("Found cpg_on_alert %d\n", sng_ccSpan.cpg_on_alert);
 		} else if (!strcasecmp(parm->var, "cicbase")) {
 		/**********************************************************************/
 			sng_ccSpan.cicbase = atoi(parm->val);
@@ -3341,6 +3345,7 @@ static int ftmod_ss7_fill_in_ccSpan(sng_ccSpan_t *ccSpan)
 		g_ftdm_sngss7_data.cfg.isupCkt[x].transparent_iam_max_size			= ccSpan->transparent_iam_max_size;
 		g_ftdm_sngss7_data.cfg.isupCkt[x].cpg_on_progress_media				= ccSpan->cpg_on_progress_media;
 		g_ftdm_sngss7_data.cfg.isupCkt[x].cpg_on_progress	 		    	= ccSpan->cpg_on_progress;
+		g_ftdm_sngss7_data.cfg.isupCkt[x].cpg_on_alert	 		    		= ccSpan->cpg_on_alert;
 		g_ftdm_sngss7_data.cfg.isupCkt[x].ignore_alert_on_cpg				= ccSpan->ignore_alert_on_cpg;
 
 		if (ccSpan->t3 == 0) {

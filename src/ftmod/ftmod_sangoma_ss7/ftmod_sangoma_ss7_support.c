@@ -155,6 +155,21 @@ ftdm_status_t copy_cgPtyNum_from_sngss7(ftdm_channel_t *ftdmchan, SiConEvnt *siC
 	int pres_restrict = 0x00;
 	int clid_found = 0x00;
 	char var[FTDM_DIGITS_LIMIT];
+	char cid_digits[FTDM_DIGITS_LIMIT];
+
+	/* actual cid digit can be filled from presentation number,
+	 * but expose received calling party number to dialplan */ 		
+	if (siConEvnt->cgPtyNum.eh.pres) {
+		if (siConEvnt->cgPtyNum.addrSig.pres) {
+			copy_tknStr_from_sngss7(siConEvnt->cgPtyNum.addrSig,
+					cid_digits,
+					siConEvnt->cgPtyNum.oddEven);
+
+			sprintf(var, "%s", cid_digits);
+			sngss7_add_var(sngss7_info, "ss7_orig_clg_num", var);
+			SS7_INFO_CHAN(ftdmchan," ss7_orig_clg_num[%s]\n", var);
+		}
+	}
 #ifdef SS7_UK
 	/* If presentation IE available then use that instead of calling party IE */
 	if (g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].switchType == LSI_SW_UK) {
@@ -190,8 +205,19 @@ cgpty_cli:
 	/* fill in calling party information */
 	if (siConEvnt->cgPtyNum.eh.pres) {
 		if (!pres_restrict && siConEvnt->cgPtyNum.addrSig.pres) {
+
 			/* If presentation is restricted then dont add digits  */
 			if (siConEvnt->cgPtyNum.presRest.pres &&  (siConEvnt->cgPtyNum.presRest.val == PRSNT_RESTRIC)) {
+				copy_tknStr_from_sngss7(siConEvnt->cgPtyNum.addrSig,
+						ftdmchan->caller_data.cid_num.digits,
+						siConEvnt->cgPtyNum.oddEven);
+
+				/* Add Calling party number also for dialplan */
+				sprintf(var, "%s", ftdmchan->caller_data.cid_num.digits);
+				sngss7_add_var(sngss7_info, "ss7_clg_num", var);
+
+				memset (ftdmchan->caller_data.cid_num.digits, 0, sizeof(ftdmchan->caller_data.cid_num.digits));
+
 				SS7_INFO_CHAN(ftdmchan," Presentation Restriction =%d not allowed.%s\n",siConEvnt->cgPtyNum.presRest.val,"");
 			} else if (!clid_found) {
 				/* fill in cid_num */
@@ -400,7 +426,7 @@ ftdm_status_t copy_nfci_to_sngss7(ftdm_channel_t *ftdmchan, SiNatFwdCalInd *nfci
         /* Call Indicator */
         nfci->cliBlkInd.pres = PRSNT_NODEF;
 
-	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_cli_blocking_ind");
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_nfci_cli_blocking_ind");
 	if (!ftdm_strlen_zero(val)) {
 		nfci->cliBlkInd.val = atoi(val); 
 	} else {
@@ -412,8 +438,13 @@ ftdm_status_t copy_nfci_to_sngss7(ftdm_channel_t *ftdmchan, SiNatFwdCalInd *nfci
 	}
 
         /* Network Translated Address Indicator */
-        nfci->nwTransAddrInd.pres = PRSNT_NODEF;
-        nfci->nwTransAddrInd.val  = NO_INF;             /* No Information */
+	nfci->nwTransAddrInd.pres = PRSNT_NODEF;
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_nfci_nw_trans_addr_ind");
+	if (!ftdm_strlen_zero(val)) {
+		nfci->nwTransAddrInd.val = atoi(val);
+	} else {
+		nfci->nwTransAddrInd.val  = NO_INF;             /* No Information */
+	}
         //nfci->nwTransAddrInd.val  = NWTRANS_CDADDR;     /* Network translation of the called adddress has occurred */
 
         /* Priority Access Indicator */
@@ -432,6 +463,52 @@ ftdm_status_t copy_nfci_to_sngss7(ftdm_channel_t *ftdmchan, SiNatFwdCalInd *nfci
         ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "SS7-UK: Setting NFCI- Blocking Ind[%d], Network Ind[%d], Priority Ind[%d], Protection Ind[%d]\n",
                         nfci->cliBlkInd.val, nfci->nwTransAddrInd.val, nfci->priorAccessInd.val, nfci->protectionInd.val);
         return FTDM_SUCCESS;
+}
+
+ftdm_status_t copy_nfci_from_sngss7(ftdm_channel_t *ftdmchan, SiNatFwdCalInd *nfci)
+{
+	char val[64];
+	sngss7_chan_data_t	*sngss7_info = ftdmchan->call_data;
+	memset(val, 0, sizeof(val));
+
+	if (nfci->eh.pres != PRSNT_NODEF) {
+		ftdm_log_chan_msg(ftdmchan, FTDM_LOG_DEBUG, "No NFCI Parameter available\n");
+		return FTDM_SUCCESS;
+	}
+
+	/* Call Indicator */
+	if ( PRSNT_NODEF == nfci->cliBlkInd.pres) {
+		snprintf(val, sizeof(val), "%d", nfci->cliBlkInd.val);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "SS7-UK: NFCI blocking indicator %s\n", val);
+		sngss7_add_var(sngss7_info, "ss7_nfci_cli_blocking_ind", val);
+	}
+
+	/* Network Translated Address Indicator */
+	if ( PRSNT_NODEF == nfci->nwTransAddrInd.pres) {
+		snprintf(val, sizeof(val), "%d", nfci->nwTransAddrInd.val);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "SS7-UK: NFCI Network Translation Address indicator %s\n", val);
+		sngss7_add_var(sngss7_info, "ss7_nfci_nw_trans_addr_ind", val);
+	}
+
+#if 0
+	/* Priority Access Indicator */
+	nfci->priorAccessInd.pres = PRSNT_NODEF;
+	nfci->priorAccessInd.val = NO_INF;
+	//nfci->priorAccessInd.val = PRIORACCSCALL_IUP;
+
+	/* Protection Indicator */
+	nfci->protectionInd.pres = PRSNT_NODEF;
+	nfci->protectionInd.val  = NO_INF;
+	//nfci->protectionInd.val  = PROTCALL_IUP;
+	//
+	nfci->spare.pres = PRSNT_NODEF;
+	nfci->spare.val  = 0x00;
+
+#endif
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "SS7-UK: Getting NFCI- Blocking Ind[%d], Network Ind[%d], Priority Ind[%d], Protection Ind[%d]\n",
+			nfci->cliBlkInd.val, nfci->nwTransAddrInd.val, nfci->priorAccessInd.val, nfci->protectionInd.val);
+
+	return FTDM_SUCCESS;
 }
 
 ftdm_status_t copy_nflxl_from_sngss7(ftdm_channel_t *ftdmchan, SiNatFwdCalIndLnk *nflxl)
@@ -635,66 +712,181 @@ ftdm_status_t copy_divtlineid_from_sngss7(ftdm_channel_t *ftdmchan, SiLstDvrtLin
 	return FTDM_SUCCESS;
 }
 
-ftdm_status_t copy_paramcompatibility_to_sngss7(ftdm_channel_t *ftdmchan, SiParmCompInfo *parmCom)
+ftdm_status_t copy_paramcompatibility_to_sngss7(ftdm_channel_t *ftdmchan, SiConEvnt* iam, SiParmCompInfo *parmCom)
 {
+	SiNatFwdCalInd* nfci = NULL;
+	SiLstDvrtLineID *lineid = NULL;
+	SiNatFwdCalIndLnk *nflxl = NULL;
+	SiPresentNum *prsNmb = NULL;
+	SiGenNum *genNmb = NULL;
+
+	if (!iam || !parmCom) return FTDM_SUCCESS;
+
+	nfci = &iam->natFwdCalInd;
+
 	parmCom->eh.pres = PRSNT_NODEF;
 
 	/* upgraded parm 1 */
-	parmCom->upgrPar1.pres = PRSNT_NODEF;
-	parmCom->upgrPar1.val  = 254;  /* National Forward Call Indicator */
 
-	/* transit exchange indicator */
-	parmCom->tranXInd1.pres = PRSNT_NODEF;
-	parmCom->tranXInd1.val  = 1; /* End node Interpretation */ 
+	if (PRSNT_NODEF == nfci->eh.pres) {
 
-	/* release call indicator */	
-	parmCom->relCllInd1.pres = PRSNT_NODEF;
-	parmCom->relCllInd1.val  = 0; /* Do Not Release call */ 
+		parmCom->upgrPar1.pres = PRSNT_NODEF;
+		parmCom->upgrPar1.val  = 254;  /* National Forward Call Indicator */
 
-	/* send notification indicator */	
-	parmCom->sndNotInd1.pres = PRSNT_NODEF;
-	parmCom->sndNotInd1.val  = 0; /* Do not send notification indicator */
+		/* transit exchange indicator */
+		parmCom->tranXInd1.pres = PRSNT_NODEF;
+		parmCom->tranXInd1.val  = 1; /* End node Interpretation */ 
 
-	/* discard message indicator */	
-	parmCom->dcrdMsgInd1.pres = PRSNT_NODEF;
-	parmCom->dcrdMsgInd1.val  = 0; /* Do not discard message (pass on) */ 
+		/* release call indicator */	
+		parmCom->relCllInd1.pres = PRSNT_NODEF;
+		parmCom->relCllInd1.val  = 0; /* Do Not Release call */ 
 
-	/* discard parameter indicator */
-	parmCom->dcrdParInd1.pres = PRSNT_NODEF;
-	parmCom->dcrdParInd1.val  = 1;	/* Discard parameter */ 
+		/* send notification indicator */	
+		parmCom->sndNotInd1.pres = PRSNT_NODEF;
+		parmCom->sndNotInd1.val  = 0; /* Do not send notification indicator */
 
-	/* pass not possible indicator */	
-	parmCom->passNtPoss1.pres = PRSNT_NODEF;
-	parmCom->passNtPoss1.val  = 2;	/* Discard parameter */ 
+		/* discard message indicator */	
+		parmCom->dcrdMsgInd1.pres = PRSNT_NODEF;
+		parmCom->dcrdMsgInd1.val  = 0; /* Do not discard message (pass on) */ 
 
-	/* upgraded parm 2 */
-	parmCom->upgrPar2.pres = PRSNT_NODEF;
-	parmCom->upgrPar2.val  = 252;   /* Last Diverting Line ID */
+		/* discard parameter indicator */
+		parmCom->dcrdParInd1.pres = PRSNT_NODEF;
+		parmCom->dcrdParInd1.val  = 1;	/* Discard parameter */ 
 
-	/* transit exchange indicator */
-	parmCom->tranXInd1.pres = PRSNT_NODEF;
-	parmCom->tranXInd1.val  = 1; /* End node Interpretation */ 
+		/* pass not possible indicator */	
+		parmCom->passNtPoss1.pres = PRSNT_NODEF;
+		parmCom->passNtPoss1.val  = 2;	/* Discard parameter */ 
+	}
 
-	/* release call indicator */	
-	parmCom->relCllInd1.pres = PRSNT_NODEF;
-	parmCom->relCllInd1.val  = 0; /* Do Not Release call */ 
+	lineid = &iam->lstDvrtLineId;
 
-	/* send notification indicator */	
-	parmCom->sndNotInd1.pres = PRSNT_NODEF;
-	parmCom->sndNotInd1.val  = 0; /* Do not send notification indicator */
+	if (PRSNT_NODEF == lineid->eh.pres) {
 
-	/* discard message indicator */	
-	parmCom->dcrdMsgInd1.pres = PRSNT_NODEF;
-	parmCom->dcrdMsgInd1.val  = 0; /* Do not discard message (pass on) */ 
+		/* upgraded parm 2 */
+		parmCom->upgrPar2.pres = PRSNT_NODEF;
+		parmCom->upgrPar2.val  = 252;   /* Last Diverting Line ID */
 
-	/* discard parameter indicator */
-	parmCom->dcrdParInd1.pres = PRSNT_NODEF;
-	parmCom->dcrdParInd1.val  = 1;	/* Discard parameter */ 
+		/* transit exchange indicator */
+		parmCom->tranXInd2.pres = PRSNT_NODEF;
+		parmCom->tranXInd2.val  = 1; /* End node Interpretation */ 
 
-	/* pass not possible indicator */	
-	parmCom->passNtPoss1.pres = PRSNT_NODEF;
-	parmCom->passNtPoss1.val  = 2;	/* Discard parameter */ 
+		/* release call indicator */	
+		parmCom->relCllInd2.pres = PRSNT_NODEF;
+		parmCom->relCllInd2.val  = 0; /* Do Not Release call */ 
 
+		/* send notification indicator */	
+		parmCom->sndNotInd2.pres = PRSNT_NODEF;
+		parmCom->sndNotInd2.val  = 0; /* Do not send notification indicator */
+
+		/* discard message indicator */	
+		parmCom->dcrdMsgInd2.pres = PRSNT_NODEF;
+		parmCom->dcrdMsgInd2.val  = 0; /* Do not discard message (pass on) */ 
+
+		/* discard parameter indicator */
+		parmCom->dcrdParInd2.pres = PRSNT_NODEF;
+		parmCom->dcrdParInd2.val  = 1;	/* Discard parameter */ 
+
+		/* pass not possible indicator */	
+		parmCom->passNtPoss2.pres = PRSNT_NODEF;
+		parmCom->passNtPoss2.val  = 2;	/* Discard parameter */ 
+	}
+
+	nflxl = &iam->natFwdCalIndLnk;
+	if (PRSNT_NODEF == nflxl->eh.pres) {
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "SS7-UK: Setting Parameter Compatibility information for LxL FCI %s\n",""); 
+		/* Link by link parameter present..add entry here ... */
+		/* upgraded parm 3 */
+		parmCom->upgrPar3.pres = PRSNT_NODEF;
+		parmCom->upgrPar3.val  = 244;  /* Link by Link Forward Call Indicator */
+
+		/* transit exchange indicator */
+		parmCom->tranXInd3.pres = PRSNT_NODEF;
+		parmCom->tranXInd3.val  = 1; /* End node Interpretation */ 
+
+		/* release call indicator */	
+		parmCom->relCllInd3.pres = PRSNT_NODEF;
+		parmCom->relCllInd3.val  = 0; /* Do Not Release call */ 
+
+		/* send notification indicator */	
+		parmCom->sndNotInd3.pres = PRSNT_NODEF;
+		parmCom->sndNotInd3.val  = 0; /* Do not send notification indicator */
+
+		/* discard message indicator */	
+		parmCom->dcrdMsgInd3.pres = PRSNT_NODEF;
+		parmCom->dcrdMsgInd3.val  = 0; /* Do not discard message (pass on) */ 
+
+		/* discard parameter indicator */
+		parmCom->dcrdParInd3.pres = PRSNT_NODEF;
+		parmCom->dcrdParInd3.val  = 1;	/* Discard parameter */ 
+
+		/* pass not possible indicator */	
+		parmCom->passNtPoss3.pres = PRSNT_NODEF;
+		parmCom->passNtPoss3.val  = 2;	/* Discard parameter */ 
+	}
+
+	prsNmb = &iam->presntNum;
+	if (PRSNT_NODEF == prsNmb->eh.pres) {
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "SS7-UK: Setting Parameter Compatibility information for Presentation number %s\n",""); 
+
+		parmCom->upgrPar4.pres = PRSNT_NODEF;
+		parmCom->upgrPar4.val  = 253;  
+
+		/* transit exchange indicator */
+		parmCom->tranXInd4.pres = PRSNT_NODEF;
+		parmCom->tranXInd4.val  = 0; /* Transit node Interpretation */ 
+
+		/* release call indicator */	
+		parmCom->relCllInd4.pres = PRSNT_NODEF;
+		parmCom->relCllInd4.val  = 0; /* Do Not Release call */ 
+
+		/* send notification indicator */	
+		parmCom->sndNotInd4.pres = PRSNT_NODEF;
+		parmCom->sndNotInd4.val  = 0; /* Do not send notification indicator */
+
+		/* discard message indicator */	
+		parmCom->dcrdMsgInd4.pres = PRSNT_NODEF;
+		parmCom->dcrdMsgInd4.val  = 0; /* Do not discard message (pass on) */ 
+
+		/* discard parameter indicator */
+		parmCom->dcrdParInd4.pres = PRSNT_NODEF;
+		parmCom->dcrdParInd4.val  = 1;	/* Discard parameter */ 
+
+		/* pass not possible indicator */	
+		parmCom->passNtPoss4.pres = PRSNT_NODEF;
+		parmCom->passNtPoss4.val  = 2;	/* Discard parameter */ 
+	}
+
+	genNmb = &iam->genNmb;
+	if (PRSNT_NODEF == genNmb->eh.pres) {
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "SS7-UK: Setting Parameter Compatibility information for Generic number %s\n",""); 
+
+		parmCom->upgrPar5.pres = PRSNT_NODEF;
+		parmCom->upgrPar5.val  = 192;  
+
+		/* transit exchange indicator */
+		parmCom->tranXInd5.pres = PRSNT_NODEF;
+		parmCom->tranXInd5.val  = 0; /* Transit node Interpretation */ 
+
+		/* release call indicator */	
+		parmCom->relCllInd5.pres = PRSNT_NODEF;
+		parmCom->relCllInd5.val  = 0; /* Do Not Release call */ 
+
+		/* send notification indicator */	
+		parmCom->sndNotInd5.pres = PRSNT_NODEF;
+		parmCom->sndNotInd5.val  = 0; /* Do not send notification indicator */
+
+		/* discard message indicator */	
+		parmCom->dcrdMsgInd5.pres = PRSNT_NODEF;
+		parmCom->dcrdMsgInd5.val  = 0; /* Do not discard message (pass on) */ 
+
+		/* discard parameter indicator */
+		parmCom->dcrdParInd5.pres = PRSNT_NODEF;
+		parmCom->dcrdParInd5.val  = 1;	/* Discard parameter */ 
+
+		/* pass not possible indicator */	
+		parmCom->passNtPoss5.pres = PRSNT_NODEF;
+		parmCom->passNtPoss5.val  = 2;	/* Discard parameter */ 
+	}
 
 	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "SS7-UK: Setting Parameter Compatibility information for NFCI %s\n",""); 
 	return FTDM_SUCCESS;

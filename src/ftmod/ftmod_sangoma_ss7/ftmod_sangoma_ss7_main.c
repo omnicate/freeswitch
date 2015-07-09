@@ -1512,6 +1512,14 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 			if (!sngss7_test_ckt_flag(sngss7_info, FLAG_SENT_ACM)) {
 				sngss7_set_ckt_flag(sngss7_info, FLAG_SENT_ACM);
 				ft_to_sngss7_acm(ftdmchan);
+
+				/* CPG on Alert configuration option set then send CPG as well */
+				if (g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].cpg_on_alert == FTDM_TRUE) {
+					if (!sngss7_test_ckt_flag(sngss7_info, FLAG_SENT_CPG)) {
+						sngss7_set_ckt_flag(sngss7_info, FLAG_SENT_CPG);
+						ft_to_sngss7_cpg(ftdmchan, EV_PROGRESS, EVPR_NOIND);
+					}
+				}
 			} else {
 				if (!sngss7_test_ckt_flag(sngss7_info, FLAG_SENT_CPG)) {
 					sngss7_set_ckt_flag(sngss7_info, FLAG_SENT_CPG);
