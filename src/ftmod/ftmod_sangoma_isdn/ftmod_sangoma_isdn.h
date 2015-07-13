@@ -279,6 +279,7 @@ typedef struct sngisdn_span_data {
 	uint8_t			cid_name_method;
 	uint8_t			send_cid_name;
 	uint8_t                 send_connect_ack;
+	uint8_t			lawful_interception_user_info;
 	ftdm_channel_t 		*phy_channels[NUM_E1_CHANNELS_PER_SPAN]; /* Channels ordered by physical channel id */
 
 	int32_t			timer_t301;
@@ -513,6 +514,7 @@ ftdm_status_t set_calling_num2(ftdm_channel_t *ftdmchan, CgPtyNmb *cgPtyNmb);
 ftdm_status_t set_called_num(ftdm_channel_t *ftdmchan, CdPtyNmb *cdPtyNmb);
 ftdm_status_t set_redir_num(ftdm_channel_t *ftdmchan, RedirNmb *redirNmb);
 ftdm_status_t set_calling_name(ftdm_channel_t *ftdmchan, ConEvnt *conEvnt);
+ftdm_status_t set_lawful_interception(ftdm_channel_t *ftdmchan, ConEvnt *conEvnt);
 ftdm_status_t set_calling_subaddr(ftdm_channel_t *ftdmchan, CgPtySad *cgPtySad);
 ftdm_status_t set_called_subaddr(ftdm_channel_t *ftdmchan, CdPtySad *cdPtySad);
 ftdm_status_t set_prog_ind_ie(ftdm_channel_t *ftdmchan, ProgInd *progInd, ftdm_sngisdn_progind_t prog_ind);

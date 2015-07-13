@@ -39,6 +39,8 @@
 /******************************************************************************/
 
 /* DEFINES ********************************************************************/
+#define CALLING_PARTY_SUBADDR_IE 0x6D
+#define CALLED_PARTY_SUBADDR_IE 0x71
 /******************************************************************************/
 
 /* GLOBALS ********************************************************************/
@@ -1300,10 +1302,114 @@ ftdm_status_t copy_redirgInfo_to_sngss7(ftdm_channel_t *ftdmchan, SiRedirInfo *r
 	return FTDM_SUCCESS;
 }
 
+static void dump_hex(ftdm_channel_t *ftdmchan, unsigned char *val, int len)
+{
+	char pbuf[512] = { 0 };
+	int c = 0;
+	int i = 0;
+	c += sprintf(&pbuf[c], "\n");
+	for (i = 0; i < len && c < (sizeof(pbuf) - 10); i++) {
+		c += sprintf(&pbuf[c], "0x%02X ", val[i]);
+		if (!((i+1) % 10)) {
+			c += sprintf(&pbuf[c], "\n");
+		}
+	}
+	pbuf[c] = '\n';
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "%s", pbuf);
+}
+
+static const char *li_direction_val2str(const char *val);
+static void bcd_decode(ftdm_channel_t *ftdmchan, unsigned char *bcdbuf, int bcd_len, char dstbuf[], int bufsize,
+                int *shift,
+                int *mask,
+                int *nibcnt);
+static void process_calling_party_subaddr_ie(ftdm_channel_t *ftdmchan, unsigned char *ie)
+{
+	char val[25];
+	int p = 3; /* Subaddress information starts at the fourth octet */
+	int shift = 0;
+	int mask = 0x0F;
+	int nibcnt = 0;
+
+	int len = ie[1] + 3;
+	sngss7_chan_data_t *sngss7_info = ftdmchan->call_data;
+
+	/* Decode the LIID */
+	bcd_decode(ftdmchan, &ie[p], ie[1], val, sizeof(val), &shift, &mask, &nibcnt);
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Decoded LIID: %s\n", val);
+	sngss7_add_var(sngss7_info, "li.id", val);
+
+	/* Decode the direction */
+	bcd_decode(ftdmchan, &ie[p], ie[1], val, sizeof(val), &shift, &mask, &nibcnt);
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Decoded Direction: %s/%s\n", val, li_direction_val2str(val));
+	sngss7_add_var(sngss7_info, "li.direction", li_direction_val2str(val));
+
+	/* Save TMR (Transmission Medium Requirement) */
+	if (len >= 19) {
+		snprintf(val, sizeof(val), "%d", ie[18]);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Transmission Medium Requirement: %s\n", val);
+		sngss7_add_var(sngss7_info, "li.tmr", val);
+	}
+
+	/* Save BC (Bearer Capability) */
+	if (len >= 20) {
+		snprintf(val, sizeof(val), "%d", ie[19]);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Bearer Capability: %s\n", val);
+		sngss7_add_var(sngss7_info, "li.bc", val);
+	}
+
+	/* Save HLC (High Layer Compatibility) */
+	if (len >= 21) {
+		snprintf(val, sizeof(val), "%d", ie[20]);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "High Layer Compatibility: %s\n", val);
+		sngss7_add_var(sngss7_info, "li.hlc", val);
+	}
+
+	/* Save MBSC (Mobile Bearer Service Code) */
+	if (len >= 22) {
+		snprintf(val, sizeof(val), "%d", ie[21]);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Mobile Bearer Service Code: %s\n", val);
+		sngss7_add_var(sngss7_info, "li.mbsc", val);
+	}
+
+	/* Save MTSC (Mobile Teleservice Code) */
+	if (len >= 23) {
+		snprintf(val, sizeof(val), "%d", ie[22]);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Mobile Bearer Service Code: %s\n", val);
+		sngss7_add_var(sngss7_info, "li.mtsc", val);
+	}
+}
+
+static void process_called_party_subaddr_ie(ftdm_channel_t *ftdmchan, unsigned char *ie)
+{
+	char val[25];
+	int p = 3; /* Subaddress information starts at the fourth octet */
+	int shift = 0;
+	int mask = 0x0F;
+	int nibcnt = 0;
+
+	sngss7_chan_data_t *sngss7_info = ftdmchan->call_data;
+
+	/* Decode the operator id */
+	bcd_decode(ftdmchan, &ie[p], ie[1], val, sizeof(val), &shift, &mask, &nibcnt);
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Decoded operator id: %s\n", val);
+	sngss7_add_var (sngss7_info, "li.operator_id", val);
+
+	/* Encode the communication identity number */
+	bcd_decode(ftdmchan, &ie[p], ie[1], val, sizeof(val), &shift, &mask, &nibcnt);
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Decoded communication identity number: %s\n", val);
+	sngss7_add_var (sngss7_info, "li.communication_identity_number", val);
+
+	/* Encode the cc link identifier */
+	bcd_decode(ftdmchan, &ie[p], ie[1], val, sizeof(val), &shift, &mask, &nibcnt);
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Decoded cc link identifier: %s\n", val);
+	sngss7_add_var (sngss7_info, "li.cc_link_identifier", val);
+}
 
 ftdm_status_t copy_access_transport_from_sngss7(ftdm_channel_t *ftdmchan, SiAccTrnspt *accTrnspt)
 {
 	char val[3*((MF_SIZE_TKNSTRE + 7) & 0xff8)];
+	int i = 0;
 	sngss7_chan_data_t *sngss7_info = ftdmchan->call_data;
 
 	if (accTrnspt->eh.pres != PRSNT_NODEF || accTrnspt->infoElmts.pres !=PRSNT_NODEF) {
@@ -1313,7 +1419,26 @@ ftdm_status_t copy_access_transport_from_sngss7(ftdm_channel_t *ftdmchan, SiAccT
 
 	ftdm_url_encode((const char*)accTrnspt->infoElmts.val, val, accTrnspt->infoElmts.len);
 	sngss7_add_var (sngss7_info, "ss7_access_transport_urlenc", val);
-	
+
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found Access Transport IE available of length %d\n", accTrnspt->infoElmts.len);
+	dump_hex(ftdmchan, accTrnspt->infoElmts.val, accTrnspt->infoElmts.len);
+	for (i = 0; i < accTrnspt->infoElmts.len; ) {
+		unsigned char *ie = &accTrnspt->infoElmts.val[i];
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found IE 0x%X of length %d, type=0x%X\n", ie[0], ie[1], ie[2]);
+		if (ie[1] <= 0) {
+			ftdm_log_chan(ftdmchan, FTDM_LOG_ERROR, "w00t!\n", ie[1]);
+			break;
+		}
+		switch (ie[0]) {
+			case CALLING_PARTY_SUBADDR_IE:
+				process_calling_party_subaddr_ie(ftdmchan, &ie[0]);
+				break;
+			case CALLED_PARTY_SUBADDR_IE:
+				process_called_party_subaddr_ie(ftdmchan, &ie[0]);
+				break;
+		}
+		i += (ie[1] + 3);
+	}
 	return FTDM_SUCCESS;
 }
 
@@ -1338,11 +1463,7 @@ ftdm_status_t copy_access_transport_to_sngss7(ftdm_channel_t *ftdmchan, SiAccTrn
 	const char *val = NULL;
 
 	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_access_transport_urlenc");
-	if (ftdm_strlen_zero(val)) {
-		accTrnspt->eh.pres = NOTPRSNT;
-		accTrnspt->infoElmts.pres = NOTPRSNT;
-	}
-	else {
+	if (!ftdm_strlen_zero(val)) {
 		char *val_dec = NULL;
 		ftdm_size_t val_len = strlen (val);
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found Access Transport IE encoded : %s\n", val);
@@ -1526,12 +1647,323 @@ ftdm_status_t copy_cgPtyCat_from_sngss7(ftdm_channel_t *ftdmchan, SiCgPtyCat *cg
 	return FTDM_SUCCESS;
 }
 
+// fprintf(stderr, "[%d] %d m(0x%1X) s(0x%1X)\n", p, i, m, s);
+#define write_bcd(val) \
+        do { \
+                p = nib / 2; \
+                if (p > max_p) { \
+                        fprintf(stderr, "Max size reached\n"); \
+                        return; \
+                } \
+                subAddrIE[p] |= ((val << s) & m); \
+                m = (m == 0x0F) ? 0xF0 : 0x0F; \
+                s = (s == 0) ? 4 : 0; \
+                nib++; \
+        } while (0);
+static void bcd_encode(const char *digits,
+                uint8_t *subAddrIE,
+                int *shift,
+                int *mask,
+                int *nibcnt,
+                int max_p)
+{
+	/* TODO: get rid of shift/mask, we can use the nibcnt to determine it */
+	int s = *shift;
+	int m = *mask;
+	int p = 0;
+	int nib = *nibcnt;
+	int i = 0;
+	char tmp[2] = { 0 };
+	const char *c = digits;
+
+	//fprintf(stderr, "%p\n", subAddrIE);
+	while (c && *c) {
+		tmp[0] = *c;
+		i = atoi(tmp);
+		write_bcd(i);
+		c++;
+	}
+
+	/* Add the field separator */
+	i = 0xF;
+	write_bcd(i);
+
+	/* Store context for subsequent calls */
+	*shift = s;
+	*mask = m;
+	*nibcnt = nib;
+}
+
+//fprintf(stderr, "[%d] %d m(0x%1X) s(0x%1X)\n", p, digit, m, s);
+#define retrieve_bcd(digit) \
+        do { \
+                p = nib / 2; \
+                if (p > bcd_len) { \
+			ftdm_log_chan(ftdmchan, FTDM_LOG_ERROR, "max bcd length of %d bytes reached\n", bcd_len); \
+                        return; \
+                } \
+		digit = ((bcdbuf[p] & m) >> s); \
+                m = (m == 0x0F) ? 0xF0 : 0x0F; \
+                s = (s == 0) ? 4 : 0; \
+                nib++; \
+        } while (0);
+static void bcd_decode(ftdm_channel_t *ftdmchan, unsigned char *bcdbuf, int bcd_len, char dstbuf[], int bufsize,
+                int *shift,
+                int *mask,
+                int *nibcnt)
+{
+	/* TODO: get rid of shift/mask, we can use the nibcnt to determine it */
+	int s = *shift;
+	int m = *mask;
+	int p = 0;
+	int nib = *nibcnt;
+	int i = 0;
+	int c = 0;
+
+	dstbuf[0] = '\0';
+	while (c < bufsize) {
+		retrieve_bcd(i);
+		if (i == 0xF) {
+			ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found bcd end character at nibble %d\n", nib);
+			break;
+		}
+		if (i < 0 || i > 9) {
+			ftdm_log_chan(ftdmchan, FTDM_LOG_ERROR, "Invalid BCD value %d at nibble %d\n", nib);
+			break;
+		}
+		dstbuf[c] = ('0' + i); /* integer to ascii */
+		c++;
+	}
+	dstbuf[c] = '\0';
+
+	/* Store context for subsequent calls */
+	*shift = s;
+	*mask = m;
+	*nibcnt = nib;
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "bcd decoded: %s (s=0x%1X, m=0x%1X, n=%d)\n", dstbuf, s, m, nib);
+}
+
+struct _direction_map {
+	const char *var;
+	const char *val;
+} li_direction_map[] = {
+	{ "mono-mode", "0" },
+	{ "cc-from-target", "1" },
+	{ "cc-from-other-party", "2" },
+	{ "direction-unknown", "3" },
+};
+
+static const char *li_direction_str2val(const char *dir)
+{
+	int i = 0;
+	for (i = 0; i < ftdm_array_len(li_direction_map); i++) {
+		if (!strcasecmp(dir, li_direction_map[i].var)) {
+			return li_direction_map[i].val;
+		}
+	}
+	return "3";
+}
+
+static const char *li_direction_val2str(const char *val)
+{
+	int i = 0;
+	for (i = 0; i < ftdm_array_len(li_direction_map); i++) {
+		if (!strcasecmp(val, li_direction_map[i].val)) {
+			return li_direction_map[i].var;
+		}
+	}
+	return "3";
+}
+
+static void append_ie_to_transport(SiAccTrnspt *accTrnspt, uint8_t *subAddrIE)
+{
+	/* check if the clg_subAddr has already been added */
+	if (accTrnspt->eh.pres == PRSNT_NODEF) {
+		/* append the subAddrIE */
+		memcpy(&accTrnspt->infoElmts.val[accTrnspt->infoElmts.len], subAddrIE, (subAddrIE[1] + 3));
+		accTrnspt->infoElmts.len = accTrnspt->infoElmts.len + subAddrIE[1] + 3;
+	} else {
+		/* fill in from the beginning */
+		accTrnspt->eh.pres = PRSNT_NODEF;
+		accTrnspt->infoElmts.pres = PRSNT_NODEF;
+		memcpy(accTrnspt->infoElmts.val, subAddrIE, (subAddrIE[1] + 3));
+		accTrnspt->infoElmts.len = subAddrIE[1] + 3;
+	}
+}
+
+#define MAX_SUBADDR 20 /* According to notes on table 4-10/Q.931 */
+static void encode_li_cgpty_subAddrIE(ftdm_channel_t *ftdmchan, SiAccTrnspt *accTrnspt, uint8_t *subAddrIE, int max_len)
+{
+	int p = 0;
+	int shift = 0;
+	int mask = 0x0F;
+	int nibcnt = 0;
+	int odd = 0;
+	int len = 0;
+	uint8_t octetval = 0;
+	const char *strval = NULL;
+	const char *id = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "li.id");
+	const char *direction = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "li.direction");
+	const char *dirval = ftdm_strlen_zero(direction) ? "" : li_direction_str2val(direction);
+
+	max_len = max_len > MAX_SUBADDR ? MAX_SUBADDR : max_len;
+	memset(subAddrIE, 0, max_len);
+
+	/* calling party subaddress IE identifier */
+	subAddrIE[p] = CALLING_PARTY_SUBADDR_IE;
+
+	p = 3; /* Subaddress information starts at the fourth octet */
+
+	/* Encode the LIID */
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Encoding LIID: %s\n", id);
+	bcd_encode(id, &subAddrIE[p], &shift, &mask, &nibcnt, max_len);
+
+	/* Encode the direction */
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Encoding Direction: %s\n", dirval);
+	bcd_encode(dirval, &subAddrIE[p], &shift, &mask, &nibcnt, max_len);
+
+	/* Encode TMR (Transmission Medium Requirement) */
+	strval = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "li.tmr");
+	octetval = !ftdm_strlen_zero(strval) ? atoi(strval) : 0xFF;
+	subAddrIE[18] = octetval;
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Stored Transmission Medium Requirement: %d\n", octetval);
+
+	/* Encode BC (Bearer Capability) */
+	strval = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "li.bc");
+	octetval = !ftdm_strlen_zero(strval) ? atoi(strval) : 0xFF;
+	subAddrIE[19] = octetval;
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Stored Bearer Capability: %d\n", octetval);
+
+	/* Encode HLC (High Layer Compatibility) */
+	strval = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "li.hlc");
+	octetval = !ftdm_strlen_zero(strval) ? atoi(strval) : 0xFF;
+	subAddrIE[20] = octetval;
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Stored High Layer Compatibility: %d\n", octetval);
+
+	/* Encode MBSC (Mobile Bearer Service Code) */
+	strval = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "li.mbsc");
+	octetval = !ftdm_strlen_zero(strval) ? atoi(strval) : 0xFF;
+	subAddrIE[21] = octetval;
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Stored Mobile Bearer Service Code: %d\n", octetval);
+
+	/* Encode MTSC (Mobile Teleservice Code) */
+	strval = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "li.mtsc");
+	octetval = !ftdm_strlen_zero(strval) ? atoi(strval) : 0xFF;
+	subAddrIE[22] = octetval;
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Stored Mobile Teleservice Code: %d\n", octetval);
+
+	/* Note that we still add later 3 more bytes to the ie length when appending the ie to the transport for the IE identifier, length and type of subaddr */
+	/* Total length is almost fixed (21 bytes when no mobile codes are available, 23 when they are)  */
+	len = 15;
+	if (subAddrIE[21] == 0xFF && subAddrIE[22] == 0xFF) {
+		/* Take only 3 out of 5 since the last 2 are not available */
+		len += 3;
+	} else if (subAddrIE[22] == 0xFF) {
+		/* Take only 4 out of 5 since the last one is not available */
+		len += 4;
+	} else {
+		/* Take all service octets. Note that subAddrIE[21] might be 0xFF, but
+	           the alternative according to the ETSI spec is to not include the MTSC
+		   value either (e.g take only 3 octets) but I prefer the alternative of
+		   sending all the info we got */
+		len += 5;
+	}
+
+	p = 1;
+	subAddrIE[p] = len;
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Calling party subaddress IE Length: %d\n", subAddrIE[p]);
+
+	/* Type of subaddress and odd/even indicator are at the same octet*/
+	p = 2;
+
+	/* Set the MSB (ext) */
+	subAddrIE[p] |= 0x80;
+
+	/* Set Type of subaddress */
+	subAddrIE[p] |= (0x2 << 4) & 0x70; /* 0x2 is type 010 (user-defined) in bit positions 567 */
+
+	/* Set Odd/Even indicator */
+	odd = (nibcnt % 2) ? 1 : 0;
+	subAddrIE[p] |= (odd << 3) & 0x8;
+
+	append_ie_to_transport(accTrnspt, subAddrIE);
+}
+
+static void encode_li_cdpty_subAddrIE(ftdm_channel_t *ftdmchan, SiAccTrnspt *accTrnspt, uint8_t *subAddrIE, int max_len)
+{
+	const char *operator_id = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "li.operator_id");
+	const char *cin = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "li.communication_identity_number");
+	const char *cclid = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "li.cc_link_identifier");
+	int p = 0;
+	int shift = 0;
+	int mask = 0x0F;
+	int nibcnt = 0;
+	int odd = 0;
+
+	max_len = max_len > MAX_SUBADDR ? MAX_SUBADDR : max_len;
+	memset(subAddrIE, 0, max_len);
+
+	/* called party subaddress IE identifier */
+	subAddrIE[p] = CALLED_PARTY_SUBADDR_IE;
+
+	p = 3; /* Subaddress information starts at the fourth octet */
+
+	/* Encode the operator id */
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Encoding operator id: %s\n", operator_id);
+	bcd_encode(operator_id, &subAddrIE[p], &shift, &mask, &nibcnt, max_len);
+
+	/* Encode the communication identity number */
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Encoding communication identity number: %s\n", cin);
+	bcd_encode(cin, &subAddrIE[p], &shift, &mask, &nibcnt, max_len);
+
+	/* Encode the cc link identifier */
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Encoding cc link identifier: %s\n", cclid);
+	bcd_encode(cclid, &subAddrIE[p], &shift, &mask, &nibcnt, max_len);
+
+	/* Set length field */
+	p = 1;
+	subAddrIE[p] = !(nibcnt % 2) ? (nibcnt / 2) : ((nibcnt / 2) + 1);
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Called party subaddress IE Length: %d\n", subAddrIE[p]);
+
+	/* Type of subaddress and odd/even indicator are at the same octet*/
+	p = 2;
+
+	/* Set the MSB (ext) */
+	subAddrIE[p] |= 0x80;
+
+	/* Set Type of subaddress */
+	subAddrIE[p] |= (0x2 << 4) & 0x70; /* 0x2 is type 010 (user-defined) in bit positions 567 */
+
+	/* Set Odd/Even indicator */
+	odd = (nibcnt % 2) ? 1 : 0;
+	subAddrIE[p] |= (odd << 3) & 0x8;
+
+	append_ie_to_transport(accTrnspt, subAddrIE);
+}
+
 ftdm_status_t copy_accTrnspt_to_sngss7(ftdm_channel_t *ftdmchan, SiAccTrnspt *accTrnspt)
 {
-	const char			*clg_subAddr = NULL;
-	const char			*cld_subAddr = NULL;
-	char 				subAddrIE[MAX_SIZEOF_SUBADDR_IE];
+	const char *clg_subAddr = NULL;
+	const char *cld_subAddr = NULL;
+	const char *li_id = NULL;
+	char subAddrIE[MAX_SIZEOF_SUBADDR_IE] = { 0 };
 	
+	/* check if the user would like us to send encoded lawful interception information  */
+	li_id = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "li.id");
+	if (!ftdm_strlen_zero(li_id)) {
+		uint8_t subaddr_ie[MAX_SIZEOF_SUBADDR_IE];
+		ftdm_log_chan_msg(ftdmchan, FTDM_LOG_DEBUG, "Found user supplied lawful interception information\n");
+
+		/* First encode the LIID and Direction in the calling party subaddress */
+		encode_li_cgpty_subAddrIE(ftdmchan, accTrnspt, subaddr_ie, sizeof(subaddr_ie) - 1);
+
+		/* Now encode the Operator ID, CIN and CCLID in the called party subaddress */
+		encode_li_cdpty_subAddrIE(ftdmchan, accTrnspt, subaddr_ie, sizeof(subaddr_ie) - 1);
+
+		/* Lawful interception info done, do not check for explicit calling/called subaddress info */
+		goto done;
+	}
+
 	/* check if the user would like us to send a clg_sub-address */
 	clg_subAddr = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_clg_subaddr");
 	if (!ftdm_strlen_zero(clg_subAddr)) {
@@ -1545,9 +1977,9 @@ ftdm_status_t copy_accTrnspt_to_sngss7(ftdm_channel_t *ftdmchan, SiAccTrnspt *ac
 			case '0':						/* NSAP */
 				encode_subAddrIE_nsap(&clg_subAddr[1], subAddrIE, SNG_CALLING);
 				break;
-				case '1':						/* national variant */
-					encode_subAddrIE_nat(&clg_subAddr[1], subAddrIE, SNG_CALLING);
-					break;
+			case '1':						/* national variant */
+				encode_subAddrIE_nat(&clg_subAddr[1], subAddrIE, SNG_CALLING);
+				break;
 			default:
 				ftdm_log_chan(ftdmchan, FTDM_LOG_ERROR, "Invalid Calling Sub-Address encoding requested: %c\n", clg_subAddr[0]);
 				break;
@@ -1555,7 +1987,7 @@ ftdm_status_t copy_accTrnspt_to_sngss7(ftdm_channel_t *ftdmchan, SiAccTrnspt *ac
 
 
 		/* if subaddIE is still empty don't copy it in */
-		if (subAddrIE[0] != '0') {
+		if (subAddrIE[0] != '\0') {
 			/* check if the clg_subAddr has already been added */
 			if (accTrnspt->eh.pres == PRSNT_NODEF) {
 				/* append the subAddrIE */
@@ -1584,16 +2016,16 @@ ftdm_status_t copy_accTrnspt_to_sngss7(ftdm_channel_t *ftdmchan, SiAccTrnspt *ac
 			case '0':						/* NSAP */
 				encode_subAddrIE_nsap(&cld_subAddr[1], subAddrIE, SNG_CALLED);
 				break;
-				case '1':						/* national variant */
-					encode_subAddrIE_nat(&cld_subAddr[1], subAddrIE, SNG_CALLED);
-					break;
+			case '1':						/* national variant */
+				encode_subAddrIE_nat(&cld_subAddr[1], subAddrIE, SNG_CALLED);
+				break;
 			default:
 				ftdm_log_chan(ftdmchan, FTDM_LOG_ERROR, "Invalid Called Sub-Address encoding requested: %c\n", cld_subAddr[0]);
 				break;
 		} /* switch (cld_subAddr[0]) */
 
 		/* if subaddIE is still empty don't copy it in */
-		if (subAddrIE[0] != '0') {
+		if (subAddrIE[0] != '\0') {
 			/* check if the cld_subAddr has already been added */
 			if (accTrnspt->eh.pres == PRSNT_NODEF) {
 				/* append the subAddrIE */
@@ -1608,6 +2040,13 @@ ftdm_status_t copy_accTrnspt_to_sngss7(ftdm_channel_t *ftdmchan, SiAccTrnspt *ac
 			}
 		}
 	} /* if ((cld_subAddr != NULL) && (*cld_subAddr)) */
+
+
+done:
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Transport pres %d/%d, ie length: %d\n", accTrnspt->infoElmts.pres, accTrnspt->eh.pres, accTrnspt->infoElmts.len);
+	if (accTrnspt->infoElmts.pres == PRSNT_NODEF) {
+		dump_hex(ftdmchan, accTrnspt->infoElmts.val, accTrnspt->infoElmts.len);
+	}
 	return FTDM_SUCCESS;
 }
 

@@ -76,6 +76,9 @@ void sngisdn_snd_setup(ftdm_channel_t *ftdmchan)
 	set_facility_ie(ftdmchan, &conEvnt.facilityStr);
 	set_prog_ind_ie(ftdmchan, &conEvnt.progInd, prog_ind);
 
+	/* Set lawful interception information if any */
+	set_lawful_interception(ftdmchan, &conEvnt);
+
 	set_user_user_ie(ftdmchan, &conEvnt.usrUsr);
 
 	ftdm_log_chan(ftdmchan, FTDM_LOG_INFO, "Sending SETUP (suId:%d suInstId:%u spInstId:%u dchan:%d ces:%d)\n", signal_data->cc_id, sngisdn_info->suInstId, sngisdn_info->spInstId, signal_data->dchan_id, sngisdn_info->ces);

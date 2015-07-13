@@ -266,7 +266,43 @@ ftmod_sangoma_isdn_la_SOURCES = \
 	$(SRC)/ftmod/ftmod_sangoma_isdn/ftmod_sangoma_isdn_stack_hndl.c \
 	$(SRC)/ftmod/ftmod_sangoma_isdn/ftmod_sangoma_isdn_stack_out.c
 
-ftmod_sangoma_isdn_la_CFLAGS  = $(FTDM_CFLAGS) $(AM_CFLAGS) -D_GNU_SOURCE
+ftmod_sangoma_isdn_la_SOURCES += \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/asn_codecs_prim.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/ber_decoder.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/ber_tlv_length.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/ber_tlv_tag.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/BIT_STRING.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/CC-Link-Identifier.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/CommunicationIdentifier.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/constraints.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/constr_CHOICE.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/constr_SEQUENCE.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/constr_SET.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/constr_TYPE.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/der_encoder.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/Direction-Indication.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/IA5String.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/INTEGER.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/IPAddress.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/IP-value.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/LawfulInterceptionData.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/LawfulInterceptionIdentifier.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/NativeEnumerated.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/NativeInteger.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/Network-Element-Identifier.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/Network-Identifier.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/OBJECT_IDENTIFIER.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/OCTET_STRING.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/per_decoder.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/per_encoder.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/per_opentype.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/per_support.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/Service-Information.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/xer_decoder.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/xer_encoder.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/xer_support.c
+
+ftmod_sangoma_isdn_la_CFLAGS  = $(FTDM_CFLAGS) $(AM_CFLAGS) -D_GNU_SOURCE -I$(SRC)/ftmod/ftmod_sangoma_isdn/asn/
 ftmod_sangoma_isdn_la_LDFLAGS = -shared -module -avoid-version -lsng_isdn
 ftmod_sangoma_isdn_la_LIBADD  = libfreetdm.la
 endif
