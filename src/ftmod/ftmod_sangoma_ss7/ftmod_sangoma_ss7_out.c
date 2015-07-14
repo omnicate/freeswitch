@@ -614,6 +614,17 @@ void ft_to_sngss7_rel (ftdm_channel_t * ftdmchan)
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "No user supplied release cause in REL, using \"%d\"\n", ftdmchan->caller_data.hangup_cause);
 	}
 
+	if ( rel.causeDgn.causeVal.val == 71)
+	{
+		rel.causeDgn.location.val = 3;
+		rel.causeDgn.causeVal.val = 1;
+	}
+  
+	if ( rel.causeDgn.causeVal.val == 28)
+	{
+		rel.causeDgn.location.val = 3;
+	}
+
 	redirect_num = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_redirect_number");
 	if (!ftdm_strlen_zero(redirect_num)) {
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found user supplied re-direct number in REL, value \"%s\"\n", redirect_num);

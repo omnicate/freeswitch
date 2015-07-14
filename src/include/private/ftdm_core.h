@@ -483,6 +483,11 @@ struct ftdm_channel {
 	int32_t rxdrops;
 	ftdm_usrmsg_t *usrmsg;
 	ftdm_time_t last_state_change_time;
+<<<<<<< HEAD
+=======
+	uint8_t forward_collect_digit_dtmf;
+	uint32_t io_timer_offset;
+>>>>>>> 216e980... Fix Issue #11996: NSG is gettng timout while reading from channel as soon as link goes down
 };
 
 struct ftdm_span {
