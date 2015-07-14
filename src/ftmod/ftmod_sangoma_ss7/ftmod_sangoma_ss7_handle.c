@@ -225,6 +225,7 @@ ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 #ifdef SS7_UK
 			copy_presNmb_from_sngss7(ftdmchan, &siConEvnt->presntNum);
 			copy_nflxl_from_sngss7(ftdmchan, &siConEvnt->natFwdCalIndLnk);
+			copy_nfci_from_sngss7(ftdmchan, &siConEvnt->natFwdCalInd);
 			copy_divtlineid_from_sngss7(ftdmchan, &siConEvnt->lstDvrtLineId);
 #endif
 
@@ -375,9 +376,12 @@ ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 				/* set the state of the channel to collecting...the rest is done by the chan monitor */
 				ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_COLLECT);
 			}
-			/* Add Calling party number also for dialplan */
-		         sprintf(var, "%s", ftdmchan->caller_data.cid_num.digits);
-			 sngss7_add_var(sngss7_info, "ss7_clg_num", var);
+
+			if (strlen(ftdmchan->caller_data.cid_num.digits)) {
+				/* Add Calling party number also for dialplan */
+				sprintf(var, "%s", ftdmchan->caller_data.cid_num.digits);
+				sngss7_add_var(sngss7_info, "ss7_clg_num", var);
+			}
 
 #ifdef ACC_TEST
 			if (sngss7_info->priority == FTDM_FALSE) {
