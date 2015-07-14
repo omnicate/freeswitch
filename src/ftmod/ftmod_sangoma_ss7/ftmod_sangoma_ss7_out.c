@@ -257,7 +257,9 @@ void ft_to_sngss7_iam (ftdm_channel_t * ftdmchan)
 			copy_nfci_to_sngss7(ftdmchan, &iam.natFwdCalInd);
 			copy_presnum_to_sngss7(ftdmchan, &iam.presntNum);
 			copy_nflxl_to_sngss7(ftdmchan, &iam.natFwdCalIndLnk);
-			copy_paramcompatibility_to_sngss7(ftdmchan, &iam.parmCom);
+			/* make sure parameter compatibility should be last one to fill
+			 * as it looks for filled parameters to add entry in this IE */
+			copy_paramcompatibility_to_sngss7(ftdmchan, &iam, &iam.parmCom);
 		}
 #endif
 
