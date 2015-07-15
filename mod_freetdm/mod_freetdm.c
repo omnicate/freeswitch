@@ -723,7 +723,6 @@ static switch_status_t channel_read_frame(switch_core_session_t *session, switch
 	int chunk, do_break = 0;
 	uint32_t span_id, chan_id;
 	const char *name = NULL;
-	int offset = 1;
 
 	channel = switch_core_session_get_channel(session);
 	assert(channel != NULL);
@@ -748,9 +747,7 @@ static switch_status_t channel_read_frame(switch_core_session_t *session, switch
 	   Yes, we support digium cards, ain't we nice.......
 	   6 double length intervals should compensate */
 	chunk = ftdm_channel_get_io_interval(tech_pvt->ftdmchan) * 2;
-	/* Get the offset in order to increse timeout interval */
-	offset = ftdm_channel_get_io_timer_offset(tech_pvt->ftdmchan);
-	total_to = chunk * 6 * offset;
+	total_to = chunk * 6 * 1000;  /* TODO - define time */
 
  top:
 
