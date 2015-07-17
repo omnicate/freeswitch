@@ -154,13 +154,13 @@ void conference_event_mod_channel_handler(const char *event_channel, cJSON *json
 			}
 
 			if (conference->layout_group_hash) {
-			  for (hi = switch_core_hash_first(conference->layout_group_hash); hi; hi = switch_core_hash_next(&hi)) {
-			    char *name;
-			    switch_core_hash_this(hi, &vvar, NULL, &val);
-			    name = switch_mprintf("group:%s", (char *)vvar);
-			    cJSON_AddItemToArray(array, cJSON_CreateString(name));
-			    free(name);
-			  }
+				for (hi = switch_core_hash_first(conference->layout_group_hash); hi; hi = switch_core_hash_next(&hi)) {
+					char *name;
+					switch_core_hash_this(hi, &vvar, NULL, &val);
+					name = switch_mprintf("group:%s", (char *)vvar);
+					cJSON_AddItemToArray(array, cJSON_CreateString(name));
+					free(name);
+				}
 			}
 
 			switch_mutex_unlock(conference_globals.setup_mutex);
@@ -306,7 +306,7 @@ void conference_event_adv_la(conference_obj_t *conference, conference_member_t *
 	//if (member->video_flow == SWITCH_MEDIA_FLOW_SENDONLY) {
 	switch_channel_set_flag(member->channel, CF_VIDEO_REFRESH_REQ);
 	switch_core_media_gen_key_frame(member->session);
-		//}
+	//}
 
 	if (conference && conference->la && member->session &&
 		!switch_channel_test_flag(member->channel, CF_VIDEO_ONLY)) {
@@ -701,3 +701,14 @@ switch_status_t chat_send(switch_event_t *message_event)
 
 	return SWITCH_STATUS_SUCCESS;
 }
+
+/* For Emacs:
+ * Local Variables:
+ * mode:c
+ * indent-tabs-mode:t
+ * tab-width:4
+ * c-basic-offset:4
+ * End:
+ * For VIM:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
+ */

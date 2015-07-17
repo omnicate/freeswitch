@@ -240,10 +240,10 @@ char *conference_cdr_rfc4579_render(conference_obj_t *conference, switch_event_t
 
 
 		/** ok so this is in the rfc but not the xsd
-		if (!(x_tag3 = switch_xml_add_child_d(x_tag2, "joining-method", off3++))) {
+			if (!(x_tag3 = switch_xml_add_child_d(x_tag2, "joining-method", off3++))) {
 			abort();
-		}
-		switch_xml_set_txt_d(x_tag3, np->cp->direction == SWITCH_CALL_DIRECTION_INBOUND ? "dialed-in" : "dialed-out");
+			}
+			switch_xml_set_txt_d(x_tag3, np->cp->direction == SWITCH_CALL_DIRECTION_INBOUND ? "dialed-in" : "dialed-out");
 		*/
 
 		if (np->member) {
@@ -409,7 +409,7 @@ cJSON *conference_cdr_json_render(conference_obj_t *conference, cJSON *req)
 		}
 
 		//if (np->record_path) {
-			//json_add_child_string(juser, "recordingPATH", np->record_path);
+		//json_add_child_string(juser, "recordingPATH", np->record_path);
 		//}
 
 		json_add_child_string(juser, "status", np->leave_time ? "disconnected" : "connected");
@@ -693,7 +693,7 @@ void conference_cdr_render(conference_obj_t *conference)
 			switch_xml_set_txt_d(x_ptr, "conference_locked");
 		} else if (rp->reason == CDRR_MAXMEMBERS) {
 			switch_xml_set_txt_d(x_ptr, "max_members_reached");
-		} else 	if (rp->reason == CDRR_PIN) {
+		} else	if (rp->reason == CDRR_PIN) {
 			switch_xml_set_txt_d(x_ptr, "invalid_pin");
 		}
 
@@ -723,39 +723,50 @@ void conference_cdr_render(conference_obj_t *conference)
 #ifdef _MSC_VER
 		if ((fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR)) > -1) {
 #else
-		if ((fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH)) > -1) {
+			if ((fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH)) > -1) {
 #endif
-			int wrote;
-			wrote = write(fd, xml_text, (unsigned) strlen(xml_text));
-			wrote++;
-			close(fd);
-			fd = -1;
-		} else {
-			char ebuf[512] = { 0 };
-			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error writing [%s][%s]\n",
-					path, switch_strerror_r(errno, ebuf, sizeof(ebuf)));
-		}
-
-		if (conference->cdr_event_mode != CDRE_NONE) {
-			switch_event_t *event;
-
-			if (switch_event_create_subclass(&event, SWITCH_EVENT_CUSTOM, CONF_EVENT_CDR) == SWITCH_STATUS_SUCCESS)
-		//	if (switch_event_create(&event, SWITCH_EVENT_CDR) == SWITCH_STATUS_SUCCESS)
-			{
-				switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "CDR-Source", CONF_EVENT_CDR);
-				if (conference->cdr_event_mode == CDRE_AS_CONTENT) {
-					switch_event_set_body(event, xml_text);
-				} else {
-					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "CDR-Path", path);
-				}
-				switch_event_fire(&event);
+				int wrote;
+				wrote = write(fd, xml_text, (unsigned) strlen(xml_text));
+				wrote++;
+				close(fd);
+				fd = -1;
 			} else {
-				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Could not create CDR event");
+				char ebuf[512] = { 0 };
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error writing [%s][%s]\n",
+								  path, switch_strerror_r(errno, ebuf, sizeof(ebuf)));
+			}
+
+			if (conference->cdr_event_mode != CDRE_NONE) {
+				switch_event_t *event;
+
+				if (switch_event_create_subclass(&event, SWITCH_EVENT_CUSTOM, CONF_EVENT_CDR) == SWITCH_STATUS_SUCCESS)
+					//	if (switch_event_create(&event, SWITCH_EVENT_CDR) == SWITCH_STATUS_SUCCESS)
+					{
+						switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "CDR-Source", CONF_EVENT_CDR);
+						if (conference->cdr_event_mode == CDRE_AS_CONTENT) {
+							switch_event_set_body(event, xml_text);
+						} else {
+							switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "CDR-Path", path);
+						}
+						switch_event_fire(&event);
+					} else {
+					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Could not create CDR event");
+				}
 			}
 		}
+
+		switch_safe_free(path);
+		switch_safe_free(xml_text);
+		switch_xml_free(cdr);
 	}
 
-	switch_safe_free(path);
-	switch_safe_free(xml_text);
-	switch_xml_free(cdr);
-}
+	/* For Emacs:
+	 * Local Variables:
+	 * mode:c
+	 * indent-tabs-mode:t
+	 * tab-width:4
+	 * c-basic-offset:4
+	 * End:
+	 * For VIM:
+	 * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
+	 */

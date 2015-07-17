@@ -298,3 +298,14 @@ void conference_al_close(al_handle_t *al)
 	switch_mutex_unlock(conference_globals.setup_mutex);
 }
 #endif
+
+/* For Emacs:
+ * Local Variables:
+ * mode:c
+ * indent-tabs-mode:t
+ * tab-width:4
+ * c-basic-offset:4
+ * End:
+ * For VIM:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
+ */

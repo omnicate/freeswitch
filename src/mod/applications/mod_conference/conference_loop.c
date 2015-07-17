@@ -42,37 +42,37 @@
 #include <mod_conference.h>
 
 struct _mapping control_mappings[] = {
-    {"mute", conference_loop_mute_toggle},
-    {"mute on", conference_loop_mute_on},
-    {"mute off", conference_loop_mute_off},
-    {"vmute", conference_loop_vmute_toggle},
-    {"vmute on", conference_loop_vmute_on},
-    {"vmute off", conference_loop_vmute_off},
-    {"vmute snap", conference_loop_conference_video_vmute_snap},
-    {"vmute snapoff", conference_loop_conference_video_vmute_snapoff},
-    {"deaf mute", conference_loop_deafmute_toggle},
-    {"energy up", conference_loop_energy_up},
-    {"energy equ", conference_loop_energy_equ_conf},
-    {"energy dn", conference_loop_energy_dn},
-    {"vol talk up", conference_loop_volume_talk_up},
-    {"vol talk zero", conference_loop_volume_talk_zero},
-    {"vol talk dn", conference_loop_volume_talk_dn},
-    {"vol listen up", conference_loop_volume_listen_up},
-    {"vol listen zero", conference_loop_volume_listen_zero},
-    {"vol listen dn", conference_loop_volume_listen_dn},
-    {"hangup", conference_loop_hangup},
-    {"event", conference_loop_event},
-    {"lock", conference_loop_lock_toggle},
-    {"transfer", conference_loop_transfer},
-    {"execute_application", conference_loop_exec_app},
-    {"floor", conference_loop_floor_toggle},
-    {"vid-floor", conference_loop_vid_floor_toggle},
-    {"vid-floor-force", conference_loop_vid_floor_force}
+	{"mute", conference_loop_mute_toggle},
+	{"mute on", conference_loop_mute_on},
+	{"mute off", conference_loop_mute_off},
+	{"vmute", conference_loop_vmute_toggle},
+	{"vmute on", conference_loop_vmute_on},
+	{"vmute off", conference_loop_vmute_off},
+	{"vmute snap", conference_loop_conference_video_vmute_snap},
+	{"vmute snapoff", conference_loop_conference_video_vmute_snapoff},
+	{"deaf mute", conference_loop_deafmute_toggle},
+	{"energy up", conference_loop_energy_up},
+	{"energy equ", conference_loop_energy_equ_conf},
+	{"energy dn", conference_loop_energy_dn},
+	{"vol talk up", conference_loop_volume_talk_up},
+	{"vol talk zero", conference_loop_volume_talk_zero},
+	{"vol talk dn", conference_loop_volume_talk_dn},
+	{"vol listen up", conference_loop_volume_listen_up},
+	{"vol listen zero", conference_loop_volume_listen_zero},
+	{"vol listen dn", conference_loop_volume_listen_dn},
+	{"hangup", conference_loop_hangup},
+	{"event", conference_loop_event},
+	{"lock", conference_loop_lock_toggle},
+	{"transfer", conference_loop_transfer},
+	{"execute_application", conference_loop_exec_app},
+	{"floor", conference_loop_floor_toggle},
+	{"vid-floor", conference_loop_vid_floor_toggle},
+	{"vid-floor-force", conference_loop_vid_floor_force}
 };
 
 int conference_loop_mapping_len()
 {
-  return (sizeof(control_mappings)/sizeof(control_mappings[0]));
+	return (sizeof(control_mappings)/sizeof(control_mappings[0]));
 }
 
 switch_status_t conference_loop_dmachine_dispatcher(switch_ivr_dmachine_match_t *match)
@@ -528,8 +528,8 @@ void conference_loop_volume_listen_dn(conference_member_t *member, caller_contro
 		conference_member_play_file(member, msg, 0, SWITCH_TRUE);
 	}
 
-    switch_snprintf(msg, sizeof(msg), "digits/%d.wav", abs(member->volume_in_level));
-    conference_member_play_file(member, msg, 0, SWITCH_TRUE);
+	switch_snprintf(msg, sizeof(msg), "digits/%d.wav", abs(member->volume_in_level));
+	conference_member_play_file(member, msg, 0, SWITCH_TRUE);
 }
 
 void conference_loop_event(conference_member_t *member, caller_control_action_t *action)
@@ -587,7 +587,7 @@ void conference_loop_transfer(conference_member_t *member, caller_control_action
 
 	switch_ivr_session_transfer(member->session, exten, dialplan, context);
 
-  done:
+ done:
 	return;
 }
 
@@ -643,7 +643,7 @@ void conference_loop_exec_app(conference_member_t *member, caller_control_action
 	switch_core_session_set_read_codec(member->session, &member->read_codec);
 	switch_channel_clear_app_flag(channel, CF_APP_TAGGED);
 
-  done:
+ done:
 
 	switch_safe_free(mydata);
 
@@ -658,7 +658,7 @@ void conference_loop_hangup(conference_member_t *member, caller_control_action_t
 /* marshall frames from the call leg to the conference thread for muxing to other call legs */
 void *SWITCH_THREAD_FUNC conference_loop_input(switch_thread_t *thread, void *obj)
 {
-    switch_event_t *event;
+	switch_event_t *event;
 	conference_member_t *member = obj;
 	switch_channel_t *channel;
 	switch_status_t status;
@@ -1006,7 +1006,7 @@ void *SWITCH_THREAD_FUNC conference_loop_input(switch_thread_t *thread, void *ob
 			}
 		}
 
-	  do_continue:
+	do_continue:
 
 		switch_mutex_unlock(member->read_mutex);
 
@@ -1278,24 +1278,24 @@ void conference_loop_output(conference_member_t *member)
 				if (write_frame.datalen) {
 					write_frame.samples = write_frame.datalen / 2 / member->conference->channels;
 
-				   if( !conference_utils_member_test_flag(member, MFLAG_CAN_HEAR)) {
-				      memset(write_frame.data, 255, write_frame.datalen);
-				   } else if (member->volume_out_level) { /* Check for output volume adjustments */
-					   switch_change_sln_volume(write_frame.data, write_frame.samples * member->conference->channels, member->volume_out_level);
-				   }
+					if( !conference_utils_member_test_flag(member, MFLAG_CAN_HEAR)) {
+						memset(write_frame.data, 255, write_frame.datalen);
+					} else if (member->volume_out_level) { /* Check for output volume adjustments */
+						switch_change_sln_volume(write_frame.data, write_frame.samples * member->conference->channels, member->volume_out_level);
+					}
 
-				   write_frame.timestamp = timer.samplecount;
+					write_frame.timestamp = timer.samplecount;
 
-				   if (member->fnode) {
-					   conference_member_add_file_data(member, write_frame.data, write_frame.datalen);
-				   }
+					if (member->fnode) {
+						conference_member_add_file_data(member, write_frame.data, write_frame.datalen);
+					}
 
-				   conference_member_check_channels(&write_frame, member, SWITCH_FALSE);
+					conference_member_check_channels(&write_frame, member, SWITCH_FALSE);
 
-				   if (switch_core_session_write_frame(member->session, &write_frame, SWITCH_IO_FLAG_NONE, 0) != SWITCH_STATUS_SUCCESS) {
-					   switch_mutex_unlock(member->audio_out_mutex);
-					   break;
-				   }
+					if (switch_core_session_write_frame(member->session, &write_frame, SWITCH_IO_FLAG_NONE, 0) != SWITCH_STATUS_SUCCESS) {
+						switch_mutex_unlock(member->audio_out_mutex);
+						break;
+					}
 				}
 			}
 
@@ -1394,3 +1394,14 @@ void conference_loop_output(conference_member_t *member)
 		member->conference->bridge_hangup_cause = switch_channel_get_cause(channel);
 	}
 }
+
+/* For Emacs:
+ * Local Variables:
+ * mode:c
+ * indent-tabs-mode:t
+ * tab-width:4
+ * c-basic-offset:4
+ * End:
+ * For VIM:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
+ */

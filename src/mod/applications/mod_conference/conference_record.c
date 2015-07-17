@@ -115,27 +115,27 @@ switch_status_t conference_record_action(conference_obj_t *conference, char *pat
 	switch_assert(conference != NULL);
 	switch_mutex_lock(conference->member_mutex);
 	for (member = conference->members; member; member = member->next)
-	{
-		if (conference_utils_member_test_flag(member, MFLAG_NOCHANNEL) && (!path || !strcmp(path, member->rec_path)))
 		{
-			//switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG,	"Action: %d\n", action);
-			switch (action)
-			{
-				case REC_ACTION_STOP:
-						conference_utils_member_clear_flag_locked(member, MFLAG_RUNNING);
-						count++;
-						break;
-				case REC_ACTION_PAUSE:
-						conference_utils_member_set_flag_locked(member, MFLAG_PAUSE_RECORDING);
-						count = 1;
-						break;
-				case REC_ACTION_RESUME:
-						conference_utils_member_clear_flag_locked(member, MFLAG_PAUSE_RECORDING);
-						count = 1;
-						break;
-					}
+			if (conference_utils_member_test_flag(member, MFLAG_NOCHANNEL) && (!path || !strcmp(path, member->rec_path)))
+				{
+					//switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG,	"Action: %d\n", action);
+					switch (action)
+						{
+						case REC_ACTION_STOP:
+							conference_utils_member_clear_flag_locked(member, MFLAG_RUNNING);
+							count++;
+							break;
+						case REC_ACTION_PAUSE:
+							conference_utils_member_set_flag_locked(member, MFLAG_PAUSE_RECORDING);
+							count = 1;
+							break;
+						case REC_ACTION_RESUME:
+							conference_utils_member_clear_flag_locked(member, MFLAG_PAUSE_RECORDING);
+							count = 1;
+							break;
+						}
 				}
-			}
+		}
 	switch_mutex_unlock(conference->member_mutex);
 	return count;
 }
@@ -277,7 +277,7 @@ void *SWITCH_THREAD_FUNC conference_record_thread_run(switch_thread_t *thread, v
 	switch_core_file_set_string(&member->rec->fh, SWITCH_AUDIO_COL_STR_ARTIST, "FreeSWITCH mod_conference Software Conference Module");
 
 	if (test_eflag(conference, EFLAG_RECORD) &&
-			switch_event_create_subclass(&event, SWITCH_EVENT_CUSTOM, CONF_EVENT_MAINT) == SWITCH_STATUS_SUCCESS) {
+		switch_event_create_subclass(&event, SWITCH_EVENT_CUSTOM, CONF_EVENT_MAINT) == SWITCH_STATUS_SUCCESS) {
 		conference_event_add_data(conference, event);
 		switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Action", "start-recording");
 		switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Path", rec->path);
@@ -346,7 +346,7 @@ void *SWITCH_THREAD_FUNC conference_record_thread_run(switch_thread_t *thread, v
 		switch_core_timer_next(&timer);
 	}							/* Rinse ... Repeat */
 
-  end:
+ end:
 
 	for(;;) {
 		switch_mutex_lock(member->audio_out_mutex);
@@ -418,3 +418,14 @@ void *SWITCH_THREAD_FUNC conference_record_thread_run(switch_thread_t *thread, v
 	switch_thread_rwlock_unlock(conference->rwlock);
 	return NULL;
 }
+
+/* For Emacs:
+ * Local Variables:
+ * mode:c
+ * indent-tabs-mode:t
+ * tab-width:4
+ * c-basic-offset:4
+ * End:
+ * For VIM:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
+ */

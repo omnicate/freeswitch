@@ -974,8 +974,8 @@ void conference_video_destroy_canvas(mcu_canvas_t **canvasP) {
 }
 
 void conference_video_write_canvas_image_to_codec_group(conference_obj_t *conference, mcu_canvas_t *canvas, codec_set_t *codec_set,
-											  int codec_index, uint32_t timestamp, switch_bool_t need_refresh,
-											  switch_bool_t need_keyframe, switch_bool_t need_reset)
+														int codec_index, uint32_t timestamp, switch_bool_t need_refresh,
+														switch_bool_t need_keyframe, switch_bool_t need_reset)
 
 {
 	conference_member_t *imember;
@@ -1808,13 +1808,13 @@ void *SWITCH_THREAD_FUNC conference_video_muxing_thread_run(switch_thread_t *thr
 			}
 
 			if (!layer) {
-			  if (conference_video_find_layer(conference, canvas, imember, &layer) == SWITCH_STATUS_SUCCESS) {
-			    imember->layer_timeout = 0;
-			  } else {
-			    if (--imember->layer_timeout <= 0) {
-			      conference_video_next_canvas(imember);
-			    }
-			  }
+				if (conference_video_find_layer(conference, canvas, imember, &layer) == SWITCH_STATUS_SUCCESS) {
+					imember->layer_timeout = 0;
+				} else {
+					if (--imember->layer_timeout <= 0) {
+						conference_video_next_canvas(imember);
+					}
+				}
 			}
 
 			conference_video_check_auto_bitrate(imember, layer);
@@ -2201,7 +2201,7 @@ void *SWITCH_THREAD_FUNC conference_video_muxing_thread_run(switch_thread_t *thr
 				for (i = 0; write_codecs[i] && switch_core_codec_ready(&write_codecs[i]->codec) && i < MAX_MUX_CODECS; i++) {
 					write_codecs[i]->frame.img = write_img;
 					conference_video_write_canvas_image_to_codec_group(conference, canvas, write_codecs[i], i,
-													  timestamp, need_refresh, need_keyframe, need_reset);
+																	   timestamp, need_refresh, need_keyframe, need_reset);
 
 					if (canvas->video_write_bandwidth) {
 						switch_core_codec_control(&write_codecs[i]->codec, SCC_VIDEO_BANDWIDTH, SCCT_INT, &canvas->video_write_bandwidth, NULL, NULL);
@@ -2852,8 +2852,8 @@ void conference_video_write_frame(conference_obj_t *conference, conference_membe
 					send_frame = 1;
 				}
 			} else if (!conference_utils_member_test_flag(imember, MFLAG_RECEIVING_VIDEO) &&
-				(conference_utils_test_flag(conference, CFLAG_VID_FLOOR_LOCK) ||
-				 !(imember->id == imember->conference->video_floor_holder && imember->conference->last_video_floor_holder))) {
+					   (conference_utils_test_flag(conference, CFLAG_VID_FLOOR_LOCK) ||
+						!(imember->id == imember->conference->video_floor_holder && imember->conference->last_video_floor_holder))) {
 				send_frame = 1;
 			}
 
@@ -2977,3 +2977,14 @@ switch_status_t conference_video_thread_callback(switch_core_session_t *session,
 
 	return SWITCH_STATUS_SUCCESS;
 }
+
+/* For Emacs:
+ * Local Variables:
+ * mode:c
+ * indent-tabs-mode:t
+ * tab-width:4
+ * c-basic-offset:4
+ * End:
+ * For VIM:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
+ */

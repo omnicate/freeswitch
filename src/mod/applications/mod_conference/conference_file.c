@@ -319,7 +319,7 @@ switch_status_t conference_file_play(conference_obj_t *conference, char *file, u
 
 	switch_mutex_unlock(conference->mutex);
 
-  done:
+ done:
 
 	switch_safe_free(expanded);
 	switch_safe_free(dfile);
@@ -329,7 +329,7 @@ switch_status_t conference_file_play(conference_obj_t *conference, char *file, u
 
 /* Play a file */
 switch_status_t conference_file_local_play(conference_obj_t *conference, switch_core_session_t *session, char *path, uint32_t leadin, void *buf,
-												  uint32_t buflen)
+										   uint32_t buflen)
 {
 	uint32_t x = 0;
 	switch_status_t status = SWITCH_STATUS_SUCCESS;
@@ -385,8 +385,19 @@ switch_status_t conference_file_local_play(conference_obj_t *conference, switch_
 		switch_safe_free(dpath);
 	}
 
-  done:
+ done:
 	switch_safe_free(expanded);
 
 	return status;
 }
+
+/* For Emacs:
+ * Local Variables:
+ * mode:c
+ * indent-tabs-mode:t
+ * tab-width:4
+ * c-basic-offset:4
+ * End:
+ * For VIM:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
+ */

@@ -216,42 +216,42 @@ switch_status_t conference_api_main_real(const char *cmd, switch_core_session_t 
 
 switch_status_t conference_api_sub_syntax(char **syntax)
 {
-  /* build api interface help ".syntax" field string */
-  uint32_t i;
-  size_t nl = 0, ol = 0;
-  char cmd_str[256];
-  char *tmp = NULL, *p = strdup("");
+	/* build api interface help ".syntax" field string */
+	uint32_t i;
+	size_t nl = 0, ol = 0;
+	char cmd_str[256];
+	char *tmp = NULL, *p = strdup("");
 
-  for (i = 0; i < CONFFUNCAPISIZE; i++) {
-    nl = strlen(conference_api_sub_commands[i].pcommand) + strlen(conference_api_sub_commands[i].psyntax) + 5;
+	for (i = 0; i < CONFFUNCAPISIZE; i++) {
+		nl = strlen(conference_api_sub_commands[i].pcommand) + strlen(conference_api_sub_commands[i].psyntax) + 5;
 
-    switch_snprintf(cmd_str, sizeof(cmd_str), "add conference ::conference::conference_list_conferences %s", conference_api_sub_commands[i].pcommand);
-    switch_console_set_complete(cmd_str);
+		switch_snprintf(cmd_str, sizeof(cmd_str), "add conference ::conference::conference_list_conferences %s", conference_api_sub_commands[i].pcommand);
+		switch_console_set_complete(cmd_str);
 
-    if (p != NULL) {
-      ol = strlen(p);
-    }
-    tmp = realloc(p, ol + nl);
-    if (tmp != NULL) {
-      p = tmp;
-      strcat(p, "\t\t");
-      strcat(p, conference_api_sub_commands[i].pcommand);
-      if (!zstr(conference_api_sub_commands[i].psyntax)) {
-	strcat(p, " ");
-	strcat(p, conference_api_sub_commands[i].psyntax);
-      }
-      if (i < CONFFUNCAPISIZE - 1) {
-	strcat(p, "\n");
-      }
-    } else {
-      switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't realloc\n");
-      return SWITCH_STATUS_TERM;
-    }
-  }
+		if (p != NULL) {
+			ol = strlen(p);
+		}
+		tmp = realloc(p, ol + nl);
+		if (tmp != NULL) {
+			p = tmp;
+			strcat(p, "\t\t");
+			strcat(p, conference_api_sub_commands[i].pcommand);
+			if (!zstr(conference_api_sub_commands[i].psyntax)) {
+				strcat(p, " ");
+				strcat(p, conference_api_sub_commands[i].psyntax);
+			}
+			if (i < CONFFUNCAPISIZE - 1) {
+				strcat(p, "\n");
+			}
+		} else {
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Couldn't realloc\n");
+			return SWITCH_STATUS_TERM;
+		}
+	}
 
-  *syntax = p;
+	*syntax = p;
 
-  return SWITCH_STATUS_SUCCESS;
+	return SWITCH_STATUS_SUCCESS;
 }
 
 
@@ -1113,22 +1113,22 @@ switch_status_t conference_api_sub_vid_layout(conference_obj_t *conference, swit
 		int xx = 4;
 
 		if ((group_name = strchr(argv[2], ':'))) {
-		  group_name++;
-		  xx--;
+			group_name++;
+			xx--;
 		} else {
-		  group_name = argv[3];
+			group_name = argv[3];
 		}
 
 		if (!group_name) {
-		  stream->write_function(stream, "Group name not specified.\n");
-		  return SWITCH_STATUS_SUCCESS;
+			stream->write_function(stream, "Group name not specified.\n");
+			return SWITCH_STATUS_SUCCESS;
 		} else {
-		  if (((lg = switch_core_hash_find(conference->layout_group_hash, group_name)))) {
+			if (((lg = switch_core_hash_find(conference->layout_group_hash, group_name)))) {
 				vlayout = conference_video_find_best_layout(conference, lg, 0);
 			}
 
 			if (!vlayout) {
-			  stream->write_function(stream, "Invalid group layout [%s]\n", group_name);
+				stream->write_function(stream, "Invalid group layout [%s]\n", group_name);
 				return SWITCH_STATUS_SUCCESS;
 			}
 
@@ -1638,8 +1638,8 @@ switch_status_t conference_api_sub_file_seek(conference_obj_t *conference, switc
 		uint32_t id = atoi(argv[3]);
 		conference_member_t *member = conference_member_get(conference, id);
 		if (member == NULL) {
-		    stream->write_function(stream, "Member: %u not found.\n", id);
-		    return SWITCH_STATUS_GENERR;
+			stream->write_function(stream, "Member: %u not found.\n", id);
+			return SWITCH_STATUS_GENERR;
 		}
 
 		switch_mutex_lock(member->fnode_mutex);
@@ -1805,7 +1805,7 @@ switch_status_t conference_api_sub_saymember(conference_obj_t *conference, switc
 	}
 	ret_status = SWITCH_STATUS_SUCCESS;
 
-  done:
+ done:
 
 	if (member) {
 		switch_thread_rwlock_unlock(member->rwlock);
@@ -1876,9 +1876,9 @@ switch_status_t conference_api_sub_relate(conference_obj_t *conference, switch_s
 
 				for (rel = member->relationships; rel; rel = rel->next) {
 					stream->write_function(stream, "%d -> %d %s%s%s\n", member->id, rel->id,
-						(rel->flags & RFLAG_CAN_SPEAK) ? "SPEAK " : "NOSPEAK ",
-						(rel->flags & RFLAG_CAN_HEAR) ? "HEAR " : "NOHEAR ",
-						(rel->flags & RFLAG_CAN_SEND_VIDEO) ? "SENDVIDEO " : "NOSENDVIDEO ");
+										   (rel->flags & RFLAG_CAN_SPEAK) ? "SPEAK " : "NOSPEAK ",
+										   (rel->flags & RFLAG_CAN_HEAR) ? "HEAR " : "NOHEAR ",
+										   (rel->flags & RFLAG_CAN_SEND_VIDEO) ? "SENDVIDEO " : "NOSENDVIDEO ");
 				}
 			}
 		} else {
@@ -1976,7 +1976,7 @@ switch_status_t conference_api_sub_relate(conference_obj_t *conference, switch_s
 			stream->write_function(stream, "relationship %u->%u not found.\n", id, oid);
 		}
 
-skip:
+	skip:
 		if (member) {
 			switch_thread_rwlock_unlock(member->rwlock);
 		}
@@ -2307,7 +2307,7 @@ switch_status_t conference_api_sub_norecord(conference_obj_t *conference, switch
 		stream->write_function(stream, "non-existant recording '%s'\n", argv[2]);
 	} else {
 		if (test_eflag(conference, EFLAG_RECORD) &&
-				switch_event_create_subclass(&event, SWITCH_EVENT_CUSTOM, CONF_EVENT_MAINT) == SWITCH_STATUS_SUCCESS) {
+			switch_event_create_subclass(&event, SWITCH_EVENT_CUSTOM, CONF_EVENT_MAINT) == SWITCH_STATUS_SUCCESS) {
 			conference_event_add_data(conference, event);
 			switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Action", "stop-recording");
 			switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Path", all ? "all" : argv[2]);
@@ -2341,25 +2341,25 @@ switch_status_t conference_api_sub_pauserec(conference_obj_t *conference, switch
 		return SWITCH_STATUS_GENERR;
 	}
 	stream->write_function(stream, "%s recording file %s\n",
-			action == REC_ACTION_PAUSE ? "Pause" : "Resume", argv[2]);
+						   action == REC_ACTION_PAUSE ? "Pause" : "Resume", argv[2]);
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG,	"%s recording file %s\n",
-			action == REC_ACTION_PAUSE ? "Pause" : "Resume", argv[2]);
+					  action == REC_ACTION_PAUSE ? "Pause" : "Resume", argv[2]);
 
 	if (!conference_record_action(conference, argv[2], action)) {
 		stream->write_function(stream, "non-existant recording '%s'\n", argv[2]);
 	} else {
 		if (test_eflag(conference, EFLAG_RECORD) && switch_event_create_subclass(&event, SWITCH_EVENT_CUSTOM, CONF_EVENT_MAINT) == SWITCH_STATUS_SUCCESS)
-		{
-			conference_event_add_data(conference, event);
-			if (action == REC_ACTION_PAUSE) {
-				switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Action", "pause-recording");
-			} else {
-				switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Action", "resume-recording");
+			{
+				conference_event_add_data(conference, event);
+				if (action == REC_ACTION_PAUSE) {
+					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Action", "pause-recording");
+				} else {
+					switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Action", "resume-recording");
+				}
+				switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Path", argv[2]);
+				switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Other-Recordings", conference->record_count ? "true" : "false");
+				switch_event_fire(&event);
 			}
-			switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Path", argv[2]);
-			switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Other-Recordings", conference->record_count ? "true" : "false");
-			switch_event_fire(&event);
-		}
 	}
 
 	return SWITCH_STATUS_SUCCESS;
@@ -2478,7 +2478,7 @@ switch_status_t conference_api_sub_pin(conference_obj_t *conference, switch_stre
 }
 
 switch_status_t conference_api_sub_get(conference_obj_t *conference,
-		switch_stream_handle_t *stream, int argc, char **argv) {
+									   switch_stream_handle_t *stream, int argc, char **argv) {
 	int ret_status = SWITCH_STATUS_GENERR;
 
 	if (argc != 3) {
@@ -2487,43 +2487,43 @@ switch_status_t conference_api_sub_get(conference_obj_t *conference,
 		ret_status = SWITCH_STATUS_SUCCESS;
 		if (strcasecmp(argv[2], "run_time") == 0) {
 			stream->write_function(stream, "%ld",
-					switch_epoch_time_now(NULL) - conference->run_time);
+								   switch_epoch_time_now(NULL) - conference->run_time);
 		} else if (strcasecmp(argv[2], "count") == 0) {
 			stream->write_function(stream, "%d",
-					conference->count);
+								   conference->count);
 		} else if (strcasecmp(argv[2], "count_ghosts") == 0) {
 			stream->write_function(stream, "%d",
-					conference->count_ghosts);
+								   conference->count_ghosts);
 		} else if (strcasecmp(argv[2], "max_members") == 0) {
 			stream->write_function(stream, "%d",
-					conference->max_members);
+								   conference->max_members);
 		} else if (strcasecmp(argv[2], "rate") == 0) {
 			stream->write_function(stream, "%d",
-					conference->rate);
+								   conference->rate);
 		} else if (strcasecmp(argv[2], "profile_name") == 0) {
 			stream->write_function(stream, "%s",
-					conference->profile_name);
+								   conference->profile_name);
 		} else if (strcasecmp(argv[2], "sound_prefix") == 0) {
 			stream->write_function(stream, "%s",
-					conference->sound_prefix);
+								   conference->sound_prefix);
 		} else if (strcasecmp(argv[2], "caller_id_name") == 0) {
 			stream->write_function(stream, "%s",
-					conference->caller_id_name);
+								   conference->caller_id_name);
 		} else if (strcasecmp(argv[2], "caller_id_number") == 0) {
 			stream->write_function(stream, "%s",
-					conference->caller_id_number);
+								   conference->caller_id_number);
 		} else if (strcasecmp(argv[2], "is_locked") == 0) {
 			stream->write_function(stream, "%s",
-					conference_utils_test_flag(conference, CFLAG_LOCKED) ? "locked" : "");
+								   conference_utils_test_flag(conference, CFLAG_LOCKED) ? "locked" : "");
 		} else if (strcasecmp(argv[2], "endconference_grace_time") == 0) {
 			stream->write_function(stream, "%d",
-					conference->endconference_grace_time);
+								   conference->endconference_grace_time);
 		} else if (strcasecmp(argv[2], "uuid") == 0) {
 			stream->write_function(stream, "%s",
-					conference->uuid_str);
+								   conference->uuid_str);
 		} else if (strcasecmp(argv[2], "wait_mod") == 0) {
 			stream->write_function(stream, "%s",
-					conference_utils_test_flag(conference, CFLAG_WAIT_MOD) ? "true" : "");
+								   conference_utils_test_flag(conference, CFLAG_WAIT_MOD) ? "true" : "");
 		} else {
 			ret_status = SWITCH_STATUS_FALSE;
 		}
@@ -2533,7 +2533,7 @@ switch_status_t conference_api_sub_get(conference_obj_t *conference,
 }
 
 switch_status_t conference_api_sub_set(conference_obj_t *conference,
-		switch_stream_handle_t *stream, int argc, char **argv) {
+									   switch_stream_handle_t *stream, int argc, char **argv) {
 	int ret_status = SWITCH_STATUS_GENERR;
 
 	if (argc != 4 || zstr(argv[3])) {
@@ -2548,23 +2548,23 @@ switch_status_t conference_api_sub_set(conference_obj_t *conference,
 			} else {
 				ret_status = SWITCH_STATUS_FALSE;
 			}
-		} else 	if (strcasecmp(argv[2], "sound_prefix") == 0) {
+		} else	if (strcasecmp(argv[2], "sound_prefix") == 0) {
 			stream->write_function(stream, "%s",conference->sound_prefix);
 			conference->sound_prefix = switch_core_strdup(conference->pool, argv[3]);
-		} else 	if (strcasecmp(argv[2], "caller_id_name") == 0) {
+		} else	if (strcasecmp(argv[2], "caller_id_name") == 0) {
 			stream->write_function(stream, "%s",conference->caller_id_name);
 			conference->caller_id_name = switch_core_strdup(conference->pool, argv[3]);
-		} else 	if (strcasecmp(argv[2], "caller_id_number") == 0) {
+		} else	if (strcasecmp(argv[2], "caller_id_number") == 0) {
 			stream->write_function(stream, "%s",conference->caller_id_number);
 			conference->caller_id_number = switch_core_strdup(conference->pool, argv[3]);
 		} else if (strcasecmp(argv[2], "endconference_grace_time") == 0) {
-				int new_gt = atoi(argv[3]);
-				if (new_gt >= 0) {
-					stream->write_function(stream, "%d", conference->endconference_grace_time);
-					conference->endconference_grace_time = new_gt;
-				} else {
-					ret_status = SWITCH_STATUS_FALSE;
-				}
+			int new_gt = atoi(argv[3]);
+			if (new_gt >= 0) {
+				stream->write_function(stream, "%d", conference->endconference_grace_time);
+				conference->endconference_grace_time = new_gt;
+			} else {
+				ret_status = SWITCH_STATUS_FALSE;
+			}
 		} else {
 			ret_status = SWITCH_STATUS_FALSE;
 		}
@@ -2737,3 +2737,14 @@ switch_status_t conference_api_dispatch(conference_obj_t *conference, switch_str
 
 	return status;
 }
+
+/* For Emacs:
+ * Local Variables:
+ * mode:c
+ * indent-tabs-mode:t
+ * tab-width:4
+ * c-basic-offset:4
+ * End:
+ * For VIM:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
+ */

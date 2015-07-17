@@ -117,9 +117,9 @@ void conference_member_bind_controls(conference_member_t *member, const char *co
 
 
 	for (xcontrol = switch_xml_child(xgroups, "control"); xcontrol; xcontrol = xcontrol->next) {
-        const char *key = switch_xml_attr(xcontrol, "action");
-        const char *digits = switch_xml_attr(xcontrol, "digits");
-        const char *data = switch_xml_attr_soft(xcontrol, "data");
+		const char *key = switch_xml_attr(xcontrol, "action");
+		const char *digits = switch_xml_attr(xcontrol, "digits");
+		const char *data = switch_xml_attr_soft(xcontrol, "data");
 
 		if (zstr(key) || zstr(digits)) continue;
 
@@ -745,7 +745,7 @@ switch_status_t conference_member_add(conference_obj_t *conference, conference_m
 
 		if (conference->count > 1) {
 			if ((conference->moh_sound && !conference_utils_test_flag(conference, CFLAG_WAIT_MOD)) ||
-					(conference_utils_test_flag(conference, CFLAG_WAIT_MOD) && !switch_true(switch_channel_get_variable(channel, "conference_permanent_wait_mod_moh")))) {
+				(conference_utils_test_flag(conference, CFLAG_WAIT_MOD) && !switch_true(switch_channel_get_variable(channel, "conference_permanent_wait_mod_moh")))) {
 				/* stop MoH if any */
 				conference_file_stop(conference, FILE_STOP_ASYNC);
 			}
@@ -754,9 +754,9 @@ switch_status_t conference_member_add(conference_obj_t *conference, conference_m
 				const char * enter_sound = switch_channel_get_variable(channel, "conference_enter_sound");
 				if (conference_utils_test_flag(conference, CFLAG_ENTER_SOUND) && !conference_utils_member_test_flag(member, MFLAG_SILENT)) {
 					if (!zstr(enter_sound)) {
-					conference_file_play(conference, (char *)enter_sound, CONF_DEFAULT_LEADIN,
-							switch_core_session_get_channel(member->session), 0);
-			        } else {
+						conference_file_play(conference, (char *)enter_sound, CONF_DEFAULT_LEADIN,
+											 switch_core_session_get_channel(member->session), 0);
+					} else {
 						conference_file_play(conference, conference->enter_sound, CONF_DEFAULT_LEADIN, switch_core_session_get_channel(member->session), 0);
 					}
 				}
@@ -1300,7 +1300,7 @@ switch_status_t conference_member_play_file(conference_member_t *member, char *f
 	switch_mutex_unlock(member->fnode_mutex);
 	status = SWITCH_STATUS_SUCCESS;
 
-  done:
+ done:
 
 	switch_safe_free(expanded);
 	switch_safe_free(dfile);
@@ -1629,11 +1629,11 @@ int conference_member_setup_media(conference_member_t *member, conference_obj_t 
 
 	return 0;
 
-  codec_done1:
+ codec_done1:
 	switch_core_codec_destroy(&member->read_codec);
-  codec_done2:
+ codec_done2:
 	switch_core_codec_destroy(&member->write_codec);
-  done:
+ done:
 
 	switch_mutex_unlock(member->audio_out_mutex);
 
@@ -1641,3 +1641,14 @@ int conference_member_setup_media(conference_member_t *member, conference_obj_t 
 
 
 }
+
+/* For Emacs:
+ * Local Variables:
+ * mode:c
+ * indent-tabs-mode:t
+ * tab-width:4
+ * c-basic-offset:4
+ * End:
+ * For VIM:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
+ */
