@@ -488,14 +488,20 @@ cJSON *conference_cdr_json_render(conference_obj_t *conference, cJSON *req)
 
 void conference_cdr_del(conference_member_t *member)
 {
+	switch_assert(member);
+
 	if (member->channel) {
 		switch_channel_get_variables(member->channel, &member->cdr_node->var_event);
 	}
+
+	switch_mutex_lock(member->conference->member_mutex);
+
 	if (member->cdr_node) {
 		member->cdr_node->leave_time = switch_epoch_time_now(NULL);
 		memcpy(member->cdr_node->mflags, member->flags, sizeof(member->flags));
 		member->cdr_node->member = NULL;
 	}
+	switch_mutex_unlock(member->conference->member_mutex);
 }
 
 void conference_cdr_add(conference_member_t *member)
@@ -504,7 +510,11 @@ void conference_cdr_add(conference_member_t *member)
 	switch_caller_profile_t *cp;
 	switch_channel_t *channel;
 
+	switch_assert(member);
+
 	np = switch_core_alloc(member->conference->pool, sizeof(*np));
+
+	switch_mutex_lock(member->conference->member_mutex);
 
 	np->next = member->conference->cdr_nodes;
 	member->conference->cdr_nodes = member->cdr_node = np;
@@ -513,21 +523,21 @@ void conference_cdr_add(conference_member_t *member)
 
 	if (!member->session) {
 		member->cdr_node->record_path = switch_core_strdup(member->conference->pool, member->rec_path);
-		return;
+		goto done;
 	}
 
 	channel = switch_core_session_get_channel(member->session);
 
 	if (!(cp = switch_channel_get_caller_profile(channel))) {
-		return;
+		goto done;
 	}
 
 	member->cdr_node->cp = switch_caller_profile_dup(member->conference->pool, cp);
 
 	member->cdr_node->id = member->id;
 
-
-
+ done:
+	switch_mutex_unlock(member->conference->member_mutex);
 }
 
 void conference_cdr_rejected(conference_obj_t *conference, switch_channel_t *channel, cdr_reject_reason_t reason)
@@ -616,6 +626,8 @@ void conference_cdr_render(conference_obj_t *conference)
 		abort();
 	}
 
+	switch_mutex_lock(conference->member_mutex);
+
 	for (np = conference->cdr_nodes; np; np = np->next) {
 		int member_off = 0;
 		int flag_off = 0;
@@ -673,6 +685,8 @@ void conference_cdr_render(conference_obj_t *conference)
 
 
 	}
+
+	switch_mutex_unlock(conference->member_mutex);
 
 	if (!(x_rejected = switch_xml_add_child_d(x_conference, "rejected", conference_off++))) {
 		abort();

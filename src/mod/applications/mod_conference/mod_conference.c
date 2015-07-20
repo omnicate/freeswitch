@@ -681,12 +681,15 @@ void *SWITCH_THREAD_FUNC conference_thread_run(switch_thread_t *thread, void *ob
 	conference_file_stop(conference, FILE_STOP_ASYNC);
 	conference_file_stop(conference, FILE_STOP_ALL);
 
+	switch_mutex_lock(conference->member_mutex);
+
 	for (np = conference->cdr_nodes; np; np = np->next) {
 		if (np->var_event) {
 			switch_event_destroy(&np->var_event);
 		}
 	}
 
+	switch_mutex_unlock(conference->member_mutex);
 
 	/* Close Unused Handles */
 	if (conference->fnode) {
