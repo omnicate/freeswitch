@@ -37,7 +37,6 @@
 #include <libavutil/imgutils.h>
 
 #define SLICE_SIZE SWITCH_DEFAULT_VIDEO_SIZE
-#define FPS 15 // frame rate
 #define H264_NALU_BUFFER_SIZE 65536
 #define MAX_NALUS 128
 #define H263_MODE_B // else Mode A only
@@ -831,8 +830,7 @@ static switch_status_t open_encoder(h264_codec_context_t *context, uint32_t widt
 	context->encoder_ctx->height = context->codec_settings.video.height;
 	/* frames per second */
 	context->encoder_ctx->time_base = (AVRational){1, 90};
-	//context->encoder_ctx->gop_size = FPS * 10; /* emit one intra frame every 3 seconds */
-	//context->encoder_ctx->max_b_frames = 0;
+	context->encoder_ctx->max_b_frames = 0;
 	context->encoder_ctx->pix_fmt = AV_PIX_FMT_YUV420P;
 	context->encoder_ctx->thread_count = 1;//switch_core_cpu_count() > 4 ? 4 : 1;
 	context->encoder_ctx->bit_rate = context->bandwidth * 1024;
@@ -860,19 +858,22 @@ static switch_status_t open_encoder(h264_codec_context_t *context, uint32_t widt
 		context->encoder_ctx->me_method=ME_HEX;    // me_method=hex
 		context->encoder_ctx->me_subpel_quality = 7;   // subq=7
 		context->encoder_ctx->me_range = 16;   // me_range=16
-		context->encoder_ctx->gop_size = 250;  // g=250
-		context->encoder_ctx->keyint_min = 25; // keyint_min=25
-		context->encoder_ctx->scenechange_threshold = 40;  // sc_threshold=40
-		context->encoder_ctx->i_quant_factor = 0.71; // i_qfactor=0.71
-		context->encoder_ctx->b_frame_strategy = 1;  // b_strategy=1
-		context->encoder_ctx->qcompress = 0.6; // qcomp=0.6
-		context->encoder_ctx->qmin = 10;   // qmin=10
-		context->encoder_ctx->qmax = 51;   // qmax=51
-		context->encoder_ctx->max_qdiff = 4;   // qdiff=4
 		context->encoder_ctx->max_b_frames = 3;    // bf=3
 		context->encoder_ctx->refs = 3;    // refs=3
 		context->encoder_ctx->trellis = 1; // trellis=1
 	}
+
+	// libx264-medium.ffpreset preset
+	context->encoder_ctx->gop_size = 250;  // g=250
+	context->encoder_ctx->keyint_min = 25; // keyint_min=25
+	context->encoder_ctx->scenechange_threshold = 40;  // sc_threshold=40
+	context->encoder_ctx->i_quant_factor = 0.71; // i_qfactor=0.71
+	context->encoder_ctx->b_frame_strategy = 1;  // b_strategy=1
+	context->encoder_ctx->qcompress = 0.6; // qcomp=0.6
+	context->encoder_ctx->qmin = 10;   // qmin=10
+	context->encoder_ctx->qmax = 51;   // qmax=51
+	context->encoder_ctx->max_qdiff = 4;   // qdiff=4
+
 
 	if (avcodec_open2(context->encoder_ctx, context->encoder, NULL) < 0) {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Could not open codec\n");
