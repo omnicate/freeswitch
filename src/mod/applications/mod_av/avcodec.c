@@ -285,7 +285,7 @@ static switch_status_t buffer_h264_nalu(h264_codec_context_t *context, switch_fr
 	return SWITCH_STATUS_SUCCESS;
 }
 
-static inline int is_valid_h263_demension(int width, int height)
+static inline int is_valid_h263_dimension(int width, int height)
 {
 	return ((width == 128 && height == 96) ||
 			(width == 176 && height == 144) ||
@@ -786,8 +786,8 @@ static switch_status_t open_encoder(h264_codec_context_t *context, uint32_t widt
 			// so let's work around
 			width = 352;
 			height = 288;
-		} else if (!is_valid_h263_demension(width, height)) {
-			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "You want %dx%d, but valid sizes are 128x96, 176x144, 352x288, 704x576, and 1408x1152.Try H.263+\n", width, height);
+		} else if (!is_valid_h263_dimension(width, height)) {
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "You want %dx%d, but valid sizes are 128x96, 176x144, 352x288, 704x576, and 1408x1152. Try H.263+\n", width, height);
 			return SWITCH_STATUS_FALSE;
 		}
 	}
@@ -991,7 +991,10 @@ static switch_status_t switch_h264_encode(switch_codec_t *codec, switch_frame_t 
 	width = img->d_w;
 	height = img->d_h;
 
-	if (context->av_codec_id == AV_CODEC_ID_H263 && (!is_valid_h263_demension(width, height))) goto error;
+	if (context->av_codec_id == AV_CODEC_ID_H263 && (!is_valid_h263_dimension(width, height))) {
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "You want %dx%d, but valid H263 sizes are 128x96, 176x144, 352x288, 704x576, and 1408x1152. Try H.263+\n", width, height);
+		goto error;
+	}
 
 	if (frame->flags & SFF_SAME_IMAGE) {
 		// read from nalu buffer
