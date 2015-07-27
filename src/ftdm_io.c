@@ -3081,6 +3081,7 @@ static ftdm_status_t ftdm_channel_done(ftdm_channel_t *ftdmchan)
 	ftdm_clear_flag(ftdmchan, FTDM_CHANNEL_USER_HANGUP);
 	ftdm_clear_flag(ftdmchan, FTDM_CHANNEL_DIGITAL_MEDIA);
 	ftdm_clear_flag(ftdmchan, FTDM_CHANNEL_NATIVE_SIGBRIDGE);
+	ftdm_clear_flag(ftdmchan, FTDM_CHANNEL_MUTE);
 	ftdm_mutex_lock(ftdmchan->pre_buffer_mutex);
 	ftdm_buffer_destroy(&ftdmchan->pre_buffer);
 	ftdmchan->pre_buffer_size = 0;
@@ -4321,6 +4322,11 @@ FT_DECLARE(ftdm_status_t) ftdm_channel_process_media(ftdm_channel_t *ftdmchan, v
 	fio_codec_t codec_func = NULL;
 	ftdm_size_t max = *datalen;
 	ftdm_status_t tone_status;
+
+	/* check if the channel is a D/signalling channel the return SUCCESS */
+	if (FTDM_IS_DCHAN(ftdmchan)) {
+		goto done;
+	}
 
 	tone_status = handle_tone_generation(ftdmchan);
 	if (tone_status != FTDM_SUCCESS) {
