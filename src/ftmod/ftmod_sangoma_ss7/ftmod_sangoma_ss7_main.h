@@ -571,6 +571,7 @@ typedef struct sng_ss7_cfg {
 	sng_isap_t		isap[MAX_ISAPS+1];
 	sng_glare_resolution	glareResolution;
 	uint32_t		force_inr;
+	uint32_t		force_early_media;
 	sng_m2ua_gbl_cfg_t 	g_m2ua_cfg;
 	sng_sctp_cfg_t		sctpCfg;
 	uint32_t 		sng_acc;

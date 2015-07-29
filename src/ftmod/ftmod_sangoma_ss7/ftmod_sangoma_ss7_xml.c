@@ -664,6 +664,7 @@ static int ftmod_ss7_parse_sng_gen(ftdm_conf_node_t *sng_gen, char* operating_mo
 	/* Set the transparent_iam_max_size to default value */
 	g_ftdm_sngss7_data.cfg.transparent_iam_max_size=800;
 	g_ftdm_sngss7_data.cfg.force_inr = 0;
+	g_ftdm_sngss7_data.cfg.force_early_media = 0;
 
 	/* By default automatic congestion control will be False */
 	g_ftdm_sngss7_data.cfg.sng_acc = 0;
@@ -700,6 +701,13 @@ static int ftmod_ss7_parse_sng_gen(ftdm_conf_node_t *sng_gen, char* operating_mo
 				g_ftdm_sngss7_data.cfg.force_inr = 0;
 			}
 			SS7_DEBUG("Found INR force configuration = %s\n", parm->val);
+		} else if (!strcasecmp(parm->var, "force_early_media")) {
+			if (ftdm_true(parm->val)) {
+				g_ftdm_sngss7_data.cfg.force_early_media = 1;
+			} else {
+				g_ftdm_sngss7_data.cfg.force_early_media = 0;
+			}
+			SS7_DEBUG("Found force early media configuration = %s\n", parm->val);
 		} else if (!strcasecmp(parm->var, "operating_mode")) {
 			strcpy(operating_mode, parm->val);
 		} else if (!strcasecmp(parm->var, "stack-logging-enable")) {
