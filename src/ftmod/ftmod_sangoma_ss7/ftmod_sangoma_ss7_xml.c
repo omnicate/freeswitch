@@ -2129,15 +2129,16 @@ static int ftmod_ss7_parse_cc_spans(ftdm_conf_node_t *cc_spans)
 /******************************************************************************/
 static int ftmod_ss7_parse_cc_span(ftdm_conf_node_t *cc_span)
 {
-	sng_ccSpan_t			sng_ccSpan;
+	sng_ccSpan_t		sng_ccSpan;
 	ftdm_conf_parameter_t	*parm = cc_span->parameters;
-	int						num_parms = cc_span->n_parameters;
-	int						flag_clg_nadi = 0;
-	int						flag_cld_nadi = 0;
-	int						flag_rdnis_nadi = 0;
-	int						flag_loc_nadi = 0;
-	int						i;
-	int						ret;
+	int			num_parms = cc_span->n_parameters;
+	int			flag_clg_nadi = 0;
+	int			flag_cld_nadi = 0;
+	int			flag_rdnis_nadi = 0;
+	int			flag_loc_nadi = 0;
+	int			i;
+	int			ret;
+	ftdm_bool_t		lpa_on_cot = FTDM_FALSE;
 
 	/* To get number of CIC's configured per DPC */
 	nmb_cics_cfg = 0;
@@ -2277,9 +2278,11 @@ static int ftmod_ss7_parse_cc_span(ftdm_conf_node_t *cc_span)
 		} else if (!strcasecmp(parm->var, "lpa_on_cot")) {
 		/**********************************************************************/
 			if (*parm->val == '1') {
+				lpa_on_cot = FTDM_TRUE;
 				sngss7_set_options(&sng_ccSpan, SNGSS7_LPA_FOR_COT);
 				SS7_DEBUG("Found Tx LPA on COT enable option\n");
 			} else if (*parm->val == '0') {
+				lpa_on_cot = FTDM_FALSE;
 				sngss7_clear_options(&sng_ccSpan, SNGSS7_LPA_FOR_COT);
 				SS7_DEBUG("Found Tx LPA on COT disable option\n");
 			} else {
@@ -2387,6 +2390,14 @@ static int ftmod_ss7_parse_cc_span(ftdm_conf_node_t *cc_span)
 
 		/* default the status to PAUSED */
 		sngss7_set_flag(&g_ftdm_sngss7_data.cfg.isupIntf[sng_ccSpan.isupInf], SNGSS7_PAUSED);
+	}
+
+	if (lpa_on_cot == FTDM_TRUE) {
+		sngss7_set_options(&g_ftdm_sngss7_data.cfg.isupIntf[sng_ccSpan.isupInf], SNGSS7_LPA_FOR_COT);
+		SS7_DEBUG("LPA on COT is set for interface %d\n", g_ftdm_sngss7_data.cfg.isupIntf[sng_ccSpan.isupInf].id);
+	} else {
+		SS7_DEBUG("LPA on COT is cleared for interface %d\n", g_ftdm_sngss7_data.cfg.isupIntf[sng_ccSpan.isupInf].id);
+		sngss7_clear_options(&g_ftdm_sngss7_data.cfg.isupIntf[sng_ccSpan.isupInf], SNGSS7_LPA_FOR_COT);;
 	}
 
 	sng_acc_assign_max_bucket(sng_ccSpan.isupInf, nmb_cics_cfg);

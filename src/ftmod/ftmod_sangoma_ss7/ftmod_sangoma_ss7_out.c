@@ -740,6 +740,68 @@ void ft_to_sngss7_rsca (ftdm_channel_t * ftdmchan)
 }
 
 /******************************************************************************/
+/* sending continuity check */
+void ft_to_sngss7_ccr (ftdm_channel_t * ftdmchan)
+{
+	SS7_FUNC_TRACE_ENTER (__FUNCTION__);
+
+	sngss7_chan_data_t *sngss7_info = ftdmchan->call_data;
+	SiStaEvnt ccr;
+
+	/* clean out the gra struct */
+	memset (&ccr, 0x0, sizeof (ccr));
+
+	ccr.contInd.eh.pres = PRSNT_NODEF;
+
+	ccr.contInd.contInd.pres = PRSNT_NODEF;
+	ccr.contInd.contInd.val = CONT_CHKSUCC;
+
+	sng_cc_sta_request (1,
+			sngss7_info->suInstId,
+			sngss7_info->spInstId,
+			sngss7_info->circuit->id,
+			sngss7_info->globalFlg,
+			SIT_STA_CONTCHK,
+			&ccr);
+
+	SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Tx CCR\n", sngss7_info->circuit->cic);
+
+	SS7_FUNC_TRACE_EXIT (__FUNCTION__);
+	return;
+}
+
+/******************************************************************************/
+/* generate COT and send it to peer */
+void ft_to_sngss7_cot (ftdm_channel_t * ftdmchan)
+{
+	SS7_FUNC_TRACE_ENTER (__FUNCTION__);
+
+	sngss7_chan_data_t *sngss7_info = ftdmchan->call_data;
+	SiStaEvnt cot;
+
+	/* clean out the gra struct */
+	memset (&cot, 0x0, sizeof (cot));
+
+	cot.contInd.eh.pres = PRSNT_NODEF;
+
+	cot.contInd.contInd.pres = PRSNT_NODEF;
+	cot.contInd.contInd.val = CONT_CHKSUCC;
+
+	sng_cc_sta_request (1,
+			sngss7_info->suInstId,
+			sngss7_info->spInstId,
+			sngss7_info->circuit->id,
+			sngss7_info->globalFlg,
+			SIT_STA_CONTREP,
+			&cot);
+
+	SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Tx CCR\n", sngss7_info->circuit->cic);
+
+	SS7_FUNC_TRACE_EXIT (__FUNCTION__);
+	return;
+}
+
+/******************************************************************************/
 void ft_to_sngss7_blo (ftdm_channel_t * ftdmchan)
 {
 	SS7_FUNC_TRACE_ENTER (__FUNCTION__);

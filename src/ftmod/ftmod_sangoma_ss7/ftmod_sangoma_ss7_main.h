@@ -1111,6 +1111,11 @@ void ft_to_sngss7_anm(ftdm_channel_t *ftdmchan);
 void ft_to_sngss7_rel(ftdm_channel_t *ftdmchan);
 void ft_to_sngss7_rlc(ftdm_channel_t *ftdmchan);
 void ft_to_sngss7_rsc(ftdm_channel_t *ftdmchan);
+
+/* for continuity check and generate COT */
+void ft_to_sngss7_cot(ftdm_channel_t *ftdmchan);
+void ft_to_sngss7_ccr (ftdm_channel_t * ftdmchan);
+
 void ft_to_sngss7_rsca(ftdm_channel_t *ftdmchan);
 void ft_to_sngss7_blo(ftdm_channel_t *ftdmchan);
 void ft_to_sngss7_bla(ftdm_channel_t *ftdmchan);

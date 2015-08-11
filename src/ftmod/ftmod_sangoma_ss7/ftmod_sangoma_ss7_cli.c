@@ -81,6 +81,9 @@ static ftdm_status_t handle_tx_grs(ftdm_stream_handle_t *stream, int span, int c
 static ftdm_status_t handle_tx_blo(ftdm_stream_handle_t *stream, int span, int chan, int verbose);
 static ftdm_status_t handle_tx_ubl(ftdm_stream_handle_t *stream, int span, int chan, int verbose);
 
+static ftdm_status_t handle_tx_cot(ftdm_stream_handle_t *stream, int span, int chan, int verbose);
+static ftdm_status_t handle_tx_ccr(ftdm_stream_handle_t *stream, int span, int chan, int verbose);
+
 static ftdm_status_t handle_tx_cgb(ftdm_stream_handle_t *stream, int span, int chan, int range, int verbose);
 static ftdm_status_t handle_tx_cgu(ftdm_stream_handle_t *stream, int span, int chan, int range, int verbose);
 
@@ -690,7 +693,47 @@ ftdm_status_t ftdm_sngss7_handle_cli_cmd(ftdm_stream_handle_t *stream, const cha
 			stream->write_function(stream, "Unknown \"cgu\" command\n");
 			goto handle_cli_error;
 		/**********************************************************************/
+		}
+	/**************************************************************************/
+	} else if (!strcasecmp(argv[c], "cot")) {
+	/**************************************************************************/
+		if (check_arg_count(argc, 2)) goto handle_cli_error_argc;
+		c++;
+
+		if (!strcasecmp(argv[c], "span")) {
+		/**********************************************************************/
+			if (check_arg_count(argc, 5)) goto handle_cli_error_argc;
+
+			if (extract_span_chan(argv, c, &span, &chan)) goto handle_cli_error_span_chan;
+
+			handle_tx_cot(stream, span, chan, verbose);
+		/**********************************************************************/
+		} else {
+		/**********************************************************************/
+			stream->write_function(stream, "Unknown \"COT\" command\n");
+			goto handle_cli_error;
+		/**********************************************************************/
 		} 
+	/**************************************************************************/
+	} else if (!strcasecmp(argv[c], "ccr")) {
+	/**************************************************************************/
+		if (check_arg_count(argc, 2)) goto handle_cli_error_argc;
+		c++;
+
+		if (!strcasecmp(argv[c], "span")) {
+		/**********************************************************************/
+			if (check_arg_count(argc, 5)) goto handle_cli_error_argc;
+
+			if (extract_span_chan(argv, c, &span, &chan)) goto handle_cli_error_span_chan;
+
+			handle_tx_ccr(stream, span, chan, verbose);
+		/**********************************************************************/
+		} else {
+		/**********************************************************************/
+			stream->write_function(stream, "Unknown \"CCR\" command\n");
+			goto handle_cli_error;
+		/**********************************************************************/
+		}
 	/**************************************************************************/
 	} else if (!strcasecmp(argv[c], "rsc")) {
 	/**************************************************************************/
@@ -1038,6 +1081,8 @@ static ftdm_status_t handle_print_usage(ftdm_stream_handle_t *stream)
 	stream->write_function(stream, "ftmod_sangoma_ss7 circuit control:\n");
 	stream->write_function(stream, "ftdm ss7 blo span X chan Y\n");
 	stream->write_function(stream, "ftdm ss7 ubl span X chan Y\n");
+	stream->write_function(stream, "ftdm ss7 cot span X chan Y\n");
+	stream->write_function(stream, "ftdm ss7 ccr span X chan Y\n");
 	stream->write_function(stream, "ftdm ss7 rsc span X chan Y\n");
 	stream->write_function(stream, "ftdm ss7 grs span X chan Y range Z\n");
 	stream->write_function(stream, "ftdm ss7 cgb span X chan Y range Z\n");
@@ -2001,6 +2046,106 @@ static ftdm_status_t handle_set_uninhibit(ftdm_stream_handle_t *stream, char *na
 	stream->write_function(stream, "Failed to find link=\"%s\"\n", name);
 
 success:
+	return FTDM_SUCCESS;
+}
+
+/******************************************************************************/
+static ftdm_status_t handle_tx_cot(ftdm_stream_handle_t *stream, int span, int chan, int verbose)
+{
+	int 		    x;
+	sngss7_chan_data_t  *sngss7_info;
+	ftdm_channel_t	    *ftdmchan;
+	int		    lspan;
+	int		    lchan;
+
+	x = (g_ftdm_sngss7_data.cfg.procId * 1000) + 1;
+	while (g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0) {
+		if (g_ftdm_sngss7_data.cfg.isupCkt[x].type == SNG_CKT_VOICE) {
+			sngss7_info = (sngss7_chan_data_t *)g_ftdm_sngss7_data.cfg.isupCkt[x].obj;
+			ftdmchan = sngss7_info->ftdmchan;
+
+			/* if span == 0 then all spans should be printed */
+			if (span == 0) {
+				lspan = ftdmchan->physical_span_id;
+			} else {
+				lspan = span;
+			}
+
+			/* if chan == 0 then all chans should be printed */
+			if (chan == 0) {
+				lchan = ftdmchan->physical_chan_id;
+			} else {
+				lchan = chan;
+			}
+
+			if ((ftdmchan->physical_span_id == lspan) && (ftdmchan->physical_chan_id == lchan)) {
+				/* lock the channel */
+				ftdm_mutex_lock(ftdmchan->mutex);
+				ft_to_sngss7_cot(ftdmchan);
+
+				/* unlock the channel again before we exit */
+				ftdm_mutex_unlock(ftdmchan->mutex);
+			} /* if ( span and chan) */
+
+		} /* if ( cic == voice) */
+
+		/* go the next circuit */
+		x++;
+	} /* while (g_ftdm_sngss7_data.cfg.isupCkt[x]id != 0) */
+
+	/* print the status of channels */
+	handle_show_status(stream, span, chan, verbose);
+
+	return FTDM_SUCCESS;
+}
+
+/******************************************************************************/
+static ftdm_status_t handle_tx_ccr(ftdm_stream_handle_t *stream, int span, int chan, int verbose)
+{
+	int 		    x;
+	sngss7_chan_data_t  *sngss7_info;
+	ftdm_channel_t	    *ftdmchan;
+	int		    lspan;
+	int		    lchan;
+
+	x = (g_ftdm_sngss7_data.cfg.procId * 1000) + 1;
+	while (g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0) {
+		if (g_ftdm_sngss7_data.cfg.isupCkt[x].type == SNG_CKT_VOICE) {
+			sngss7_info = (sngss7_chan_data_t *)g_ftdm_sngss7_data.cfg.isupCkt[x].obj;
+			ftdmchan = sngss7_info->ftdmchan;
+
+			/* if span == 0 then all spans should be printed */
+			if (span == 0) {
+				lspan = ftdmchan->physical_span_id;
+			} else {
+				lspan = span;
+			}
+
+			/* if chan == 0 then all chans should be printed */
+			if (chan == 0) {
+				lchan = ftdmchan->physical_chan_id;
+			} else {
+				lchan = chan;
+			}
+
+			if ((ftdmchan->physical_span_id == lspan) && (ftdmchan->physical_chan_id == lchan)) {
+				/* lock the channel */
+				ftdm_mutex_lock(ftdmchan->mutex);
+				ft_to_sngss7_ccr(ftdmchan);
+
+				/* unlock the channel again before we exit */
+				ftdm_mutex_unlock(ftdmchan->mutex);
+			} /* if ( span and chan) */
+
+		} /* if ( cic == voice) */
+
+		/* go the next circuit */
+		x++;
+	} /* while (g_ftdm_sngss7_data.cfg.isupCkt[x]id != 0) */
+
+	/* print the status of channels */
+	handle_show_status(stream, span, chan, verbose);
+
 	return FTDM_SUCCESS;
 }
 
