@@ -4065,6 +4065,19 @@ static int ftmod_ss7_fill_in_acc_timer(sng_route_t *mtp3_route, ftdm_span_t *spa
 	return FTDM_SUCCESS;
 }
 
+/*
+ * Earlier circuit range per Proc Id is constraint to 1000 cic and it was hardcoded.
+ * Thus, in case of configuring E1 having circuit Id more than 1000. SS7 CICs never
+ * comes in UP state.
+ *
+ * ftmod_ss7_get_circuit_start_range() and ftmod_ss7_get_circuit_end_range() api
+ * basically give the range of circuits ID depeding up on the proc ID's, base on
+ * SNG_CIC_MAP_OFFSET as defined in sng_ss7.h. These are common api's so that
+ * if in case there is any need to chage the Circuits range then there is no need
+ * to change it on multiple places, just change the offset and user can achieve
+ * CIC range in result.
+ */
+
 /* get circuit start range based on proc ID */
 int ftmod_ss7_get_circuit_start_range(int procId)
 {
