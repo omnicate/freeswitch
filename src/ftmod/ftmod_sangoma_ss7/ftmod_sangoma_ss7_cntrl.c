@@ -1080,36 +1080,6 @@ int ftmod_ss7_isup_debug(int action)
 
 	return (sng_cntrl_isup(&pst, &cntrl));
 }
-int ftmod_ss7_mtp2_debug(int action)
-{
-	SdMngmt cntrl;
-	Pst pst; 
-
-	/* initalize the post structure */
-	smPstInit(&pst);
-
-	/* insert the destination Entity */
-	pst.dstEnt = ENTSD;
-
-	/* initalize the control structure */
-	memset(&cntrl, 0x0, sizeof(SdMngmt));
-
-	/* initalize the control header */
-	smHdrInit(&cntrl.hdr);
-
-	cntrl.hdr.msgType               = TCNTRL;       /* this is a control request */
-	cntrl.hdr.entId.ent             = ENTSD;
-	cntrl.hdr.entId.inst            = S_INST;
-	cntrl.hdr.elmId.elmnt           = STGEN;
-
-	cntrl.t.cntrl.action            = action;       /* Activate */
-	cntrl.t.cntrl.subAction         = SADBG;        /* specificed element */
-
-	cntrl.t.cntrl.sdDbg.dbgMask     = 0xFFFF;       /* Setting up the debug level */
-
-	return (sng_cntrl_mtp2(&pst, &cntrl));
-}
-
 
 /******************************************************************************/
 int ftmod_ss7_mtp3_debug(int action)
