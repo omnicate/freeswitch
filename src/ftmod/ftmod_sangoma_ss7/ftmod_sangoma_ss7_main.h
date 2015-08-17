@@ -1207,6 +1207,8 @@ ftdm_status_t ftmod_sangoma_ss7_mtp2_indicate(ftdm_channel_t *ftdmchan);
 
 /* in ftmod_sangoma_ss7_xml.c */
 int ftmod_ss7_parse_xml(ftdm_conf_parameter_t *ftdm_parameters, ftdm_span_t *span);
+int ftmod_ss7_get_circuit_start_range(int procId);
+int ftmod_ss7_get_circuit_end_range(int procId);
 
 /* in ftmod_sangoma_ss7_cli.c */
 ftdm_status_t ftdm_sngss7_handle_cli_cmd(ftdm_stream_handle_t *stream, const char *data);

@@ -3237,7 +3237,7 @@ static int ftmod_ss7_fill_in_ccSpan(sng_ccSpan_t *ccSpan)
 		}
 
 		/* find a spot for this circuit in the global structure */
-		x = (ccSpan->procId * 1000) + 1;
+		x = ftmod_ss7_get_circuit_start_range(ccSpan->procId);
 		flag = 0;
 		while (flag == 0) {
 			/* Skip channel if it is a transparent one */
@@ -3466,7 +3466,7 @@ static int ftmod_ss7_fill_in_circuits(sng_span_t *sngSpan)
 		ftdmchan = ftdmspan->channels[i];
 
 		/* find the equivalent channel in the global structure */
-		x = (g_ftdm_sngss7_data.cfg.procId * 1000) + 1;
+		x = ftmod_ss7_get_circuit_start_range(g_ftdm_sngss7_data.cfg.procId);
 		flag = 0;
 		while (g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0) {
 		/**********************************************************************/
@@ -3553,7 +3553,7 @@ static int ftmod_ss7_fill_in_circuits(sng_span_t *sngSpan)
 			x++;
 
 			/* check if we are outside of the range of possible indexes */
-			if (x == ((g_ftdm_sngss7_data.cfg.procId + 1) * 1000)) {
+			if (x == (ftmod_ss7_get_circuit_end_range(g_ftdm_sngss7_data.cfg.procId))) {
 				break;
 			}
 		/**********************************************************************/
@@ -4063,6 +4063,41 @@ static int ftmod_ss7_fill_in_acc_timer(sng_route_t *mtp3_route, ftdm_span_t *spa
 		}
 	}
 	return FTDM_SUCCESS;
+}
+
+/*
+ * Earlier circuit range per Proc Id is constraint to 1000 cic and it was hardcoded.
+ * Thus, in case of configuring E1 having circuit Id more than 1000. SS7 CICs never
+ * comes in UP state.
+ *
+ * ftmod_ss7_get_circuit_start_range() and ftmod_ss7_get_circuit_end_range() api
+ * basically give the range of circuits ID depeding up on the proc ID's, base on
+ * SNG_CIC_MAP_OFFSET as defined in sng_ss7.h. These are common api's so that
+ * if in case there is any need to chage the Circuits range then there is no need
+ * to change it on multiple places, just change the offset and user can achieve
+ * CIC range in result.
+ */
+
+/* get circuit start range based on proc ID */
+int ftmod_ss7_get_circuit_start_range(int procId)
+{
+	int start_range = 0;
+	int offset	= (procId -1) * SNG_CIC_MAP_OFFSET;
+
+	start_range = (offset + (procId * 1000)) + 1;
+
+	return start_range;
+}
+
+/* get circuit end range based on proc ID */
+int ftmod_ss7_get_circuit_end_range(int procId)
+{
+	int end_range = 0;
+	int offset    = SNG_CIC_MAP_OFFSET;
+
+	end_range = ftmod_ss7_get_circuit_start_range(procId) + offset - 1;
+
+	return end_range;
 }
 
 /******************************************************************************/

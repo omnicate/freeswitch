@@ -1497,7 +1497,7 @@ ftdm_status_t handle_pause(uint32_t suInstId, uint32_t spInstId, uint32_t circui
 	sngss7_set_flag(&g_ftdm_sngss7_data.cfg.isupIntf[infId], SNGSS7_PAUSED);
 	
 	/* go through all the circuits now and find any other circuits on this infId */
-	i = (g_ftdm_sngss7_data.cfg.procId * 1000) + 1;
+	i = ftmod_ss7_get_circuit_start_range(g_ftdm_sngss7_data.cfg.procId);
 	while (g_ftdm_sngss7_data.cfg.isupCkt[i].id != 0) {
 		
 		/* check that the infId matches and that this is not a siglink */
@@ -1574,7 +1574,7 @@ ftdm_status_t handle_resume(uint32_t suInstId, uint32_t spInstId, uint32_t circu
 	sngss7_clear_flag(&g_ftdm_sngss7_data.cfg.isupIntf[infId], SNGSS7_PAUSED);
 
 	/* go through all the circuits now and find any other circuits on this infId */
-	i = (g_ftdm_sngss7_data.cfg.procId * 1000) + 1;
+	i = ftmod_ss7_get_circuit_start_range(g_ftdm_sngss7_data.cfg.procId);
 	while (g_ftdm_sngss7_data.cfg.isupCkt[i].id != 0) {
 
 		/* check that the infId matches and that this is not a siglink */

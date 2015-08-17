@@ -487,9 +487,9 @@ void sngss7_sta_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circuit, uint
 						g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic);
 		}
 
-		x = (g_ftdm_sngss7_data.cfg.procId * MAX_CIC_MAP_LENGTH) + 1;
+		x = ftmod_ss7_get_circuit_start_range(g_ftdm_sngss7_data.cfg.procId);
 		while ((g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0) &&
-			   (g_ftdm_sngss7_data.cfg.isupCkt[x].id < ((g_ftdm_sngss7_data.cfg.procId + 1) * MAX_CIC_MAP_LENGTH))) {
+			   (g_ftdm_sngss7_data.cfg.isupCkt[x].id < (ftmod_ss7_get_circuit_end_range(g_ftdm_sngss7_data.cfg.procId)))) {
 			/**********************************************************************/
 			/* confirm this is a voice channel and not a gap/sig (no ftdmchan there) */
 			if (g_ftdm_sngss7_data.cfg.isupCkt[x].type == SNG_CKT_VOICE) {
