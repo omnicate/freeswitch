@@ -2603,6 +2603,10 @@ FT_DECLARE(ftdm_channel_t *) ftdm_span_get_channel_ph(const ftdm_span_t *span, u
 
 	for (curr = citer ; curr; curr = ftdm_iterator_next(curr)) {
 		fchan = ftdm_iterator_current(curr);
+		if (!fchan) {
+			ftdm_log(FTDM_LOG_WARNING, "Failed to find chan %i on span %s\n",chanid,span->name);
+			break;
+		}
 		if (fchan->physical_chan_id == chanid) {
 			chan = fchan;
 			break;

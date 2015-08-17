@@ -571,6 +571,7 @@ typedef struct sng_ss7_cfg {
 	sng_isap_t		isap[MAX_ISAPS+1];
 	sng_glare_resolution	glareResolution;
 	uint32_t		force_inr;
+	uint32_t		force_early_media;
 	sng_m2ua_gbl_cfg_t 	g_m2ua_cfg;
 	sng_sctp_cfg_t		sctpCfg;
 	uint32_t 		sng_acc;
@@ -1110,6 +1111,11 @@ void ft_to_sngss7_anm(ftdm_channel_t *ftdmchan);
 void ft_to_sngss7_rel(ftdm_channel_t *ftdmchan);
 void ft_to_sngss7_rlc(ftdm_channel_t *ftdmchan);
 void ft_to_sngss7_rsc(ftdm_channel_t *ftdmchan);
+
+/* for continuity check and generate COT */
+void ft_to_sngss7_cot(ftdm_channel_t *ftdmchan);
+void ft_to_sngss7_ccr (ftdm_channel_t * ftdmchan);
+
 void ft_to_sngss7_rsca(ftdm_channel_t *ftdmchan);
 void ft_to_sngss7_blo(ftdm_channel_t *ftdmchan);
 void ft_to_sngss7_bla(ftdm_channel_t *ftdmchan);

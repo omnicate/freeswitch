@@ -84,7 +84,8 @@ ftdm_state_map_t sangoma_ss7_state_map = {
 	{FTDM_CHANNEL_STATE_RESTART, FTDM_END},
 	{FTDM_CHANNEL_STATE_SUSPENDED, FTDM_CHANNEL_STATE_TERMINATING,
 	 FTDM_CHANNEL_STATE_HANGUP, FTDM_CHANNEL_STATE_HANGUP_COMPLETE,
-	 FTDM_CHANNEL_STATE_DOWN, FTDM_CHANNEL_STATE_IDLE, FTDM_END}
+	 FTDM_CHANNEL_STATE_DOWN, FTDM_CHANNEL_STATE_IDLE,
+	 FTDM_CHANNEL_STATE_IN_LOOP, FTDM_END}
 	},
 	{
 	ZSD_INBOUND,
@@ -204,7 +205,8 @@ ftdm_state_map_t sangoma_ss7_state_map = {
 	{FTDM_CHANNEL_STATE_RESTART, FTDM_END},
 	{FTDM_CHANNEL_STATE_SUSPENDED, FTDM_CHANNEL_STATE_TERMINATING,
 	 FTDM_CHANNEL_STATE_HANGUP, FTDM_CHANNEL_STATE_HANGUP_COMPLETE,
-	 FTDM_CHANNEL_STATE_DOWN, FTDM_CHANNEL_STATE_IDLE, FTDM_END}
+	 FTDM_CHANNEL_STATE_DOWN, FTDM_CHANNEL_STATE_IDLE,
+	 FTDM_CHANNEL_STATE_IN_LOOP, FTDM_END}
 	},
 	{
 	ZSD_OUTBOUND,
@@ -2659,9 +2661,9 @@ static ftdm_status_t ftdm_sangoma_ss7_start(ftdm_span_t * span)
 
 	SS7_INFO ("Starting span %s:%u.\n", span->name, span->span_id);
 
-    if (SNG_SS7_OPR_MODE_MTP2_API == g_ftdm_operating_mode) {
-        return sngss7_activate_mtp2api(span);
-    }
+	if (SNG_SS7_OPR_MODE_MTP2_API == g_ftdm_operating_mode) {
+		return sngss7_activate_mtp2api(span);
+	}
 
 	/* clear the monitor thread stop flag */
 	ftdm_clear_flag (span, FTDM_SPAN_STOP_THREAD);
