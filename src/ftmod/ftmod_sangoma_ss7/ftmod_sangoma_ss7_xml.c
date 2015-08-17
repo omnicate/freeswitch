@@ -138,6 +138,7 @@ typedef struct sng_ccSpan
 	uint8_t			transparent_iam;
 	uint8_t         	cpg_on_progress_media;
 	uint8_t         	cpg_on_progress;
+	uint8_t         	cpg_on_alert;
 	uint8_t         	ignore_alert_on_cpg;
 	uint8_t			itx_auto_reply;
 	uint8_t			bearcap_check;
@@ -663,6 +664,7 @@ static int ftmod_ss7_parse_sng_gen(ftdm_conf_node_t *sng_gen, char* operating_mo
 	/* Set the transparent_iam_max_size to default value */
 	g_ftdm_sngss7_data.cfg.transparent_iam_max_size=800;
 	g_ftdm_sngss7_data.cfg.force_inr = 0;
+	g_ftdm_sngss7_data.cfg.force_early_media = 0;
 
 	/* By default automatic congestion control will be False */
 	g_ftdm_sngss7_data.cfg.sng_acc = 0;
@@ -699,6 +701,13 @@ static int ftmod_ss7_parse_sng_gen(ftdm_conf_node_t *sng_gen, char* operating_mo
 				g_ftdm_sngss7_data.cfg.force_inr = 0;
 			}
 			SS7_DEBUG("Found INR force configuration = %s\n", parm->val);
+		} else if (!strcasecmp(parm->var, "force_early_media")) {
+			if (ftdm_true(parm->val)) {
+				g_ftdm_sngss7_data.cfg.force_early_media = 1;
+			} else {
+				g_ftdm_sngss7_data.cfg.force_early_media = 0;
+			}
+			SS7_DEBUG("Found force early media configuration = %s\n", parm->val);
 		} else if (!strcasecmp(parm->var, "operating_mode")) {
 			strcpy(operating_mode, parm->val);
 		} else if (!strcasecmp(parm->var, "stack-logging-enable")) {
@@ -2120,15 +2129,16 @@ static int ftmod_ss7_parse_cc_spans(ftdm_conf_node_t *cc_spans)
 /******************************************************************************/
 static int ftmod_ss7_parse_cc_span(ftdm_conf_node_t *cc_span)
 {
-	sng_ccSpan_t			sng_ccSpan;
+	sng_ccSpan_t		sng_ccSpan;
 	ftdm_conf_parameter_t	*parm = cc_span->parameters;
-	int						num_parms = cc_span->n_parameters;
-	int						flag_clg_nadi = 0;
-	int						flag_cld_nadi = 0;
-	int						flag_rdnis_nadi = 0;
-	int						flag_loc_nadi = 0;
-	int						i;
-	int						ret;
+	int			num_parms = cc_span->n_parameters;
+	int			flag_clg_nadi = 0;
+	int			flag_cld_nadi = 0;
+	int			flag_rdnis_nadi = 0;
+	int			flag_loc_nadi = 0;
+	int			i;
+	int			ret;
+	ftdm_bool_t		lpa_on_cot = FTDM_FALSE;
 
 	/* To get number of CIC's configured per DPC */
 	nmb_cics_cfg = 0;
@@ -2209,6 +2219,9 @@ static int ftmod_ss7_parse_cc_span(ftdm_conf_node_t *cc_span)
 		} else if (!strcasecmp(parm->var, "cpg_on_progress")) {
 			sng_ccSpan.cpg_on_progress = ftdm_true(parm->val);
 			SS7_DEBUG("Found cpg_on_progress %d\n", sng_ccSpan.cpg_on_progress);
+		} else if (!strcasecmp(parm->var, "cpg_on_alert")) {
+			sng_ccSpan.cpg_on_alert = ftdm_true(parm->val);
+			SS7_DEBUG("Found cpg_on_alert %d\n", sng_ccSpan.cpg_on_alert);
 		} else if (!strcasecmp(parm->var, "cicbase")) {
 		/**********************************************************************/
 			sng_ccSpan.cicbase = atoi(parm->val);
@@ -2265,9 +2278,11 @@ static int ftmod_ss7_parse_cc_span(ftdm_conf_node_t *cc_span)
 		} else if (!strcasecmp(parm->var, "lpa_on_cot")) {
 		/**********************************************************************/
 			if (*parm->val == '1') {
+				lpa_on_cot = FTDM_TRUE;
 				sngss7_set_options(&sng_ccSpan, SNGSS7_LPA_FOR_COT);
 				SS7_DEBUG("Found Tx LPA on COT enable option\n");
 			} else if (*parm->val == '0') {
+				lpa_on_cot = FTDM_FALSE;
 				sngss7_clear_options(&sng_ccSpan, SNGSS7_LPA_FOR_COT);
 				SS7_DEBUG("Found Tx LPA on COT disable option\n");
 			} else {
@@ -2375,6 +2390,14 @@ static int ftmod_ss7_parse_cc_span(ftdm_conf_node_t *cc_span)
 
 		/* default the status to PAUSED */
 		sngss7_set_flag(&g_ftdm_sngss7_data.cfg.isupIntf[sng_ccSpan.isupInf], SNGSS7_PAUSED);
+	}
+
+	if (lpa_on_cot == FTDM_TRUE) {
+		sngss7_set_options(&g_ftdm_sngss7_data.cfg.isupIntf[sng_ccSpan.isupInf], SNGSS7_LPA_FOR_COT);
+		SS7_DEBUG("LPA on COT is set for interface %d\n", g_ftdm_sngss7_data.cfg.isupIntf[sng_ccSpan.isupInf].id);
+	} else {
+		SS7_DEBUG("LPA on COT is cleared for interface %d\n", g_ftdm_sngss7_data.cfg.isupIntf[sng_ccSpan.isupInf].id);
+		sngss7_clear_options(&g_ftdm_sngss7_data.cfg.isupIntf[sng_ccSpan.isupInf], SNGSS7_LPA_FOR_COT);;
 	}
 
 	sng_acc_assign_max_bucket(sng_ccSpan.isupInf, nmb_cics_cfg);
@@ -3250,9 +3273,9 @@ static int ftmod_ss7_fill_in_ccSpan(sng_ccSpan_t *ccSpan)
 				nmb_cics_cfg++;
 				/* we're at the end of the list of circuitsl aka this is new */
 				SS7_DEBUG("Found a new circuit %d, ccSpanId=%d, chan=%d\n",
-							x, 
-							ccSpan->id, 
-							count);
+						x,
+						ccSpan->id,
+						count);
 
 				/* throw the flag to end the loop */
 				flag = 1;
@@ -3341,6 +3364,7 @@ static int ftmod_ss7_fill_in_ccSpan(sng_ccSpan_t *ccSpan)
 		g_ftdm_sngss7_data.cfg.isupCkt[x].transparent_iam_max_size			= ccSpan->transparent_iam_max_size;
 		g_ftdm_sngss7_data.cfg.isupCkt[x].cpg_on_progress_media				= ccSpan->cpg_on_progress_media;
 		g_ftdm_sngss7_data.cfg.isupCkt[x].cpg_on_progress	 		    	= ccSpan->cpg_on_progress;
+		g_ftdm_sngss7_data.cfg.isupCkt[x].cpg_on_alert	 		    		= ccSpan->cpg_on_alert;
 		g_ftdm_sngss7_data.cfg.isupCkt[x].ignore_alert_on_cpg				= ccSpan->ignore_alert_on_cpg;
 
 		if (ccSpan->t3 == 0) {

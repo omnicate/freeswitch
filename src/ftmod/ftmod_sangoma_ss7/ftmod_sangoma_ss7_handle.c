@@ -225,6 +225,7 @@ ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 #ifdef SS7_UK
 			copy_presNmb_from_sngss7(ftdmchan, &siConEvnt->presntNum);
 			copy_nflxl_from_sngss7(ftdmchan, &siConEvnt->natFwdCalIndLnk);
+			copy_nfci_from_sngss7(ftdmchan, &siConEvnt->natFwdCalInd);
 			copy_divtlineid_from_sngss7(ftdmchan, &siConEvnt->lstDvrtLineId);
 #endif
 
@@ -379,6 +380,12 @@ ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 		         sprintf(var, "%s", ftdmchan->caller_data.cid_num.digits);
 			 sngss7_add_var(sngss7_info, "ss7_clg_num", var);
 
+			if (strlen(ftdmchan->caller_data.cid_num.digits)) {
+				/* Add Calling party number also for dialplan */
+				sprintf(var, "%s", ftdmchan->caller_data.cid_num.digits);
+				sngss7_add_var(sngss7_info, "ss7_clg_num", var);
+			}
+
 #ifdef ACC_TEST
 			if (sngss7_info->priority == FTDM_FALSE) {
 				sng_increment_acc_statistics(ftdmchan, ACC_IAM_RECV_DEBUG);
@@ -386,6 +393,12 @@ ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 				sng_increment_acc_statistics(ftdmchan, ACC_IAM_PRI_RECV_DEBUG);
 			}
 #endif
+			if (strlen(ftdmchan->caller_data.cid_num.digits)) {
+				/* Add Calling party number also for dialplan */
+				sprintf(var, "%s", ftdmchan->caller_data.cid_num.digits);
+				sngss7_add_var(sngss7_info, "ss7_clg_num", var);
+			}
+
 			SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Rx IAM clg = \"%s\" (NADI=%d), cld = \"%s\" (NADI=%d)\n",
 							sngss7_info->circuit->cic,
 							ftdmchan->caller_data.cid_num.digits,
@@ -502,6 +515,22 @@ ftdm_status_t handle_con_sta(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 
 					next_state = FTDM_CHANNEL_STATE_PROGRESS_MEDIA;
 				}
+				/* Ideally we should control below logic via dialplan variable
+				 * but somehow dialplan variable not working, hence using gen config option
+				 * to control this..need to revisit this */
+				{
+					const char *val = NULL;
+					val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_force_early_media");
+					if (!ftdm_strlen_zero(val) && ftdm_true(val)) {
+						SS7_WARN_CHAN(ftdmchan, "ss7_force_early_media set..moving to PROGRESS_MEDIA state \n", sngss7_info->circuit->cic);
+						next_state = FTDM_CHANNEL_STATE_PROGRESS_MEDIA;
+					} else if (g_ftdm_sngss7_data.cfg.force_early_media) {
+						SS7_WARN_CHAN(ftdmchan, "force_early_media configured..moving to PROGRESS_MEDIA state \n", sngss7_info->circuit->cic);
+						/* forcefully moving to progress media */
+						next_state = FTDM_CHANNEL_STATE_PROGRESS_MEDIA;
+					}
+				}
+
 				if (next_state != FTDM_CHANNEL_STATE_INVALID) {
 					ftdm_set_state(ftdmchan, next_state);
 				}

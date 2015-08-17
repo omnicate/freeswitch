@@ -444,6 +444,7 @@ typedef struct sng_isup_ckt {
 	uint8_t			transparent_iam;
 	uint8_t			cpg_on_progress_media;
 	uint8_t			cpg_on_progress;
+	uint8_t			cpg_on_alert;
 	uint8_t			ignore_alert_on_cpg;
 	uint8_t			itx_auto_reply;
 	uint8_t			bearcap_check;
@@ -570,6 +571,7 @@ typedef struct sng_ss7_cfg {
 	sng_isap_t		isap[MAX_ISAPS+1];
 	sng_glare_resolution	glareResolution;
 	uint32_t		force_inr;
+	uint32_t		force_early_media;
 	sng_m2ua_gbl_cfg_t 	g_m2ua_cfg;
 	sng_sctp_cfg_t		sctpCfg;
 	uint32_t 		sng_acc;
@@ -1109,6 +1111,11 @@ void ft_to_sngss7_anm(ftdm_channel_t *ftdmchan);
 void ft_to_sngss7_rel(ftdm_channel_t *ftdmchan);
 void ft_to_sngss7_rlc(ftdm_channel_t *ftdmchan);
 void ft_to_sngss7_rsc(ftdm_channel_t *ftdmchan);
+
+/* for continuity check and generate COT */
+void ft_to_sngss7_cot(ftdm_channel_t *ftdmchan);
+void ft_to_sngss7_ccr (ftdm_channel_t * ftdmchan);
+
 void ft_to_sngss7_rsca(ftdm_channel_t *ftdmchan);
 void ft_to_sngss7_blo(ftdm_channel_t *ftdmchan);
 void ft_to_sngss7_bla(ftdm_channel_t *ftdmchan);
@@ -1227,11 +1234,12 @@ ftdm_status_t copy_access_transport_to_sngss7(ftdm_channel_t *ftdmchan, SiAccTrn
 ftdm_status_t copy_locPtyNum_to_sngss7(ftdm_channel_t *ftdmchan, SiCgPtyNum *locPtyNum);
 ftdm_status_t copy_locPtyNum_from_sngss7(ftdm_channel_t *ftdmchan, SiCgPtyNum *locPtyNum);
 ftdm_status_t copy_nfci_to_sngss7(ftdm_channel_t *ftdmchan, SiNatFwdCalInd *nfci);
+ftdm_status_t copy_nfci_from_sngss7(ftdm_channel_t *ftdmchan, SiNatFwdCalInd *nfci);
 ftdm_status_t copy_nflxl_to_sngss7(ftdm_channel_t *ftdmchan, SiNatFwdCalIndLnk *nfci);
 ftdm_status_t copy_nflxl_from_sngss7(ftdm_channel_t *ftdmchan, SiNatFwdCalIndLnk *nflxl);
 ftdm_status_t copy_presnum_to_sngss7(ftdm_channel_t *ftdmchan, SiPresentNum *num);
 ftdm_status_t copy_presNmb_from_sngss7(ftdm_channel_t *ftdmchan, SiPresentNum *genNmb);
-ftdm_status_t copy_paramcompatibility_to_sngss7(ftdm_channel_t *ftdmchan, SiParmCompInfo *parmCom);
+ftdm_status_t copy_paramcompatibility_to_sngss7(ftdm_channel_t *ftdmchan, SiConEvnt* iam, SiParmCompInfo *parmCom);
 ftdm_status_t copy_genNmb_to_sngss7(ftdm_channel_t *ftdmchan, SiGenNum *genNmb);
 ftdm_status_t copy_genNmb_from_sngss7(ftdm_channel_t *ftdmchan, SiGenNum *genNmb);
 ftdm_status_t copy_genNmbR_from_sngss7(ftdm_channel_t *ftdmchan, SiGenNum *genNmbR);
