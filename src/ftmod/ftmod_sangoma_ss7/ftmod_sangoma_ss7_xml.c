@@ -3273,9 +3273,9 @@ static int ftmod_ss7_fill_in_ccSpan(sng_ccSpan_t *ccSpan)
 				nmb_cics_cfg++;
 				/* we're at the end of the list of circuitsl aka this is new */
 				SS7_DEBUG("Found a new circuit %d, ccSpanId=%d, chan=%d\n",
-							x, 
-							ccSpan->id, 
-							count);
+						x,
+						ccSpan->id,
+						count);
 
 				/* throw the flag to end the loop */
 				flag = 1;
