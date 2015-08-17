@@ -387,7 +387,14 @@ ftdm_status_t copy_cdPtyNum_to_sngss7(ftdm_channel_t *ftdmchan, SiCdPtyNum *cdPt
 	}
 
 	cdPtyNum->numPlan.pres	  = PRSNT_NODEF;
-	cdPtyNum->numPlan.val	   = 0x01;
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_cld_numplan");
+	if (!ftdm_strlen_zero(val)) {
+		cdPtyNum->numPlan.val		= atoi(val);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found user supplied Called party number plan value \"%s\"\n", val);
+	} else {
+		cdPtyNum->numPlan.val	   = 0x01;
+		ftdm_log_chan_msg(ftdmchan, FTDM_LOG_DEBUG, "No user supplied Called party number plan value, set to default value 0x01\n");
+	}
 
 	cdPtyNum->innInd.pres	   = PRSNT_NODEF;
 	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_cld_inn");

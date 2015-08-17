@@ -827,9 +827,9 @@ ftdm_status_t ftmod_sctp_sap_config(int id)
         */
     c->reConfig.hBeatEnable 	= TRUE;
     /* Flow control start threshold. When the number of messages in SCTPs message queue reaches this value, flow control starts. */
-    c->reConfig.flcUpThr 		= 8;
+    c->reConfig.flcUpThr 		= 200;
     /* Flow control stop threshold. When the number of messages in SCTPs message queue reaches this value, flow control stops. */
-    c->reConfig.flcLowThr 		= 6;
+    c->reConfig.flcLowThr 		= 64;
 
     c->reConfig.handleInitFlg 	= FALSE;
 

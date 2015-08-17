@@ -2603,6 +2603,10 @@ FT_DECLARE(ftdm_channel_t *) ftdm_span_get_channel_ph(const ftdm_span_t *span, u
 
 	for (curr = citer ; curr; curr = ftdm_iterator_next(curr)) {
 		fchan = ftdm_iterator_current(curr);
+		if (!fchan) {
+			ftdm_log(FTDM_LOG_WARNING, "Failed to find chan %i on span %s\n",chanid,span->name);
+			break;
+		}
 		if (fchan->physical_chan_id == chanid) {
 			chan = fchan;
 			break;
@@ -3081,6 +3085,7 @@ static ftdm_status_t ftdm_channel_done(ftdm_channel_t *ftdmchan)
 	ftdm_clear_flag(ftdmchan, FTDM_CHANNEL_USER_HANGUP);
 	ftdm_clear_flag(ftdmchan, FTDM_CHANNEL_DIGITAL_MEDIA);
 	ftdm_clear_flag(ftdmchan, FTDM_CHANNEL_NATIVE_SIGBRIDGE);
+	ftdm_clear_flag(ftdmchan, FTDM_CHANNEL_MUTE);
 	ftdm_mutex_lock(ftdmchan->pre_buffer_mutex);
 	ftdm_buffer_destroy(&ftdmchan->pre_buffer);
 	ftdmchan->pre_buffer_size = 0;
@@ -4321,6 +4326,11 @@ FT_DECLARE(ftdm_status_t) ftdm_channel_process_media(ftdm_channel_t *ftdmchan, v
 	fio_codec_t codec_func = NULL;
 	ftdm_size_t max = *datalen;
 	ftdm_status_t tone_status;
+
+	/* check if the channel is a D/signalling channel the return SUCCESS */
+	if (FTDM_IS_DCHAN(ftdmchan)) {
+		goto done;
+	}
 
 	tone_status = handle_tone_generation(ftdmchan);
 	if (tone_status != FTDM_SUCCESS) {
