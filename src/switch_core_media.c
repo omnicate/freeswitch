@@ -7293,8 +7293,8 @@ SWITCH_DECLARE(void) switch_core_media_gen_local_sdp(switch_core_session_t *sess
 						switch_core_session_get_payload_code(orig_session, 
 															 imp->codec_type == SWITCH_CODEC_TYPE_AUDIO ? SWITCH_MEDIA_TYPE_AUDIO : SWITCH_MEDIA_TYPE_VIDEO,
 															 imp->iananame, imp->samples_per_second, &orig_pt, NULL, &orig_fmtp) == SWITCH_STATUS_SUCCESS) {
-						if (orig_pt == smh->mparams->te) {
-							smh->mparams->te  = (switch_payload_t)smh->payload_space++;
+						while (orig_pt == smh->mparams->te) {
+							smh->mparams->te = (switch_payload_t)smh->payload_space++;
 						}
 
 						smh->ianacodes[i] = orig_pt;
