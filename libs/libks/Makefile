@@ -32,3 +32,5 @@ test/testpools/testpools: $(MYLIB) test/testpools/testpools.c
 	$(CC) $(CXFLAGS) test/testpools/testpools.c -Isrc/include/ libks.a -o test/testpools/testpools
 
 test-all: test/testpools/testpools
+	@echo Testing memory pool
+	test/testpools/testpools && echo ok

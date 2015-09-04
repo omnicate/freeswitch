@@ -32,6 +32,7 @@
  * growth problems.
  */
 
+
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -64,6 +65,8 @@
 #else
 static char *rcs_id = "$Id: mpool.c,v 1.5 2006/05/31 20:28:31 gray Exp $";
 #endif
+
+#include "ks.h"
 
 /* version */
 static char *version = "mpool library version 2.1.0";
@@ -1171,8 +1174,8 @@ KS_DECLARE(int) mpool_clear(mpool_t *mp_p)
  *
  * ARGUMENTS:
  *
- * mp_p <-> Pointer to the memory pool.  If NULL then it will do a
- * normal malloc.
+ * mp_p <-> Pointer to the memory pool.
+ *
  *
  * byte_size -> Number of bytes to allocate in the pool.  Must be >0.
  *
@@ -1183,19 +1186,8 @@ KS_DECLARE(void *) mpool_alloc(mpool_t *mp_p, const unsigned long byte_size,
                      int *error_p)
 {
     void *addr;
-  
-    if (mp_p == NULL) {
-        /* special case -- do a normal malloc */
-        addr = (void *)malloc(byte_size);
-        if (addr == NULL) {
-            SET_POINTER(error_p, MPOOL_ERROR_ALLOC);
-            return NULL;
-        }
-        else {
-            SET_POINTER(error_p, MPOOL_ERROR_NONE);
-            return addr;
-        }
-    }
+
+	ks_assert(mp_p);
   
     if (mp_p->mp_magic != MPOOL_MAGIC) {
         SET_POINTER(error_p, MPOOL_ERROR_PNT);
@@ -1308,8 +1300,8 @@ KS_DECLARE(void *) mpool_calloc(mpool_t *mp_p, const unsigned long ele_n,
  *
  * ARGUMENTS:
  *
- * mp_p <-> Pointer to the memory pool.  If NULL then it will do a
- * normal free.
+ * mp_p <-> Pointer to the memory pool.
+ *
  *
  * addr <-> Address to free.
  *
@@ -1317,11 +1309,10 @@ KS_DECLARE(void *) mpool_calloc(mpool_t *mp_p, const unsigned long ele_n,
  */
 KS_DECLARE(int) mpool_free(mpool_t *mp_p, void *addr, const unsigned long size)
 {
-    if (mp_p == NULL) {
-        /* special case -- do a normal free */
-        free(addr);
-        return MPOOL_ERROR_NONE;
-    }
+
+	ks_assert(mp_p);
+	ks_assert(addr);
+
     if (mp_p->mp_magic != MPOOL_MAGIC) {
         return MPOOL_ERROR_PNT;
     }
@@ -1361,8 +1352,8 @@ KS_DECLARE(int) mpool_free(mpool_t *mp_p, void *addr, const unsigned long size)
  *
  * ARGUMENTS:
  *
- * mp_p <-> Pointer to the memory pool.  If NULL then it will do a
- * normal realloc.
+ * mp_p <-> Pointer to the memory pool.
+ *
  *
  * old_addr -> Previously allocated address.
  *
@@ -1384,18 +1375,8 @@ KS_DECLARE(void *) mpool_resize(mpool_t *mp_p, void *old_addr,
     mpool_block_t   *block_p;
     int ret;
   
-    if (mp_p == NULL) {
-        /* special case -- do a normal realloc */
-        new_addr = (void *)realloc(old_addr, new_byte_size);
-        if (new_addr == NULL) {
-            SET_POINTER(error_p, MPOOL_ERROR_ALLOC);
-            return NULL;
-        } 
-        else {
-            SET_POINTER(error_p, MPOOL_ERROR_NONE);
-            return new_addr;
-        }
-    }
+	ks_assert(mp_p);
+	ks_assert(old_addr);
   
     if (mp_p->mp_magic != MPOOL_MAGIC) {
         SET_POINTER(error_p, MPOOL_ERROR_PNT);
