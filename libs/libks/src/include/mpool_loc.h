@@ -73,14 +73,12 @@
 typedef struct {
 	unsigned int		mp_magic;	/* magic number for struct */
 	unsigned int		mp_flags;	/* flags for the struct */
-	unsigned int		mp_mmflags;	/* flags for mmap */
 	unsigned long		mp_alloc_c;	/* number of allocations */
 	unsigned long		mp_user_alloc;	/* user bytes allocated */
 	unsigned long		mp_max_alloc;	/* maximum user bytes allocated */
 	unsigned int		mp_page_c;	/* number of pages allocated */
 	unsigned int		mp_max_pages;	/* maximum number of pages to use */
 	unsigned int		mp_page_size;	/* page-size of our system */
-	int			mp_fd;		/* fd for /dev/zero if mmap-ing */
 	off_t			mp_top;		/* top of our allocations in fd */ 
 	mpool_log_func_t	mp_log_func;	/* log callback function */
 	void			*mp_addr;	/* current address for mmaping */

@@ -23,12 +23,12 @@ $(MYLIB): $(OBJS) $(HEADERS) $(SRC)
 	$(CC) $(CC_CFLAGS) $(CFLAGS) $(CXFLAGS) -c $< -o $@
 
 test-clean:
-	rm -f test/testpools
+	rm -f test/testpools/testpools
 
 clean: test-clean
 	rm -f *.o src/*.o libks.a *~ src/*~ src/include/*~
 
-test/testpools: $(MYLIB) test/testpools.c
-	$(CC) $(CXFLAGS) test/testpools.c -Isrc/include/ libks.a -o test/testpools
+test/testpools/testpools: $(MYLIB) test/testpools/testpools.c
+	$(CC) $(CXFLAGS) test/testpools/testpools.c -Isrc/include/ libks.a -o test/testpools/testpools
 
-test-all: test/testpools
+test-all: test/testpools/testpools

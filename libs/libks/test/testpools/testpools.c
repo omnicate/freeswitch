@@ -22,7 +22,7 @@ int main(int argc, char **argv)
 		}
 	}
 
-	pool = mpool_open(MPOOL_FLAG_ANONYMOUS, 0, NULL, &err);
+	pool = mpool_open(MPOOL_FLAG_DEFAULT, 0, NULL, &err);
 
 	if (!pool || err != MPOOL_ERROR_NONE) {
 		fprintf(stderr, "ERR: %d [%s]\n", err, mpool_strerror(err));

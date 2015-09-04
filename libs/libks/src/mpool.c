@@ -264,7 +264,7 @@ static void *alloc_pages(mpool_t *mp_p, const unsigned int page_n,
 #endif
  
 
-    state = MAP_PRIVATE;
+    state = MAP_PRIVATE | MAP_ANON;
 
 #if defined(MAP_FILE)
     state |= MAP_FILE;
@@ -275,8 +275,8 @@ static void *alloc_pages(mpool_t *mp_p, const unsigned int page_n,
 #endif
     
     /* mmap from /dev/zero */
-    mem = mmap(mp_p->mp_addr, size, PROT_READ | PROT_WRITE, state | mp_p->mp_mmflags,
-               mp_p->mp_fd, mp_p->mp_top);
+    mem = mmap(mp_p->mp_addr, size, PROT_READ | PROT_WRITE, state, -1, mp_p->mp_top);
+               
     if (mem == (void *)MAP_FAILED) {
         if (errno == ENOMEM) {
             SET_POINTER(error_p, MPOOL_ERROR_NO_MEM);
@@ -909,7 +909,6 @@ KS_DECLARE(mpool_t *) mpool_open(const unsigned int flags, const unsigned int pa
     mp.mp_page_c = 0;
     /* mp.mp_page_size set below */
     /* mp.mp_blocks_bit_n set below */
-    /* mp.mp_fd set below */
     /* mp.mp_top set below */
     /* mp.mp_addr set below */
     mp.mp_log_func = NULL;
@@ -935,19 +934,6 @@ KS_DECLARE(mpool_t *) mpool_open(const unsigned int flags, const unsigned int pa
         }
     }
   
-    mp.mp_mmflags = 0;
-
-    if (BIT_IS_SET(flags, MPOOL_FLAG_ANONYMOUS)) {
-        mp.mp_fd = -1;
-        mp.mp_mmflags |= MAP_ANON;
-    } else {
-        /* open dev-zero for our mmaping */
-        mp.mp_fd = open("/dev/zero", O_RDWR, 0);
-        if (mp.mp_fd < 0) {
-            SET_POINTER(error_p, MPOOL_ERROR_OPEN_ZERO);
-            return NULL;
-        }
-    }
     mp.mp_addr = start_addr;
     /* we start at the front of the file */
     mp.mp_top = 0;
@@ -964,10 +950,6 @@ KS_DECLARE(mpool_t *) mpool_open(const unsigned int flags, const unsigned int pa
     /* now allocate us space for the actual struct */
     mp_p = alloc_pages(&mp, page_n, error_p);
     if (mp_p == NULL) {
-        if (mp.mp_fd >= 0) {
-            (void)close(mp.mp_fd);
-            mp.mp_fd = -1;
-        }
         return NULL;
     }
   
@@ -995,10 +977,6 @@ KS_DECLARE(mpool_t *) mpool_open(const unsigned int flags, const unsigned int pa
         ret = free_pointer(&mp, free_addr,
                            (char *)block_p->mb_bounds_p - (char *)free_addr);
         if (ret != MPOOL_ERROR_NONE) {
-            if (mp.mp_fd >= 0) {
-                (void)close(mp.mp_fd);
-                mp.mp_fd = -1;
-            }
             /* NOTE: after this line mp_p will be invalid */
             (void)free_pages(block_p, SIZE_OF_PAGES(&mp, page_n));
                              
@@ -1092,12 +1070,6 @@ KS_DECLARE(int) mpool_close(mpool_t *mp_p)
         if (ret != MPOOL_ERROR_NONE) {
             final = ret;
         }
-    }
-  
-    /* close /dev/zero if necessary */
-    if (mp_p->mp_fd >= 0) {
-        (void)close(mp_p->mp_fd);
-        mp_p->mp_fd = -1;
     }
   
     /* invalidate the mpool before we ditch it */

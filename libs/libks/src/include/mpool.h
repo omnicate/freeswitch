@@ -31,12 +31,16 @@
  * mpool flags to mpool_alloc or mpool_set_attr
  */
 
+typedef enum {
+	MPOOL_FLAG_DEFAULT = 0,
+
+	MPOOL_FLAG_BEST_FIT = (1 << 0),
 /*
  * Choose a best fit algorithm not first fit.  This takes more CPU
  * time but will result in a tighter heap.
  */
-#define MPOOL_FLAG_BEST_FIT  (1<<0)
-
+	
+	MPOOL_FLAG_NO_FREE = (1 << 1),
 /*
  * By default the library adds 2 bytes onto all allocations to insert
  * a magic number that it can look for to determine how large a freed
@@ -44,8 +48,10 @@
  * going to be performed on the pool and to not waste memory on these
  * bytes.
  */
-#define MPOOL_FLAG_NO_FREE  (1<<1)
 
+
+
+	MPOOL_FLAG_HEAVY_PACKING = (1 << 2)
 /*
  * This enables very heavy packing at the possible expense of CPU.
  * This affects a number of parts of the library.
@@ -59,12 +65,9 @@
  * and then it will give up.  This flag forces it to look until it
  * finds it.
  */
-#define MPOOL_FLAG_HEAVY_PACKING (1<<2)
 
-/*
- * Use MMAP_ANONYMOUS instead of /dev/zero
- */
-#define MPOOL_FLAG_ANONYMOUS  (1<<3)
+} mpool_flag_t;
+
 
 /*
  * Mpool error codes
