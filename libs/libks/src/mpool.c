@@ -748,7 +748,8 @@ static void *alloc_mem(mpool_t *mp_p, const unsigned long byte_size,
 {
     unsigned long size, fence;
     void *addr;
-  
+	alloc_prefix_t *prefix;
+
     /* make sure we have enough bytes */
     if (byte_size < MIN_ALLOCATION) {
         size = MIN_ALLOCATION;
@@ -760,14 +761,18 @@ static void *alloc_mem(mpool_t *mp_p, const unsigned long byte_size,
 	fence = FENCE_SIZE;
   
     /* get our free space + the space for the fence post */
-    addr = get_space(mp_p, size + fence, error_p);
+    addr = get_space(mp_p, size + fence + PREFIX_SIZE, error_p);
     if (addr == NULL) {
         /* error_p set in get_space */
         return NULL;
     }
   
-	write_magic((char *)addr + size);
-  
+	write_magic((char *)addr + size + PREFIX_SIZE);
+	prefix = (alloc_prefix_t *) addr;
+	prefix->m1 = PRE_MAGIC1;
+	prefix->m2 = PRE_MAGIC2;
+	prefix->size = size;
+
     /* maintain our stats */
     mp_p->mp_alloc_c++;
     mp_p->mp_user_alloc += size;
@@ -776,7 +781,7 @@ static void *alloc_mem(mpool_t *mp_p, const unsigned long byte_size,
     }
   
     SET_POINTER(error_p, MPOOL_ERROR_NONE);
-    return addr;
+    return addr + PREFIX_SIZE;
 }
 
 /*
@@ -799,26 +804,34 @@ static void *alloc_mem(mpool_t *mp_p, const unsigned long byte_size,
  *
  * addr <-> Address to free.
  *
- * size -> Size of the address being freed.
  */
-static int free_mem(mpool_t *mp_p, void *addr, const unsigned long size)
+static int free_mem(mpool_t *mp_p, void *addr)
 {
-    unsigned long old_size, fence;
+    unsigned long size, old_size, fence;
     int ret;
     mpool_block_t   *block_p;
-  
+	alloc_prefix_t *prefix;
+
+
+	prefix = (alloc_prefix_t *) ((char *)addr - PREFIX_SIZE);
+	if (!(prefix->m1 == PRE_MAGIC1 && prefix->m2 == PRE_MAGIC2)) {
+		return MPOOL_ERROR_INVALID_POINTER;
+	}
+
+	size = prefix->size;
+
     /*
      * If the size is larger than a block then the allocation must be at
      * the front of the block.
      */
     if (size > MAX_BLOCK_USER_MEMORY(mp_p)) {
-        block_p = (mpool_block_t *)((char *)addr - sizeof(mpool_block_t));
+        block_p = (mpool_block_t *)((char *)addr - PREFIX_SIZE - sizeof(mpool_block_t));
         if (block_p->mb_magic != BLOCK_MAGIC
             || block_p->mb_magic2 != BLOCK_MAGIC) {
             return MPOOL_ERROR_POOL_OVER;
         }
     }
-  
+
     /* make sure we have enough bytes */
     if (size < MIN_ALLOCATION) {
         old_size = MIN_ALLOCATION;
@@ -826,17 +839,19 @@ static int free_mem(mpool_t *mp_p, void *addr, const unsigned long size)
     else {
         old_size = size;
     }
-  
+
 	/* find the user's magic numbers */
 	ret = check_magic(addr, old_size);
 
+	/* move pointer to actual beginning */
+	addr = prefix;
+  
 	if (ret != MPOOL_ERROR_NONE) { 
 		return ret;
 	}
 
 	fence = FENCE_SIZE;
 
-  
     /* now we free the pointer */
     ret = free_pointer(mp_p, addr, old_size + fence);
     if (ret != MPOOL_ERROR_NONE) {
@@ -1295,9 +1310,8 @@ KS_DECLARE(void *) mpool_calloc(mpool_t *mp_p, const unsigned long ele_n,
  *
  * addr <-> Address to free.
  *
- * size -> Size of the address being freed.
  */
-KS_DECLARE(int) mpool_free(mpool_t *mp_p, void *addr, const unsigned long size)
+KS_DECLARE(int) mpool_free(mpool_t *mp_p, void *addr)
 {
 
 	ks_assert(mp_p);
@@ -1311,17 +1325,11 @@ KS_DECLARE(int) mpool_free(mpool_t *mp_p, void *addr, const unsigned long size)
     }
   
     if (mp_p->mp_log_func != NULL) {
-        mp_p->mp_log_func(mp_p, MPOOL_FUNC_FREE, size, 0, NULL, addr, 0);
+		alloc_prefix_t *prefix = (alloc_prefix_t *) ((char *)addr - PREFIX_SIZE);
+        mp_p->mp_log_func(mp_p, MPOOL_FUNC_FREE, prefix->size, 0, NULL, addr, 0);
     }
   
-    if (addr == NULL) {
-        return MPOOL_ERROR_ARG_NULL;
-    }
-    if (size == 0) {
-        return MPOOL_ERROR_ARG_INVALID;
-    }
-  
-    return free_mem(mp_p, addr, size);
+    return free_mem(mp_p, addr);
 }
 
 /*
@@ -1347,23 +1355,20 @@ KS_DECLARE(int) mpool_free(mpool_t *mp_p, void *addr, const unsigned long size)
  *
  * old_addr -> Previously allocated address.
  *
- * old_byte_size -> Size of the old address.  Must be known, cannot be
- * 0.
- *
  * new_byte_size -> New size of the allocation.
  *
  * error_p <- Pointer to integer which, if not NULL, will be set with
  * a mpool error code.
  */
 KS_DECLARE(void *) mpool_resize(mpool_t *mp_p, void *old_addr,
-                      const unsigned long old_byte_size,
                       const unsigned long new_byte_size,
                       int *error_p)
 {
-    unsigned long copy_size, new_size, old_size, fence;
+    unsigned long copy_size, new_size, old_size, fence, old_byte_size;
     void *new_addr;
     mpool_block_t   *block_p;
     int ret;
+	alloc_prefix_t *prefix;
   
 	ks_assert(mp_p);
 	ks_assert(old_addr);
@@ -1376,29 +1381,29 @@ KS_DECLARE(void *) mpool_resize(mpool_t *mp_p, void *old_addr,
         SET_POINTER(error_p, MPOOL_ERROR_POOL_OVER);
         return NULL;
     }
-  
-    if (old_addr == NULL) {
-        SET_POINTER(error_p, MPOOL_ERROR_ARG_NULL);
-        return NULL;
-    }
-    if (old_byte_size == 0) {
-        SET_POINTER(error_p, MPOOL_ERROR_ARG_INVALID);
-        return NULL;
-    }
+
+	prefix = (alloc_prefix_t *) ((char *)old_addr - PREFIX_SIZE);
+
+	if (!(prefix->m1 == PRE_MAGIC1 && prefix->m2 == PRE_MAGIC2)) {
+		SET_POINTER(error_p, MPOOL_ERROR_INVALID_POINTER);
+		return NULL;
+	}
+
+	old_byte_size = prefix->size;
   
     /*
      * If the size is larger than a block then the allocation must be at
      * the front of the block.
      */
     if (old_byte_size > MAX_BLOCK_USER_MEMORY(mp_p)) {
-        block_p = (mpool_block_t *)((char *)old_addr - sizeof(mpool_block_t));
+        block_p = (mpool_block_t *)((char *)old_addr - PREFIX_SIZE - sizeof(mpool_block_t));
         if (block_p->mb_magic != BLOCK_MAGIC
             || block_p->mb_magic2 != BLOCK_MAGIC) {
             SET_POINTER(error_p, MPOOL_ERROR_POOL_OVER);
             return NULL;
         }
     }
-  
+
     /* make sure we have enough bytes */
     if (old_byte_size < MIN_ALLOCATION) {
         old_size = MIN_ALLOCATION;
@@ -1417,6 +1422,9 @@ KS_DECLARE(void *) mpool_resize(mpool_t *mp_p, void *old_addr,
         }
         fence = FENCE_SIZE;
     }
+
+	/* move pointer to actual beginning */
+	old_addr = prefix;
   
     /* make sure we have enough bytes */
     if (new_byte_size < MIN_ALLOCATION) {
@@ -1449,10 +1457,10 @@ KS_DECLARE(void *) mpool_resize(mpool_t *mp_p, void *old_addr,
     memcpy(new_addr, old_addr, copy_size);
   
     /* free the old address */
-    ret = free_mem(mp_p, old_addr, old_byte_size);
+    ret = free_mem(mp_p, old_addr + PREFIX_SIZE);
     if (ret != MPOOL_ERROR_NONE) {
         /* if the old free failed, try and free the new address */
-        (void)free_mem(mp_p, new_addr, new_byte_size);
+        (void)free_mem(mp_p, new_addr);
         SET_POINTER(error_p, ret);
         return NULL;
     }
@@ -1693,6 +1701,9 @@ KS_DECLARE(const char *) mpool_strerror(const int error)
         break;
     case MPOOL_ERROR_PNT_OVER:
         return "user pointer admin space overwritten";
+        break;
+    case MPOOL_ERROR_INVALID_POINTER:
+        return "pointer is not valid";
         break;
     default:
         break;

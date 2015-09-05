@@ -1,7 +1,7 @@
 PWD=$(shell pwd)
 INCS=-I$(PWD)/src/include
 DEBUG=-g -ggdb
-BASE_FLAGS=$(INCS) $(DEBUG) -I$(LIBEDIT_DIR)/src/ -fPIC
+BASE_FLAGS=$(INCS) $(DEBUG) -I$(LIBEDIT_DIR)/src/ -fPIC -g -ggdb
 PICKY=-O2
 CFLAGS=$(BASE_FLAGS) $(PICKY)
 CXXFLAGS=$(BASE_FLAGS)

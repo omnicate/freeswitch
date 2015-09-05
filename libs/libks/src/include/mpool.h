@@ -82,7 +82,7 @@ typedef enum {
 #define MPOOL_ERROR_NO_PAGES 19 /* ran out of pages in pool */
 #define MPOOL_ERROR_ALLOC 20 /* calloc,malloc,free,realloc failed */
 #define MPOOL_ERROR_PNT_OVER 21 /* pointer structure was overwritten */
-
+#define MPOOL_ERROR_INVALID_POINTER 22 /* address is not valid */
 /*
  * Mpool function IDs for the mpool_log_func callback function.
  */
@@ -290,10 +290,9 @@ KS_DECLARE(void *)mpool_calloc(mpool_t *mp_p, const unsigned long ele_n,
  *
  * addr <-> Address to free.
  *
- * size -> Size of the address being freed.
  */
 
-KS_DECLARE(int) mpool_free(mpool_t *mp_p, void *addr, const unsigned long size);
+KS_DECLARE(int) mpool_free(mpool_t *mp_p, void *addr);
 
 /*
  * void *mpool_resize
@@ -318,16 +317,12 @@ KS_DECLARE(int) mpool_free(mpool_t *mp_p, void *addr, const unsigned long size);
  *
  * old_addr -> Previously allocated address.
  *
- * old_byte_size -> Size of the old address.  Must be known, cannot be
- * 0.
- *
  * new_byte_size -> New size of the allocation.
  *
  * error_p <- Pointer to integer which, if not NULL, will be set with
  * a mpool error code.
  */
 KS_DECLARE(void *) mpool_resize(mpool_t *mp_p, void *old_addr,
-				   const unsigned long old_byte_size,
 				   const unsigned long new_byte_size,
 				   int *error_p);
 

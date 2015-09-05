@@ -34,6 +34,17 @@
 #define MAX_FREE_SEARCH		10240		/* max size to search */
 #define MAX_FREE_LIST_SEARCH	100		/* max looking for free mem */ 
 
+#define PRE_MAGIC1 0x33U
+#define PRE_MAGIC2 0xCCU
+
+typedef struct alloc_prefix_s {
+	unsigned char m1;
+	unsigned long size;
+	unsigned char m2;
+} alloc_prefix_t;
+
+#define PREFIX_SIZE sizeof(struct alloc_prefix_s)
+
 /*
  * bitflag tools for Variable and a Flag
  */
