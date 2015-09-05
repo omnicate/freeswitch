@@ -757,12 +757,7 @@ static void *alloc_mem(mpool_t *mp_p, const unsigned long byte_size,
         size = byte_size;
     }
   
-    if (BIT_IS_SET(mp_p->mp_flags, MPOOL_FLAG_NO_FREE)) {
-        fence = 0;
-    }
-    else {
-        fence = FENCE_SIZE;
-    }
+	fence = FENCE_SIZE;
   
     /* get our free space + the space for the fence post */
     addr = get_space(mp_p, size + fence, error_p);
@@ -771,9 +766,7 @@ static void *alloc_mem(mpool_t *mp_p, const unsigned long byte_size,
         return NULL;
     }
   
-    if (! BIT_IS_SET(mp_p->mp_flags, MPOOL_FLAG_NO_FREE)) {
-        write_magic((char *)addr + size);
-    }
+	write_magic((char *)addr + size);
   
     /* maintain our stats */
     mp_p->mp_alloc_c++;
@@ -834,18 +827,15 @@ static int free_mem(mpool_t *mp_p, void *addr, const unsigned long size)
         old_size = size;
     }
   
-    /* if we are packing the pool smaller */
-    if (BIT_IS_SET(mp_p->mp_flags, MPOOL_FLAG_NO_FREE)) {
-        fence = 0;
-    }
-    else {
-        /* find the user's magic numbers if they were written */
-        ret = check_magic(addr, old_size);
-        if (ret != MPOOL_ERROR_NONE) { 
-            return ret;
-        }
-        fence = FENCE_SIZE;
-    }
+	/* find the user's magic numbers */
+	ret = check_magic(addr, old_size);
+
+	if (ret != MPOOL_ERROR_NONE) { 
+		return ret;
+	}
+
+	fence = FENCE_SIZE;
+
   
     /* now we free the pointer */
     ret = free_pointer(mp_p, addr, old_size + fence);
@@ -1417,11 +1407,9 @@ KS_DECLARE(void *) mpool_resize(mpool_t *mp_p, void *old_addr,
         old_size = old_byte_size;
     }
   
-    /* verify that the size matches exactly if we can */
-    if (BIT_IS_SET(mp_p->mp_flags, MPOOL_FLAG_NO_FREE)) {
-        fence = 0;
-    }
-    else if (old_size > 0) {
+    /* verify that the size matches exactly */
+
+    if (old_size > 0) {
         ret = check_magic(old_addr, old_size);
         if (ret != MPOOL_ERROR_NONE) {
             SET_POINTER(error_p, ret);

@@ -40,18 +40,7 @@ typedef enum {
  * time but will result in a tighter heap.
  */
 	
-	MPOOL_FLAG_NO_FREE = (1 << 1),
-/*
- * By default the library adds 2 bytes onto all allocations to insert
- * a magic number that it can look for to determine how large a freed
- * memory chunk is.  This flag indicates that few if any frees are
- * going to be performed on the pool and to not waste memory on these
- * bytes.
- */
-
-
-
-	MPOOL_FLAG_HEAVY_PACKING = (1 << 2)
+	MPOOL_FLAG_HEAVY_PACKING = (1 << 1)
 /*
  * This enables very heavy packing at the possible expense of CPU.
  * This affects a number of parts of the library.
