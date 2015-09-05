@@ -299,10 +299,7 @@ KS_DECLARE(int) mpool_free(mpool_t *mp_p, void *addr);
  *
  * DESCRIPTION:
  *
- * Reallocate an address in a mmeory pool to a new size.  This is
- * different from realloc in that it needs the old address' size.  If
- * you don't have it then you need to allocate new space, copy the
- * data, and free the old pointer yourself.
+ * Reallocate an address in a mmeory pool to a new size.  
  *
  * RETURNS:
  *
