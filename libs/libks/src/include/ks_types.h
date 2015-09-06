@@ -38,18 +38,18 @@
 
 #ifdef __cplusplus
 extern "C" {
-#endif /* defined(__cplusplus) */
+#endif							/* defined(__cplusplus) */
 
 #include <ks_platform.h>
 
 #define KS_VA_NONE "%s", ""
 
 
-typedef enum {
-	KS_POLL_READ = (1 << 0),
-	KS_POLL_WRITE = (1 << 1),
-	KS_POLL_ERROR = (1 << 2)
-} ks_poll_t;
+	typedef enum {
+		KS_POLL_READ = (1 << 0),
+		KS_POLL_WRITE = (1 << 1),
+		KS_POLL_ERROR = (1 << 2)
+	} ks_poll_t;
 
 #ifdef WIN32
 #define KS_SEQ_FWHITE FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY
@@ -61,14 +61,14 @@ typedef enum {
 #define KS_SEQ_FCYAN FOREGROUND_GREEN | FOREGROUND_BLUE | FOREGROUND_INTENSITY
 #define KS_SEQ_BCYAN FOREGROUND_GREEN | FOREGROUND_BLUE
 #define KS_SEQ_FGREEN FOREGROUND_GREEN | FOREGROUND_INTENSITY
-#define KS_SEQ_BGREEN FOREGROUND_GREEN 
+#define KS_SEQ_BGREEN FOREGROUND_GREEN
 #define KS_SEQ_FYELLOW FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_INTENSITY
 #define KS_SEQ_BYELLOW FOREGROUND_RED | FOREGROUND_GREEN
 #define KS_SEQ_DEFAULT_COLOR KS_SEQ_FWHITE
 #define KS_SEQ_FBLUE FOREGROUND_BLUE | FOREGROUND_INTENSITY
-#define KS_SEQ_BBLUE FOREGROUND_BLUE 
+#define KS_SEQ_BBLUE FOREGROUND_BLUE
 #define KS_SEQ_FBLACK 0 | FOREGROUND_INTENSITY
-#define KS_SEQ_BBLACK 0 
+#define KS_SEQ_BBLACK 0
 #else
 #define KS_SEQ_ESC "\033["
 /* Ansi Control character suffixes */
@@ -125,22 +125,22 @@ typedef enum {
 #define KS_SEQ_CLEARSCR KS_SEQ_ESC KS_SEQ_CLEARSCR_CHAR KS_SEQ_HOME
 #endif
 
-typedef int16_t ks_port_t;
-typedef size_t ks_size_t;
+	typedef int16_t ks_port_t;
+	typedef size_t ks_size_t;
 
-typedef enum {
-	KS_SUCCESS,
-	KS_FAIL,
-	KS_BREAK,
-	KS_DISCONNECTED,
-	KS_GENERR
-} ks_status_t;
+	typedef enum {
+		KS_SUCCESS,
+		KS_FAIL,
+		KS_BREAK,
+		KS_DISCONNECTED,
+		KS_GENERR
+	} ks_status_t;
 
 /*! \brief Used internally for truth test */
-typedef enum {
-	KS_TRUE = 1,
-	KS_FALSE = 0
-} ks_bool_t;
+	typedef enum {
+		KS_TRUE = 1,
+		KS_FALSE = 0
+	} ks_bool_t;
 
 #ifndef __FUNCTION__
 #define __FUNCTION__ (const char *)__func__
@@ -164,17 +164,14 @@ typedef enum {
 #define KS_LOG_CRIT KS_PRE, KS_LOG_LEVEL_CRIT
 #define KS_LOG_ALERT KS_PRE, KS_LOG_LEVEL_ALERT
 #define KS_LOG_EMERG KS_PRE, KS_LOG_LEVEL_EMERG
-typedef void (*ks_logger_t)(const char *file, const char *func, int line, int level, const char *fmt, ...);
-typedef void (*ks_listen_callback_t)(ks_socket_t server_sock, ks_socket_t client_sock, struct sockaddr_in *addr);
+	typedef void (*ks_logger_t) (const char *file, const char *func, int line, int level, const char *fmt, ...);
+	typedef void (*ks_listen_callback_t) (ks_socket_t server_sock, ks_socket_t client_sock, struct sockaddr_in * addr);
 
 
 #ifdef __cplusplus
 }
-#endif /* defined(__cplusplus) */
-
-
-#endif /* defined(_KS_TYPES_H_) */
-
+#endif							/* defined(__cplusplus) */
+#endif							/* defined(_KS_TYPES_H_) */
 /* For Emacs:
  * Local Variables:
  * mode:c
@@ -185,4 +182,3 @@ typedef void (*ks_listen_callback_t)(ks_socket_t server_sock, ks_socket_t client
  * For VIM:
  * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */
-

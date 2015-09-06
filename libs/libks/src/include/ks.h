@@ -39,7 +39,7 @@
 
 #ifdef __cplusplus
 extern "C" {
-#endif /* defined(__cplusplus) */
+#endif							/* defined(__cplusplus) */
 
 #define ks_copy_string(_x, _y, _z) strncpy(_x, _y, _z - 1)
 #define ks_set_string(_x, _y) ks_copy_string(_x, _y, sizeof(_x))
@@ -72,46 +72,45 @@ extern "C" {
 #define ks_clear_flag(obj, flag) (obj)->flags &= ~(flag)
 
 
-KS_DECLARE(int) ks_vasprintf(char **ret, const char *fmt, va_list ap);
+	KS_DECLARE(int) ks_vasprintf(char **ret, const char *fmt, va_list ap);
 
-KS_DECLARE_DATA extern ks_logger_t ks_log;
+	KS_DECLARE_DATA extern ks_logger_t ks_log;
 
 /*! Sets the logger for libks. Default is the null_logger */
-KS_DECLARE(void) ks_global_set_logger(ks_logger_t logger);
+	            KS_DECLARE(void) ks_global_set_logger(ks_logger_t logger);
 /*! Sets the default log level for libks */
-KS_DECLARE(void) ks_global_set_default_logger(int level);
+	            KS_DECLARE(void) ks_global_set_default_logger(int level);
 
 
 #include "ks_threadmutex.h"
 #include "ks_config.h"
 #include "ks_buffer.h"
-#include "mpool.h"
+#include "ks_mpool.h"
 #include "simclist.h"
 #include "table.h"
 
-KS_DECLARE(size_t) ks_url_encode(const char *url, char *buf, size_t len);
-KS_DECLARE(char *)ks_url_decode(char *s);
-KS_DECLARE(const char *)ks_stristr(const char *instr, const char *str);
-KS_DECLARE(int) ks_toupper(int c);
-KS_DECLARE(int) ks_tolower(int c);
-KS_DECLARE(int) ks_snprintf(char *buffer, size_t count, const char *fmt, ...);
+	    KS_DECLARE(size_t) ks_url_encode(const char *url, char *buf, size_t len);
+	       KS_DECLARE(char *) ks_url_decode(char *s);
+	     KS_DECLARE(const char *) ks_stristr(const char *instr, const char *str);
+	     KS_DECLARE(int) ks_toupper(int c);
+	    KS_DECLARE(int) ks_tolower(int c);
+	    KS_DECLARE(int) ks_snprintf(char *buffer, size_t count, const char *fmt, ...);
 
 
-KS_DECLARE(int) ks_wait_sock(ks_socket_t sock, uint32_t ms, ks_poll_t flags);
+	    KS_DECLARE(int) ks_wait_sock(ks_socket_t sock, uint32_t ms, ks_poll_t flags);
 
-KS_DECLARE(unsigned int) ks_separate_string_string(char *buf, const char *delim, char **array, unsigned int arraylen);
+	          KS_DECLARE(unsigned int) ks_separate_string_string(char *buf, const char *delim, char **array, unsigned int arraylen);
 
 #define ks_recv(_h) ks_recv_event(_h, 0, NULL)
 #define ks_recv_timed(_h, _ms) ks_recv_event_timed(_h, _ms, 0, NULL)
 
-static __inline__ int ks_safe_strcasecmp(const char *s1, const char *s2)
-{
-	if (!(s1 && s2)) {
-		return 1;
-	}
+	static __inline__ int ks_safe_strcasecmp(const char *s1, const char *s2) {
+		if (!(s1 && s2)) {
+			return 1;
+		}
 
-	return strcasecmp(s1, s2);
-}
+		return strcasecmp(s1, s2);
+	}
 
 #ifdef __cplusplus
 }

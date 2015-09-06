@@ -157,7 +157,7 @@ KS_DECLARE(int) ks_config_next_pair(ks_config_t *cfg, char **var, char **val)
 		}
 
 
-		if ((end = strchr(*var, ';')) && *(end+1) == *end) {
+		if ((end = strchr(*var, ';')) && *(end + 1) == *end) {
 			*end = '\0';
 			end--;
 		} else if ((end = strchr(*var, '\n')) != 0) {

@@ -67,10 +67,10 @@ void ks_thread_override_default_stacksize(size_t size)
 	thread_default_stacksize = size;
 }
 
-static void * KS_THREAD_CALLING_CONVENTION thread_launch(void *args)
+static void *KS_THREAD_CALLING_CONVENTION thread_launch(void *args)
 {
 	void *exit_val;
-    ks_thread_t *thread = (ks_thread_t *)args;
+	ks_thread_t *thread = (ks_thread_t *) args;
 	exit_val = thread->function(thread, thread->private_data);
 #ifndef WIN32
 	pthread_attr_destroy(&thread->attribute);
@@ -90,7 +90,7 @@ ks_status_t ks_thread_create_detached_ex(ks_thread_function_t func, void *data, 
 	ks_thread_t *thread = NULL;
 	ks_status_t status = KS_FAIL;
 
-	if (!func || !(thread = (ks_thread_t *)malloc(sizeof(ks_thread_t)))) {
+	if (!func || !(thread = (ks_thread_t *) malloc(sizeof(ks_thread_t)))) {
 		goto done;
 	}
 
@@ -99,7 +99,7 @@ ks_status_t ks_thread_create_detached_ex(ks_thread_function_t func, void *data, 
 	thread->stack_size = stack_size;
 
 #if defined(WIN32)
-	thread->handle = (void *)_beginthreadex(NULL, (unsigned)thread->stack_size, (unsigned int (__stdcall *)(void *))thread_launch, thread, 0, NULL);
+	thread->handle = (void *) _beginthreadex(NULL, (unsigned) thread->stack_size, (unsigned int (__stdcall *) (void *)) thread_launch, thread, 0, NULL);
 	if (!thread->handle) {
 		goto fail;
 	}
@@ -108,28 +108,32 @@ ks_status_t ks_thread_create_detached_ex(ks_thread_function_t func, void *data, 
 	status = KS_SUCCESS;
 	goto done;
 #else
-	
-	if (pthread_attr_init(&thread->attribute) != 0)	goto fail;
 
-	if (pthread_attr_setdetachstate(&thread->attribute, PTHREAD_CREATE_DETACHED) != 0) goto failpthread;
+	if (pthread_attr_init(&thread->attribute) != 0)
+		goto fail;
 
-	if (thread->stack_size && pthread_attr_setstacksize(&thread->attribute, thread->stack_size) != 0) goto failpthread;
+	if (pthread_attr_setdetachstate(&thread->attribute, PTHREAD_CREATE_DETACHED) != 0)
+		goto failpthread;
 
-	if (pthread_create(&thread->handle, &thread->attribute, thread_launch, thread) != 0) goto failpthread;
+	if (thread->stack_size && pthread_attr_setstacksize(&thread->attribute, thread->stack_size) != 0)
+		goto failpthread;
+
+	if (pthread_create(&thread->handle, &thread->attribute, thread_launch, thread) != 0)
+		goto failpthread;
 
 	status = KS_SUCCESS;
 	goto done;
 
- failpthread:
+  failpthread:
 
 	pthread_attr_destroy(&thread->attribute);
 #endif
 
- fail:
+  fail:
 	if (thread) {
 		free(thread);
 	}
- done:
+  done:
 	return status;
 }
 
@@ -142,7 +146,7 @@ KS_DECLARE(ks_status_t) ks_mutex_create(ks_mutex_t **mutex)
 #endif
 	ks_mutex_t *check = NULL;
 
-	check = (ks_mutex_t *)malloc(sizeof(**mutex));
+	check = (ks_mutex_t *) malloc(sizeof(**mutex));
 	if (!check)
 		goto done;
 #ifdef WIN32
@@ -159,16 +163,16 @@ KS_DECLARE(ks_status_t) ks_mutex_create(ks_mutex_t **mutex)
 
 	goto success;
 
- fail:
+  fail:
 	pthread_mutexattr_destroy(&attr);
 	goto done;
 
- success:
+  success:
 #endif
 	*mutex = check;
 	status = KS_SUCCESS;
 
- done:
+  done:
 	return status;
 }
 

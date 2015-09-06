@@ -38,7 +38,7 @@
 
 #ifdef __cplusplus
 extern "C" {
-#endif /* defined(__cplusplus) */
+#endif							/* defined(__cplusplus) */
 
 #if !defined(_XOPEN_SOURCE) && !defined(__FreeBSD__) && !defined(__NetBSD__) && !defined(__OpenBSD__)
 #define _XOPEN_SOURCE 600
@@ -117,17 +117,17 @@ extern "C" {
 #ifdef WIN32
 #include <winsock2.h>
 #include <windows.h>
-typedef SOCKET ks_socket_t;
-typedef unsigned __int64 uint64_t;
-typedef unsigned __int32 uint32_t;
-typedef unsigned __int16 uint16_t;
-typedef unsigned __int8 uint8_t;
-typedef __int64 int64_t;
-typedef __int32 int32_t;
-typedef __int16 int16_t;
-typedef __int8 int8_t;
-typedef intptr_t ks_ssize_t;
-typedef int ks_filehandle_t;
+	typedef SOCKET ks_socket_t;
+	typedef unsigned __int64 uint64_t;
+	typedef unsigned __int32 uint32_t;
+	typedef unsigned __int16 uint16_t;
+	typedef unsigned __int8 uint8_t;
+	typedef __int64 int64_t;
+	typedef __int32 int32_t;
+	typedef __int16 int16_t;
+	typedef __int8 int8_t;
+	typedef intptr_t ks_ssize_t;
+	typedef int ks_filehandle_t;
 #define KS_SOCK_INVALID INVALID_SOCKET
 #define strerror_r(num, buf, size) strerror_s(buf, size, num)
 #if defined(KS_DECLARE_STATIC)
@@ -143,7 +143,7 @@ typedef int ks_filehandle_t;
 #define KS_DECLARE_NONSTD(type)		__declspec(dllimport) type __cdecl
 #define KS_DECLARE_DATA				__declspec(dllimport)
 #endif
-#else // !WIN32
+#else							// !WIN32
 #define KS_DECLARE(type) type
 #define KS_DECLARE_NONSTD(type) type
 #define KS_DECLARE_DATA
@@ -155,18 +155,17 @@ typedef int ks_filehandle_t;
 #include <netinet/in.h>
 #include <netdb.h>
 #define KS_SOCK_INVALID -1
-typedef int ks_socket_t;
-typedef ssize_t ks_ssize_t;
-typedef int ks_filehandle_t;
+	typedef int ks_socket_t;
+	typedef ssize_t ks_ssize_t;
+	typedef int ks_filehandle_t;
 #endif
 
 
 
 #ifdef __cplusplus
 }
-#endif /* defined(__cplusplus) */
-#endif /* defined(_KS_PLATFORM_H_) */
-
+#endif							/* defined(__cplusplus) */
+#endif							/* defined(_KS_PLATFORM_H_) */
 /* For Emacs:
  * Local Variables:
  * mode:c

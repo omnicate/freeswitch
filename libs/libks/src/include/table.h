@@ -26,7 +26,7 @@
 
 #ifdef __cplusplus
 extern "C" {
-#endif /* __cplusplus */
+#endif							/* __cplusplus */
 
 	/*
 	 * To build a "key" in any of the below routines, pass in a pointer to
@@ -73,7 +73,7 @@ extern "C" {
 	 * re-hashed.  Although this may take some time when it re-hashes, the
 	 * table will perform better over time.
 	 */
-#define TABLE_FLAG_AUTO_ADJUST	(1<<0)	
+#define TABLE_FLAG_AUTO_ADJUST	(1<<0)
 
 	/*
 	 * If the above auto-adjust flag is set, also adjust the number of
@@ -83,9 +83,9 @@ extern "C" {
 
 	/* structure to walk through the fields in a linear order */
 	typedef struct {
-		unsigned int	tl_magic;	/* magic structure to ensure correct init */
-		unsigned int	tl_bucket_c;	/* where in the table buck array we are */
-		unsigned int	tl_entry_c;	/* in the bucket, which entry we are on */
+		unsigned int tl_magic;	/* magic structure to ensure correct init */
+		unsigned int tl_bucket_c;	/* where in the table buck array we are */
+		unsigned int tl_entry_c;	/* in the bucket, which entry we are on */
 	} table_linear_t;
 
 	/*
@@ -118,10 +118,9 @@ extern "C" {
 	 *
 	 * data2_size - Pointer to the size of the second data entry.
 	 */
-	typedef int (*table_compare_t)(const void *key1, const int key1_size,
-								   const void *data1, const int data1_size,
-								   const void *key2, const int key2_size,
-								   const void *data2, const int data2_size);
+	typedef int (*table_compare_t) (const void *key1, const int key1_size,
+									const void *data1, const int data1_size,
+									const void *key2, const int key2_size, const void *data2, const int data2_size);
 
 	/*
 	 * int (*table_mem_alloc_t)
@@ -143,7 +142,7 @@ extern "C" {
 	 *
 	 * size -> Number of bytes that needs to be allocated.
 	 */
-	typedef void	*(*table_mem_alloc_t)(void *pool_p, const unsigned long size);
+	typedef void *(*table_mem_alloc_t) (void *pool_p, const unsigned long size);
 
 	/*
 	 * int (*table_mem_resize_t)
@@ -173,9 +172,7 @@ extern "C" {
 	 *
 	 * new_size -> New size of the allocation.
 	 */
-	typedef void	*(*table_mem_resize_t)(void *pool_p, void *old_addr,
-										   const unsigned long old_size,
-										   const unsigned long new_size);
+	typedef void *(*table_mem_resize_t) (void *pool_p, void *old_addr, const unsigned long old_size, const unsigned long new_size);
 
 	/*
 	 * int (*table_mem_free_t)
@@ -200,8 +197,7 @@ extern "C" {
 	 * min_size -> Minimum size of the address being freed or 0 if not
 	 * known.  This can also be the exact size if known.
 	 */
-	typedef int	(*table_mem_free_t)(void *pool_p, void *addr,
-									const unsigned long min_size);
+	typedef int (*table_mem_free_t) (void *pool_p, void *addr, const unsigned long min_size);
 
 #ifdef TABLE_MAIN
 
@@ -210,10 +206,10 @@ extern "C" {
 #else
 
 	/* generic table type */
-	typedef	void	table_t;
+	typedef void table_t;
 
 	/* generic table entry type */
-	typedef void	table_entry_t;
+	typedef void table_entry_t;
 
 #endif
 
@@ -241,7 +237,7 @@ extern "C" {
 	 * table error code.
 	 */
 	extern
-	table_t		*table_alloc(const unsigned int bucket_n, int *error_p);
+	table_t *table_alloc(const unsigned int bucket_n, int *error_p);
 
 	/*
 	 * table_t *table_alloc_in_pool
@@ -276,11 +272,8 @@ extern "C" {
 	 * table error code.
 	 */
 	extern
-	table_t		*table_alloc_in_pool(const unsigned int bucket_n,
-									 void *mem_pool,
-									 table_mem_alloc_t alloc_func,
-									 table_mem_resize_t resize_func,
-									 table_mem_free_t free_func, int *error_p);
+	table_t *table_alloc_in_pool(const unsigned int bucket_n,
+								 void *mem_pool, table_mem_alloc_t alloc_func, table_mem_resize_t resize_func, table_mem_free_t free_func, int *error_p);
 
 	/*
 	 * int table_attr
@@ -303,7 +296,7 @@ extern "C" {
 	 * attr - Attribute(s) that we will be applying to the table.
 	 */
 	extern
-	int	table_attr(table_t *table_p, const int attr);
+	int table_attr(table_t *table_p, const int attr);
 
 	/*
 	 * int table_set_data_alignment
@@ -343,7 +336,7 @@ extern "C" {
 	 * 2.  Set to 0 for none.
 	 */
 	extern
-	int	table_set_data_alignment(table_t *table_p, const int alignment);
+	int table_set_data_alignment(table_t *table_p, const int alignment);
 
 	/*
 	 * int table_clear
@@ -363,7 +356,7 @@ extern "C" {
 	 * table_p - Table structure pointer that we will be clearing.
 	 */
 	extern
-	int	table_clear(table_t *table_p);
+	int table_clear(table_t *table_p);
 
 	/*
 	 * int table_free
@@ -383,7 +376,7 @@ extern "C" {
 	 * table_p - Table structure pointer that we will be freeing.
 	 */
 	extern
-	int	table_free(table_t *table_p);
+	int table_free(table_t *table_p);
 
 	/*
 	 * int table_insert_kd
@@ -462,11 +455,9 @@ extern "C" {
 	 * in the table.
 	 */
 	extern
-	int	table_insert_kd(table_t *table_p,
+	int table_insert_kd(table_t *table_p,
 						const void *key_buf, const int key_size,
-						const void *data_buf, const int data_size,
-						void **key_buf_p, void **data_buf_p,
-						const char overwrite_b);
+						const void *data_buf, const int data_size, void **key_buf_p, void **data_buf_p, const char overwrite_b);
 
 	/*
 	 * int table_insert
@@ -521,10 +512,8 @@ extern "C" {
 	 * in the table.
 	 */
 	extern
-	int	table_insert(table_t *table_p,
-					 const void *key_buf, const int key_size,
-					 const void *data_buf, const int data_size,
-					 void **data_buf_p, const char overwrite_b);
+	int table_insert(table_t *table_p,
+					 const void *key_buf, const int key_size, const void *data_buf, const int data_size, void **data_buf_p, const char overwrite_b);
 
 	/*
 	 * int table_retrieve
@@ -566,9 +555,7 @@ extern "C" {
 	 * the key.
 	 */
 	extern
-	int	table_retrieve(table_t *table_p,
-					   const void *key_buf, const int key_size,
-					   void **data_buf_p, int *data_size_p);
+	int table_retrieve(table_t *table_p, const void *key_buf, const int key_size, void **data_buf_p, int *data_size_p);
 
 	/*
 	 * int table_delete
@@ -616,9 +603,7 @@ extern "C" {
 	 * associated with the key.
 	 */
 	extern
-	int	table_delete(table_t *table_p,
-					 const void *key_buf, const int key_size,
-					 void **data_buf_p, int *data_size_p);
+	int table_delete(table_t *table_p, const void *key_buf, const int key_size, void **data_buf_p, int *data_size_p);
 
 	/*
 	 * int table_delete_first
@@ -670,9 +655,7 @@ extern "C" {
 	 * associated with the key.
 	 */
 	extern
-	int	table_delete_first(table_t *table_p,
-						   void **key_buf_p, int *key_size_p,
-						   void **data_buf_p, int *data_size_p);
+	int table_delete_first(table_t *table_p, void **key_buf_p, int *key_size_p, void **data_buf_p, int *data_size_p);
 
 	/*
 	 * int table_info
@@ -699,7 +682,7 @@ extern "C" {
 	 * contain the number of entries stored in the table.
 	 */
 	extern
-	int	table_info(table_t *table_p, int *num_buckets_p, int *num_entries_p);
+	int table_info(table_t *table_p, int *num_buckets_p, int *num_entries_p);
 
 	/*
 	 * int table_adjust
@@ -722,7 +705,7 @@ extern "C" {
 	 * adjust the table to its number of entries.
 	 */
 	extern
-	int	table_adjust(table_t *table_p, const int bucket_n);
+	int table_adjust(table_t *table_p, const int bucket_n);
 
 	/*
 	 * int table_type_size
@@ -740,7 +723,7 @@ extern "C" {
 	 * None.
 	 */
 	extern
-	int	table_type_size(void);
+	int table_type_size(void);
 
 	/*
 	 * int table_first
@@ -786,9 +769,7 @@ extern "C" {
 	 * associated with the first key.
 	 */
 	extern
-	int	table_first(table_t *table_p,
-					void **key_buf_p, int *key_size_p,
-					void **data_buf_p, int *data_size_p);
+	int table_first(table_t *table_p, void **key_buf_p, int *key_size_p, void **data_buf_p, int *data_size_p);
 
 	/*
 	 * int table_next
@@ -834,9 +815,7 @@ extern "C" {
 	 * associated with the next key.
 	 */
 	extern
-	int	table_next(table_t *table_p,
-				   void **key_buf_p, int *key_size_p,
-				   void **data_buf_p, int *data_size_p);
+	int table_next(table_t *table_p, void **key_buf_p, int *key_size_p, void **data_buf_p, int *data_size_p);
 
 	/*
 	 * int table_this
@@ -881,9 +860,7 @@ extern "C" {
 	 * associated with the current key.
 	 */
 	extern
-	int	table_this(table_t *table_p,
-				   void **key_buf_p, int *key_size_p,
-				   void **data_buf_p, int *data_size_p);
+	int table_this(table_t *table_p, void **key_buf_p, int *key_size_p, void **data_buf_p, int *data_size_p);
 
 	/*
 	 * int table_first_r
@@ -930,9 +907,7 @@ extern "C" {
 	 * associated with the first key.
 	 */
 	extern
-	int	table_first_r(table_t *table_p, table_linear_t *linear_p,
-					  void **key_buf_p, int *key_size_p,
-					  void **data_buf_p, int *data_size_p);
+	int table_first_r(table_t *table_p, table_linear_t *linear_p, void **key_buf_p, int *key_size_p, void **data_buf_p, int *data_size_p);
 
 	/*
 	 * int table_next_r
@@ -979,9 +954,7 @@ extern "C" {
 	 * associated with the next key.
 	 */
 	extern
-	int	table_next_r(table_t *table_p, table_linear_t *linear_p,
-					 void **key_buf_p, int *key_size_p,
-					 void **data_buf_p, int *data_size_p);
+	int table_next_r(table_t *table_p, table_linear_t *linear_p, void **key_buf_p, int *key_size_p, void **data_buf_p, int *data_size_p);
 
 	/*
 	 * int table_this_r
@@ -1028,9 +1001,7 @@ extern "C" {
 	 * associated with the current key.
 	 */
 	extern
-	int	table_this_r(table_t *table_p, table_linear_t *linear_p,
-					 void **key_buf_p, int *key_size_p,
-					 void **data_buf_p, int *data_size_p);
+	int table_this_r(table_t *table_p, table_linear_t *linear_p, void **key_buf_p, int *key_size_p, void **data_buf_p, int *data_size_p);
 
 	/*
 	 * table_t *table_mmap
@@ -1053,7 +1024,7 @@ extern "C" {
 	 * table error code.
 	 */
 	extern
-	table_t		*table_mmap(const char *path, int *error_p);
+	table_t *table_mmap(const char *path, int *error_p);
 
 	/*
 	 * int table_munmap
@@ -1071,7 +1042,7 @@ extern "C" {
 	 * table_p - Mmaped table pointer to unmap.
 	 */
 	extern
-	int	table_munmap(table_t *table_p);
+	int table_munmap(table_t *table_p);
 
 	/*
 	 * int table_read
@@ -1096,7 +1067,7 @@ extern "C" {
 	 * table error code.
 	 */
 	extern
-	table_t	*table_read(const char *path, int *error_p);
+	table_t *table_read(const char *path, int *error_p);
 
 	/*
 	 * int table_write
@@ -1121,7 +1092,7 @@ extern "C" {
 	 * the file is created.
 	 */
 	extern
-	int	table_write(const table_t *table_p, const char *path, const int mode);
+	int table_write(const table_t *table_p, const char *path, const int mode);
 
 	/*
 	 * table_entry_t *table_order
@@ -1158,8 +1129,7 @@ extern "C" {
 	 * table error code.
 	 */
 	extern
-	table_entry_t	**table_order(table_t *table_p, table_compare_t compare,
-								  int *num_entries_p, int *error_p);
+	table_entry_t **table_order(table_t *table_p, table_compare_t compare, int *num_entries_p, int *error_p);
 
 	/*
 	 * int table_order_free
@@ -1186,8 +1156,7 @@ extern "C" {
 	 * table_order or table_order_pos in num_entries_p.
 	 */
 	extern
-	int	table_order_free(table_t *table_p, table_entry_t **table_entries,
-						 const int entry_n);
+	int table_order_free(table_t *table_p, table_entry_t **table_entries, const int entry_n);
 
 	/*
 	 * int table_entry
@@ -1229,9 +1198,7 @@ extern "C" {
 	 * to the size of the data that is stored in the table.
 	 */
 	extern
-	int	table_entry(table_t *table_p, table_entry_t *entry_p,
-					void **key_buf_p, int *key_size_p,
-					void **data_buf_p, int *data_size_p);
+	int table_entry(table_t *table_p, table_entry_t *entry_p, void **key_buf_p, int *key_size_p, void **data_buf_p, int *data_size_p);
 
 	/*
 	 * table_linear_t *table_order_pos
@@ -1268,8 +1235,7 @@ extern "C" {
 	 * table error code.
 	 */
 	extern
-	table_linear_t	*table_order_pos(table_t *table_p, table_compare_t compare,
-									 int *num_entries_p, int *error_p);
+	table_linear_t *table_order_pos(table_t *table_p, table_compare_t compare, int *num_entries_p, int *error_p);
 
 	/*
 	 * int table_order_pos_free
@@ -1296,8 +1262,7 @@ extern "C" {
 	 * table_order or table_order_pos in num_entries_p.
 	 */
 	extern
-	int	table_order_pos_free(table_t *table_p, table_linear_t *table_entries,
-							 const int entry_n);
+	int table_order_pos_free(table_t *table_p, table_linear_t *table_entries, const int entry_n);
 
 	/*
 	 * int table_entry_pos
@@ -1339,9 +1304,7 @@ extern "C" {
 	 * to the size of the data that is stored in the table.
 	 */
 	extern
-	int	table_entry_pos(table_t *table_p, table_linear_t *linear_p,
-						void **key_buf_p, int *key_size_p,
-						void **data_buf_p, int *data_size_p);
+	int table_entry_pos(table_t *table_p, table_linear_t *linear_p, void **key_buf_p, int *key_size_p, void **data_buf_p, int *data_size_p);
 
 	/*
 	 * const char *table_strerror
@@ -1361,16 +1324,14 @@ extern "C" {
 	 * error - Error number that we are converting.
 	 */
 	extern
-	const char	*table_strerror(const int error);
+	const char *table_strerror(const int error);
 
 	/*<<<<<<<<<<   This is end of the auto-generated output from fillproto. */
 
 #ifdef __cplusplus
 }
-#endif /* __cplusplus */
-
-#endif /* ! __TABLE_H__ */
-
+#endif							/* __cplusplus */
+#endif							/* ! __TABLE_H__ */
 /* For Emacs:
  * Local Variables:
  * mode:c
