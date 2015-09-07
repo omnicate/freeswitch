@@ -232,6 +232,9 @@ void ft_to_sngss7_iam (ftdm_channel_t * ftdmchan)
 			copy_cgPtyNum_to_sngss7(ftdmchan, &iam.cgPtyNum);
 		}
 
+		/* chargeNum*/
+		copy_chargeNum_to_sngss7(ftdmchan, &iam.chargeNum, NULL);
+
 		/* Location Number information */
 		copy_locPtyNum_to_sngss7(ftdmchan, &iam.cgPtyNum1);
 

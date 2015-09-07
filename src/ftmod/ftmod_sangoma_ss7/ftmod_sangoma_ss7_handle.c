@@ -235,6 +235,7 @@ ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 			copy_usrServInfoA_from_sngss7(ftdmchan, &siConEvnt->usrServInfo);
 			copy_cgPtyCat_from_sngss7(ftdmchan, &siConEvnt->cgPtyCat);
 			copy_cdPtyNum_from_sngss7(ftdmchan, &siConEvnt->cdPtyNum);
+			copy_chargeNum_from_sngss7(ftdmchan, &siConEvnt->chargeNum);
 			copy_usr2UsrInfo_from_sngss7(ftdmchan, &siConEvnt->usr2UsrInfo);
 			copy_hopCounter_from_sngss7(ftdmchan, &siConEvnt->hopCounter);
 
