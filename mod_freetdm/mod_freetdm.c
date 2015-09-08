@@ -1504,14 +1504,14 @@ static switch_call_cause_t channel_outgoing_channel(switch_core_session_t *sessi
 			ftdm_usrmsg_add_var(&usrmsg, "ss7_chargenum", sipvar);
 		}
 
-		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-ChargeNum-nadi");
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-ChargeNum-NADI");
 		if (sipvar) {
 			ftdm_usrmsg_add_var(&usrmsg, "ss7_chargenum_nadi", sipvar);
 		}
 
-		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-ChargeNum-numplan");
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-ChargeNum-Plan");
 		if (sipvar) {
-			ftdm_usrmsg_add_var(&usrmsg, "ss7_chargenum_numplan", sipvar);
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_chargenum_plan", sipvar);
 		}
 		
 		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-Access-Transport-URLENC");
@@ -2259,12 +2259,12 @@ ftdm_status_t ftdm_channel_from_event(ftdm_sigmsg_t *sigmsg, switch_core_session
 
 		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_chargenum_nadi");
 		if (!ftdm_strlen_zero(var_value)) {
-			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-ChargeNum-nadi", "%s", var_value);
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-ChargeNum-NADI", "%s", var_value);
 		}
 
-		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_chargenum_numplan");
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_chargenum_plan");
 		if (!ftdm_strlen_zero(var_value)) {
-			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-ChargeNum-numplan", "%s", var_value);
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-ChargeNum-Plan", "%s", var_value);
 		}
 
 		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_loc_screen_ind");

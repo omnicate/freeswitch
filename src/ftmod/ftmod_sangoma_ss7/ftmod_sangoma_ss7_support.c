@@ -358,19 +358,29 @@ ftdm_status_t copy_chargeNum_from_sngss7(ftdm_channel_t *ftdmchan,  SiChargeNum 
 	char var[FTDM_DIGITS_LIMIT];
 	sngss7_chan_data_t *sngss7_info = ftdmchan->call_data;
 
+	memset(var, 0, sizeof(var));
+
+	if (chargeNum->eh.pres != PRSNT_NODEF) {
+		ftdm_log_chan_msg(ftdmchan, FTDM_LOG_DEBUG, "No ChargeNum Parameter available\n");
+		return FTDM_SUCCESS;
+	}
+
 	if (chargeNum->addrSig.pres == PRSNT_NODEF) {
 		copy_tknStr_from_sngss7(chargeNum->addrSig, var, chargeNum->oddEven);
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found ChargeNum : %s\n", var);
 		sngss7_add_var(sngss7_info, "ss7_chargenum", var);
 	}
 
-	if (chargeNum->eh.pres == PRSNT_NODEF &&
-	    chargeNum->natAddr.pres 	== PRSNT_NODEF) {
-		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found natAddr.val %d\n", chargeNum->natAddr.val);
+	if (chargeNum->natAddr.pres == PRSNT_NODEF) {
 		sprintf(var, "%d", chargeNum->natAddr.val);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found natAddr.val %d\n", var);
 		sngss7_add_var(sngss7_info, "ss7_chargenum_nadi", var);
+	}
+
+	if (chargeNum->numPlan.pres == PRSNT_NODEF) {
 		sprintf(var, "%d", chargeNum->numPlan.val);
-		sngss7_add_var(sngss7_info, "ss7_chargenum_numplan", var);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found chargeNum numbering plan %d\n", var);
+		sngss7_add_var(sngss7_info, "ss7_chargenum_plan", var);
 	}
 
 	return FTDM_SUCCESS;
@@ -379,13 +389,22 @@ ftdm_status_t copy_chargeNum_from_sngss7(ftdm_channel_t *ftdmchan,  SiChargeNum 
 /* Copy chargeNum to sngss7 */
 ftdm_status_t copy_chargeNum_to_sngss7(ftdm_channel_t *ftdmchan, SiChargeNum *chargeNum, char *digits)
 {
-	 const char	*val = NULL;
+	const char	*val = NULL;
 	sngss7_chan_data_t	*sngss7_info = ftdmchan->call_data;
 
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_chargenum");
+	if (!ftdm_strlen_zero(val)) {
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, " Found user supplied chargeNum value %s\n", val);
+		copy_tknStr_to_sngss7((char *)val, &chargeNum->addrSig, &chargeNum->oddEven);
+	} else {
+		ftdm_log_chan(ftdmchan, FTDM_LOG_WARNING, "No user suppiled chargeNum value %s\n", "");
+		return FTDM_SUCCESS;
+	}
 
 	chargeNum->eh.pres 	  = PRSNT_NODEF;
-	chargeNum->natAddr.pres   = PRSNT_NODEF;
+	chargeNum->addrSig.pres   = PRSNT_NODEF;
 
+	chargeNum->natAddr.pres   = PRSNT_NODEF;
 	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_chargenum_nadi");
 	if (!ftdm_strlen_zero(val)) {
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found user supplied chargeNum NADI value \"%s\"\n", val);
@@ -396,7 +415,7 @@ ftdm_status_t copy_chargeNum_to_sngss7(ftdm_channel_t *ftdmchan, SiChargeNum *ch
 	}
 
 	chargeNum->numPlan.pres	  = PRSNT_NODEF;
-	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_chargenum_numplan");
+	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_chargenum_plan");
 	if (!ftdm_strlen_zero(val)) {
 		chargeNum->numPlan.val		= atoi(val);
 		ftdm_log_chan(ftdmchan, FTDM_LOG_WARNING, "Found user supplied chargeNum plan value \"%s\"\n", val);
@@ -405,15 +424,6 @@ ftdm_status_t copy_chargeNum_to_sngss7(ftdm_channel_t *ftdmchan, SiChargeNum *ch
 		ftdm_log_chan_msg(ftdmchan, FTDM_LOG_WARNING, "No user supplied  chargeNum plan value, set to default value 0x01\n");
 	}
 
-	chargeNum->addrSig.pres 	  = PRSNT_NODEF;
-	val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_chargenum");
-	if (!ftdm_strlen_zero(val)) {
-		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, " Found user supplied chargeNum value %s\n",val);
-		copy_tknStr_to_sngss7((char *)val, &chargeNum->addrSig, &chargeNum->oddEven);
-	} else {
-		ftdm_log_chan(ftdmchan, FTDM_LOG_WARNING, "No user suppiled chargeNum value %s\n","");
-		return FTDM_FAIL;
-	}
 
 	return FTDM_SUCCESS;
 } /*copy_chargeNum_to_sngss7() */
