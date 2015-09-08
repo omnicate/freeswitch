@@ -146,12 +146,12 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\testpools.c" />
-  </ItemGroup>
-  <ItemGroup>
     <ProjectReference Include="..\..\libks.vcxproj">
       <Project>{70d178d8-1100-4152-86c0-809a91cff832}</Project>
     </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="testpools.c" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
