@@ -89,7 +89,7 @@ typedef struct ks_mpool_cleanup_node_s {
 	struct ks_mpool_cleanup_node_s *next;
 } ks_mpool_cleanup_node_t;
 
-typedef struct ks_mpool_s {
+struct ks_mpool_s {
 	unsigned int mp_magic;		/* magic number for struct */
 	unsigned int mp_flags;		/* flags for the struct */
 	unsigned long mp_alloc_c;	/* number of allocations */
@@ -108,7 +108,7 @@ typedef struct ks_mpool_s {
 	struct ks_mpool_block_st *mp_free[MAX_BITS + 1];	/* free lists based on size */
 	unsigned int mp_magic2;		/* upper magic for overwrite sanity */
 	ks_mpool_cleanup_node_t *clfn_list;
-} ks_mpool_t;
+};
 
 /* for debuggers to be able to interrogate the generic type in the .h file */
 typedef ks_mpool_t ks_mpool_ext_t;

@@ -21,16 +21,16 @@
  * $Id: table_t.c,v 1.12 2000/03/09 03:30:42 gray Exp $
  */
 
+#include "ks.h"
+
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <stdlib.h>
 #include <time.h>
 #include <unistd.h>
 
 #include "table.h"
-
-static	char	*rcs_id =
-  "$Id: table_t.c,v 1.12 2000/03/09 03:30:42 gray Exp $";
 
 #define RANDOM_VALUE(x)		((random() % ((x) * 10)) / 10)
 
@@ -822,6 +822,7 @@ static	void	io_test(table_t *tab_p)
     exit(1);
   }
   
+#if 0
   /*
    * mmap in the table
    */
@@ -846,6 +847,7 @@ static	void	io_test(table_t *tab_p)
 		  TABLE_FILE, table_strerror(ret));
     exit(1);
   }
+ #endif
 }
 
 /*

@@ -34,8 +34,9 @@
 #ifndef _KS_H_
 #define _KS_H_
 
-#include <stdarg.h>
 #include <ks_types.h>
+
+#include <stdarg.h>
 
 #ifdef __cplusplus
 extern "C" {

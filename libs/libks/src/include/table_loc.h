@@ -156,18 +156,18 @@ typedef struct table_shell_st {
  * NOTE: if this structure is changed, the table_shell_t must be
  * changed to match.
  */
-typedef struct table_entry_st {
+struct table_entry_st {
 	unsigned int te_key_size;	/* size of data */
 	unsigned int te_data_size;	/* size of data */
 	struct table_entry_st *te_next_p;	/* pointer to next in the list */
 	unsigned char te_key_buf[1];	/* 1st byte of key buf */
-} table_entry_t;
+};
 
 /* external structure for debuggers be able to see void */
 typedef table_entry_t table_entry_ext_t;
 
 /* main table structure */
-typedef struct table_st {
+struct table_st {
 	unsigned int ta_magic;		/* magic number */
 	unsigned int ta_flags;		/* table's flags defined in table.h */
 	unsigned int ta_bucket_n;	/* num of buckets, should be 2^X */
@@ -182,7 +182,7 @@ typedef struct table_st {
 	table_mem_alloc_t ta_alloc_func;	/* memory allocation function */
 	table_mem_resize_t ta_resize_func;	/* memory resize function */
 	table_mem_free_t ta_free_func;	/* memory free function */
-} table_t;
+};
 
 /* external table structure for debuggers */
 typedef table_t table_ext_t;

@@ -34,13 +34,12 @@
 #ifndef _KS_TYPES_H_
 #define _KS_TYPES_H_
 
-#include <stdarg.h>
-
 #ifdef __cplusplus
 extern "C" {
 #endif							/* defined(__cplusplus) */
 
 #include <ks_platform.h>
+#include <stdarg.h>
 
 #define KS_VA_NONE "%s", ""
 

@@ -1,8 +1,9 @@
+#include "ks.h"
+#include "ks_mpool.h"
+
 #include <stdlib.h>
 #include <stdio.h>
-#include "ks_mpool.h"
 #include <string.h>
-#include <ks.h>
 
 static void fill(char *str, int bytes, char c)
 {

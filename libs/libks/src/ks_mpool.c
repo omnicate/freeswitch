@@ -32,6 +32,7 @@
  * growth problems.
  */
 
+#include "ks.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -60,16 +61,9 @@
 #include "ks_mpool.h"
 #include "ks_mpool_loc.h"
 
-#ifdef __GNUC__
-#ident "$Id: ks_mpool.c,v 1.5 2006/05/31 20:28:31 gray Exp $"
-#else
-static char *rcs_id = "$Id: ks_mpool.c,v 1.5 2006/05/31 20:28:31 gray Exp $";
+#ifndef MAP_ANON
+#define MAP_ANON MAP_ANONYMOUS
 #endif
-
-#include "ks.h"
-
-/* version */
-static char *version = "ks_mpool library version 2.1.0";
 
 /* local variables */
 static int enabled_b = 0;		/* lib initialized? */
@@ -94,6 +88,7 @@ long getpagesize(void)
 
 /* We need mutex here probably or this notion of cleanup stuff cannot be threadsafe */
 
+#if 0
 static ks_mpool_cleanup_node_t *find_cleanup_node(ks_mpool_t *mp_p, void *ptr)
 {
 	ks_mpool_cleanup_node_t *np, *cnode = NULL;
@@ -113,6 +108,7 @@ static ks_mpool_cleanup_node_t *find_cleanup_node(ks_mpool_t *mp_p, void *ptr)
 	/* done, the nodes are all from the pool so they will be destroyed */
 	return cnode;
 }
+#endif
 
 static void peform_pool_cleanup_on_free(ks_mpool_t *mp_p, void *ptr)
 {
@@ -857,7 +853,7 @@ static void *alloc_mem(ks_mpool_t *mp_p, const unsigned long byte_size, int *err
 	}
 
 	SET_POINTER(error_p, KS_MPOOL_ERROR_NONE);
-	return addr + PREFIX_SIZE;
+	return (uint8_t *)addr + PREFIX_SIZE;
 }
 
 /*
@@ -1501,7 +1497,7 @@ KS_DECLARE(int) ks_mpool_free(ks_mpool_t *mp_p, void *addr)
  */
 KS_DECLARE(void *) ks_mpool_resize(ks_mpool_t *mp_p, void *old_addr, const unsigned long new_byte_size, int *error_p)
 {
-	unsigned long copy_size, new_size, old_size, fence, old_byte_size;
+	unsigned long copy_size, new_size, old_size, old_byte_size;
 	void *new_addr;
 	ks_mpool_block_t *block_p;
 	int ret;
@@ -1555,7 +1551,6 @@ KS_DECLARE(void *) ks_mpool_resize(ks_mpool_t *mp_p, void *old_addr, const unsig
 			SET_POINTER(error_p, ret);
 			return NULL;
 		}
-		fence = FENCE_SIZE;
 	}
 
 	/* move pointer to actual beginning */
@@ -1576,7 +1571,7 @@ KS_DECLARE(void *) ks_mpool_resize(ks_mpool_t *mp_p, void *old_addr, const unsig
 	 */
 
 	/* we need to get another address */
-	new_addr = alloc_mem(mp_p, new_byte_size, error_p);
+	new_addr = alloc_mem(mp_p, new_size, error_p);
 	if (new_addr == NULL) {
 		/* error_p set in ks_mpool_alloc */
 		return NULL;
@@ -1590,7 +1585,7 @@ KS_DECLARE(void *) ks_mpool_resize(ks_mpool_t *mp_p, void *old_addr, const unsig
 	memcpy(new_addr, old_addr, copy_size);
 
 	/* free the old address */
-	ret = free_mem(mp_p, old_addr + PREFIX_SIZE);
+	ret = free_mem(mp_p, (uint8_t *)old_addr + PREFIX_SIZE);
 	if (ret != KS_MPOOL_ERROR_NONE) {
 		/* if the old free failed, try and free the new address */
 		(void) free_mem(mp_p, new_addr);

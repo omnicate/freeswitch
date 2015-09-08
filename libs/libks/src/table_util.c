@@ -21,6 +21,8 @@
  * $Id: table_util.c,v 1.5 2000/03/09 03:30:42 gray Exp $
  */
 
+#include "ks.h"
+
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>

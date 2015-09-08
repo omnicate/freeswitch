@@ -29,17 +29,24 @@
  * information.
  */
 
+#include "ks.h"
+
+#if !defined(_XOPEN_SOURCE) && !defined(__FreeBSD__) && !defined(__NetBSD__) && !defined(__OpenBSD__)
+#define _XOPEN_SOURCE 600
+#endif
+
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#if defined(unix) || defined(__APPLE__)
+#if defined(unix) || defined(__APPLE__) || defined(__linux__)
 
 #include <unistd.h>
-
+#if defined(__linux__)
+#include <alloca.h>
+#endif
 #else
-
 #include <io.h>
 #include <malloc.h>
 #define NO_MMAP
@@ -70,14 +77,6 @@
 #ifdef DMALLOC
 #include "dmalloc.h"
 #endif
-
-static char *rcs_id = "$Id: table.c,v 1.19 2000/03/09 03:30:41 gray Exp $";
-
-/*
- * Version id for the library.  You also need to add an entry to the
- * NEWS and ChangeLog files.
- */
-static char *version_id = "$TableVersion: 4.3.0 March 8, 2000 $";
 
 /****************************** local functions ******************************/
 
@@ -1051,7 +1050,8 @@ static int split(unsigned char *first_p, unsigned char *last_p,
  * error_p - Pointer to an integer which, if not NULL, will contain a
  * table error code.
  */
-table_t *table_alloc(const unsigned int bucket_n, int *error_p)
+
+KS_DECLARE(table_t *) table_alloc(const unsigned int bucket_n, int *error_p)
 {
 	table_t *table_p = NULL;
 	unsigned int buck_n;
@@ -1129,7 +1129,7 @@ table_t *table_alloc(const unsigned int bucket_n, int *error_p)
  * error_p - Pointer to an integer which, if not NULL, will contain a
  * table error code.
  */
-table_t *table_alloc_in_pool(const unsigned int bucket_n,
+KS_DECLARE(table_t *) table_alloc_in_pool(const unsigned int bucket_n,
 							 void *mem_pool, table_mem_alloc_t alloc_func, table_mem_resize_t resize_func, table_mem_free_t free_func, int *error_p)
 {
 	table_t *table_p = NULL;
@@ -1208,7 +1208,7 @@ table_t *table_alloc_in_pool(const unsigned int bucket_n,
  *
  * attr - Attribute(s) that we will be applying to the table.
  */
-int table_attr(table_t *table_p, const int attr)
+KS_DECLARE(int) table_attr(table_t *table_p, const int attr)
 {
 	if (table_p == NULL) {
 		return TABLE_ERROR_ARG_NULL;
@@ -1259,7 +1259,7 @@ int table_attr(table_t *table_p, const int attr)
  * alignment - Alignment requested for the data.  Must be a power of
  * 2.  Set to 0 for none.
  */
-int table_set_data_alignment(table_t *table_p, const int alignment)
+KS_DECLARE(int) table_set_data_alignment(table_t *table_p, const int alignment)
 {
 	int val;
 
@@ -1309,7 +1309,8 @@ int table_set_data_alignment(table_t *table_p, const int alignment)
  *
  * table_p - Table structure pointer that we will be clearing.
  */
-int table_clear(table_t *table_p)
+
+KS_DECLARE(int) table_clear(table_t *table_p)
 {
 	int final = TABLE_ERROR_NONE;
 	table_entry_t *entry_p, *next_p;
@@ -1371,7 +1372,8 @@ int table_clear(table_t *table_p)
  *
  * table_p - Table structure pointer that we will be freeing.
  */
-int table_free(table_t *table_p)
+
+KS_DECLARE(int) table_free(table_t *table_p)
 {
 	int ret;
 
@@ -1485,7 +1487,8 @@ int table_free(table_t *table_p)
  * the data in the table with the new data if the key already exists
  * in the table.
  */
-int table_insert_kd(table_t *table_p,
+
+KS_DECLARE(int) table_insert_kd(table_t *table_p,
 					const void *key_buf, const int key_size,
 					const void *data_buf, const int data_size, void **key_buf_p, void **data_buf_p, const char overwrite_b)
 {
@@ -1751,7 +1754,8 @@ int table_insert_kd(table_t *table_p,
  * the data in the table with the new data if the key already exists
  * in the table.
  */
-int table_insert(table_t *table_p,
+
+KS_DECLARE(int) table_insert(table_t *table_p,
 				 const void *key_buf, const int key_size, const void *data_buf, const int data_size, void **data_buf_p, const char overwrite_b)
 {
 	return table_insert_kd(table_p, key_buf, key_size, data_buf, data_size, NULL, data_buf_p, overwrite_b);
@@ -1796,7 +1800,8 @@ int table_insert(table_t *table_p,
  * to the size of the data stored in the table that is associated with
  * the key.
  */
-int table_retrieve(table_t *table_p, const void *key_buf, const int key_size, void **data_buf_p, int *data_size_p)
+
+KS_DECLARE(int) table_retrieve(table_t *table_p, const void *key_buf, const int key_size, void **data_buf_p, int *data_size_p)
 {
 	int bucket;
 	unsigned int ksize;
@@ -1897,7 +1902,8 @@ int table_retrieve(table_t *table_p, const void *key_buf, const int key_size, vo
  * to the size of the data that was stored in the table and that was
  * associated with the key.
  */
-int table_delete(table_t *table_p, const void *key_buf, const int key_size, void **data_buf_p, int *data_size_p)
+
+KS_DECLARE(int) table_delete(table_t *table_p, const void *key_buf, const int key_size, void **data_buf_p, int *data_size_p)
 {
 	int bucket;
 	unsigned int ksize;
@@ -2048,7 +2054,8 @@ int table_delete(table_t *table_p, const void *key_buf, const int key_size, void
  * to the size of the data that was stored in the table and that was
  * associated with the key.
  */
-int table_delete_first(table_t *table_p, void **key_buf_p, int *key_size_p, void **data_buf_p, int *data_size_p)
+
+KS_DECLARE(int) table_delete_first(table_t *table_p, void **key_buf_p, int *key_size_p, void **data_buf_p, int *data_size_p)
 {
 	unsigned char *data_copy_p;
 	table_entry_t *entry_p;
@@ -2171,7 +2178,8 @@ int table_delete_first(table_t *table_p, void **key_buf_p, int *key_size_p, void
  * num_entries_p - Pointer to an integer which, if not NULL, will
  * contain the number of entries stored in the table.
  */
-int table_info(table_t *table_p, int *num_buckets_p, int *num_entries_p)
+
+KS_DECLARE(int) table_info(table_t *table_p, int *num_buckets_p, int *num_entries_p)
 {
 	if (table_p == NULL) {
 		return TABLE_ERROR_ARG_NULL;
@@ -2206,7 +2214,8 @@ int table_info(table_t *table_p, int *num_buckets_p, int *num_entries_p)
  * bucket_n - Number buckets to adjust the table to.  Set to 0 to
  * adjust the table to its number of entries.
  */
-int table_adjust(table_t *table_p, const int bucket_n)
+
+KS_DECLARE(int) table_adjust(table_t *table_p, const int bucket_n)
 {
 	table_entry_t *entry_p, *next_p;
 	table_entry_t **buckets, **bucket_p, **bounds_p;
@@ -2321,7 +2330,8 @@ int table_adjust(table_t *table_p, const int bucket_n)
  *
  * None.
  */
-int table_type_size(void)
+
+KS_DECLARE(int) table_type_size(void)
 {
 	return sizeof(table_t);
 }
@@ -2371,7 +2381,7 @@ int table_type_size(void)
  * to the size of the data that is stored in the table and that is
  * associated with the first key.
  */
-int table_first(table_t *table_p, void **key_buf_p, int *key_size_p, void **data_buf_p, int *data_size_p)
+KS_DECLARE(int) table_first(table_t *table_p, void **key_buf_p, int *key_size_p, void **data_buf_p, int *data_size_p)
 {
 	table_entry_t *entry_p;
 
@@ -2451,7 +2461,8 @@ int table_first(table_t *table_p, void **key_buf_p, int *key_size_p, void **data
  * to the size of the data that is stored in the table and that is
  * associated with the next key.
  */
-int table_next(table_t *table_p, void **key_buf_p, int *key_size_p, void **data_buf_p, int *data_size_p)
+
+KS_DECLARE(int) table_next(table_t *table_p, void **key_buf_p, int *key_size_p, void **data_buf_p, int *data_size_p)
 {
 	table_entry_t *entry_p;
 	int error;
@@ -2532,7 +2543,8 @@ int table_next(table_t *table_p, void **key_buf_p, int *key_size_p, void **data_
  * to the size of the data that is stored in the table and that is
  * associated with the current key.
  */
-int table_this(table_t *table_p, void **key_buf_p, int *key_size_p, void **data_buf_p, int *data_size_p)
+
+KS_DECLARE(int) table_this(table_t *table_p, void **key_buf_p, int *key_size_p, void **data_buf_p, int *data_size_p)
 {
 	table_entry_t *entry_p = NULL;
 	int entry_c;
@@ -2634,7 +2646,8 @@ int table_this(table_t *table_p, void **key_buf_p, int *key_size_p, void **data_
  * to the size of the data that is stored in the table and that is
  * associated with the first key.
  */
-int table_first_r(table_t *table_p, table_linear_t *linear_p, void **key_buf_p, int *key_size_p, void **data_buf_p, int *data_size_p)
+
+KS_DECLARE(int) table_first_r(table_t *table_p, table_linear_t *linear_p, void **key_buf_p, int *key_size_p, void **data_buf_p, int *data_size_p)
 {
 	table_entry_t *entry_p;
 
@@ -2718,7 +2731,7 @@ int table_first_r(table_t *table_p, table_linear_t *linear_p, void **key_buf_p, 
  * to the size of the data that is stored in the table and that is
  * associated with the next key.
  */
-int table_next_r(table_t *table_p, table_linear_t *linear_p, void **key_buf_p, int *key_size_p, void **data_buf_p, int *data_size_p)
+KS_DECLARE(int) table_next_r(table_t *table_p, table_linear_t *linear_p, void **key_buf_p, int *key_size_p, void **data_buf_p, int *data_size_p)
 {
 	table_entry_t *entry_p;
 	int error;
@@ -2804,7 +2817,8 @@ int table_next_r(table_t *table_p, table_linear_t *linear_p, void **key_buf_p, i
  * to the size of the data that is stored in the table and that is
  * associated with the current key.
  */
-int table_this_r(table_t *table_p, table_linear_t *linear_p, void **key_buf_p, int *key_size_p, void **data_buf_p, int *data_size_p)
+
+KS_DECLARE(int) table_this_r(table_t *table_p, table_linear_t *linear_p, void **key_buf_p, int *key_size_p, void **data_buf_p, int *data_size_p)
 {
 	table_entry_t *entry_p;
 	int entry_c;
@@ -2878,7 +2892,8 @@ int table_this_r(table_t *table_p, table_linear_t *linear_p, void **key_buf_p, i
  * error_p - Pointer to an integer which, if not NULL, will contain a
  * table error code.
  */
-table_t *table_mmap(const char *path, int *error_p)
+
+KS_DECLARE(table_t *) table_mmap(const char *path, int *error_p)
 {
 #ifdef NO_MMAP
 
@@ -2974,7 +2989,7 @@ table_t *table_mmap(const char *path, int *error_p)
  *
  * table_p - Mmaped table pointer to unmap.
  */
-int table_munmap(table_t *table_p)
+KS_DECLARE(int) table_munmap(table_t *table_p)
 {
 #ifdef NO_MMAP
 
@@ -3025,7 +3040,8 @@ int table_munmap(table_t *table_p)
  * error_p - Pointer to an integer which, if not NULL, will contain a
  * table error code.
  */
-table_t *table_read(const char *path, int *error_p)
+
+KS_DECLARE(table_t *) table_read(const char *path, int *error_p)
 {
 	unsigned int size;
 	int fd, ent_size;
@@ -3185,7 +3201,7 @@ table_t *table_read(const char *path, int *error_p)
  * mode - Mode of the file.  This argument is passed on to open when
  * the file is created.
  */
-int table_write(const table_t *table_p, const char *path, const int mode)
+KS_DECLARE(int) table_write(const table_t *table_p, const char *path, const int mode)
 {
 	int fd, rem, ent_size;
 	unsigned int bucket_c, bucket_size;
@@ -3390,7 +3406,7 @@ int table_write(const table_t *table_p, const char *path, const int mode)
  * error_p - Pointer to an integer which, if not NULL, will contain a
  * table error code.
  */
-table_entry_t **table_order(table_t *table_p, table_compare_t compare, int *num_entries_p, int *error_p)
+KS_DECLARE(table_entry_t **) table_order(table_t *table_p, table_compare_t compare, int *num_entries_p, int *error_p)
 {
 	table_entry_t *entry_p, **entries, **entries_p;
 	table_linear_t linear;
@@ -3502,7 +3518,8 @@ table_entry_t **table_order(table_t *table_p, table_compare_t compare, int *num_
  * entry_n - Number of entries in the array as passed back by
  * table_order or table_order_pos in num_entries_p.
  */
-int table_order_free(table_t *table_p, table_entry_t **table_entries, const int entry_n)
+
+KS_DECLARE(int) table_order_free(table_t *table_p, table_entry_t **table_entries, const int entry_n)
 {
 	int ret, final = TABLE_ERROR_NONE;
 
@@ -3564,7 +3581,8 @@ int table_order_free(table_t *table_p, table_entry_t **table_entries, const int 
  * data_size_p - Pointer to an integer which, if not NULL, will be set
  * to the size of the data that is stored in the table.
  */
-int table_entry(table_t *table_p, table_entry_t *entry_p, void **key_buf_p, int *key_size_p, void **data_buf_p, int *data_size_p)
+
+KS_DECLARE(int) table_entry(table_t *table_p, table_entry_t *entry_p, void **key_buf_p, int *key_size_p, void **data_buf_p, int *data_size_p)
 {
 	if (table_p == NULL) {
 		return TABLE_ERROR_ARG_NULL;
@@ -3628,7 +3646,7 @@ int table_entry(table_t *table_p, table_entry_t *entry_p, void **key_buf_p, int 
  * error_p - Pointer to an integer which, if not NULL, will contain a
  * table error code.
  */
-table_linear_t *table_order_pos(table_t *table_p, table_compare_t compare, int *num_entries_p, int *error_p)
+KS_DECLARE(table_linear_t *) table_order_pos(table_t *table_p, table_compare_t compare, int *num_entries_p, int *error_p)
 {
 	table_entry_t *entry_p;
 	table_linear_t linear, *linears, *linears_p;
@@ -3721,7 +3739,7 @@ table_linear_t *table_order_pos(table_t *table_p, table_compare_t compare, int *
  * entry_n - Number of entries in the array as passed back by
  * table_order or table_order_pos in num_entries_p.
  */
-int table_order_pos_free(table_t *table_p, table_linear_t *table_entries, const int entry_n)
+KS_DECLARE(int) table_order_pos_free(table_t *table_p, table_linear_t *table_entries, const int entry_n)
 {
 	int ret, final = TABLE_ERROR_NONE;
 
@@ -3783,7 +3801,8 @@ int table_order_pos_free(table_t *table_p, table_linear_t *table_entries, const 
  * data_size_p - Pointer to an integer which, if not NULL, will be set
  * to the size of the data that is stored in the table.
  */
-int table_entry_pos(table_t *table_p, table_linear_t *linear_p, void **key_buf_p, int *key_size_p, void **data_buf_p, int *data_size_p)
+
+KS_DECLARE(int) table_entry_pos(table_t *table_p, table_linear_t *linear_p, void **key_buf_p, int *key_size_p, void **data_buf_p, int *data_size_p)
 {
 	table_entry_t *entry_p;
 	int ret;
@@ -3845,7 +3864,7 @@ int table_entry_pos(table_t *table_p, table_linear_t *linear_p, void **key_buf_p
  *
  * error - Error number that we are converting.
  */
-const char *table_strerror(const int error)
+KS_DECLARE(const char *) table_strerror(const int error)
 {
 	error_str_t *err_p;
 

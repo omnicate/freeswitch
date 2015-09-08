@@ -34,8 +34,6 @@
 #ifndef _KS_PLATFORM_H_
 #define _KS_PLATFORM_H_
 
-#include <stdarg.h>
-
 #ifdef __cplusplus
 extern "C" {
 #endif							/* defined(__cplusplus) */
@@ -44,6 +42,12 @@ extern "C" {
 #define _XOPEN_SOURCE 600
 #endif
 
+#ifdef __linux__
+#ifndef _BSD_SOURCE
+#define _BSD_SOURCE 1
+#endif
+#endif
+	
 #ifndef HAVE_STRINGS_H
 #define HAVE_STRINGS_H 1
 #endif
@@ -57,6 +61,8 @@ extern "C" {
 #endif
 #endif
 
+#include <stdarg.h>
+	
 #ifdef _MSC_VER
 #ifndef __inline__
 #define __inline__ __inline
@@ -144,9 +150,15 @@ extern "C" {
 #define KS_DECLARE_DATA				__declspec(dllimport)
 #endif
 #else							// !WIN32
+#if (defined(__GNUC__) || defined(__SUNPRO_CC) || defined (__SUNPRO_C)) && defined(KS_API_VISIBILITY)
+#define KS_DECLARE(type)		__attribute__((visibility("default"))) type
+#define KS_DECLARE_NONSTD(type)	__attribute__((visibility("default"))) type
+#define KS_DECLARE_DATA		__attribute__((visibility("default")))
+#else
 #define KS_DECLARE(type) type
 #define KS_DECLARE_NONSTD(type) type
 #define KS_DECLARE_DATA
+#endif
 #include <stdint.h>
 #include <sys/types.h>
 #include <sys/ioctl.h>

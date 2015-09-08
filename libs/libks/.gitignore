@@ -1,0 +1,12 @@
+Makefile
+Makefile.in
+build/compile
+build/libtool.m4
+build/ltoptions.m4
+build/ltsugar.m4
+build/ltversion.m4
+build/lt~obsolete.m4
+table_file
+testpools
+testtable
+			

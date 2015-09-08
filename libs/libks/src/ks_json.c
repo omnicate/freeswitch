@@ -23,6 +23,9 @@
 /* cJSON */
 /* JSON parser in C. */
 
+#include "ks.h"
+#include "ks_json.h"
+
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
@@ -30,8 +33,6 @@
 #include <float.h>
 #include <limits.h>
 #include <ctype.h>
-#include "ks_json.h"
-#include "ks.h"
 
 static const char *ep;
 
