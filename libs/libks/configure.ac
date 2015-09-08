@@ -31,7 +31,7 @@ fi
 
 #  Enable debugging
 AC_ARG_ENABLE(debug,
-[AC_HELP_STRING([--enable-debug],[build with debug information])],[enable_debug="$enable_debug"],[enable_debug="yes"])
+[AC_HELP_STRING([--enable-debug],[build with debug information])],[enable_debug="$enable_debug"],[enable_debug="no"])
 
 if test "${enable_debug}" = "yes"; then
         AC_DEFINE([DEBUG],[],[Enable extra debugging.])
