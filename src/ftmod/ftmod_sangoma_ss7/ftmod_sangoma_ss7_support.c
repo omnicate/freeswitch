@@ -387,7 +387,7 @@ ftdm_status_t copy_chargeNum_from_sngss7(ftdm_channel_t *ftdmchan,  SiChargeNum 
 } /* copy_chargeNum_from_sngss7() */
 
 /* Copy chargeNum to sngss7 */
-ftdm_status_t copy_chargeNum_to_sngss7(ftdm_channel_t *ftdmchan, SiChargeNum *chargeNum, char *digits)
+ftdm_status_t copy_chargeNum_to_sngss7(ftdm_channel_t *ftdmchan, SiChargeNum *chargeNum)
 {
 	const char	*val = NULL;
 	sngss7_chan_data_t	*sngss7_info = ftdmchan->call_data;
