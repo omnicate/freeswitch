@@ -90,6 +90,105 @@ long getpagesize(void)
 	return g_pagesize;
 }
 #endif
+
+
+/* We need mutex here probably or this notion of cleanup stuff cannot be threadsafe */
+
+static ks_mpool_cleanup_node_t *find_cleanup_node(ks_mpool_t *mp_p, void *ptr)
+{
+	ks_mpool_cleanup_node_t *np, *cnode = NULL;
+	
+	ks_assert(mp_p);
+	ks_assert(ptr);
+
+	for (np = mp_p->clfn_list; np; np = np->next) {
+		if (np->ptr == ptr) {
+			cnode = np;
+			goto end;
+		}
+	}
+
+ end:
+
+	/* done, the nodes are all from the pool so they will be destroyed */
+	return cnode;
+}
+
+static void peform_pool_cleanup_on_free(ks_mpool_t *mp_p, void *ptr)
+{
+	ks_mpool_cleanup_node_t *np, *cnode, *last = NULL;
+
+	np = mp_p->clfn_list;
+
+	while(np) {
+		if (np->ptr == ptr) {
+			if (last) {
+				last->next = np->next;
+			} else {
+				mp_p->clfn_list = np->next;
+			}
+
+			cnode = np;
+			np = np->next;
+			cnode->fn(mp_p, cnode->ptr, cnode->arg, cnode->type, KS_MPCL_ANNOUNCE);
+			cnode->fn(mp_p, cnode->ptr, cnode->arg, cnode->type, KS_MPCL_TEARDOWN);
+			cnode->fn(mp_p, cnode->ptr, cnode->arg, cnode->type, KS_MPCL_DESTROY);
+
+			continue;
+		}
+		last = np;
+		np = np->next;
+	}
+}
+
+static void peform_pool_cleanup(ks_mpool_t *mp_p)
+{
+	ks_mpool_cleanup_node_t *np;
+
+	for (np = mp_p->clfn_list; np; np = np->next) {
+		np->fn(mp_p, np->ptr, np->arg, np->type, KS_MPCL_ANNOUNCE);
+	}
+
+	for (np = mp_p->clfn_list; np; np = np->next) {
+		np->fn(mp_p, np->ptr, np->arg, np->type, KS_MPCL_TEARDOWN);
+	}
+
+	for (np = mp_p->clfn_list; np; np = np->next) {
+		np->fn(mp_p, np->ptr, np->arg, np->type, KS_MPCL_DESTROY);
+	}
+
+	mp_p->clfn_list = NULL;
+}
+
+KS_DECLARE(ks_status_t) ks_mpool_set_cleanup(ks_mpool_t *mp_p, void *ptr, void *arg, int type, ks_mpool_cleanup_fn_t fn)
+{
+	ks_mpool_cleanup_node_t *cnode;
+	int err = 0;
+
+	ks_assert(mp_p);
+	ks_assert(ptr);
+	ks_assert(fn);
+
+	/* don't set cleanup on this cnode obj or it will be an endless loop */
+	cnode = (ks_mpool_cleanup_node_t *) ks_mpool_alloc(mp_p, sizeof(*cnode), &err);
+	
+	if (!cnode) {
+		return KS_FAIL;
+	}
+
+	cnode->ptr = ptr;
+	cnode->arg = arg;
+	cnode->fn = fn;
+	cnode->type = type;
+
+	cnode->next = mp_p->clfn_list;
+	mp_p->clfn_list = cnode;
+
+	return KS_SUCCESS;
+}
+
+
+
 /****************************** local utilities ******************************/
 
 /*
@@ -818,6 +917,8 @@ static int free_mem(ks_mpool_t *mp_p, void *addr)
 	/* find the user's magic numbers */
 	ret = check_magic(addr, old_size);
 
+	peform_pool_cleanup_on_free(mp_p, addr);
+
 	/* move pointer to actual beginning */
 	addr = prefix;
 
@@ -1062,6 +1163,8 @@ static int ks_mpool_raw_close(ks_mpool_t *mp_p)
 		mp_p->mp_log_func(mp_p, KS_MPOOL_FUNC_CLOSE, 0, 0, NULL, NULL, 0);
 	}
 
+	peform_pool_cleanup(mp_p);
+
 	/*
 	 * NOTE: if we are HEAVY_PACKING then the 1st block with the ks_mpool
 	 * header is not on the linked list.
@@ -1178,6 +1281,8 @@ KS_DECLARE(int) ks_mpool_clear(ks_mpool_t *mp_p)
 	if (mp_p->mp_log_func != NULL) {
 		mp_p->mp_log_func(mp_p, KS_MPOOL_FUNC_CLEAR, 0, 0, NULL, NULL, 0);
 	}
+
+	peform_pool_cleanup(mp_p);
 
 	/* reset all of our free lists */
 	for (bit_n = 0; bit_n <= MAX_BITS; bit_n++) {

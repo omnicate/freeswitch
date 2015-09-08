@@ -136,7 +136,7 @@ typedef void (*ks_mpool_log_func_t) (const void *mp_p,
 #else
 
 /* generic ks_mpool type */
-typedef void ks_mpool_t;
+//typedef void ks_mpool_t;
 
 #endif
 
@@ -470,6 +470,7 @@ KS_DECLARE(int) ks_mpool_set_max_pages(ks_mpool_t *mp_p, const unsigned int max_
  */
 KS_DECLARE(const char *) ks_mpool_strerror(const int error);
 
+KS_DECLARE(ks_status_t) ks_mpool_set_cleanup(ks_mpool_t *mp_p, void *ptr, void *arg, int type, ks_mpool_cleanup_fn_t fn);
 
 #define ks_mpool_safe_free(_p, _a) ks_mpool_free(_p, _a); _a = NULL
 
