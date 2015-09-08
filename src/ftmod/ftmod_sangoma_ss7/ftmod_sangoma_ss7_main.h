@@ -1215,7 +1215,7 @@ ftdm_status_t ftdm_sngss7_handle_cli_cmd(ftdm_stream_handle_t *stream, const cha
 
 /* in ftmod_sangoma_ss7_support.c */
 ftdm_status_t copy_chargeNum_from_sngss7(ftdm_channel_t *ftdmchan,  SiChargeNum *chargeNum);
-ftdm_status_t copy_chargeNum_to_sngss7(ftdm_channel_t *ftdmchan, SiChargeNum *chargeNum, char *digits);
+ftdm_status_t copy_chargeNum_to_sngss7(ftdm_channel_t *ftdmchan, SiChargeNum *chargeNum);
 ftdm_status_t copy_cgPtyNum_from_sngss7(ftdm_channel_t *ftdmchan, SiConEvnt *siConEvnt, sngss7_chan_data_t* sngss7_info); 
 ftdm_status_t copy_cgPtyNum_to_sngss7(ftdm_channel_t *ftdmchan, SiCgPtyNum *cgPtyNum);
 ftdm_status_t is_clip_disable(ftdm_channel_t *ftdmchan);
