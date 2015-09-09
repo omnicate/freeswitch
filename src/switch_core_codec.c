@@ -867,7 +867,10 @@ SWITCH_DECLARE(switch_status_t) switch_core_codec_decode_video(switch_codec_t *c
 
 	if (codec->implementation->decode_video) {
 		status = codec->implementation->decode_video(codec, frame);
+	} else {
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Codec decode is not supported in this module.\n");
 	}
+
 	if (codec->mutex) switch_mutex_unlock(codec->mutex);
 
 	return status;

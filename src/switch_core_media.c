@@ -10787,6 +10787,12 @@ SWITCH_DECLARE(switch_status_t) switch_core_session_read_video_frame(switch_core
 		(*frame)->img = NULL;
 
 		decode_status = switch_core_codec_decode_video((*frame)->codec, *frame);
+
+		if (decode_status == SWITCH_STATUS_FALSE) {
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Codec decode failed, disabling transcode.\n");
+			switch_channel_clear_flag(session->channel, CF_VIDEO_DECODED_READ);
+			goto done;
+		}
 		
 		if ((*frame)->img && switch_channel_test_flag(session->channel, CF_VIDEO_DEBUG_READ)) {
 			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "IMAGE %dx%d %dx%d\n", 
