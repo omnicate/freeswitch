@@ -27,43 +27,92 @@
 
 #ifdef WIN32
 #include <process.h>
-
-struct ks_mutex {
-	CRITICAL_SECTION mutex;
-};
-
 #else
-
 #include <pthread.h>
-
-struct ks_mutex {
-	pthread_mutex_t mutex;
-};
-
 #endif
 
-KS_DECLARE(ks_status_t) ks_mutex_create(ks_mutex_t **mutex)
+typedef enum {
+	KS_MUTEX_TYPE_DEFAULT,
+	KS_MUTEX_TYPE_NON_RECURSIVE
+} ks_mutex_type_t;
+
+struct ks_mutex {
+#ifdef WIN32
+	CRITICAL_SECTION mutex;
+	HANDLE handle;
+#else
+	pthread_mutex_t mutex;
+#endif
+	ks_mpool_t * pool;
+	ks_mutex_type_t type;
+};
+
+static void ks_mutex_cleanup(ks_mpool_t *mpool, void *ptr, void *arg, int type, ks_mpool_cleanup_action_t action)
+{
+	ks_mutex_t *mutex = (ks_mutex_t *) ptr;
+
+	switch(action) {
+	case KS_MPCL_ANNOUNCE:
+		break;
+	case KS_MPCL_TEARDOWN:
+		break;
+	case KS_MPCL_DESTROY:
+#ifdef WIN32
+		if (mutex->type == KS_MUTEX_TYPE_NON_RECURSIVE) {
+			CloseHandle(mutex->handle)
+		} else {
+			DeleteCriticalSection(&mutex->mutex);
+		}
+#else
+		pthread_mutex_destroy(&mutex->mutex);
+#endif
+		break;
+	}
+}
+
+
+KS_DECLARE(ks_status_t) ks_mutex_create(ks_mutex_t **mutex, unsigned int flags, ks_mpool_t *pool)
 {
 	ks_status_t status = KS_FAIL;
 #ifndef WIN32
 	pthread_mutexattr_t attr;
 #endif
 	ks_mutex_t *check = NULL;
+	int err = 0;
 
-	check = (ks_mutex_t *) malloc(sizeof(**mutex));
+	if (!pool)
+		goto done;
+
+	check = (ks_mutex_t *) ks_mpool_alloc(pool, sizeof(**mutex), &err);
+
 	if (!check)
 		goto done;
+
+	check->pool = pool;
+	check->type = KS_MUTEX_TYPE_DEFAULT;
+
 #ifdef WIN32
-	InitializeCriticalSection(&check->mutex);
+	if (flags & KS_MUTEX_FLAG_NON_RECURSIVE) {
+		check->type = KS_MUTEX_TYPE_NON_RECURSIVE;
+		check->handle = CreateEvent(NULL, FALSE, TRUE, NULL);
+	} else {
+		InitializeCriticalSection(&check->mutex);
+	}
 #else
-	if (pthread_mutexattr_init(&attr))
-		goto done;
+	if (flags & KS_MUTEX_FLAG_NON_RECURSIVE) {
+		if (pthread_mutex_init(&check->mutex, NULL))
+			goto done;
 
-	if (pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE))
-		goto fail;
+	} else {
+		if (pthread_mutexattr_init(&attr))
+			goto done;
 
-	if (pthread_mutex_init(&check->mutex, &attr))
-		goto fail;
+		if (pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE))
+			goto fail;
+
+		if (pthread_mutex_init(&check->mutex, &attr))
+			goto fail;
+	}
 
 	goto success;
 
@@ -75,6 +124,7 @@ KS_DECLARE(ks_status_t) ks_mutex_create(ks_mutex_t **mutex)
 #endif
 	*mutex = check;
 	status = KS_SUCCESS;
+	ks_mpool_set_cleanup(pool, check, NULL, 0, ks_mutex_cleanup);
 
   done:
 	return status;
@@ -83,24 +133,30 @@ KS_DECLARE(ks_status_t) ks_mutex_create(ks_mutex_t **mutex)
 KS_DECLARE(ks_status_t) ks_mutex_destroy(ks_mutex_t **mutex)
 {
 	ks_mutex_t *mp = *mutex;
+	int err;
+
 	*mutex = NULL;
+
 	if (!mp) {
 		return KS_FAIL;
 	}
-#ifdef WIN32
-	DeleteCriticalSection(&mp->mutex);
-#else
-	if (pthread_mutex_destroy(&mp->mutex))
-		return KS_FAIL;
-#endif
-	free(mp);
+
+	err = ks_mpool_safe_free(mp->pool, mp);
+
 	return KS_SUCCESS;
 }
 
 KS_DECLARE(ks_status_t) ks_mutex_lock(ks_mutex_t *mutex)
 {
 #ifdef WIN32
-	EnterCriticalSection(&mutex->mutex);
+	if (mutex->type == KS_MUTEX_TYPE_NON_RECURSIVE) {
+        DWORD ret = WaitForSingleObject(mutex->handle, INFINITE);
+		if ((ret != WAIT_OBJECT_0) && (ret != WAIT_ABANDONED)) {
+            return KS_FAIL;
+		}
+	} else {
+		EnterCriticalSection(&mutex->mutex);
+	}
 #else
 	if (pthread_mutex_lock(&mutex->mutex))
 		return KS_FAIL;
@@ -111,8 +167,15 @@ KS_DECLARE(ks_status_t) ks_mutex_lock(ks_mutex_t *mutex)
 KS_DECLARE(ks_status_t) ks_mutex_trylock(ks_mutex_t *mutex)
 {
 #ifdef WIN32
-	if (!TryEnterCriticalSection(&mutex->mutex))
-		return KS_FAIL;
+	if (mutex->type == KS_MUTEX_TYPE_NON_RECURSIVE) {
+        DWORD ret = WaitForSingleObject(mutex->handle, 0);
+		if ((ret != WAIT_OBJECT_0) && (ret != WAIT_ABANDONED)) {
+            return KS_FAIL;
+		}
+	} else {
+		if (!TryEnterCriticalSection(&mutex->mutex))
+			return KS_FAIL;
+	}
 #else
 	if (pthread_mutex_trylock(&mutex->mutex))
 		return KS_FAIL;
@@ -123,7 +186,13 @@ KS_DECLARE(ks_status_t) ks_mutex_trylock(ks_mutex_t *mutex)
 KS_DECLARE(ks_status_t) ks_mutex_unlock(ks_mutex_t *mutex)
 {
 #ifdef WIN32
-	LeaveCriticalSection(&mutex->mutex);
+	if (mutex->type == KS_MUTEX_TYPE_NON_RECURSIVE) {
+        if (!SetEvent(mutex->handle)) {
+			return KS_FAIL;
+		}
+	} else {
+		LeaveCriticalSection(&mutex->mutex);
+	}
 #else
 	if (pthread_mutex_unlock(&mutex->mutex))
 		return KS_FAIL;
