@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -128,7 +128,8 @@
     <ClCompile Include="src\ks_config.c" />
     <ClCompile Include="src\ks_json.c" />
     <ClCompile Include="src\ks_mpool.c" />
-    <ClCompile Include="src\ks_threadmutex.c" />
+    <ClCompile Include="src\ks_thread.c" />
+    <ClCompile Include="src\ks_mutex.c" />
     <ClCompile Include="src\simclist.c" />
     <ClCompile Include="src\table.c" />
     <ClCompile Include="src\table_util.c" />
