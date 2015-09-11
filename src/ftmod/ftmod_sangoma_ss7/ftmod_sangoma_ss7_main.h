@@ -565,7 +565,7 @@ typedef struct sng_ss7_cfg {
 	sng_link_set_t		mtpLinkSet[MAX_MTP_LINKSETS+1];
 	sng_route_t		mtpRoute[MAX_MTP_ROUTES+1];
 	sng_isup_inf_t		isupIntf[MAX_ISUP_INFS+1];
-	sng_isup_ckt_t		isupCkt[10000]; 	/* KONRAD - only need 2000 ( and 0-1000 aren't used) since other servers are registerd else where */
+	sng_isup_ckt_t		isupCkt[25000]; 	/* 0-1000 aren't used since other servers are registerd else where */
 	sng_transparent_ckt_t 	transCkt[MAX_TRANSPARENT_CKTS];
 	sng_nsap_t		nsap[MAX_NSAPS+1];
 	sng_isap_t		isap[MAX_ISAPS+1];
