@@ -78,9 +78,9 @@ static void *KS_THREAD_CALLING_CONVENTION thread_launch(void *args)
 
 KS_DECLARE(ks_status_t) ks_thread_join(ks_thread_t *thread) {
 #ifdef WIN32
-	WaitForSingleObject( thread->handle, INFINITE );
+	WaitForSingleObject(thread->handle, INFINITE);
 #else
-
+	pthread_join(thread->handle);
 #endif
 }
 
