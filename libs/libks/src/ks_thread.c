@@ -1,4 +1,4 @@
-/* 
+/*
  * Cross Platform Thread/Mutex abstraction
  * Copyright(C) 2007 Michael Jerris
  *
@@ -13,39 +13,13 @@
  * code prove defective in any respect, you (not the initial developer or any other contributor)
  * assume the cost of any necessary servicing, repair or correction. This disclaimer of warranty
  * constitutes an essential part of this license. No use of any covered code is authorized hereunder
- * except under this disclaimer. 
+ * except under this disclaimer.
  *
  */
 
 #include "ks.h"
 #include "ks_threadmutex.h"
 
-#ifdef WIN32
-#include <process.h>
-
-#define KS_THREAD_CALLING_CONVENTION __stdcall
-
-#else
-
-#include <pthread.h>
-
-#define KS_THREAD_CALLING_CONVENTION
-
-#endif
-
-struct ks_thread {
-#ifdef WIN32
-	void *handle;
-#else
-	pthread_t handle;
-#endif
-	void *private_data;
-	ks_thread_function_t function;
-	size_t stack_size;
-#ifndef WIN32
-	pthread_attr_t attribute;
-#endif
-};
 
 size_t thread_default_stacksize = 240 * 1024;
 
@@ -54,43 +28,106 @@ void ks_thread_override_default_stacksize(size_t size)
 	thread_default_stacksize = size;
 }
 
+static void ks_thread_cleanup(ks_mpool_t *mpool, void *ptr, void *arg, int type, ks_mpool_cleanup_action_t action)
+{
+	ks_thread_t *thread = (ks_thread_t *) ptr;
+
+	switch(action) {
+	case KS_MPCL_ANNOUNCE:
+		thread->running = 0;
+		break;
+	case KS_MPCL_TEARDOWN:
+		if (!(thread->flags & KS_THREAD_FLAG_DETATCHED)) {
+			ks_thread_join(thread);
+		}
+		break;
+	case KS_MPCL_DESTROY:
+#ifdef WIN32
+		if (!(thread->flags & KS_THREAD_FLAG_DETATCHED)) {
+			CloseHandle(thread->handle);
+		}
+#endif
+		break;
+	}
+}
+
 static void *KS_THREAD_CALLING_CONVENTION thread_launch(void *args)
 {
 	void *exit_val;
 	ks_thread_t *thread = (ks_thread_t *) args;
+
+#ifdef HAVE_PTHREAD_SETSCHEDPARAM
+	if (thread->priority) {
+		int policy;
+		struct sched_param param = { 0 };
+		pthread_t tt = pthread_self();
+
+		pthread_getschedparam(tt, &policy, &param);
+		param.sched_priority = thread->priority;
+		pthread_setschedparam(tt, policy, &param);
+	}
+#endif
+
 	exit_val = thread->function(thread, thread->private_data);
 #ifndef WIN32
 	pthread_attr_destroy(&thread->attribute);
 #endif
-	free(thread);
 
 	return exit_val;
 }
 
-KS_DECLARE(ks_status_t) ks_thread_create_detached(ks_thread_function_t func, void *data)
-{
-	return ks_thread_create_detached_ex(func, data, thread_default_stacksize);
+KS_DECLARE(ks_status_t) ks_thread_join(ks_thread_t *thread) {
+#ifdef WIN32
+	WaitForSingleObject( thread->handle, INFINITE );
+#else
+
+#endif
 }
 
-ks_status_t ks_thread_create_detached_ex(ks_thread_function_t func, void *data, size_t stack_size)
+KS_DECLARE(ks_status_t) ks_thread_create_ex(ks_thread_t **rthread, ks_thread_function_t func, void *data,
+										 uint32_t flags, size_t stack_size, ks_thread_priority_t priority, ks_mpool_t *pool)
 {
 	ks_thread_t *thread = NULL;
 	ks_status_t status = KS_FAIL;
+	int err;
 
-	if (!func || !(thread = (ks_thread_t *) malloc(sizeof(ks_thread_t)))) {
-		goto done;
-	}
+	if (!rthread) goto done;
+
+	*rthread = NULL;
+
+	if (!func || !pool) goto done;
+
+	thread = (ks_thread_t *) ks_mpool_alloc(pool, sizeof(ks_thread_t), &err);
+
+	if (!thread) goto done;
 
 	thread->private_data = data;
 	thread->function = func;
 	thread->stack_size = stack_size;
+	thread->running = 1;
+	thread->flags = flags;
+	thread->priority = priority;
 
 #if defined(WIN32)
 	thread->handle = (void *) _beginthreadex(NULL, (unsigned) thread->stack_size, (unsigned int (__stdcall *) (void *)) thread_launch, thread, 0, NULL);
+
 	if (!thread->handle) {
 		goto fail;
 	}
-	CloseHandle(thread->handle);
+
+	if (priority >= 99) {
+		SetThreadPriority(thread->handle, THREAD_PRIORITY_TIME_CRITICAL);
+	} else if (priority >= 50) {
+		SetThreadPriority(thread->handle, THREAD_PRIORITY_ABOVE_NORMAL);
+	} else if (priority >= 10) {
+		SetThreadPriority(thread->handle, THREAD_PRIORITY_NORMAL);
+	} else if (priority >= 1) {
+		SetThreadPriority(thread->handle, THREAD_PRIORITY_LOWEST);
+	}
+
+	if (flags & KS_THREAD_FLAG_DETATCHED) {
+		CloseHandle(thread->handle);
+	}
 
 	status = KS_SUCCESS;
 	goto done;
@@ -99,7 +136,7 @@ ks_status_t ks_thread_create_detached_ex(ks_thread_function_t func, void *data, 
 	if (pthread_attr_init(&thread->attribute) != 0)
 		goto fail;
 
-	if (pthread_attr_setdetachstate(&thread->attribute, PTHREAD_CREATE_DETACHED) != 0)
+	if ((flags & KS_THREAD_FLAG_DETATCHED) && pthread_attr_setdetachstate(&thread->attribute, PTHREAD_CREATE_DETACHED) != 0)
 		goto failpthread;
 
 	if (thread->stack_size && pthread_attr_setstacksize(&thread->attribute, thread->stack_size) != 0)
@@ -118,9 +155,17 @@ ks_status_t ks_thread_create_detached_ex(ks_thread_function_t func, void *data, 
 
   fail:
 	if (thread) {
-		free(thread);
+		thread->running = 0;
+		if (pool) {
+			int err = ks_mpool_safe_free(pool, thread);
+		}
 	}
   done:
+	if (status == KS_SUCCESS) {
+		*rthread = thread;
+		ks_mpool_set_cleanup(pool, thread, NULL, 0, ks_thread_cleanup);
+	}
+
 	return status;
 }
 
