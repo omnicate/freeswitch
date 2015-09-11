@@ -513,6 +513,7 @@ KS_DECLARE(ks_status_t) ks_listen(const char *host, ks_port_t port, ks_listen_ca
 
 }
 
+#if 0
 KS_DECLARE(ks_status_t) ks_listen_threaded(const char *host, ks_port_t port, ks_listen_callback_t callback, int max)
 {
 	ks_socket_t server_sock = KS_SOCK_INVALID;
@@ -579,7 +580,7 @@ KS_DECLARE(ks_status_t) ks_listen_threaded(const char *host, ks_port_t port, ks_
 	return status;
 
 }
-
+#endif
 
 /* USE WSAPoll on vista or higher */
 #ifdef KS_USE_WSAPOLL

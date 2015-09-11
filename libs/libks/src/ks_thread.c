@@ -80,7 +80,8 @@ KS_DECLARE(ks_status_t) ks_thread_join(ks_thread_t *thread) {
 #ifdef WIN32
 	WaitForSingleObject(thread->handle, INFINITE);
 #else
-	pthread_join(thread->handle);
+	void *ret;
+	pthread_join(thread->handle, &ret);
 #endif
 }
 
