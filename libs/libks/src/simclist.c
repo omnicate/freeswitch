@@ -46,7 +46,9 @@
 
 /* disable asserts */
 #ifndef SIMCLIST_DEBUG
+#ifndef NDEBUG
 #define NDEBUG
+#endif
 #endif
 
 #include <assert.h>
@@ -1545,9 +1547,9 @@ SIMCLIST_HASHCOMPUTER(int8_t) SIMCLIST_HASHCOMPUTER(int16_t) SIMCLIST_HASHCOMPUT
 
 	for (l = 0; str[l] != '\0'; l++) {
 		if (l)
-			plus = hash ^ str[l];
+			plus = (char)(hash ^ str[l]);
 		else
-			plus = hash ^ (str[l] - str[0]);
+			plus = (char)(hash ^ (str[l] - str[0]));
 		hash += (plus << (CHAR_BIT * (l % sizeof(list_hash_t))));
 	}
 

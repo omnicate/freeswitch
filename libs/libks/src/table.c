@@ -869,7 +869,7 @@ static int split(unsigned char *first_p, unsigned char *last_p,
 		left_p = first_p;
 		right_p = last_p;
 		/* is there a faster way to find this? */
-		width = (last_p - first_p) / ele_size;
+		width = (unsigned)(last_p - first_p) / ele_size;
 		pivot_p = first_p + ele_size * (width >> 1);
 
 		/*
@@ -950,8 +950,8 @@ static int split(unsigned char *first_p, unsigned char *last_p,
 		left_last_p = right_p;
 
 		/* determine the size of the left and right hand parts */
-		size1 = left_last_p - first_p;
-		size2 = last_p - right_first_p;
+		size1 = (int)(left_last_p - first_p);
+		size2 = (int)(last_p - right_first_p);
 
 		/* is the 1st half small enough to just insert-sort? */
 		if (size1 < min_qsort_size) {
@@ -1521,12 +1521,12 @@ KS_DECLARE(int) table_insert_kd(table_t *table_p,
 
 	/* determine sizes of key and data */
 	if (key_size < 0) {
-		ksize = strlen((char *) key_buf) + sizeof(char);
+		ksize = (unsigned)(strlen((char *) key_buf) + sizeof(char));
 	} else {
 		ksize = key_size;
 	}
 	if (data_size < 0) {
-		dsize = strlen((char *) data_buf) + sizeof(char);
+		dsize = (unsigned)(strlen((char *) data_buf) + sizeof(char));
 	} else {
 		dsize = data_size;
 	}
@@ -1819,7 +1819,7 @@ KS_DECLARE(int) table_retrieve(table_t *table_p, const void *key_buf, const int 
 
 	/* find key size */
 	if (key_size < 0) {
-		ksize = strlen((char *) key_buf) + sizeof(char);
+		ksize = (unsigned)(strlen((char *) key_buf) + sizeof(char));
 	} else {
 		ksize = key_size;
 	}
@@ -1928,7 +1928,7 @@ KS_DECLARE(int) table_delete(table_t *table_p, const void *key_buf, const int ke
 
 	/* get the key size */
 	if (key_size < 0) {
-		ksize = strlen((char *) key_buf) + sizeof(char);
+		ksize = (unsigned)(strlen((char *) key_buf) + sizeof(char));
 	} else {
 		ksize = key_size;
 	}
@@ -3110,7 +3110,7 @@ KS_DECLARE(table_t *) table_read(const char *path, int *error_p)
 
 		/* run through the entry list */
 		last_p = NULL;
-		for (pos = *(unsigned long *) bucket_p;; pos = (unsigned long) entry_p->te_next_p) {
+		for (pos = *(unsigned long *)(intptr_t)bucket_p;; pos = (unsigned long)(intptr_t) entry_p->te_next_p) {
 
 			/* read in the entry */
 			if (fseek(infile, pos, SEEK_SET) != 0) {
@@ -3246,7 +3246,7 @@ KS_DECLARE(int) table_write(const table_t *table_p, const char *path, const int 
 	size += sizeof(table_t);
 
 	/* buckets go right after main struct */
-	main_tab.ta_buckets = (table_entry_t **) size;
+	main_tab.ta_buckets = (table_entry_t **)(intptr_t) size;
 	size += sizeof(table_entry_t *) * table_p->ta_bucket_n;
 
 	/* run through and count the buckets */
@@ -3256,7 +3256,7 @@ KS_DECLARE(int) table_write(const table_t *table_p, const char *path, const int 
 			buckets[bucket_c] = NULL;
 			continue;
 		}
-		buckets[bucket_c] = (table_entry_t *) size;
+		buckets[bucket_c] = (table_entry_t *)(intptr_t) size;
 		for (entry_p = *bucket_p; entry_p != NULL; entry_p = entry_p->te_next_p) {
 			size += entry_size(table_p, entry_p->te_key_size, entry_p->te_data_size);
 			/*
@@ -3317,7 +3317,7 @@ KS_DECLARE(int) table_write(const table_t *table_p, const char *path, const int 
 			}
 			next_p = entry_p->te_next_p;
 			if (next_p != NULL) {
-				entry_p->te_next_p = (table_entry_t *) size;
+				entry_p->te_next_p = (table_entry_t *)(intptr_t) size;
 			}
 
 			/* now write to disk */
@@ -3412,7 +3412,7 @@ KS_DECLARE(table_entry_t **) table_order(table_t *table_p, table_compare_t compa
 	table_linear_t linear;
 	compare_t comp_func;
 	unsigned int entries_size;
-	int ret;
+	int ret = TABLE_ERROR_NONE;
 
 	if (table_p == NULL) {
 		SET_POINTER(error_p, TABLE_ERROR_ARG_NULL);
@@ -3651,7 +3651,7 @@ KS_DECLARE(table_linear_t *) table_order_pos(table_t *table_p, table_compare_t c
 	table_entry_t *entry_p;
 	table_linear_t linear, *linears, *linears_p;
 	compare_t comp_func;
-	int ret;
+	int ret = TABLE_ERROR_NONE;
 
 	if (table_p == NULL) {
 		SET_POINTER(error_p, TABLE_ERROR_ARG_NULL);

@@ -117,7 +117,7 @@ int expand_chars(const void *buf, const int buf_size, char *out, const int out_s
 		}
 	}
 
-	return out_p - out;
+	return (int)(out_p - out);
 }
 
 /*

@@ -464,7 +464,7 @@ KS_DECLARE(ks_status_t) ks_listen(const char *host, ks_port_t port, ks_listen_ca
 	struct sockaddr_in addr;
 	ks_status_t status = KS_STATUS_SUCCESS;
 
-	if ((server_sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
+	if ((server_sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) != KS_SOCK_INVALID) {
 		return KS_STATUS_FAIL;
 	}
 
@@ -486,7 +486,7 @@ KS_DECLARE(ks_status_t) ks_listen(const char *host, ks_port_t port, ks_listen_ca
 	}
 
 	for (;;) {
-		int client_sock;
+		ks_socket_t client_sock;
 		struct sockaddr_in echoClntAddr;
 #ifdef WIN32
 		int clntLen;
@@ -619,6 +619,7 @@ KS_DECLARE(int) ks_wait_sock(ks_socket_t sock, uint32_t ms, ks_poll_t flags)
 #ifdef WIN32
 #pragma warning( push )
 #pragma warning( disable : 4127 )
+#pragma warning( disable : 4548 )
 		FD_SET(sock, &rfds);
 #pragma warning( pop )
 #else
@@ -631,6 +632,7 @@ KS_DECLARE(int) ks_wait_sock(ks_socket_t sock, uint32_t ms, ks_poll_t flags)
 #ifdef WIN32
 #pragma warning( push )
 #pragma warning( disable : 4127 )
+#pragma warning( disable : 4548 )
 		FD_SET(sock, &wfds);
 #pragma warning( pop )
 #else
@@ -643,6 +645,7 @@ KS_DECLARE(int) ks_wait_sock(ks_socket_t sock, uint32_t ms, ks_poll_t flags)
 #ifdef WIN32
 #pragma warning( push )
 #pragma warning( disable : 4127 )
+#pragma warning( disable : 4548 )
 		FD_SET(sock, &efds);
 #pragma warning( pop )
 #else
@@ -653,7 +656,7 @@ KS_DECLARE(int) ks_wait_sock(ks_socket_t sock, uint32_t ms, ks_poll_t flags)
 	tv.tv_sec = ms / 1000;
 	tv.tv_usec = (ms % 1000) * ms;
 
-	s = select(sock + 1, (flags & KS_POLL_READ) ? &rfds : NULL, (flags & KS_POLL_WRITE) ? &wfds : NULL, (flags & KS_POLL_ERROR) ? &efds : NULL, &tv);
+	s = select((int)sock + 1, (flags & KS_POLL_READ) ? &rfds : NULL, (flags & KS_POLL_WRITE) ? &wfds : NULL, (flags & KS_POLL_ERROR) ? &efds : NULL, &tv);
 
 	if (s < 0) {
 		r = s;

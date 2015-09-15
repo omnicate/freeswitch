@@ -59,7 +59,7 @@ static void ks_mutex_cleanup(ks_mpool_t *mpool, void *ptr, void *arg, int type, 
 	case KS_MPCL_DESTROY:
 #ifdef WIN32
 		if (mutex->type == KS_MUTEX_TYPE_NON_RECURSIVE) {
-			CloseHandle(mutex->handle)
+			CloseHandle(mutex->handle);
 		} else {
 			DeleteCriticalSection(&mutex->mutex);
 		}

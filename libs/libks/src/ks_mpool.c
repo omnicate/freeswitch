@@ -623,14 +623,14 @@ static int split_block(ks_mpool_t *mp_p, void *free_addr, const unsigned long si
 	if (page_n == 1) {
 		/* now free the rest of the 1st block block */
 		end_p = (char *) free_addr + size;
-		ret = free_pointer(mp_p, end_p, (char *) block_p->mb_bounds_p - (char *) end_p);
+		ret = free_pointer(mp_p, end_p, (unsigned long)((char *) block_p->mb_bounds_p - (char *) end_p));
 		if (ret != KS_MPOOL_ERROR_NONE) {
 			return ret;
 		}
 	}
 
 	/* now free the rest of the block */
-	ret = free_pointer(mp_p, FIRST_ADDR_IN_BLOCK(new_block_p), MEMORY_IN_BLOCK(new_block_p));
+	ret = free_pointer(mp_p, FIRST_ADDR_IN_BLOCK(new_block_p), (unsigned long)MEMORY_IN_BLOCK(new_block_p));
 	if (ret != KS_MPOOL_ERROR_NONE) {
 		return ret;
 	}
@@ -729,7 +729,7 @@ static void *get_space(ks_mpool_t *mp_p, const unsigned long byte_size, int *err
 #endif
 
 		free_end = (char *) free_addr + size;
-		left = (char *) block_p->mb_bounds_p - (char *) free_end;
+		left = (unsigned) ((char *) block_p->mb_bounds_p - (char *) free_end);
 	} else {
 
 		if (bit_c < min_bit_free_next) {
@@ -1052,7 +1052,7 @@ static ks_mpool_t *ks_mpool_raw_open(const unsigned int flags, const unsigned in
 		free_addr = (char *) mp_p + sizeof(ks_mpool_t);
 
 		/* free the rest of the block */
-		ret = free_pointer(&mp, free_addr, (char *) block_p->mb_bounds_p - (char *) free_addr);
+		ret = free_pointer(&mp, free_addr, (unsigned long)((char *) block_p->mb_bounds_p - (char *) free_addr));
 		if (ret != KS_MPOOL_ERROR_NONE) {
 			/* NOTE: after this line mp_p will be invalid */
 			(void) free_pages(block_p, SIZE_OF_PAGES(&mp, page_n));
@@ -1176,7 +1176,7 @@ static int ks_mpool_raw_close(ks_mpool_t *mp_p)
 		block_p->mb_magic2 = 0;
 		/* record the next pointer because it might be invalidated below */
 		next_p = block_p->mb_next_p;
-		ret = free_pages(block_p, (char *) block_p->mb_bounds_p - (char *) block_p);
+		ret = free_pages(block_p, (unsigned long)((char *) block_p->mb_bounds_p - (char *) block_p));
 
 		if (ret != KS_MPOOL_ERROR_NONE) {
 			final = ret;
@@ -1295,7 +1295,7 @@ KS_DECLARE(int) ks_mpool_clear(ks_mpool_t *mp_p)
 		first_p = FIRST_ADDR_IN_BLOCK(block_p);
 
 		/* free the memory */
-		ret = free_pointer(mp_p, first_p, MEMORY_IN_BLOCK(block_p));
+		ret = free_pointer(mp_p, first_p, (unsigned long)MEMORY_IN_BLOCK(block_p));
 		if (ret != KS_MPOOL_ERROR_NONE) {
 			final = ret;
 		}

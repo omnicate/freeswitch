@@ -159,7 +159,7 @@ KS_DECLARE(ks_status_t) ks_thread_create_ex(ks_thread_t **rthread, ks_thread_fun
 	if (thread) {
 		thread->running = 0;
 		if (pool) {
-			int err = ks_mpool_safe_free(pool, thread);
+			err = ks_mpool_safe_free(pool, thread);
 		}
 	}
   done:
