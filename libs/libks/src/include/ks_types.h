@@ -38,10 +38,10 @@
 extern "C" {
 #endif							/* defined(__cplusplus) */
 
-#define KS_STR2ENUM_P(_FUNC1, _FUNC2, _TYPE) FT_DECLARE(_TYPE) _FUNC1 (const char *name); FT_DECLARE(const char *) _FUNC2 (_TYPE type);                       
+#define KS_STR2ENUM_P(_FUNC1, _FUNC2, _TYPE) KS_DECLARE(_TYPE) _FUNC1 (const char *name); KS_DECLARE(const char *) _FUNC2 (_TYPE type);                       
 
 #define KS_STR2ENUM(_FUNC1, _FUNC2, _TYPE, _STRINGS, _MAX)  \
-    FT_DECLARE(_TYPE) _FUNC1 (const char *name)             \
+    KS_DECLARE(_TYPE) _FUNC1 (const char *name)             \
     {                                                       \
         int i;                                              \
         _TYPE t = _MAX ;                                    \
@@ -55,7 +55,7 @@ extern "C" {
                                                             \
         return t;                                           \
     }                                                       \
-    FT_DECLARE(const char *) _FUNC2 (_TYPE type)            \
+    KS_DECLARE(const char *) _FUNC2 (_TYPE type)            \
     {                                                       \
         if (type > _MAX) {                                  \
             type = _MAX;                                    \
@@ -81,8 +81,21 @@ extern "C" {
 		KS_FAIL,
 		KS_BREAK,
 		KS_DISCONNECTED,
-		KS_GENERR
+		KS_GENERR,
+		/* Always insert new entries above this line*/
+		KS_STATUS_COUNT
 	} ks_status_t;
+
+#define STATUS_STRINGS\
+	"SUCCESS",\
+	"FAIL",\
+	"BREAK",\
+	"DISCONNECTED",\
+	"GENERR",\
+	/* insert new entries before this */\
+	"COUNT"
+
+	KS_STR2ENUM_P(ks_str2ks_status, ks_status2str, ks_status_t)  
 
 /*! \brief Used internally for truth test */
 	typedef enum {

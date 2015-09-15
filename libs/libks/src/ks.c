@@ -83,6 +83,8 @@
 #define KS_CLAMP(min,max,val)	(KS_MIN(max,KS_MAX(val,min)))
 #endif
 
+KS_ENUM_NAMES(STATUS_NAMES, STATUS_STRINGS)
+KS_STR2ENUM(ks_str2ks_status, ks_status2str, ks_status_t, STATUS_NAMES, KS_STATUS_COUNT)
 
 /* Written by Marc Espie, public domain */
 #define KS_CTYPE_NUM_CHARS       256
