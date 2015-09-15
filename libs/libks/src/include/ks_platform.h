@@ -38,7 +38,7 @@
 extern "C" {
 #endif							/* defined(__cplusplus) */
 
-#if !defined(_XOPEN_SOURCE) && !defined(__FreeBSD__) && !defined(__NetBSD__) && !defined(__OpenBSD__)
+#if !defined(_XOPEN_SOURCE) && !defined(__FreeBSD__) && !defined(__NetBSD__) && !defined(__OpenBSD__) && !defined(__APPLE__)
 #define _XOPEN_SOURCE 600
 #endif
 

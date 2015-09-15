@@ -83,6 +83,7 @@ KS_DECLARE(ks_status_t) ks_thread_join(ks_thread_t *thread) {
 	void *ret;
 	pthread_join(thread->handle, &ret);
 #endif
+	return KS_SUCCESS;
 }
 
 KS_DECLARE(ks_status_t) ks_thread_create_ex(ks_thread_t **rthread, ks_thread_function_t func, void *data,
