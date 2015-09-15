@@ -77,11 +77,32 @@ extern "C" {
 	typedef size_t ks_size_t;
 
 	typedef enum {
-		KS_SUCCESS,
-		KS_FAIL,
-		KS_BREAK,
-		KS_DISCONNECTED,
-		KS_GENERR,
+		KS_STATUS_SUCCESS,
+		KS_STATUS_FAIL,
+		KS_STATUS_BREAK,
+		KS_STATUS_DISCONNECTED,
+		KS_STATUS_GENERR,
+		/* Memory pool errors */
+		KS_STATUS_ARG_NULL,        /* function argument is null */
+		KS_STATUS_ARG_INVALID,     /* function argument is invalid */
+		KS_STATUS_PNT,	           /* invalid ks_mpool pointer */
+		KS_STATUS_POOL_OVER,	   /* ks_mpool structure was overwritten */
+		KS_STATUS_PAGE_SIZE,	   /* could not get system page-size */
+		KS_STATUS_OPEN_ZERO,	   /* could not open /dev/zero */
+		KS_STATUS_NO_MEM,	       /* no memory available */
+		KS_STATUS_MMAP,	           /* problems with mmap */
+		KS_STATUS_SIZE,	           /* error processing requested size */
+		KS_STATUS_TOO_BIG,	       /* allocation exceeded max size */
+		KS_STATUS_MEM,	           /* invalid memory address */
+		KS_STATUS_MEM_OVER,	       /* memory lower bounds overwritten */
+		KS_STATUS_NOT_FOUND,	   /* memory block not found in pool */
+		KS_STATUS_IS_FREE,	       /* memory block already free */
+		KS_STATUS_BLOCK_STAT,      /* invalid internal block status */
+		KS_STATUS_FREE_ADDR,	   /* invalid internal free address */
+		KS_STATUS_NO_PAGES,	       /* ran out of pages in pool */
+		KS_STATUS_ALLOC,	       /* calloc,malloc,free,realloc failed */
+		KS_STATUS_PNT_OVER,	       /* pointer structure was overwritten */
+		KS_STATUS_INVALID_POINTER, /* address is not valid */
 		/* Always insert new entries above this line*/
 		KS_STATUS_COUNT
 	} ks_status_t;
@@ -92,6 +113,26 @@ extern "C" {
 	"BREAK",\
 	"DISCONNECTED",\
 	"GENERR",\
+	"ARG_NULL",\
+	"ARG_INVALID",\
+	"PNT",\
+	"POOL_OVER",\
+	"PAGE_SIZE",\
+	"OPEN_ZERO",\
+	"NO_MEM",\
+	"MMAP",\
+	"SIZE",\
+	"TOO_BIG",\
+	"MEM",\
+	"MEM_OVER",\
+	"NOT_FOUN",\
+	"IS_FREE",\
+	"BLOCK_STAT",\
+	"FREE_ADDR",\
+	"NO_PAGES",\
+	"ALLOC",\
+	"PNT_OVER",\
+	"INVALID_POINTER",\
 	/* insert new entries before this */\
 	"COUNT"
 

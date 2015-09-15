@@ -179,9 +179,9 @@ typedef void (*ks_mpool_log_func_t) (const void *mp_p,
  *
  * RETURNS:
  *
- * Success - KS_SUCCESS
+ * Success - KS_STATUS_SUCCESS
  *
- * Failure - KS_FAIL
+ * Failure - KS_STATUS_FAIL
  *
  * ARGUMENTS:
  *

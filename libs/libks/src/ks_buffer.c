@@ -61,7 +61,7 @@ KS_DECLARE(ks_status_t) ks_buffer_create(ks_buffer_t **buffer, ks_size_t blocksi
 			new_buffer->data = malloc(start_len);
 			if (!new_buffer->data) {
 				free(new_buffer);
-				return KS_FAIL;
+				return KS_STATUS_FAIL;
 			}
 			memset(new_buffer->data, 0, start_len);
 		}
@@ -73,10 +73,10 @@ KS_DECLARE(ks_status_t) ks_buffer_create(ks_buffer_t **buffer, ks_size_t blocksi
 		new_buffer->head = new_buffer->data;
 
 		*buffer = new_buffer;
-		return KS_SUCCESS;
+		return KS_STATUS_SUCCESS;
 	}
 
-	return KS_FAIL;
+	return KS_STATUS_FAIL;
 }
 
 KS_DECLARE(ks_size_t) ks_buffer_len(ks_buffer_t *buffer)

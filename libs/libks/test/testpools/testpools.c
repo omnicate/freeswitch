@@ -60,7 +60,7 @@ int main(int argc, char **argv)
 	status = ks_mpool_open(&pool, &err);
 
 	printf("OPEN:\n");
-	if (status != KS_SUCCESS) {
+	if (status != KS_STATUS_SUCCESS) {
 		fprintf(stderr, "OPEN ERR: %d [%s]\n", err, ks_mpool_strerror(err));
 		exit(255);
 	}
@@ -187,7 +187,7 @@ int main(int argc, char **argv)
 	printf("CLOSE:\n");
 	status = ks_mpool_close(&pool, &err);
 	
-	if (status != KS_SUCCESS) {
+	if (status != KS_STATUS_SUCCESS) {
 		fprintf(stderr, "CLOSE ERR: [%s]\n", ks_mpool_strerror(err));
 		exit(255);
 	}

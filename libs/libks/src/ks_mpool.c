@@ -169,7 +169,7 @@ KS_DECLARE(ks_status_t) ks_mpool_set_cleanup(ks_mpool_t *mp_p, void *ptr, void *
 	cnode = (ks_mpool_cleanup_node_t *) ks_mpool_alloc(mp_p, sizeof(*cnode), &err);
 	
 	if (!cnode) {
-		return KS_FAIL;
+		return KS_STATUS_FAIL;
 	}
 
 	cnode->ptr = ptr;
@@ -180,7 +180,7 @@ KS_DECLARE(ks_status_t) ks_mpool_set_cleanup(ks_mpool_t *mp_p, void *ptr, void *
 	cnode->next = mp_p->clfn_list;
 	mp_p->clfn_list = cnode;
 
-	return KS_SUCCESS;
+	return KS_STATUS_SUCCESS;
 }
 
 
@@ -1112,10 +1112,10 @@ KS_DECLARE(ks_status_t) ks_mpool_open(ks_mpool_t **poolP, int *error_p)
 
 	if (pool && (!error_p || *error_p == KS_MPOOL_ERROR_NONE)) {
 		*poolP = pool;
-		return KS_SUCCESS;
+		return KS_STATUS_SUCCESS;
 	} else {
 		*poolP = NULL;
-		return KS_FAIL;
+		return KS_STATUS_FAIL;
 	}
 }
 
@@ -1234,9 +1234,9 @@ KS_DECLARE(ks_status_t) ks_mpool_close(ks_mpool_t **mp_pP, int *error_p)
 
 	if (err == KS_MPOOL_ERROR_NONE) {
 		*mp_pP = NULL;
-		return KS_SUCCESS;
+		return KS_STATUS_SUCCESS;
 	} else {
-		return KS_FAIL;
+		return KS_STATUS_FAIL;
 	}
 }
 

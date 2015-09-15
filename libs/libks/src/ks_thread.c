@@ -83,14 +83,14 @@ KS_DECLARE(ks_status_t) ks_thread_join(ks_thread_t *thread) {
 	void *ret;
 	pthread_join(thread->handle, &ret);
 #endif
-	return KS_SUCCESS;
+	return KS_STATUS_SUCCESS;
 }
 
 KS_DECLARE(ks_status_t) ks_thread_create_ex(ks_thread_t **rthread, ks_thread_function_t func, void *data,
 										 uint32_t flags, size_t stack_size, ks_thread_priority_t priority, ks_mpool_t *pool)
 {
 	ks_thread_t *thread = NULL;
-	ks_status_t status = KS_FAIL;
+	ks_status_t status = KS_STATUS_FAIL;
 	int err;
 
 	if (!rthread) goto done;
@@ -131,7 +131,7 @@ KS_DECLARE(ks_status_t) ks_thread_create_ex(ks_thread_t **rthread, ks_thread_fun
 		CloseHandle(thread->handle);
 	}
 
-	status = KS_SUCCESS;
+	status = KS_STATUS_SUCCESS;
 	goto done;
 #else
 
@@ -147,7 +147,7 @@ KS_DECLARE(ks_status_t) ks_thread_create_ex(ks_thread_t **rthread, ks_thread_fun
 	if (pthread_create(&thread->handle, &thread->attribute, thread_launch, thread) != 0)
 		goto failpthread;
 
-	status = KS_SUCCESS;
+	status = KS_STATUS_SUCCESS;
 	goto done;
 
   failpthread:
@@ -163,7 +163,7 @@ KS_DECLARE(ks_status_t) ks_thread_create_ex(ks_thread_t **rthread, ks_thread_fun
 		}
 	}
   done:
-	if (status == KS_SUCCESS) {
+	if (status == KS_STATUS_SUCCESS) {
 		*rthread = thread;
 		ks_mpool_set_cleanup(pool, thread, NULL, 0, ks_thread_cleanup);
 	}

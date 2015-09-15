@@ -462,10 +462,10 @@ KS_DECLARE(ks_status_t) ks_listen(const char *host, ks_port_t port, ks_listen_ca
 {
 	ks_socket_t server_sock = KS_SOCK_INVALID;
 	struct sockaddr_in addr;
-	ks_status_t status = KS_SUCCESS;
+	ks_status_t status = KS_STATUS_SUCCESS;
 
 	if ((server_sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
-		return KS_FAIL;
+		return KS_STATUS_FAIL;
 	}
 
 	ks_socket_reuseaddr(server_sock);
@@ -476,12 +476,12 @@ KS_DECLARE(ks_status_t) ks_listen(const char *host, ks_port_t port, ks_listen_ca
 	addr.sin_port = htons(port);
 
 	if (bind(server_sock, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
-		status = KS_FAIL;
+		status = KS_STATUS_FAIL;
 		goto end;
 	}
 
 	if (listen(server_sock, 10000) < 0) {
-		status = KS_FAIL;
+		status = KS_STATUS_FAIL;
 		goto end;
 	}
 
@@ -497,7 +497,7 @@ KS_DECLARE(ks_status_t) ks_listen(const char *host, ks_port_t port, ks_listen_ca
 		clntLen = sizeof(echoClntAddr);
 
 		if ((client_sock = accept(server_sock, (struct sockaddr *) &echoClntAddr, &clntLen)) == KS_SOCK_INVALID) {
-			status = KS_FAIL;
+			status = KS_STATUS_FAIL;
 			goto end;
 		}
 
@@ -520,11 +520,11 @@ KS_DECLARE(ks_status_t) ks_listen_threaded(const char *host, ks_port_t port, ks_
 {
 	ks_socket_t server_sock = KS_SOCK_INVALID;
 	struct sockaddr_in addr;
-	ks_status_t status = KS_SUCCESS;
+	ks_status_t status = KS_STATUS_SUCCESS;
 	struct thread_handler *handler = NULL;
 
 	if ((server_sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
-		return KS_FAIL;
+		return KS_STATUS_FAIL;
 	}
 
 	ks_socket_reuseaddr(server_sock);
@@ -535,12 +535,12 @@ KS_DECLARE(ks_status_t) ks_listen_threaded(const char *host, ks_port_t port, ks_
 	addr.sin_port = htons(port);
 
 	if (bind(server_sock, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
-		status = KS_FAIL;
+		status = KS_STATUS_FAIL;
 		goto end;
 	}
 
 	if (listen(server_sock, max) < 0) {
-		status = KS_FAIL;
+		status = KS_STATUS_FAIL;
 		goto end;
 	}
 
@@ -556,7 +556,7 @@ KS_DECLARE(ks_status_t) ks_listen_threaded(const char *host, ks_port_t port, ks_
 		clntLen = sizeof(echoClntAddr);
 
 		if ((client_sock = accept(server_sock, (struct sockaddr *) &echoClntAddr, &clntLen)) == KS_SOCK_INVALID) {
-			status = KS_FAIL;
+			status = KS_STATUS_FAIL;
 			goto end;
 		}
 
