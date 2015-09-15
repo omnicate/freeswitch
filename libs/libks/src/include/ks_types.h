@@ -41,6 +41,35 @@ extern "C" {
 #include <ks_platform.h>
 #include <stdarg.h>
 
+#define KS_STR2ENUM_P(_FUNC1, _FUNC2, _TYPE) FT_DECLARE(_TYPE) _FUNC1 (const char *name); FT_DECLARE(const char *) _FUNC2 (_TYPE type);                       
+
+#define KS_STR2ENUM(_FUNC1, _FUNC2, _TYPE, _STRINGS, _MAX)  \
+    FT_DECLARE(_TYPE) _FUNC1 (const char *name)             \
+    {                                                       \
+        int i;                                              \
+        _TYPE t = _MAX ;                                    \
+                                                            \
+        for (i = 0; i < _MAX ; i++) {                       \
+            if (!strcasecmp(name, _STRINGS[i])) {           \
+                t = (_TYPE) i;                              \
+                break;                                      \
+            }                                               \
+        }                                                   \
+                                                            \
+        return t;                                           \
+    }                                                       \
+    FT_DECLARE(const char *) _FUNC2 (_TYPE type)            \
+    {                                                       \
+        if (type > _MAX) {                                  \
+            type = _MAX;                                    \
+        }                                                   \
+        return _STRINGS[(int)type];                         \
+    }                                                       \
+
+
+#define KS_ENUM_NAMES(_NAME, _STRINGS) static const char * _NAME [] = { _STRINGS , NULL };  
+
+
 #define KS_VA_NONE "%s", ""
 
 
