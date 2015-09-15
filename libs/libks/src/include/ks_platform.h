@@ -42,31 +42,45 @@ extern "C" {
 #define _XOPEN_SOURCE 600
 #endif
 
-#ifdef __linux__
-#ifndef _BSD_SOURCE
+#if defined(__linux__) && !defined(_BSD_SOURCE)
 #define _BSD_SOURCE 1
 #endif
-#endif
 	
-#ifndef HAVE_STRINGS_H
-#define HAVE_STRINGS_H 1
-#endif
-#ifndef HAVE_SYS_SOCKET_H
-#define HAVE_SYS_SOCKET_H 1
-#endif
-
-#ifndef __WINDOWS__
-#if defined(WIN32) || defined(WIN64) || defined(_MSC_VER) || defined(_WIN32)
+#if !defined(__WINDOWS__) && (defined(WIN32) || defined(WIN64) || defined(_MSC_VER) || defined(_WIN32))
 #define __WINDOWS__
-#endif
 #endif
 
 #include <stdarg.h>
+#include <time.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
+#include <assert.h>
+#ifndef WIN32
+#include <sys/time.h>
+#include <sys/types.h>
+#include <sys/select.h>
+#include <netinet/tcp.h>
+#include <sys/signal.h>
+#include <unistd.h>
+#include <ctype.h>
+#include <strings.h>
+#include <stdint.h>
+#include <sys/ioctl.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netdb.h>
+
+#endif
 	
 #ifdef _MSC_VER
+
 #ifndef __inline__
 #define __inline__ __inline
 #endif
+
 #if (_MSC_VER >= 1400)			/* VC8+ */
 #ifndef _CRT_SECURE_NO_DEPRECATE
 #define _CRT_SECURE_NO_DEPRECATE
@@ -75,50 +89,38 @@ extern "C" {
 #define _CRT_NONSTDC_NO_DEPRECATE
 #endif
 #endif
+
 #ifndef strcasecmp
 #define strcasecmp(s1, s2) _stricmp(s1, s2)
 #endif
+
 #ifndef strncasecmp
 #define strncasecmp(s1, s2, n) _strnicmp(s1, s2, n)
 #endif
+
 #if (_MSC_VER < 1900)			/* VC 2015 */
 #ifndef snprintf
 #define snprintf _snprintf
 #endif
 #endif
+
 #ifndef S_IRUSR
 #define S_IRUSR _S_IREAD
 #endif
+
 #ifndef S_IWUSR
 #define S_IWUSR _S_IWRITE
 #endif
-#undef HAVE_STRINGS_H
-#undef HAVE_SYS_SOCKET_H
+
+#endif  /* _MSC_VER */
+
+#if (_MSC_VER >= 1400)			// VC8+
+#define ks_assert(expr) assert(expr);__analysis_assume( expr )
 #endif
 
-#include <time.h>
-#ifndef WIN32
-#include <sys/time.h>
+#ifndef ks_assert
+#define ks_assert(_x) assert(_x)
 #endif
-
-#include <stdarg.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#ifndef WIN32
-#include <sys/types.h>
-#include <sys/select.h>
-#include <netinet/tcp.h>
-#include <sys/signal.h>
-#include <unistd.h>
-#include <ctype.h>
-#endif
-
-#ifdef HAVE_STRINGS_H
-#include <strings.h>
-#endif
-#include <assert.h>
-
 
 #ifdef WIN32
 #include <winsock2.h>
@@ -136,6 +138,14 @@ extern "C" {
 	typedef int ks_filehandle_t;
 #define KS_SOCK_INVALID INVALID_SOCKET
 #define strerror_r(num, buf, size) strerror_s(buf, size, num)
+#else
+#define KS_SOCK_INVALID -1
+	typedef int ks_socket_t;
+	typedef ssize_t ks_ssize_t;
+	typedef int ks_filehandle_t;
+#endif
+
+#ifdef WIN32
 #if defined(KS_DECLARE_STATIC)
 #define KS_DECLARE(type)			type __stdcall
 #define KS_DECLARE_NONSTD(type)		type __cdecl
@@ -159,20 +169,7 @@ extern "C" {
 #define KS_DECLARE_NONSTD(type) type
 #define KS_DECLARE_DATA
 #endif
-#include <stdint.h>
-#include <sys/types.h>
-#include <sys/ioctl.h>
-#include <stdarg.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <netdb.h>
-#define KS_SOCK_INVALID -1
-	typedef int ks_socket_t;
-	typedef ssize_t ks_ssize_t;
-	typedef int ks_filehandle_t;
 #endif
-
-
 
 #ifdef __cplusplus
 }
