@@ -42,17 +42,17 @@
 /******************************************************************************/
 
 /* PROTOTYPES *****************************************************************/
-int ft_to_sngss7_activate_all(void);
+int ft_to_sngss7_activate_all(ftdm_sngss7_operating_modes_e opr_mode);
 
 static int ftmod_ss7_enable_isap(int suId);
-static int ftmod_ss7_enable_nsap(int suId);
+static int ftmod_ss7_enable_nsap(int suId, ftdm_sngss7_operating_modes_e opr_mode);
 static int ftmod_ss7_enable_mtpLinkSet(int lnkSetId);
 
 
 /******************************************************************************/
 
 /* FUNCTIONS ******************************************************************/
-int ft_to_sngss7_activate_all(void)
+int ft_to_sngss7_activate_all(ftdm_sngss7_operating_modes_e opr_mode)
 {
 	int x;
 
@@ -76,14 +76,22 @@ int ft_to_sngss7_activate_all(void)
 		x++;
 	} /* while (x < (MAX_ISAPS)) */
 
-	if(SNG_SS7_OPR_MODE_M2UA_SG != g_ftdm_operating_mode){
+	if ((SNG_SS7_OPR_MODE_M2UA_SG  != opr_mode) &&
+		(SNG_SS7_OPR_MODE_M3UA_SG != opr_mode)) {
+
 		x = 1;
 		while (x < (MAX_NSAPS)) {
+			if ((g_ftdm_sngss7_data.cfg.nsap[x].opr_mode == SNG_SS7_OPR_MODE_M2UA_SG) ||
+			    (g_ftdm_sngss7_data.cfg.nsap[x].opr_mode == SNG_SS7_OPR_MODE_M3UA_SG)) {
+				x++;
+				continue;
+			}
+
 			/* check if this link has already been actived */
 			if ((g_ftdm_sngss7_data.cfg.nsap[x].id != 0) &&
 					(!(g_ftdm_sngss7_data.cfg.nsap[x].flags & SNGSS7_ACTIVE))) {
 
-				if (ftmod_ss7_enable_nsap(x)) {	
+				if (ftmod_ss7_enable_nsap(x, opr_mode)) {
 					SS7_CRITICAL("NSAP %d Enable: NOT OK\n", x);
 					return 1;
 				} else {
@@ -98,7 +106,8 @@ int ft_to_sngss7_activate_all(void)
 		} /* while (x < (MAX_NSAPS)) */
 	}
 
-	if(SNG_SS7_OPR_MODE_ISUP == g_ftdm_operating_mode){
+	if ((SNG_SS7_OPR_MODE_ISUP == opr_mode) ||
+			(SNG_SS7_OPR_MODE_M3UA_SG == opr_mode)) {
 		if (g_ftdm_sngss7_data.cfg.mtpRoute[1].id != 0) {
 			x = 1;
 			while (x < (MAX_MTP_LINKSETS+1)) {
@@ -123,8 +132,14 @@ int ft_to_sngss7_activate_all(void)
 	}
 	
 
-	if(SNG_SS7_OPR_MODE_ISUP != g_ftdm_operating_mode){
-		return ftmod_ss7_m2ua_start();
+	if ((SNG_SS7_OPR_MODE_M2UA_SG == opr_mode) ||
+			(SNG_SS7_OPR_MODE_M2UA_ASP == opr_mode)) {
+		return ftmod_ss7_m2ua_start(opr_mode);
+	}
+
+	if ((SNG_SS7_OPR_MODE_M3UA_SG == opr_mode) ||
+			(SNG_SS7_OPR_MODE_M3UA_ASP == opr_mode)) {
+		return ftmod_ss7_m3ua_start(opr_mode);
 	}
 
 	return 0;
@@ -210,7 +225,7 @@ static int ftmod_ss7_enable_isap(int suId)
 }
 
 /******************************************************************************/
-static int ftmod_ss7_enable_nsap(int suId)
+static int ftmod_ss7_enable_nsap(int suId, ftdm_sngss7_operating_modes_e opr_mode)
 {
 	SiMngmt cntrl;
 	Pst pst;
@@ -233,7 +248,11 @@ static int ftmod_ss7_enable_nsap(int suId)
 	cntrl.hdr.elmId.elmnt		= STNSAP;
 
 	cntrl.t.cntrl.s.siElmnt.elmntId.sapId				= suId; 
-	cntrl.t.cntrl.s.siElmnt.elmntParam.nsap.nsapType	= SAP_MTP; 
+	if (SNG_SS7_OPR_MODE_M3UA_ASP == opr_mode) {
+		cntrl.t.cntrl.s.siElmnt.elmntParam.nsap.nsapType	= SAP_M3UA;
+	} else {
+		cntrl.t.cntrl.s.siElmnt.elmntParam.nsap.nsapType	= SAP_MTP;
+	}
 
 
 	cntrl.t.cntrl.action		= ABND_ENA;		/* bind and activate */

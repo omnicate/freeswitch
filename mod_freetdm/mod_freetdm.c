@@ -3359,9 +3359,10 @@ static int add_config_nodes(switch_xml_t swnode, ftdm_conf_node_t *rootnode,
 	return 0;
 }
 
-#define ftdm_set_operating_mode(_operating_mode, _is_isup, _is_m2ua_sg, _is_m2ua_asp, _is_mtp2_api)                 \
+#define ftdm_set_operating_mode(_operating_mode, _is_isup, _is_m2ua_sg, _is_m2ua_asp, _is_mtp2_api, _is_m3ua_sg, _is_m3ua_asp) \
 {                                                                                                                   \
     if (_operating_mode && ('\0' != _operating_mode[0])) {                                                          \
+	_is_isup = _is_m2ua_sg = _is_m2ua_asp = _is_mtp2_api = _is_m3ua_sg = _is_m3ua_asp = 0x00;											    \
         if (!strcasecmp(_operating_mode, "ISUP")) {                                                                 \
             switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Setting Operating mode to ISUP \n");            \
             _is_isup = 0x01;                                                                                        \
@@ -3374,13 +3375,19 @@ static int add_config_nodes(switch_xml_t swnode, ftdm_conf_node_t *rootnode,
         } else if (!strcasecmp(_operating_mode, "MTP2_API")) {                                                      \
             switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Setting Operating mode to MTP2 API \n");        \
             _is_mtp2_api = 0x01;                                                                                    \
+	} else if (!strcasecmp(_operating_mode, "M3UA_SG")) {                                                       \
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Setting Operating mode to M3UA SG \n");         \
+            _is_m3ua_sg = 0x01;                                                                                     \
+        } else if (!strcasecmp(_operating_mode, "M3UA_ASP")) {                                                      \
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Setting Operating mode to M3UA ASP \n");        \
+            _is_m3ua_asp = 0x01;                                                                                    \
         } else {                                                                                                    \
             switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,                                                 \
             "Invalid operating Mode[%s] \n", operating_mode);                                                       \
             ftdm_conf_node_destroy(rootnode);                                                                       \
             return NULL;                                                                                            \
         }                                                                                                           \
-    } else {                                                                                                        \
+    } else if (!_is_isup && !_is_m2ua_sg && !_is_m2ua_asp && !_is_mtp2_api && !_is_m3ua_sg && !_is_m3ua_asp) {      \
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Default operating mode to ISUP \n"); \
         _is_isup = 0x01;                                                                                             \
     }                                                                                                               \
@@ -3395,6 +3402,8 @@ static ftdm_conf_node_t *_get_ss7_config_node(switch_xml_t cfg, const char *conf
 	int is_m2ua_sg = 0x00;
 	int is_m2ua_asp = 0x00;
 	int is_mtp2_api = 0x00;
+	int is_m3ua_sg = 0x00;
+	int is_m3ua_asp = 0x00;
 
 	/* try to find the conf in the hash first */
 	rootnode = switch_core_hash_find(globals.ss7_configs, confname);
@@ -3473,7 +3482,7 @@ static ftdm_conf_node_t *_get_ss7_config_node(switch_xml_t cfg, const char *conf
 		val = (char *) switch_xml_attr_soft(param, "value");
 		ftdm_conf_node_add_param(list, var, val);
         if (!strcasecmp("operating_mode", var)) {
-            ftdm_set_operating_mode(val, is_isup, is_m2ua_sg, is_m2ua_asp, is_mtp2_api);
+            ftdm_set_operating_mode(val, is_isup, is_m2ua_sg, is_m2ua_asp, is_mtp2_api, is_m3ua_sg, is_m3ua_asp);
         }
 	}
 
@@ -3482,7 +3491,7 @@ static ftdm_conf_node_t *_get_ss7_config_node(switch_xml_t cfg, const char *conf
      * but soon it will be removed from span configuration .*/
 
     /* span defined operating mode has to take priority */
-    ftdm_set_operating_mode(operating_mode, is_isup, is_m2ua_sg, is_m2ua_asp, is_mtp2_api);
+    ftdm_set_operating_mode(operating_mode, is_isup, is_m2ua_sg, is_m2ua_asp, is_mtp2_api, is_m3ua_sg, is_m3ua_asp);
 
 	/* add relay channels */
 	if (add_config_list_nodes(isup, rootnode, "sng_relay", "relay_channel", NULL, NULL)) {
@@ -3491,43 +3500,47 @@ static ftdm_conf_node_t *_get_ss7_config_node(switch_xml_t cfg, const char *conf
 		return NULL;
 	}
 
-	/* add mtp1 links */
-	if (add_config_list_nodes(isup, rootnode, "mtp1_links", "mtp1_link", NULL, NULL)) {
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "failed to process mtp1_links for sng_isup config %s\n", confname);
-		ftdm_conf_node_destroy(rootnode);
-		return NULL;
-	}
+	if (is_isup || is_m2ua_sg || is_m3ua_sg) {
+		/* add mtp1 links */
+		if (add_config_list_nodes(isup, rootnode, "mtp1_links", "mtp1_link", NULL, NULL)) {
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "failed to process mtp1_links for sng_isup config %s\n", confname);
+			ftdm_conf_node_destroy(rootnode);
+			return NULL;
+		}
 
-	/* add mtp2 links */
-	if (add_config_list_nodes(isup, rootnode, "mtp2_links", "mtp2_link", NULL, NULL)) {
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "failed to process mtp2_links for sng_isup config %s\n", confname);
-		ftdm_conf_node_destroy(rootnode);
-		return NULL;
+		/* add mtp2 links */
+		if (add_config_list_nodes(isup, rootnode, "mtp2_links", "mtp2_link", NULL, NULL)) {
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "failed to process mtp2_links for sng_isup config %s\n", confname);
+			ftdm_conf_node_destroy(rootnode);
+			return NULL;
+		}
 	}
 
     if (is_mtp2_api) goto done;
 
-	if (is_isup || is_m2ua_asp) {
-		/* add mtp3 links */
-		if (add_config_list_nodes(isup, rootnode, "mtp3_links", "mtp3_link", NULL, NULL)) {
-			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "failed to process mtp3_links for sng_isup config %s\n", confname);
-			ftdm_conf_node_destroy(rootnode);
-			return NULL;
-		}
+    if (is_isup || is_m2ua_asp || is_m3ua_sg ) {
+	    /* add mtp3 links */
+	    if (add_config_list_nodes(isup, rootnode, "mtp3_links", "mtp3_link", NULL, NULL)) {
+		    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "failed to process mtp3_links for sng_isup config %s\n", confname);
+		    ftdm_conf_node_destroy(rootnode);
+		    return NULL;
+	    }
 
-		/* add mtp linksets */
-		if (add_config_list_nodes(isup, rootnode, "mtp_linksets", "mtp_linkset", NULL, NULL)) {
-			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "failed to process mtp_linksets for sng_isup config %s\n", confname);
-			ftdm_conf_node_destroy(rootnode);
-			return NULL;
-		}
+	    /* add mtp linksets */
+	    if (add_config_list_nodes(isup, rootnode, "mtp_linksets", "mtp_linkset", NULL, NULL)) {
+		    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "failed to process mtp_linksets for sng_isup config %s\n", confname);
+		    ftdm_conf_node_destroy(rootnode);
+		    return NULL;
+	    }
 
-		/* add mtp routes */
-		if (add_config_list_nodes(isup, rootnode, "mtp_routes", "mtp_route", "linksets", "linkset")) {
-			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "failed to process mtp_routes for sng_isup config %s\n", confname);
-			ftdm_conf_node_destroy(rootnode);
-			return NULL;
-		}
+	    /* add mtp routes */
+	    if (add_config_list_nodes(isup, rootnode, "mtp_routes", "mtp_route", "linksets", "linkset")) {
+		    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "failed to process mtp_routes for sng_isup config %s\n", confname);
+		    ftdm_conf_node_destroy(rootnode);
+		    return NULL;
+	    }
+    }
+	if (is_isup || is_m2ua_asp || is_m3ua_asp) {
 
 		/* add isup interfaces */
 		if (add_config_list_nodes(isup, rootnode, "isup_interfaces", "isup_interface", NULL, NULL)) {
@@ -3544,14 +3557,16 @@ static ftdm_conf_node_t *_get_ss7_config_node(switch_xml_t cfg, const char *conf
 		}
 	} 
 
-	if(is_m2ua_sg || is_m2ua_asp) {
+	if (is_m2ua_sg || is_m2ua_asp || is_m3ua_sg || is_m3ua_asp) {
 		/* add sctp links */
 		if (add_config_nodes(isup, rootnode, "sng_sctp_interfaces", "sng_sctp_interface",  "sng_source_addresses")) {
 			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "failed to process sng_sctp_interface for sng_isup config %s\n", confname);
 			ftdm_conf_node_destroy(rootnode);
 			return NULL;
 		}
+	}
 
+	if (is_m2ua_sg || is_m2ua_asp) {
 		if (add_config_list_nodes(isup, rootnode, "sng_m2ua_interfaces", "sng_m2ua_interface", NULL, NULL)) {
 			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "failed to process sng_m2ua_interfaces for sng_isup config %s\n", confname);
 			ftdm_conf_node_destroy(rootnode);
@@ -3571,13 +3586,62 @@ static ftdm_conf_node_t *_get_ss7_config_node(switch_xml_t cfg, const char *conf
 		}
 	}
 
-	if(is_m2ua_sg) {
+	if (is_m2ua_sg) {
 		if (add_config_list_nodes(isup, rootnode, "sng_nif_interfaces", "sng_nif_interface", NULL, NULL)) {
 			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "failed to process sng_nif_interfaces for sng_isup config %s\n", confname);
 			ftdm_conf_node_destroy(rootnode);
 			return NULL;
 		}
 	}
+	if (is_m3ua_sg || is_m3ua_asp) {
+		if (add_config_list_nodes(isup, rootnode, "sng_m3ua_network_interfaces", "sng_m3ua_network_interface", NULL, NULL)) {
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,
+					"failed to process sng_m3ua_network_interfaces for sng_isup config %s\n", confname);
+			ftdm_conf_node_destroy(rootnode);
+			return NULL;
+		}
+
+		if (add_config_nodes(isup, rootnode, "sng_m3ua_peer_server_interfaces", "sng_m3ua_peer_server_interface", "sng_m3ua_psps")) {
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,
+					"failed to process sng_m3ua_peer_server_interface for sng_isup config %s\n", confname);
+			ftdm_conf_node_destroy(rootnode);
+			return NULL;
+		}
+
+		if (add_config_nodes(isup, rootnode, "sng_m3ua_peer_server_process_interfaces",
+					"sng_m3ua_peer_server_process_interface", "sng_destination_addresses")) {
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,
+					"failed to process sng_m3ua_peer_server_process_interface for sng_isup config %s\n", confname);
+			ftdm_conf_node_destroy(rootnode);
+			return NULL;
+		}
+
+		if (is_m3ua_asp) {
+			if (add_config_list_nodes(isup, rootnode, "sng_m3ua_user_interfaces", "sng_m3ua_user_interface", NULL, NULL)) {
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,
+						"failed to process sng_m3ua_user_interfaces for sng_isup config %s\n", confname);
+				ftdm_conf_node_destroy(rootnode);
+				return NULL;
+			}
+		}
+
+		if (is_m3ua_sg) {
+			if (add_config_list_nodes(isup, rootnode, "sng_m3ua_nif_interfaces", "sng_m3ua_nif_interface", NULL, NULL)) {
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,
+						"failed to process sng_m3ua_nif_interfaces for sng_isup config %s\n", confname);
+				ftdm_conf_node_destroy(rootnode);
+				return NULL;
+			}
+		}
+
+		if (add_config_list_nodes(isup, rootnode, "sng_m3ua_route_interfaces", "sng_m3ua_route_interface", NULL, NULL)) {
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,
+					"failed to process sng_m3ua_route_interfaces for sng_isup config %s\n", confname);
+			ftdm_conf_node_destroy(rootnode);
+			return NULL;
+		}
+	} /* M3UA SG */
+
 
 done:
 	switch_core_hash_insert(globals.ss7_configs, confname, rootnode);
@@ -3665,7 +3729,7 @@ static void parse_gsm_spans(switch_xml_t cfg, switch_xml_t spans)
 			LOAD_ERROR("Error finding FreeTDM span id:%s name:%s\n", switch_str_nil(id), switch_str_nil(name));
 			continue;
 		}
-		
+
 		if (!span_id) {
 			span_id = ftdm_span_get_id(span);
 		}
@@ -3991,6 +4055,7 @@ static switch_status_t load_config(int reload)
 	ftdm_channel_t *fchan = NULL;
 	ftdm_iterator_t *chaniter = NULL;
 	ftdm_iterator_t *curr = NULL;
+	char *last_operating_mode = NULL;
 
 	memset(&globals, 0, sizeof(globals));
 	switch_mutex_init(&globals.mutex, SWITCH_MUTEX_NESTED, module_pool);
@@ -4127,6 +4192,20 @@ static switch_status_t load_config(int reload)
                 }
             } /* reload */
 
+			/* check if the last operating mode is same as that of current parsed span operating mode then
+			 * please get the already existing configuration and remove it from global hash list */
+			 if ((last_operating_mode) && (operating_mode) && (strcasecmp(last_operating_mode, operating_mode))) {
+				tmp_node = switch_core_hash_find(globals.ss7_configs, configname);
+				if (tmp_node) {
+					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "ss7 config %s was found for operating mode %s. Deleting current hash entry.\n",
+							  last_operating_mode, configname);
+					switch_core_hash_delete(globals.ss7_configs, configname);
+				}
+			}
+
+			if (operating_mode) {
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "creating ss7 config node for operating mode %s!\n", operating_mode);
+			}
 
 			ss7confnode = _get_ss7_config_node(cfg, configname, operating_mode);
 			if (!ss7confnode) {
@@ -4141,6 +4220,7 @@ static switch_status_t load_config(int reload)
 				spanparameters[paramindex].var = "operating-mode";
 				spanparameters[paramindex].val = operating_mode;
 				paramindex++;
+				last_operating_mode = operating_mode;
 			}
 
 			spanparameters[paramindex].var = "confnode";

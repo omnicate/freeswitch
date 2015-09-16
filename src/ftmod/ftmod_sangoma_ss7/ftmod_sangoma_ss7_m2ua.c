@@ -43,45 +43,31 @@
 /* DEFINES ********************************************************************/
 /******************************************************************************/
 /* FUNCTION PROTOTYPES ********************************************************/
-static int ftmod_tucl_gen_config(void);
-static int ftmod_tucl_sap_config(int id);
-static int ftmod_sctp_gen_config(void);
-static int ftmod_cfg_sctp(void);
-static int ftmod_sctp_config(int id);
-static ftdm_status_t ftmod_sctp_sap_config(int id);
-static ftdm_status_t ftmod_sctp_tsap_config(int id);
-static int ftmod_m2ua_gen_config(void);
+static int ftmod_m2ua_gen_config(ftdm_sngss7_operating_modes_e opr_mode);
 static int ftmod_m2ua_sctsap_config(int m2ua_cfg_id, int sct_sap_id, int sctp_id);
-static int ftmod_m2ua_peer_config(int id);
-static int ftmod_m2ua_peer_config1(int m2ua_inf_id, int peer_id);
+static int ftmod_m2ua_peer_config(int id, ftdm_sngss7_operating_modes_e opr_mode);
+static int ftmod_m2ua_peer_config1(int m2ua_inf_id, int peer_id, ftdm_sngss7_operating_modes_e opr_mode);
 static int ftmod_m2ua_cluster_config(int idx);
 static int ftmod_m2ua_dlsap_config(int idx);
 static int ftmod_nif_gen_config(void);
 static int ftmod_nif_dlsap_config(int idx);
-static int ftmod_sctp_tucl_tsap_bind(int idx);
 static int ftmod_m2ua_sctp_sctsap_bind(int idx);
 static int ftmod_open_endpoint(int idx);
 static int ftmod_init_sctp_assoc(int peer_id);
 static int ftmod_nif_m2ua_dlsap_bind(int id, int action);
 static int ftmod_nif_mtp2_dlsap_bind(int id, int action);
 static int ftmod_m2ua_debug(int action);
-static int ftmod_tucl_debug(int action);
-static int ftmod_sctp_debug(int action);
-
-static int ftmod_ss7_sctp_shutdown(void);
 static int ftmod_ss7_m2ua_shutdown(void);
-static int ftmod_ss7_tucl_shutdown(void);
 static int ftmod_m2ua_enable_alarm(void);
 static int ftmod_ss7_get_nif_id_by_mtp2_id(int mtp2_id);
 static int ftmod_m2ua_contrl_request(int id ,int action);
-static ftdm_status_t ftmod_is_sctp_link_active(int sctp_id);
 
 
 /******************************************************************************/
-ftdm_status_t ftmod_ss7_m2ua_init(void) 
+ftdm_status_t ftmod_ss7_m2ua_init(int opr_mode)
 {
 	/****************************************************************************************************/
-	if (SNG_SS7_OPR_MODE_M2UA_SG == g_ftdm_operating_mode) {
+	if (SNG_SS7_OPR_MODE_M2UA_SG == opr_mode) {
 		if (sng_isup_init_nif()) {
 			ftdm_log (FTDM_LOG_ERROR , "Failed to start NIF\n");
 			return FTDM_FAIL;
@@ -130,14 +116,14 @@ ftdm_status_t ftmod_ss7_m2ua_init(void)
 		ftdm_log (FTDM_LOG_INFO ,"SCTP GEN configuration: OK\n");
 	}
 	/****************************************************************************************************/
-	if (ftmod_m2ua_gen_config()) {
+	if (ftmod_m2ua_gen_config(opr_mode)) {
 		ftdm_log (FTDM_LOG_ERROR ,"M2UA General configuration: NOT OK\n");
 		return FTDM_FAIL;
 	}else {
 		ftdm_log (FTDM_LOG_INFO ,"M2UA General configuration: OK\n");
 	}
 	/****************************************************************************************************/
-	if (SNG_SS7_OPR_MODE_M2UA_SG == g_ftdm_operating_mode) {
+	if (SNG_SS7_OPR_MODE_M2UA_SG == opr_mode) {
 		if (ftmod_nif_gen_config()) {
 			ftdm_log (FTDM_LOG_ERROR ,"NIF General configuration: NOT OK\n");
 			return FTDM_FAIL;
@@ -169,35 +155,6 @@ void ftmod_ss7_m2ua_free()
 }
 
 /******************************************************************************/
-static int ftmod_ss7_tucl_shutdown()
-{
-	Pst pst;
-	HiMngmt cntrl;  
-
-	memset((U8 *)&pst, 0, sizeof(Pst));
-	memset((U8 *)&cntrl, 0, sizeof(HiMngmt));
-
-	smPstInit(&pst);
-
-	pst.dstEnt = ENTHI;
-
-	/* prepare header */
-	cntrl.hdr.msgType     = TCNTRL;         /* message type */
-	cntrl.hdr.entId.ent   = ENTHI;          /* entity */
-	cntrl.hdr.entId.inst  = 0;              /* instance */
-	cntrl.hdr.elmId.elmnt = STGEN;       /* General */
-
-	cntrl.hdr.response.selector    = 0;
-	cntrl.hdr.response.prior       = PRIOR0;
-	cntrl.hdr.response.route       = RTESPEC;
-	cntrl.hdr.response.mem.region  = S_REG;
-	cntrl.hdr.response.mem.pool    = S_POOL;
-
-	cntrl.t.cntrl.action    = ASHUTDOWN;
-
-	return (sng_cntrl_tucl (&pst, &cntrl));
-}
-/******************************************************************************/
 static int ftmod_ss7_m2ua_shutdown()
 {
 	Pst pst;
@@ -227,45 +184,18 @@ static int ftmod_ss7_m2ua_shutdown()
 	return (sng_cntrl_m2ua (&pst, &cntrl));
 }
 /***********************************************************************************************************************/
-static int ftmod_ss7_sctp_shutdown()
-{
-	Pst pst;
-	SbMgmt cntrl;  
-
-	memset((U8 *)&pst, 0, sizeof(Pst));
-	memset((U8 *)&cntrl, 0, sizeof(SbMgmt));
-
-	smPstInit(&pst);
-
-	pst.dstEnt = ENTSB;
-
-	/* prepare header */
-	cntrl.hdr.msgType     = TCNTRL;         /* message type */
-	cntrl.hdr.entId.ent   = ENTSB;          /* entity */
-	cntrl.hdr.entId.inst  = 0;              /* instance */
-	cntrl.hdr.elmId.elmnt = STSBGEN;       /* General */
-
-	cntrl.hdr.response.selector    = 0;
-	cntrl.hdr.response.prior       = PRIOR0;
-	cntrl.hdr.response.route       = RTESPEC;
-	cntrl.hdr.response.mem.region  = S_REG;
-	cntrl.hdr.response.mem.pool    = S_POOL;
-
-	cntrl.t.cntrl.action = ASHUTDOWN;
-
-	return (sng_cntrl_sctp (&pst, &cntrl));
-}
-
-/******************************************************************************/
-
 ftdm_status_t ftmod_ss7_m2ua_span_stop(int span_id)
 {
+    ftdm_sngss7_operating_modes_e opr_mode = SNG_SS7_OPR_MODE_NONE;
     int mtp1_cfg_id=0;
     int mtp2_cfg_id=0;
     int nif_cfg_id=0;
     int m2ua_cfg_id=0;
 
-    if (SNG_SS7_OPR_MODE_M2UA_SG != g_ftdm_operating_mode) {
+    /* get the operation type */
+    opr_mode = ftmod_ss7_get_operating_mode(span_id);
+
+    if (SNG_SS7_OPR_MODE_M2UA_SG != opr_mode) {
 
         /* valid only for m2ua sg as of now */
 
@@ -327,7 +257,7 @@ ftdm_status_t ftmod_ss7_m2ua_span_stop(int span_id)
 
 /******************************************************************************/
 
-ftdm_status_t ftmod_ss7_m2ua_cfg(void)
+ftdm_status_t ftmod_ss7_m2ua_cfg(int opr_mode)
 {
     int x=0;
 
@@ -336,7 +266,7 @@ ftdm_status_t ftmod_ss7_m2ua_cfg(void)
     }
 
     /* SCTP configuration */
-    if (ftmod_cfg_sctp()) {
+    if (ftmod_cfg_sctp(opr_mode)) {
         ftdm_log (FTDM_LOG_ERROR ,"SCTP Configuration : NOT OK\n");
         return FTDM_FAIL;
     } else {
@@ -353,7 +283,7 @@ ftdm_status_t ftmod_ss7_m2ua_cfg(void)
             /****************************************************************************************************/
             /* M2UA PEER configurations */
 
-            if (ftmod_m2ua_peer_config(x)) {
+            if (ftmod_m2ua_peer_config(x, opr_mode)) {
                 ftdm_log (FTDM_LOG_ERROR ,"M2UA PEER configuration for M2UA INTF[%d] : NOT OK\n", x);
                 return FTDM_FAIL;
             } else {
@@ -387,7 +317,7 @@ ftdm_status_t ftmod_ss7_m2ua_cfg(void)
     /****************************************************************************************************/
     /* NIF DLSAP */
 
-    if (SNG_SS7_OPR_MODE_M2UA_SG == g_ftdm_operating_mode) {
+    if (SNG_SS7_OPR_MODE_M2UA_SG == opr_mode) {
         x = 1;
         while (x<MW_MAX_NUM_OF_INTF) {
             if ((g_ftdm_sngss7_data.cfg.g_m2ua_cfg.nif[x].id !=0) && 
@@ -415,180 +345,9 @@ ftdm_status_t ftmod_ss7_m2ua_cfg(void)
 }
 
 /****************************************************************************************************/
-static int ftmod_tucl_gen_config(void)
-{
-	HiMngmt cfg;
-	Pst             pst;
-
-	/* initalize the post structure */
-	smPstInit(&pst);
-
-	/* insert the destination Entity */
-	pst.dstEnt = ENTHI;
-
-	/* clear the configuration structure */
-	memset(&cfg, 0, sizeof(cfg));
-
-	/* fill in the post structure */
-	smPstInit(&cfg.t.cfg.s.hiGen.lmPst);
-	/*fill in the specific fields of the header */
-	cfg.hdr.msgType                 		= TCFG;
-	cfg.hdr.entId.ent               		= ENTHI;
-	cfg.hdr.entId.inst              		= S_INST;
-	cfg.hdr.elmId.elmnt     			= STGEN;
-
-	cfg.t.cfg.s.hiGen.numSaps                       = HI_MAX_SAPS;          		/* number of SAPs */
-	cfg.t.cfg.s.hiGen.numCons                       = HI_MAX_NUM_OF_CON;    		/* maximum num of connections */
-	cfg.t.cfg.s.hiGen.numFdsPerSet                  = HI_MAX_NUM_OF_FD_PER_SET;     	/* maximum num of fds to use per set */
-	cfg.t.cfg.s.hiGen.numFdBins                     = HI_MAX_NUM_OF_FD_HASH_BINS;   	/* for fd hash lists */
-	cfg.t.cfg.s.hiGen.numClToAccept                 = HI_MAX_NUM_OF_CLIENT_TO_ACCEPT; 	/* clients to accept simultaneously */
-	cfg.t.cfg.s.hiGen.permTsk                       = TRUE;                 		/* schedule as perm task or timer */
-	cfg.t.cfg.s.hiGen.schdTmrVal                    = HI_MAX_SCHED_TMR_VALUE;               /* if !permTsk - probably ignored */
-	cfg.t.cfg.s.hiGen.selTimeout                    = HI_MAX_SELECT_TIMEOUT_VALUE;          /* select() timeout */
-
-	/* number of raw/UDP messages to read in one iteration */
-	cfg.t.cfg.s.hiGen.numRawMsgsToRead              = HI_MAX_RAW_MSG_TO_READ;
-	cfg.t.cfg.s.hiGen.numUdpMsgsToRead              = HI_MAX_UDP_MSG_TO_READ;
-
-	/* thresholds for congestion on the memory pool */
-	cfg.t.cfg.s.hiGen.poolStrtThr                   = HI_MEM_POOL_START_THRESHOLD;
-	cfg.t.cfg.s.hiGen.poolDropThr                   = HI_MEM_POOL_DROP_THRESHOLD;
-	cfg.t.cfg.s.hiGen.poolStopThr                   = HI_MEM_POOL_STOP_THRESHOLD;
-
-	cfg.t.cfg.s.hiGen.timeRes                       = SI_PERIOD;        /* time resolution */
-
-#ifdef HI_SPECIFY_GENSOCK_ADDR
-	cfg.t.cfg.s.hiGen.ipv4GenSockAddr.address = CM_INET_INADDR_ANY;
-	cfg.t.cfg.s.hiGen.ipv4GenSockAddr.port  = 0;                            /* DAVIDY - why 0? */
-#ifdef IPV6_SUPPORTED
-	cfg.t.cfg.s.hiGen.ipv6GenSockAddr.address = CM_INET_INADDR6_ANY;
-	cfg.t.cfg.s.hiGen.ipv4GenSockAddr.port  = 0;
-#endif
-#endif
-
-	return(sng_cfg_tucl(&pst, &cfg));
-}
-/****************************************************************************************************/
-
-static int ftmod_tucl_sap_config(int id)
-{
-    HiMngmt cfg;
-    Pst     pst;
-    HiSapCfg  *pCfg;
-
-    sng_sctp_link_t *k = &g_ftdm_sngss7_data.cfg.sctpCfg.linkCfg[id];
-
-    /* initalize the post structure */
-    smPstInit(&pst);
-
-    /* insert the destination Entity */
-    pst.dstEnt = ENTHI;
-
-    /* clear the configuration structure */
-    memset(&cfg, 0, sizeof(cfg));
-
-    /*fill LM  post structure*/
-    cfg.t.cfg.s.hiGen.lmPst.dstProcId   = SFndProcId();
-    cfg.t.cfg.s.hiGen.lmPst.dstInst     = S_INST;
-
-    cfg.t.cfg.s.hiGen.lmPst.dstProcId   = SFndProcId();
-    cfg.t.cfg.s.hiGen.lmPst.dstEnt      = ENTSM;
-    cfg.t.cfg.s.hiGen.lmPst.dstInst     = S_INST;
-
-    cfg.t.cfg.s.hiGen.lmPst.prior       = PRIOR0;
-    cfg.t.cfg.s.hiGen.lmPst.route       = RTESPEC;
-    cfg.t.cfg.s.hiGen.lmPst.region      = S_REG;
-    cfg.t.cfg.s.hiGen.lmPst.pool        = S_POOL;
-    cfg.t.cfg.s.hiGen.lmPst.selector    = 0;
-
-
-    /*fill in the specific fields of the header */
-    cfg.hdr.msgType         = TCFG;
-    cfg.hdr.entId.ent       = ENTHI;
-    cfg.hdr.entId.inst      = 0;
-    cfg.hdr.elmId.elmnt     = STTSAP;
-
-    pCfg = &cfg.t.cfg.s.hiSap;
-
-    pCfg->spId 	= k->id ; /* each SCTP link there will be one tucl sap */ 
-    pCfg->uiSel 	= 0x00;  /*loosley coupled */
-    pCfg->flcEnb = TRUE;
-    pCfg->txqCongStrtLim = HI_SAP_TXN_QUEUE_CONG_START_LIMIT;
-    pCfg->txqCongDropLim = HI_SAP_TXN_QUEUE_CONG_DROP_LIMIT;
-    pCfg->txqCongStopLim = HI_SAP_TXN_QUEUE_CONG_STOP_LIMIT;
-    pCfg->numBins = 10;
-
-    pCfg->uiMemId.region = S_REG;
-    pCfg->uiMemId.pool   = S_POOL;
-    pCfg->uiPrior        = PRIOR0;
-    pCfg->uiRoute        = RTESPEC;
-
-    return(sng_cfg_tucl(&pst, &cfg));
-}
 
 /****************************************************************************************************/
- 
-static int ftmod_sctp_gen_config(void)
-{
-	SbMgmt  cfg;
-	Pst             pst;
-
-	/* initalize the post structure */
-	smPstInit(&pst);
-
-	/* insert the destination Entity */
-	pst.dstEnt = ENTSB;
-
-	/* clear the configuration structure */
-	memset(&cfg, 0, sizeof(cfg));
-
-	/* fill in the post structure */
-	smPstInit(&cfg.t.cfg.s.genCfg.smPst);
-	/*fill in the specific fields of the header */
-	cfg.hdr.msgType                                         = TCFG;
-	cfg.hdr.entId.ent                                       = ENTSB;
-	cfg.hdr.entId.inst                                      = S_INST;
-	cfg.hdr.elmId.elmnt                             	= STSBGEN;
-
-#ifdef SB_IPV6_SUPPORTED
-	/* U8          ipv6SrvcReqdFlg; */ /* IPV6 service required for sctp */
-#endif
-
-	cfg.t.cfg.s.genCfg.serviceType                          = HI_SRVC_RAW_SCTP;             	/* Usr packetized TCP Data */    /* TUCL transport protocol (IP/UDP) */
-	cfg.t.cfg.s.genCfg.maxNmbSctSaps                        = SB_MAX_SCT_SAPS;                      /* max no. SCT SAPS */
-	cfg.t.cfg.s.genCfg.maxNmbTSaps                          = SB_MAX_T_SAPS;                        /* max no. Transport SAPS */
-	cfg.t.cfg.s.genCfg.maxNmbEndp                           = SB_MAX_NUM_OF_ENDPOINTS;              /* max no. endpoints */
-	cfg.t.cfg.s.genCfg.maxNmbAssoc                          = SB_MAX_NUM_OF_ASSOC;                  /* max no. associations */
-	cfg.t.cfg.s.genCfg.maxNmbDstAddr                        = SB_MAX_NUM_OF_DST_ADDR;               /* max no. dest. addresses */
-	cfg.t.cfg.s.genCfg.maxNmbSrcAddr                        = SB_MAX_NUM_OF_SRC_ADDR;               /* max no. src. addresses */
-	cfg.t.cfg.s.genCfg.maxNmbTxChunks                       = SB_MAX_NUM_OF_TX_CHUNKS;
-	cfg.t.cfg.s.genCfg.maxNmbRxChunks                       = SB_MAX_NUM_OF_RX_CHUNKS;
-	cfg.t.cfg.s.genCfg.maxNmbInStrms                        = SB_MAX_INC_STREAMS;
-	cfg.t.cfg.s.genCfg.maxNmbOutStrms                       = SB_MAX_OUT_STREAMS;
-	cfg.t.cfg.s.genCfg.initARwnd                            = SB_MAX_RWND_SIZE;
-	cfg.t.cfg.s.genCfg.mtuInitial                           = SB_MTU_INITIAL;
-	cfg.t.cfg.s.genCfg.mtuMinInitial                        = SB_MTU_MIN_INITIAL;
-	cfg.t.cfg.s.genCfg.mtuMaxInitial                        = SB_MTU_MAX_INITIAL;
-	cfg.t.cfg.s.genCfg.performMtu                           = FALSE;
-	cfg.t.cfg.s.genCfg.timeRes                              = 1;
-	sprintf((char*)cfg.t.cfg.s.genCfg.hostname, "www.sangoma.com"); /* DAVIDY - Fix this later, probably ignored */
-	cfg.t.cfg.s.genCfg.useHstName                           = FALSE;      /* Flag whether hostname is to be used in INIT and INITACK msg */
-	cfg.t.cfg.s.genCfg.reConfig.maxInitReTx         = 8;
-	cfg.t.cfg.s.genCfg.reConfig.maxAssocReTx        = 10;
-	cfg.t.cfg.s.genCfg.reConfig.maxPathReTx         = 10;
-	cfg.t.cfg.s.genCfg.reConfig.altAcceptFlg        = TRUE;
-	cfg.t.cfg.s.genCfg.reConfig.keyTm                       = 600; /* initial value for MD5 Key expiry timer */
-	cfg.t.cfg.s.genCfg.reConfig.alpha                       = 12;
-	cfg.t.cfg.s.genCfg.reConfig.beta                        = 25;
-#ifdef SB_ECN
-	cfg.t.cfg.s.genCfg.reConfig.ecnFlg                      = TRUE;
-#endif
-
-	return(sng_cfg_sctp(&pst, &cfg));
-}
-
-/****************************************************************************************************/
-static ftdm_status_t ftmod_is_sctp_link_active(int sctp_id)
+ftdm_status_t ftmod_m2ua_is_sctp_link_active(int sctp_id)
 {
 	int x     = 0x01;
 	int y     = 0x01;
@@ -655,197 +414,8 @@ static ftdm_status_t ftmod_is_sctp_link_active(int sctp_id)
 	return FTDM_SUCCESS;
 }
 /****************************************************************************************************/
-static int ftmod_cfg_sctp(void)
-{
-	int x = 0;
-
-	x = 1;
-	while (x<MAX_SCTP_LINK) {
-
-		if ((g_ftdm_sngss7_data.cfg.sctpCfg.linkCfg[x].id !=0) && 
-                (!(g_ftdm_sngss7_data.cfg.sctpCfg.linkCfg[x].flags & SNGSS7_CONFIGURED))) {
-
-            /* check if this sctp is associated with any peer 
-             * If not associated then simply ignore */
-
-            if (FTDM_FAIL == ftmod_is_sctp_link_active(g_ftdm_sngss7_data.cfg.sctpCfg.linkCfg[x].id)) {
-                x++; 
-                continue; 
-            }
-
-            if (  ftmod_sctp_config(x) == FTDM_FAIL) {
-                SS7_CRITICAL("SCTP %d configuration FAILED!\n", x);
-                return FTDM_FAIL;
-            } else {
-                SS7_INFO("SCTP %d configuration DONE!\n", x);
-            }
-            g_ftdm_sngss7_data.cfg.sctpCfg.linkCfg[x].flags |= SNGSS7_CONFIGURED;
-        }
-		x++;
-	}
-	return FTDM_SUCCESS;
-}
-
-
-/****************************************************************************************************/
-int ftmod_sctp_config(int id)
-{ 
-	if  (FTDM_SUCCESS != ftmod_sctp_tsap_config(id))
-		return FTDM_FAIL;
-
-	if  (FTDM_SUCCESS != ftmod_sctp_sap_config(id))
-		return FTDM_FAIL;
-
-	/* each sctp link there will be one tucl sap */
-	if(ftmod_tucl_sap_config(id)){
-		ftdm_log (FTDM_LOG_ERROR ,"TUCL SAP[%d] configuration: NOT OK\n", id);
-		return FTDM_FAIL;
-	} else {
-		ftdm_log (FTDM_LOG_INFO ,"TUCL SAP[%d] configuration: OK\n", id);
-	}
-
-	return FTDM_SUCCESS;
-}
-/****************************************************************************************************/
-
-ftdm_status_t ftmod_sctp_tsap_config(int id)
-{
-	Pst			pst;
-	SbMgmt		cfg;
-	SbTSapCfg	*c;	
-
-	int 			i = 0;
-	int			ret = -1;
-	
-	sng_sctp_link_t *k = &g_ftdm_sngss7_data.cfg.sctpCfg.linkCfg[id];
-
-	smPstInit(&pst);
-	pst.dstEnt = ENTSB;
-	
-	memset(&cfg, 0x0, sizeof(cfg));
-	smHdrInit(&cfg.hdr);
-
-	cfg.hdr.msgType			= TCFG;
-	cfg.hdr.entId.ent		= ENTSB;
-	cfg.hdr.entId.inst		= S_INST;
-	cfg.hdr.elmId.elmnt		= STSBTSAP;
-	cfg.hdr.elmId.elmntInst1 	= k->id;
-
-	c = &cfg.t.cfg.s.tSapCfg;
-	c->swtch			= LSB_SW_RFC_REL0;
-	c->suId				= k->id;
-	c->sel				= 0;
-	c->ent				= ENTHI;
-	c->inst				= S_INST;
-	c->procId			= g_ftdm_sngss7_data.cfg.procId;
-	c->memId.region			= S_REG;
-	c->memId.pool			= S_POOL;
-	c->prior			= PRIOR1;
-	c->route			= RTESPEC;
-	c->srcNAddrLst.nmb 		= k->numSrcAddr;
-	for (i=0; i <= (k->numSrcAddr-1); i++) {
-		c->srcNAddrLst.nAddr[i].type = CM_NETADDR_IPV4;		
-		c->srcNAddrLst.nAddr[i].u.ipv4NetAddr = k->srcAddrList[i+1];
-	}
-
-	c->reConfig.spId		= k->id;
-	c->reConfig.maxBndRetry 	= 3; 
-	c->reConfig.tIntTmr 		= 200;
-	
-	ret = sng_cfg_sctp(&pst, &cfg);
-	if (0 == ret) {
-		SS7_INFO("SCTP TSAP [%d] configuration DONE!\n", id);
-		return FTDM_SUCCESS;
-	} else {
-		SS7_CRITICAL("SCTP TSAP [%d] configuration FAILED!\n", id);
-		return FTDM_FAIL;
-	}
-}
-
-/****************************************************************************************************/
-
-ftdm_status_t ftmod_sctp_sap_config(int id)
-{
-    Pst			pst;
-    SbMgmt		cfg;
-    SbSctSapCfg	*c;	
-
-    int		ret = -1;
-    sng_sctp_link_t *k = &g_ftdm_sngss7_data.cfg.sctpCfg.linkCfg[id];
-
-    smPstInit(&pst);
-    pst.dstEnt = ENTSB;
-
-    memset(&cfg, 0x0, sizeof(cfg));
-    smHdrInit(&cfg.hdr);
-
-    cfg.hdr.msgType			= TCFG;
-    cfg.hdr.entId.ent		= ENTSB;
-    cfg.hdr.entId.inst		= S_INST;
-    cfg.hdr.elmId.elmnt		= STSBSCTSAP;
-    cfg.hdr.elmId.elmntInst1 	= k->id;
-
-    c = &cfg.t.cfg.s.sctSapCfg;
-    c->swtch 			= LSB_SW_RFC_REL0;
-    c->spId				= k->id;	/* Service Provider SAP Id */
-    c->sel				= 0;
-    c->memId.region			= S_REG;
-    c->memId.pool			= S_POOL;
-    c->prior			= PRIOR1;
-    c->route			= RTESPEC;
-
-    /* Maximum time to wait before the SCTP layer must send a Selective Acknowledgement (SACK) message. Valid range is 1 -165535. */
-    c->reConfig.maxAckDelayTm 	= 200; 
-    /* Maximum number of messages to receive before the SCTP layer must send a SACK message. Valid range is 1 - 165535. */
-    c->reConfig.maxAckDelayDg 	= 2;
-    /* Initial value of the retransmission timer (RTO). The SCTP layer retransmits data after waiting for feedback during this time period. Valid range is 1 - 65535. */
-    c->reConfig.rtoInitial 		= 3000;
-    /* Minimum value used for the RTO. If the computed value of RTO is less than rtoMin, the computed value is rounded up to this value. */
-    c->reConfig.rtoMin 		= 1000;
-    /* Maxiumum value used for RTO. If the computed value of RTO is greater than rtoMax, the computed value is rounded down to this value. */
-    c->reConfig.rtoMax 		= 10000;
-    /* Default Freeze timer value */
-    c->reConfig.freezeTm 		= 3000;
-    /* Base cookie lifetime for the cookie in the Initiation Acknowledgement (INIT ACK) message. */
-    c->reConfig.cookieLife 		= 60000;
-    /* Default heartbeat interval timer. Valid range is 1 - 65535. */
-    c->reConfig.intervalTm 		= 3000;
-    /* Maximum burst value. Valid range is 1 - 65535. */
-    c->reConfig.maxBurst 		= 4;
-    /*Maximum number of heartbeats sent at each retransmission timeout (RTO). Valid range is 1 - 65535. */
-    c->reConfig.maxHbBurst 		= 1;
-    /*Shutdown guard timer value for graceful shutdowns. */
-    c->reConfig.t5SdownGrdTm 	= 15000;
-    /*	Action to take when the receiver's number of incoming streams is less than the sender's number of outgoing streams. Valid values are:
-        TRUE = Accept incoming stream and continue association.
-        FALSE = Abort the association.
-        */
-    c->reConfig.negAbrtFlg 		= FALSE;
-    /* 	Whether to enable or disable heartbeat by default. Valid values are:
-        TRUE = Enable heartbeat.
-        FALSE = Disable heartbeat.
-        */
-    c->reConfig.hBeatEnable 	= TRUE;
-    /* Flow control start threshold. When the number of messages in SCTPs message queue reaches this value, flow control starts. */
-    c->reConfig.flcUpThr 		= 200;
-    /* Flow control stop threshold. When the number of messages in SCTPs message queue reaches this value, flow control stops. */
-    c->reConfig.flcLowThr 		= 64;
-
-    c->reConfig.handleInitFlg 	= FALSE;
-
-    ret = sng_cfg_sctp(&pst, &cfg);
-    if (0 == ret) {
-        SS7_INFO("SCTP SAP [%d] configuration DONE!\n", id);
-        return FTDM_SUCCESS;
-    } else {
-        SS7_CRITICAL("SCTP SAP [%d] configuration FAILED!\n", id);
-        return FTDM_FAIL;
-    }
-}
-
-/**********************************************************************************************/
 /* M2UA - General configuration */
-static int ftmod_m2ua_gen_config(void)
+static int ftmod_m2ua_gen_config(ftdm_sngss7_operating_modes_e opr_mode)
 {
     Pst    pst; 
     MwMgmt cfg;
@@ -872,7 +442,7 @@ static int ftmod_m2ua_gen_config(void)
 
 
 
-    if (SNG_SS7_OPR_MODE_M2UA_SG == g_ftdm_operating_mode) {
+    if (SNG_SS7_OPR_MODE_M2UA_SG == opr_mode) {
         cfg.t.cfg.s.genCfg.nodeType          = LMW_TYPE_SGP; /* NodeType ==  SGP or ASP  */
     } else {
         cfg.t.cfg.s.genCfg.nodeType          = LMW_TYPE_ASP; /* NodeType ==  SGP or ASP  */
@@ -908,7 +478,7 @@ static int ftmod_m2ua_gen_config(void)
     cfg.t.cfg.s.genCfg.reConfig.tmrFlcPoll.val = 10;
 
 
-    if (SNG_SS7_OPR_MODE_M2UA_ASP == g_ftdm_operating_mode) {
+    if (SNG_SS7_OPR_MODE_M2UA_ASP == opr_mode) {
         cfg.t.cfg.s.genCfg.reConfig.tmrAspm.enb    = TRUE;         /* ASPM  timer */
         cfg.t.cfg.s.genCfg.reConfig.tmrAspm.val    = 10;
         cfg.t.cfg.s.genCfg.reConfig.tmrHeartBeat.enb  = TRUE;       /* Heartbeat timer */
@@ -917,7 +487,7 @@ static int ftmod_m2ua_gen_config(void)
 
 
 
-    if(SNG_SS7_OPR_MODE_M2UA_SG == g_ftdm_operating_mode){
+    if(SNG_SS7_OPR_MODE_M2UA_SG == opr_mode){
         cfg.t.cfg.s.genCfg.reConfig.tmrAsPend.enb  = TRUE;   /* AS-PENDING timer */
         cfg.t.cfg.s.genCfg.reConfig.tmrAsPend.val  = 10;
         cfg.t.cfg.s.genCfg.reConfig.tmrCongPoll.enb = TRUE;  /* SS7 Congestion poll timer */
@@ -931,7 +501,7 @@ static int ftmod_m2ua_gen_config(void)
 }   
 
 /**********************************************************************************************/
-static int ftmod_m2ua_peer_config(int id)
+static int ftmod_m2ua_peer_config(int id, ftdm_sngss7_operating_modes_e opr_mode)
 {
     int x = 0;
     int peer_id = 0;
@@ -958,7 +528,7 @@ static int ftmod_m2ua_peer_config(int id)
         } else {
             ftdm_log (FTDM_LOG_INFO, " ftmod_m2ua_sctsap_config: M2UA SCTSAP for M2UA Intf Id[%d] config SUCCESS \n", id);
         }
-        if (ftmod_m2ua_peer_config1(peer->sctpId, peer_id)) {
+        if (ftmod_m2ua_peer_config1(peer->sctpId, peer_id, opr_mode)) {
             ftdm_log (FTDM_LOG_ERROR, " ftmod_m2ua_peer_config1: M2UA Peer[%d] configuration for M2UA Intf Id[%d] config FAILED \n", peer_id, id);
             return 0x01;
         } else {
@@ -1072,7 +642,7 @@ static int ftmod_m2ua_sctsap_config(int m2ua_cfg_id,int sct_sap_id, int sctp_id)
 /****************************************************************************************************/
 
 /* M2UA - Peer configuration */
-static int ftmod_m2ua_peer_config1(int m2ua_inf_id, int peer_id)
+static int ftmod_m2ua_peer_config1(int m2ua_inf_id, int peer_id, ftdm_sngss7_operating_modes_e opr_mode)
 {
     int    i;
     Pst    pst;
@@ -1105,7 +675,7 @@ static int ftmod_m2ua_peer_config1(int m2ua_inf_id, int peer_id)
     cfg.t.cfg.s.peerCfg.peerId 		= peer->id;               /* peer id */
     cfg.t.cfg.s.peerCfg.aspIdFlag 	= peer->aspIdFlag;        /* aspId flag */
 
-    if (SNG_SS7_OPR_MODE_M2UA_ASP == g_ftdm_operating_mode) {
+    if (SNG_SS7_OPR_MODE_M2UA_ASP == opr_mode) {
         cfg.t.cfg.s.peerCfg.selfAspId 	= peer->selfAspId;  	  /* aspId */
     }
 
@@ -1402,7 +972,7 @@ void ftmod_ss7_disable_m2ua_sg_logging(void){
 }
 
 /***********************************************************************************************************************/
-int ftmod_ss7_m2ua_start(void) {
+int ftmod_ss7_m2ua_start(int opr_mode) {
     int x = 0;
 
     /***********************************************************************************************************************/
@@ -1411,7 +981,7 @@ int ftmod_ss7_m2ua_start(void) {
         if ((g_ftdm_sngss7_data.cfg.sctpCfg.linkCfg[x].id !=0) && 
                 (!(g_ftdm_sngss7_data.cfg.sctpCfg.linkCfg[x].flags & SNGSS7_ACTIVE))) {
 
-            if (FTDM_FAIL == ftmod_is_sctp_link_active(g_ftdm_sngss7_data.cfg.sctpCfg.linkCfg[x].id)) {
+            if (FTDM_FAIL == ftmod_m2ua_is_sctp_link_active(g_ftdm_sngss7_data.cfg.sctpCfg.linkCfg[x].id)) {
                 x++; 
                 continue; 
             }
@@ -1446,7 +1016,7 @@ int ftmod_ss7_m2ua_start(void) {
     }/* END - M2UA Interfaces while loop*/
     /***********************************************************************************************************************/
 
-    if (SNG_SS7_OPR_MODE_M2UA_SG == g_ftdm_operating_mode) {
+    if (SNG_SS7_OPR_MODE_M2UA_SG == opr_mode) {
         x = 1;
         while (x<MW_MAX_NUM_OF_INTF) {
             if ((g_ftdm_sngss7_data.cfg.g_m2ua_cfg.nif[x].id !=0) && 
@@ -1509,7 +1079,7 @@ int ftmod_ss7_m2ua_start(void) {
     }
 
 
-    if (SNG_SS7_OPR_MODE_M2UA_ASP == g_ftdm_operating_mode) {
+    if (SNG_SS7_OPR_MODE_M2UA_ASP == opr_mode) {
         /* enable M2UA Alarms as of now for ASP mode only...
          * ideally should be enable for both..will do it in nsg-4.4 */
         ftmod_m2ua_enable_alarm();
@@ -1642,40 +1212,6 @@ static int ftmod_init_sctp_assoc(int peer_id)
 }
 
 /***********************************************************************************************************************/
-static int ftmod_sctp_tucl_tsap_bind(int id)
-{
-    Pst pst;
-    SbMgmt cntrl;  
-    sng_sctp_link_t *k = &g_ftdm_sngss7_data.cfg.sctpCfg.linkCfg[id];
-
-    memset((U8 *)&pst, 0, sizeof(Pst));
-    memset((U8 *)&cntrl, 0, sizeof(SbMgmt));
-
-    smPstInit(&pst);
-
-    pst.dstEnt = ENTSB;
-
-    /* prepare header */
-    cntrl.hdr.msgType     = TCNTRL;         /* message type */
-    cntrl.hdr.entId.ent   = ENTSB;          /* entity */
-    cntrl.hdr.entId.inst  = 0;              /* instance */
-    cntrl.hdr.elmId.elmnt = STSBTSAP;       /* General */
-    cntrl.hdr.transId     = 1;     /* transaction identifier */
-
-    cntrl.hdr.response.selector    = 0;
-
-    cntrl.hdr.response.prior       = PRIOR0;
-    cntrl.hdr.response.route       = RTESPEC;
-    cntrl.hdr.response.mem.region  = S_REG;
-    cntrl.hdr.response.mem.pool    = S_POOL;
-
-    cntrl.t.cntrl.action = ABND_ENA;
-    cntrl.t.cntrl.sapId  = k->id;  /* SCT sap id configured at SCTP layer */
-
-    return (sng_cntrl_sctp (&pst, &cntrl));
-}  
-/***********************************************************************************************************************/
-
 static int ftmod_m2ua_sctp_sctsap_bind(int id)
 {
     int ret = 0x00;
@@ -1788,38 +1324,6 @@ static int ftmod_nif_mtp2_dlsap_bind(int id, int action)
 }
 
 /***********************************************************************************************************************/
-static int ftmod_sctp_debug(int action)
-{
-	Pst pst;
-	SbMgmt cntrl;  
-
-	memset((U8 *)&pst, 0, sizeof(Pst));
-	memset((U8 *)&cntrl, 0, sizeof(SbMgmt));
-
-	smPstInit(&pst);
-
-	pst.dstEnt = ENTSB;
-
-	/* prepare header */
-	cntrl.hdr.msgType     = TCNTRL;         /* message type */
-	cntrl.hdr.entId.ent   = ENTSB;          /* entity */
-	cntrl.hdr.entId.inst  = 0;              /* instance */
-	cntrl.hdr.elmId.elmnt = STSBGEN;       /* General */
-
-	cntrl.hdr.response.selector    = 0;
-	cntrl.hdr.response.prior       = PRIOR0;
-	cntrl.hdr.response.route       = RTESPEC;
-	cntrl.hdr.response.mem.region  = S_REG;
-	cntrl.hdr.response.mem.pool    = S_POOL;
-
-	cntrl.t.cntrl.action = action;
-	cntrl.t.cntrl.subAction = SADBG;
-	cntrl.t.cntrl.dbgMask   = 0xFFFF;
-
-	return (sng_cntrl_sctp (&pst, &cntrl));
-}
-/***********************************************************************************************************************/
-
 static int ftmod_m2ua_enable_alarm()
 {
 	Pst pst;
@@ -1882,77 +1386,6 @@ static int ftmod_m2ua_debug(int action)
 	return (sng_cntrl_m2ua (&pst, &cntrl));
 }
 /***********************************************************************************************************************/
-static int ftmod_tucl_debug(int action)
-{
-	Pst pst;
-	HiMngmt cntrl;  
-
-	memset((U8 *)&pst, 0, sizeof(Pst));
-	memset((U8 *)&cntrl, 0, sizeof(HiMngmt));
-
-	smPstInit(&pst);
-
-	pst.dstEnt = ENTHI;
-
-	/* prepare header */
-	cntrl.hdr.msgType     = TCNTRL;         /* message type */
-	cntrl.hdr.entId.ent   = ENTHI;          /* entity */
-	cntrl.hdr.entId.inst  = 0;              /* instance */
-	cntrl.hdr.elmId.elmnt = STGEN;       /* General */
-
-	cntrl.hdr.response.selector    = 0;
-	cntrl.hdr.response.prior       = PRIOR0;
-	cntrl.hdr.response.route       = RTESPEC;
-	cntrl.hdr.response.mem.region  = S_REG;
-	cntrl.hdr.response.mem.pool    = S_POOL;
-
-	cntrl.t.cntrl.action    = action;
-	cntrl.t.cntrl.subAction = SADBG;
-	cntrl.t.cntrl.ctlType.hiDbg.dbgMask = 0xFFFF;
-
-	return (sng_cntrl_tucl (&pst, &cntrl));
-}
-/***********************************************************************************************************************/
-
-/***********************************************************************************************************************/
-int ftmod_sctp_ssta_req(int elemt, int id, SbMgmt* cfm)
-{
-	SbMgmt ssta; 
-	Pst pst;
-	sng_sctp_link_t *k = &g_ftdm_sngss7_data.cfg.sctpCfg.linkCfg[id];
-
-	memset((U8 *)&pst, 0, sizeof(Pst));
-	memset((U8 *)&ssta, 0, sizeof(SbMgmt));
-
-	smPstInit(&pst);
-
-	pst.dstEnt = ENTSB;
-
-	/* prepare header */
-	ssta.hdr.msgType     = TSSTA;         /* message type */
-	ssta.hdr.entId.ent   = ENTSB;          /* entity */
-	ssta.hdr.entId.inst  = 0;              /* instance */
-	ssta.hdr.elmId.elmnt = elemt;  		/* STSBGEN */ /* Others are STSBTSAP, STSBSCTSAP, STSBASSOC, STSBDTA, STSBTMR */ 
-	ssta.hdr.transId     = 1;     /* transaction identifier */
-
-	ssta.hdr.response.selector    = 0;
-	ssta.hdr.response.prior       = PRIOR0;
-	ssta.hdr.response.route       = RTESPEC;
-	ssta.hdr.response.mem.region  = S_REG;
-	ssta.hdr.response.mem.pool    = S_POOL;
-
-    if ((ssta.hdr.elmId.elmnt == STSBSCTSAP) || (ssta.hdr.elmId.elmnt == STSBTSAP)) {
-        ssta.t.ssta.sapId = k->id; /* SapId */
-    }
-
-    if (ssta.hdr.elmId.elmnt == STSBASSOC) {
-        /*TODO - how to get assoc Id*/
-        ssta.t.ssta.s.assocSta.assocId = 0; /* association id */
-    }
-
-    return(sng_sta_sctp(&pst,&ssta,cfm));
-}
-
 int ftmod_m2ua_ssta_req(int elemt, int id, MwMgmt* cfm)
 {
     MwMgmt ssta; 

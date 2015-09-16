@@ -861,8 +861,8 @@ void handle_sng_m2ua_alarm(Pst *pst, MwMgmt *sta)
 				ftdm_log(FTDM_LOG_INFO," STMWPEER: peerId (%d) \n\n",
 						sta->t.usta.s.peerId);             
 				
-				if(SNG_SS7_OPR_MODE_M2UA_ASP == g_ftdm_operating_mode){
-					if(LMW_MSG_ASP_UP_ACK == sta->t.usta.t.aspm.msgType){
+				if (ftmod_ss7_is_operating_mode_pres(SNG_SS7_OPR_MODE_M2UA_ASP)) {
+					if (LMW_MSG_ASP_UP_ACK == sta->t.usta.t.aspm.msgType) {
 						ftdm_log(FTDM_LOG_INFO," Received ASP_ACK for PeerId[%d]\n",sta->t.usta.s.peerId);
 						ftdm_m2ua_start_timer(SNG_M2UA_TIMER_ASP_ACTIVE, sta->t.usta.s.peerId);
 					}
@@ -900,7 +900,7 @@ void handle_sng_m2ua_alarm(Pst *pst, MwMgmt *sta)
 			{
 				ftdm_log(FTDM_LOG_INFO," M2UA : LMW_EVENT_ESTABLISH_OK Event raised on peerId[%d]\n",sta->t.usta.s.peerId);
 				
-				if(SNG_SS7_OPR_MODE_M2UA_ASP == g_ftdm_operating_mode){
+				if (ftmod_ss7_is_operating_mode_pres(SNG_SS7_OPR_MODE_M2UA_ASP)) {
 					ftdm_m2ua_start_timer(SNG_M2UA_TIMER_ASP_UP, sta->t.usta.s.peerId);
 				}
 			
@@ -932,7 +932,7 @@ void handle_sng_m2ua_alarm(Pst *pst, MwMgmt *sta)
 						sta->t.usta.t.ntfy.aspId, sta->t.usta.t.ntfy.stType,
 						sta->t.usta.t.ntfy.stId);
 
-				if(SNG_SS7_OPR_MODE_M2UA_ASP == g_ftdm_operating_mode){
+				if(ftmod_ss7_is_operating_mode_pres(SNG_SS7_OPR_MODE_M2UA_ASP)){
 					if(LMW_NTFY_TYPE_ASCHG == sta->t.usta.t.ntfy.stType) {
 						if(LMW_NTFY_AS_ACTIVE == sta->t.usta.t.ntfy.stId){
 							/* AS becomes ACTIVE..now establish MTP3 link alignment procedures */
@@ -960,6 +960,122 @@ void handle_sng_m2ua_alarm(Pst *pst, MwMgmt *sta)
 }   /* handle_sng_m2ua_alarm */
 
 /******************************************************************************/
+void handle_sng_m3ua_alarm(Pst *pst, ItMgmt *sta)
+{
+    /* To print the general information */
+    ftdm_log(FTDM_LOG_INFO, "Recieved a status indication from M3UA layer \n\n");
+    ftdm_log(FTDM_LOG_INFO," Category = %d , event = %d , cause = %d\n",
+            sta->t.usta.alarm.category, sta->t.usta.alarm.event, sta->t.usta.alarm.cause);
+
+
+    /* To print the affected element value */
+    switch(sta->hdr.elmId.elmnt)
+    {
+        case STITPSP:
+            {
+                ftdm_log(FTDM_LOG_INFO," STITPSP: with psp-id (%d) \n\n",
+                        sta->t.usta.s.pspId);
+                break;
+            }
+        case STITSCTSAP:
+            {
+                ftdm_log(FTDM_LOG_INFO," STITSCTSAP: suId (%d) \n\n",
+                        sta->t.usta.s.suId);
+                break;
+            }
+        case STITNSAP:
+            {
+                ftdm_log(FTDM_LOG_INFO," STITNSAP: spId (%d) \n\n",
+                        sta->t.usta.s.spId);
+
+                break;
+            }
+        case STITPS:
+            {
+                ftdm_log(FTDM_LOG_INFO," STITPS: psId (%d) \n\n",
+                        sta->t.usta.s.psId);
+                break;
+            }
+	case STITAPC:
+	    {
+		    if (sta->t.usta.alarm.event == LIT_EVENT_PC_CONGESTED) {
+			    ftdm_log(FTDM_LOG_INFO," STITAPC: Affected Point Code[%d] with congLevel[%d]\n\n",
+					    sta->t.usta.t.dpcEvt.aPc, sta->t.usta.t.dpcEvt.p.congLevel);
+		    } else {
+			    ftdm_log(FTDM_LOG_INFO," STITAPC: Affected Point Code[%d] with SrvInd[%d]\n\n",
+					    sta->t.usta.t.dpcEvt.aPc, sta->t.usta.t.dpcEvt.p.servInd);
+		    }
+		    break;
+	    }
+        default:
+            {
+                ftdm_log(FTDM_LOG_ERROR, "[IT_USTA]: Invalid element[%d] \n\n", sta->hdr.elmId.elmnt);
+                break;
+            }
+    }
+
+    switch(sta->t.usta.alarm.event)
+    {
+        case LIT_EVENT_PC_CONGESTED:
+            {
+		    break;
+	    }
+        case LIT_EVENT_EOPEN_OK:
+            {
+                /* END-POINT Success confirmation from layer manager..start timer for assoc establish */
+                ftdm_m3ua_start_timer(SNG_M3UA_TIMER_SCTP_ASSOC, sta->t.usta.s.suId);
+                break;
+            }
+        case LIT_EVENT_ESTABLISH_OK:
+            {
+                /* SCTP association success confirmation from layer ..start timer for asp-up */
+
+                if (ftmod_ss7_is_operating_mode_pres(SNG_SS7_OPR_MODE_M3UA_ASP)) {
+					ftdm_m3ua_start_timer(SNG_M3UA_TIMER_ASP_UP, sta->t.usta.s.pspId);
+				}
+
+                break;
+            }
+
+        case LIT_EVENT_AS_INACTIVE:
+            {
+                /* recevied AS-INACTIVE from peer indication from m3ua layer..start timer for asp-active */
+
+                if ((STITPS == sta->hdr.elmId.elmnt) &&
+                        (ftmod_ss7_is_operating_mode_pres(SNG_SS7_OPR_MODE_M3UA_ASP))) {
+					ftdm_m3ua_start_timer(SNG_M3UA_TIMER_ASP_ACTIVE, sta->t.usta.s.psId);
+				}
+
+                break;
+            }
+
+        case LIT_EVENT_AS_ACTIVE:
+            {
+#if 0
+                /* recevied AS-ACTIVE from peer indication from m3ua layer..start timer for reg-routing keys */
+
+				if (ftmod_ss7_is_operating_mode_pres(SNG_SS7_OPR_MODE_M3UA_ASP)) {
+					ftdm_m3ua_start_timer(SNG_M3UA_TIMER_REG_ROUTE_KEYS, sta->t.usta.s.pspId);
+				}
+#endif
+
+                break;
+            }
+
+
+
+        default:
+            break;
+    }
+
+
+    ftdm_log(FTDM_LOG_INFO," Event [%s] \n", DECODE_LIT_EVENT(sta->t.usta.alarm.event));
+    ftdm_log(FTDM_LOG_INFO," Cause [%s] \n", DECODE_LIT_REASON(sta->t.usta.alarm.cause));
+
+}   /* handle_sng_m3ua_alarm */
+
+/******************************************************************************/
+
 void handle_sng_nif_alarm(Pst *pst, NwMgmt *sta)
 {
 	/* To print the general information */

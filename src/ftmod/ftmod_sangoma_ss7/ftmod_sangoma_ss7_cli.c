@@ -132,6 +132,7 @@ static ftdm_status_t cli_ss7_show_all_spans_detail(ftdm_stream_handle_t *stream)
 static ftdm_status_t handle_show_sctp_profiles(ftdm_stream_handle_t *stream);
 static ftdm_status_t handle_show_sctp_profile(ftdm_stream_handle_t *stream, char* sctp_profile_name);
 static ftdm_status_t handle_show_m2ua_profiles(ftdm_stream_handle_t *stream);
+static ftdm_status_t handle_show_m3ua_profiles(ftdm_stream_handle_t *stream);
 static ftdm_status_t handle_show_m2ua_profile(ftdm_stream_handle_t *stream, char* m2ua_profile_name);
 static ftdm_status_t handle_show_m2ua_peer_status(ftdm_stream_handle_t *stream, char* m2ua_profile_name);
 static ftdm_status_t handle_show_m2ua_cluster_status(ftdm_stream_handle_t *stream, char* m2ua_profile_name);
@@ -510,6 +511,19 @@ ftdm_status_t ftdm_sngss7_handle_cli_cmd(ftdm_stream_handle_t *stream, const cha
 			}else{	
 				c++;
 				handle_show_sctp_profile(stream, argv[c]);
+			}
+	    /**********************************************************************/
+		} else if (!strcasecmp(argv[c], "m3ua")) {
+	    /**********************************************************************/
+			switch(argc)
+			{
+				case 2: /* show m3ua */
+					{
+						handle_show_m3ua_profiles(stream);
+						break;
+					}
+				default:
+					goto handle_cli_error_argc;
 			}
 	    /**********************************************************************/
 		} else {
@@ -963,8 +977,60 @@ ftdm_status_t ftdm_sngss7_handle_cli_cmd(ftdm_stream_handle_t *stream, const cha
 				goto handle_cli_error_argc;
 			}
 		}else{
-			stream->write_function(stream, "Unknown \"m2ua  %s option\", supported values \"logging\"\n",argv[c]);
+				stream->write_function(stream, "Unknown \"m2ua  %s option\", supported values \"logging\"\n",argv[c]);
+				goto handle_cli_error_argc;
+			}
+	/**************************************************************************/
+	} else if (!strcasecmp(argv[c], "m3ua")) {
+	/**************************************************************************/
+		if (check_arg_count(argc, 3)) {
 			goto handle_cli_error_argc;
+		}
+		c++;
+		if (!strcasecmp(argv[c],"asp")) {
+
+			if (check_arg_count(argc, 4)) {
+				stream->write_function(stream, "Invalid \"m3ua  asp option\", please use \"m3ua asp command usage \n");
+				goto handle_cli_error_argc;
+			}
+			c++;
+			if (!strcasecmp(argv[c],"up")) {
+				c++;
+				int peer_id = atoi(argv[c]);
+				if (ftmod_m3ua_asp_up(peer_id, AASPUP)) {
+					ftdm_log (FTDM_LOG_ERROR ,"M3UA ASP[%d] UP failed.. \n", peer_id);
+				}else {
+					ftdm_log (FTDM_LOG_DEBUG ,"M3UA ASP[%d] UP success.. \n", peer_id);
+				}
+			} else if (!strcasecmp(argv[c],"active")) {
+				c++;
+				int peer_id = atoi(argv[c]);
+				if (ftmod_m3ua_asp_active(peer_id, AASPAC) != ROK) {
+					ftdm_log (FTDM_LOG_ERROR ,"M3UA ASP[%d] Active failed.. \n", peer_id);
+				}else {
+					ftdm_log (FTDM_LOG_DEBUG ,"M3UA ASP[%d] Active success.. \n", peer_id);
+				}
+			} else if (!strcasecmp(argv[c],"down")) {
+				c++;
+				int peer_id = atoi(argv[c]);
+				if (ftmod_m3ua_asp_up(peer_id, AASPDN)) {
+					ftdm_log (FTDM_LOG_ERROR ,"M3UA ASP[%d] Down failed.. \n", peer_id);
+				}else {
+					ftdm_log (FTDM_LOG_DEBUG ,"M3UA ASP[%d] Down success.. \n", peer_id);
+				}
+			} else if (!strcasecmp(argv[c],"inactive")) {
+				c++;
+				int peer_id = atoi(argv[c]);
+				if (ftmod_m3ua_asp_active(peer_id, AASPIA) != ROK) {
+					ftdm_log (FTDM_LOG_ERROR ,"M3UA ASP[%d] Inactive failed.. \n", peer_id);
+				}else {
+					ftdm_log (FTDM_LOG_DEBUG ,"M3UA ASP[%d] Inactive success.. \n", peer_id);
+				}
+
+			} else{
+				stream->write_function(stream, "Unknown \"m3ua asp \" command..see usage\n");
+				goto handle_cli_error;
+			}
 		}
 	/**************************************************************************/
 	} else if (!strcasecmp(argv[c], "isup")) {
@@ -1011,6 +1077,11 @@ ftdm_status_t ftdm_sngss7_handle_cli_cmd(ftdm_stream_handle_t *stream, const cha
 			ret = ftmod_ss7_mtp3_debug(action);
 		} else if (!strcasecmp(argv[c],"mtp2")) {
 			ret = ftmod_ss7_mtp2_debug(action);
+		} else if (!strcasecmp(argv[c],"m3ua")) {
+			ftmod_m3ua_debug(action);
+		} else if (!strcasecmp(argv[c],"sctp")) {
+			ftmod_sctp_debug(action);
+			ftmod_tucl_debug(action);
 		} else {
 			stream->write_function(stream, "Unknown \"logging %s option\", supported values are \"isup/mtp3/mtp2\"\n",argv[c]);
 			goto handle_cli_error_argc;
@@ -1062,7 +1133,7 @@ static ftdm_status_t handle_print_usage(ftdm_stream_handle_t *stream)
 	stream->write_function(stream, "ftdm ss7 show \n");
 	stream->write_function(stream, "ftdm ss7 show status mtp2 X\n");
 
-	if (SNG_SS7_OPR_MODE_M2UA_SG != g_ftdm_operating_mode) {
+	if (!ftmod_ss7_is_operating_mode_pres(SNG_SS7_OPR_MODE_M2UA_SG)) {
 
 	stream->write_function(stream, "ftdm ss7 show status mtp3 X\n");
 	stream->write_function(stream, "ftdm ss7 show status linkset X\n");
@@ -1109,16 +1180,23 @@ static ftdm_status_t handle_print_usage(ftdm_stream_handle_t *stream)
 	stream->write_function(stream, "ftdm ss7 show relay\n");
 	stream->write_function(stream, "\n");
 
-	stream->write_function(stream, "ftmod_sangoma_ss7 logging:\n");
-	stream->write_function(stream, "ftdm ss7 logging [ISUP|MTP3|MTP2] [enable|disable] \n");
+
 	if (g_ftdm_sngss7_data.cfg.sng_acc) {
 		stream->write_function(stream, "ftdm ss7 show acc config\n");
 		stream->write_function(stream, "ftdm ss7 show acc status \n");
 	}
-    } /* (SNG_SS7_OPR_MODE_M2UA_SG != g_ftdm_operating_mode) */
+	stream->write_function(stream, "\n");
+    } /* (!ftmod_ss7_is_operating_mode_pres(SNG_SS7_OPR_MODE_M2UA_SG)) */
 
-	if ((SNG_SS7_OPR_MODE_M2UA_ASP == g_ftdm_operating_mode) ||
-	   (SNG_SS7_OPR_MODE_M2UA_SG == g_ftdm_operating_mode)) {
+	if ((ftmod_ss7_is_operating_mode_pres(SNG_SS7_OPR_MODE_M3UA_SG)) ||
+	    (ftmod_ss7_is_operating_mode_pres(SNG_SS7_OPR_MODE_M3UA_ASP))) {
+		stream->write_function(stream, "ftdm ss7 logging [ISUP|MTP3|MTP2|M3UA|SCTP] [enable|disable] \n");
+	} else {
+		stream->write_function(stream, "ftdm ss7 logging [ISUP|MTP3|MTP2] [enable|disable] \n");
+	}
+
+	if ((ftmod_ss7_is_operating_mode_pres(SNG_SS7_OPR_MODE_M2UA_ASP)) ||
+	    (ftmod_ss7_is_operating_mode_pres(SNG_SS7_OPR_MODE_M2UA_SG))) {
 
 	stream->write_function(stream, "ftmod_sangoma_ss7 M2UA :\n");
 	stream->write_function(stream, "ftdm ss7 xmlshow sctp \n");
@@ -1128,7 +1206,7 @@ static ftdm_status_t handle_print_usage(ftdm_stream_handle_t *stream)
 	stream->write_function(stream, "ftdm ss7 xmlshow m2ua <m2ua_interface_name> peerstatus\n");
 	stream->write_function(stream, "ftdm ss7 xmlshow m2ua <m2ua_interface_name> clusterstatus\n");
 
-	if (SNG_SS7_OPR_MODE_M2UA_SG == g_ftdm_operating_mode) {
+	if (ftmod_ss7_is_operating_mode_pres(SNG_SS7_OPR_MODE_M2UA_SG)) {
 
 	stream->write_function(stream, "ftdm ss7 xmlshow nif \n");
 	stream->write_function(stream, "ftdm ss7 xmlshow nif <nif_interface_name>\n");
@@ -1140,6 +1218,12 @@ static ftdm_status_t handle_print_usage(ftdm_stream_handle_t *stream)
 	stream->write_function(stream, "ftdm ss7 m2ua logging [enable|disable] \n");
 
     } /* M2UA SG & M2UA ASP */
+
+	if ((ftmod_ss7_is_operating_mode_pres(SNG_SS7_OPR_MODE_M3UA_ASP)) ||
+	    (ftmod_ss7_is_operating_mode_pres(SNG_SS7_OPR_MODE_M3UA_SG))) {
+		stream->write_function(stream, "ftmod_sangoma_ss7 M3UA :\n");
+		stream->write_function(stream, "ftdm ss7 xmlshow m3ua \n");
+	}
 
 	stream->write_function(stream, "\n");
 
@@ -2058,7 +2142,7 @@ static ftdm_status_t handle_tx_cot(ftdm_stream_handle_t *stream, int span, int c
 	int		    lspan;
 	int		    lchan;
 
-	x = (g_ftdm_sngss7_data.cfg.procId * 1000) + 1;
+	x = ftmod_ss7_get_circuit_start_range(g_ftdm_sngss7_data.cfg.procId);
 	while (g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0) {
 		if (g_ftdm_sngss7_data.cfg.isupCkt[x].type == SNG_CKT_VOICE) {
 			sngss7_info = (sngss7_chan_data_t *)g_ftdm_sngss7_data.cfg.isupCkt[x].obj;
@@ -2108,7 +2192,7 @@ static ftdm_status_t handle_tx_ccr(ftdm_stream_handle_t *stream, int span, int c
 	int		    lspan;
 	int		    lchan;
 
-	x = (g_ftdm_sngss7_data.cfg.procId * 1000) + 1;
+	x = ftmod_ss7_get_circuit_start_range(g_ftdm_sngss7_data.cfg.procId);
 	while (g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0) {
 		if (g_ftdm_sngss7_data.cfg.isupCkt[x].type == SNG_CKT_VOICE) {
 			sngss7_info = (sngss7_chan_data_t *)g_ftdm_sngss7_data.cfg.isupCkt[x].obj;
@@ -3268,6 +3352,9 @@ static ftdm_status_t cli_ss7_show_all_linkset(ftdm_stream_handle_t *stream)
 *******************************************************************************/
 static ftdm_status_t cli_ss7_show_general(ftdm_stream_handle_t *stream)
 {
+	ftdm_sngss7_operating_modes_e opr_mode = SNG_SS7_OPR_MODE_NONE;
+	int idx = 0;
+
 	SS7_RELAY_DBG_FUN(cli_ss7_show_general);
 
 	ftdm_assert_return(stream != NULL, FTDM_FAIL, "Null stream\n");
@@ -3275,21 +3362,29 @@ static ftdm_status_t cli_ss7_show_general(ftdm_stream_handle_t *stream)
 	stream->write_function(stream, "MTP2 status: \n");
 	cli_ss7_show_all_mtp2link(stream);
 
-	if (SNG_SS7_OPR_MODE_M2UA_SG != g_ftdm_operating_mode) {
-		stream->write_function(stream, "\nMTP3 status: \n");
-		cli_ss7_show_all_mtp3link(stream);
+	for (idx = 0; idx < FTDM_MAX_CHANNELS_SPAN; idx++) {
+		opr_mode = SNG_SS7_OPR_MODE_NONE;
+		if (!g_ftdm_sngss7_span_data.span_data[idx].span_id) {
+			break;
+		}
 
-		stream->write_function(stream, "\nMTP3 linkset status: \n");
-		cli_ss7_show_all_linkset(stream);
+		opr_mode = g_ftdm_sngss7_span_data.span_data[idx].opr_mode;
+		if ((opr_mode) && (SNG_SS7_OPR_MODE_M2UA_SG != opr_mode)) {
+			stream->write_function(stream, "\nMTP3 status: \n");
+			cli_ss7_show_all_mtp3link(stream);
+
+			stream->write_function(stream, "\nMTP3 linkset status: \n");
+			cli_ss7_show_all_linkset(stream);
 
 #if 0
-		stream->write_function(stream, "\nMTP3 link route status: \n");
+			stream->write_function(stream, "\nMTP3 link route status: \n");
 
-		stream->write_function(stream, "\nISUP status: \n");
+			stream->write_function(stream, "\nISUP status: \n");
 #endif
 
-		stream->write_function(stream, "\nRelay status: \n");
-		cli_ss7_show_all_relay(stream);
+			stream->write_function(stream, "\nRelay status: \n");
+			cli_ss7_show_all_relay(stream);
+		}
 	}
 	
 	return FTDM_SUCCESS;
@@ -4465,6 +4560,171 @@ static ftdm_status_t ftdm_isup_snd_itx(ftdm_stream_handle_t *stream, char *argv[
 	}
 
 	return FTDM_FAIL;
+}
+
+/******************************************************************************
+* Fun:  handle_show_m3ua_profiles()
+* Desc: display all m3ua profile information
+* Ret:  FTDM_SUCCESS | FTDM_FAIL
+* Note:
+* author: Kapil Gupta
+*******************************************************************************/
+
+static ftdm_status_t handle_show_m3ua_profiles(ftdm_stream_handle_t *stream)
+{
+    ItMgmt cfm;
+    ItMgmt rsp;
+    char  buf[10046];
+    char*  xmlhdr = (char*)"<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?>";
+    int x = 0x00;
+    int idx = 0x00;
+    int len = 0x00;
+    int j = 0;
+
+    memset((U8 *)&cfm, 0, sizeof(cfm));
+    memset((U8 *)&rsp, 0, sizeof(rsp));
+    memset(&buf[0], 0, sizeof(buf));
+
+    len = len + sprintf(buf + len, "%s\n", xmlhdr);
+    len = len + sprintf(buf + len, "<m3ua_profiles>\n");
+
+    /*******************************************************************************/
+    /* General information from M3UA Stack */
+
+    if(ftmod_m3ua_ssta_req(STITGEN, 0x00, &cfm)) {
+        stream->write_function(stream," Request to  layer failed \n");
+        return FTDM_FAIL;
+    } else {
+        len = len + sprintf(buf + len, "<m3ua_gen>\n");
+#ifdef BIT_64
+        len = len + sprintf(buf + len, "<mem_size> %d </mem_size>\n", cfm.t.ssta.s.genSta.memSize);
+        len = len + sprintf(buf + len, " <allocated_mem_size> %d </allocated_mem_size>\n", cfm.t.ssta.s.genSta.memAlloc);
+#else
+        len = len + sprintf(buf + len, "<mem_size> %ld </mem_size>\n", cfm.t.ssta.s.genSta.memSize);
+        len = len + sprintf(buf + len, " <allocated_mem_size> %ld </allocated_mem_size>\n", cfm.t.ssta.s.genSta.memAlloc);
+#endif
+        len = len + sprintf(buf + len, "</m3ua_gen>\n");
+    }
+    /*******************************************************************************/
+    /* M3UA NSAP information from M3UA Stack */
+    if (ftmod_ss7_is_operating_mode_pres(SNG_SS7_OPR_MODE_M3UA_SG)) {
+        x = 1;
+        while (x<MAX_M3UA_RTE) {
+
+            if ((g_ftdm_sngss7_data.cfg.g_m3ua_cfg.nifCfg[x].id !=0) &&
+                    ((g_ftdm_sngss7_data.cfg.g_m3ua_cfg.nifCfg[x].flags & SNGSS7_ACTIVE))) {
+
+                memset((U8 *)&cfm, 0, sizeof(cfm));
+
+                len = len + sprintf(buf + len, "<m3ua_nif_profile>\n");
+                len = len + sprintf(buf + len, "<name> %s </name>\n", g_ftdm_sngss7_data.cfg.g_m3ua_cfg.nifCfg[x].name);
+
+                if (ftmod_m3ua_ssta_req(STITNSAP,x,&cfm)) {
+                    stream->write_function(stream," Request to M3UA  layer failed \n");
+                    return FTDM_FAIL;
+                } else {
+                    len = len + sprintf(buf + len, "<m3ua_nsap>\n");
+                    len = len + sprintf(buf + len," <local-sap-id> %d </local-sap-id>\n", cfm.t.ssta.s.nSapSta.lclSapId);
+                    len = len + sprintf(buf + len," <remote-sap-id> %d </remote-sap-id>\n", cfm.t.ssta.s.nSapSta.remSapId);
+                    len = len + sprintf(buf + len," <state> %s </state>\n", PRNT_M3UA_SAP_STATE(cfm.t.ssta.s.nSapSta.hlSt));
+                    len = len + sprintf(buf + len, "</m3ua_nsap>\n");
+                }
+            }
+            x++;
+        }
+    } else {
+        /* M3UA ASP case */
+        x = 1;
+        while (x<MAX_M3UA_SAP) {
+
+            if ((g_ftdm_sngss7_data.cfg.g_m3ua_cfg.sapCfg[x].id !=0) &&
+                    ((g_ftdm_sngss7_data.cfg.g_m3ua_cfg.sapCfg[x].flags & SNGSS7_CONFIGURED))) {
+
+                memset((U8 *)&cfm, 0, sizeof(cfm));
+
+                len = len + sprintf(buf + len, "<m3ua_nsap_profile>\n");
+                len = len + sprintf(buf + len, "<name> %s </name>\n", g_ftdm_sngss7_data.cfg.g_m3ua_cfg.sapCfg[x].name);
+
+                if (ftmod_m3ua_ssta_req(STITNSAP,x,&cfm)) {
+                    stream->write_function(stream," Request to M3UA  layer failed \n");
+                    return FTDM_FAIL;
+                } else {
+                    len = len + sprintf(buf + len, "<m3ua_nsap>\n");
+                    len = len + sprintf(buf + len," <local-sap-id> %d </local-sap-id>\n", cfm.t.ssta.s.nSapSta.lclSapId);
+                    len = len + sprintf(buf + len," <remote-sap-id> %d </remote-sap-id>\n", cfm.t.ssta.s.nSapSta.remSapId);
+                    len = len + sprintf(buf + len," <state> %s </state>\n", PRNT_M3UA_SAP_STATE(cfm.t.ssta.s.nSapSta.hlSt));
+                    len = len + sprintf(buf + len, "</m3ua_nsap>\n");
+                }
+            }
+            x++;
+        }
+    }
+    /*******************************************************************************/
+    x = 1;
+    while (x<MAX_M3UA_PS) {
+
+        if ((g_ftdm_sngss7_data.cfg.g_m3ua_cfg.psCfg[x].id !=0) &&
+                ((g_ftdm_sngss7_data.cfg.g_m3ua_cfg.psCfg[x].flags & SNGSS7_CONFIGURED))) {
+
+            memset((U8 *)&cfm, 0, sizeof(cfm));
+            if (ftmod_m3ua_ssta_req(STITPS,x,&cfm)) {
+                stream->write_function(stream," Request to  M3UA layer failed \n");
+                return FTDM_FAIL;
+            } else {
+                len = len + sprintf(buf + len, "<m3ua_ps>\n");
+#ifdef BIT_64
+                len = len + sprintf(buf + len," <peer-server-id> %d </peer-server-id>\n", cfm.t.ssta.s.psSta.psId);
+#else
+                len = len + sprintf(buf + len," <peer-server-id> %ld </peer-server-id>\n", cfm.t.ssta.s.psSta.psId);
+#endif
+                len = len + sprintf(buf + len, " <ps-state> %s </ps-state>\n",PRNT_M3UA_PS_STATE(cfm.t.ssta.s.psSta.asSt));
+
+                for (idx = 0; idx < LIT_MAX_SEP; idx++)
+                {
+                    len = len + sprintf(buf + len, "<m3ua_ps_state_per_end_point>\n");
+                    len = len + sprintf(buf + len, " <nmb-of-act-assoc> %d </nmb-of-act-assoc>\n", cfm.t.ssta.s.psSta.sstaPsEndp[idx].nmbAct);
+                    len = len + sprintf(buf + len, " <nmb-of-reg-assoc> %d </nmb-of-reg-assoc>\n", cfm.t.ssta.s.psSta.sstaPsEndp[idx].nmbPspReg);
+                    len = len + sprintf(buf + len, " <nmb-of-entries-in-psp-list> %d </nmb-of-entries-in-psp-list>\n",
+                            cfm.t.ssta.s.psSta.sstaPsEndp[idx].nmbPsp);
+                    for(j = 0; j < cfm.t.ssta.s.psSta.sstaPsEndp[idx].nmbAct; j++) {
+                        len = len + sprintf(buf + len, " <active-assocs-id> %d </active-assocs-id>\n",cfm.t.ssta.s.psSta.sstaPsEndp[idx].actPsp[j]);
+                    }
+
+                    for(j = 0; j < cfm.t.ssta.s.psSta.sstaPsEndp[idx].nmbPsp; j++) {
+                        len = len + sprintf(buf + len, " <psp-id> %d </psp-id>\n",cfm.t.ssta.s.psSta.sstaPsEndp[idx].pspSt[j].pspId);
+                        len = len + sprintf(buf + len, " <psp-assoc-state> %s </psp-assoc-state>\n",
+                                PRNT_M3UA_ASP_STATE(cfm.t.ssta.s.psSta.sstaPsEndp[idx].pspSt[j].aspSt));
+#ifdef BIT_64
+                        len = len + sprintf(buf + len, " <psp-routing-context> %d </psp-routing-context>\n",
+                                cfm.t.ssta.s.psSta.sstaPsEndp[idx].pspSt[j].rCtx);
+#else
+                        len = len + sprintf(buf + len, " <psp-routing-context> %ld </psp-routing-context>\n",
+                                cfm.t.ssta.s.psSta.sstaPsEndp[idx].pspSt[j].rCtx);
+#endif
+                        len = len + sprintf(buf + len, " <psp-routing-context-valid-flag> %d </psp-routing-context-valid-flag>\n",
+                                cfm.t.ssta.s.psSta.sstaPsEndp[idx].pspSt[j].rcValid);
+                        len = len + sprintf(buf + len, " <psp-mode> %d </psp-mode>\n",
+                                cfm.t.ssta.s.psSta.sstaPsEndp[idx].pspSt[j].mode);
+                    }
+
+                    len = len + sprintf(buf + len, "</m3ua_ps_state_per_end_point>\n");
+                }
+                len = len + sprintf(buf + len, "</m3ua_ps>\n");
+            }
+        }
+        x++;
+    }
+
+    /*******************************************************************************/
+
+    /*******************************************************************************/
+
+    len = len + sprintf(buf + len, "</m3ua_profiles>\n");
+    buf[len+1] = '\0';
+    printf("len[%d]\n",len);
+    stream->write_function(stream,"\n%s\n",buf);
+
+    return FTDM_SUCCESS;
 }
 
 /******************************************************************************/

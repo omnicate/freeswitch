@@ -52,7 +52,6 @@ static int ftmod_ss7_fill_in_m2ua_interface(sng_m2ua_cfg_t *m2ua_iface);
 static int ftmod_ss7_fill_in_m2ua_peer_interface(sng_m2ua_peer_cfg_t *m2ua_peer_face);
 static int ftmod_ss7_fill_in_m2ua_clust_interface(sng_m2ua_cluster_cfg_t *m2ua_cluster_face);
 
-static int ftmod_ss7_parse_sctp_link(ftdm_conf_node_t *node);
 
 /******************************************************************************/
 int ftmod_ss7_parse_nif_interfaces(ftdm_conf_node_t *nif_interfaces)
@@ -598,93 +597,4 @@ static int ftmod_ss7_fill_in_m2ua_clust_interface(sng_m2ua_cluster_cfg_t *m2ua_c
 	return 0;
 }
 
-/******************************************************************************/
-int ftmod_ss7_parse_sctp_links(ftdm_conf_node_t *node)
-{
-	ftdm_conf_node_t	*node_sctp_link = NULL;
-
-	if (!node)
-		return FTDM_FAIL;
-
-	if (strcasecmp(node->name, "sng_sctp_interfaces")) {
-		SS7_ERROR("SCTP - We're looking at <%s>...but we're supposed to be looking at <sng_sctp_interfaces>!\n", node->name);
-		return FTDM_FAIL;
-	} else {
-		SS7_DEBUG("SCTP - Parsing <sng_sctp_interface> configurations\n");
-	}
-
-	for (node_sctp_link = node->child; node_sctp_link != NULL; node_sctp_link = node_sctp_link->next) {
-		if (ftmod_ss7_parse_sctp_link(node_sctp_link) != FTDM_SUCCESS) {
-			SS7_ERROR("SCTP - Failed to parse <node_sctp_link>. \n");
-			return FTDM_FAIL;
-		}
-	}
-
-	return FTDM_SUCCESS; 
-}
-
-/******************************************************************************/
-static int ftmod_ss7_parse_sctp_link(ftdm_conf_node_t *node)
-{
-	ftdm_conf_parameter_t	*param = NULL;
-	int					num_params = 0;
-	int 					i=0;
-
-	if (!node){
-		SS7_ERROR("SCTP - NULL XML Node pointer \n");
-		return FTDM_FAIL;
-	}
-
-	param = node->parameters;
-	num_params = node->n_parameters;
-	
-	sng_sctp_link_t		t_link;
-	memset (&t_link, 0, sizeof(sng_sctp_link_t));
-	
-	if (strcasecmp(node->name, "sng_sctp_interface")) {
-		SS7_ERROR("SCTP - We're looking at <%s>...but we're supposed to be looking at <sng_sctp_interface>!\n", node->name);
-		return FTDM_FAIL;
-	} else {
-		SS7_DEBUG("SCTP - Parsing <sng_sctp_interface> configurations\n");
-	}
-
-	for (i=0; i<num_params; i++, param++) {
-		if (!strcasecmp(param->var, "name")) {
-			int n_strlen = strlen(param->val);
-			strncpy((char*)t_link.name, param->val, (n_strlen>MAX_NAME_LEN)?MAX_NAME_LEN:n_strlen);
-			SS7_DEBUG("SCTP - Parsing <sng_sctp_interface> with name = %s\n", param->val);
-		}
-		else if (!strcasecmp(param->var, "id")) {
-			t_link.id = atoi(param->val);
-			SS7_DEBUG("SCTP - Parsing <sng_sctp_interface> with id = %s\n", param->val);
-		}
-		else if (!strcasecmp(param->var, "address")) {
-			if (t_link.numSrcAddr < SCT_MAX_NET_ADDRS) {
-				t_link.srcAddrList[t_link.numSrcAddr+1] = iptoul (param->val);
-				t_link.numSrcAddr++;
-				SS7_DEBUG("SCTP - Parsing <sng_sctp_interface> with source IP Address = %s\n", param->val);
-			} else {
-				SS7_ERROR("SCTP - too many source address configured. dropping %s \n", param->val);
-			}
-		} else if (!strcasecmp(param->var, "source-port")) {
-			t_link.port = atoi(param->val);
-			SS7_DEBUG("SCTP - Parsing <sng_sctp_interface> with port = %s\n", param->val);
-		}
-		else {
-			SS7_ERROR("SCTP - Found an unknown parameter <%s>. Skipping it.\n", param->var);
-		}
-	}
-	
-	g_ftdm_sngss7_data.cfg.sctpCfg.linkCfg[t_link.id].id 		= t_link.id;
-	g_ftdm_sngss7_data.cfg.sctpCfg.linkCfg[t_link.id].port   	= t_link.port;
-	strncpy((char*)g_ftdm_sngss7_data.cfg.sctpCfg.linkCfg[t_link.id].name, t_link.name, strlen(t_link.name) );
-	g_ftdm_sngss7_data.cfg.sctpCfg.linkCfg[t_link.id].numSrcAddr = t_link.numSrcAddr;
-	for (i=1; i<=t_link.numSrcAddr; i++) {
-		g_ftdm_sngss7_data.cfg.sctpCfg.linkCfg[t_link.id].srcAddrList[i] = t_link.srcAddrList[i];
-	}
-
-	sngss7_set_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_SCTP_PRESENT);
-			
-	return FTDM_SUCCESS;
-}
 /******************************************************************************/

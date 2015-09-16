@@ -241,6 +241,9 @@ ftmod_sangoma_ss7_la_SOURCES = \
 	$(SRC)/ftmod/ftmod_sangoma_ss7/ftmod_sangoma_ss7_logger.c \
 	$(SRC)/ftmod/ftmod_sangoma_ss7/ftmod_sangoma_ss7_m2ua_xml.c \
 	$(SRC)/ftmod/ftmod_sangoma_ss7/ftmod_sangoma_ss7_m2ua.c \
+	$(SRC)/ftmod/ftmod_sangoma_ss7/ftmod_sangoma_ss7_m3ua_xml.c \
+	$(SRC)/ftmod/ftmod_sangoma_ss7/ftmod_sangoma_ss7_m3ua.c \
+	$(SRC)/ftmod/ftmod_sangoma_ss7/ftmod_sangoma_ss7_sctp.c \
 	$(SRC)/ftmod/ftmod_sangoma_ss7/ftmod_sangoma_ss7_relay.c\
 	$(SRC)/ftmod/ftmod_sangoma_ss7/ftmod_sangoma_ss7_mtp2api.c \
 	$(SRC)/ftmod/ftmod_sangoma_ss7/ftmod_sangoma_ss7_acc.c
