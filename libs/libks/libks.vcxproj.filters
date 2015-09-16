@@ -33,6 +33,9 @@
     <ClCompile Include="src\ks_json.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\ks_log.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="src\ks_mutex.c">
       <Filter>Source Files</Filter>
     </ClCompile>

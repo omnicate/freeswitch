@@ -33,60 +33,91 @@
 
 #include <ks.h>
 
-KS_ENUM_NAMES(STATUS_NAMES, STATUS_STRINGS)
-KS_STR2ENUM(ks_str2ks_status, ks_status2str, ks_status_t, STATUS_NAMES, KS_STATUS_COUNT)
-
-KS_DECLARE(size_t) ks_url_encode(const char *url, char *buf, size_t len)
+static void null_logger(const char *file, const char *func, int line, int level, const char *fmt, ...)
 {
-	const char *p;
-	size_t x = 0;
-	const char urlunsafe[] = "\r\n \"#%&+:;<=>?@[\\]^`{|}";
-	const char hex[] = "0123456789ABCDEF";
-
-	if (!buf) {
-		return 0;
+	if (file && func && line && level && fmt) {
+		return;
 	}
-
-	if (!url) {
-		return 0;
-	}
-
-	len--;
-
-	for (p = url; *p; p++) {
-		if (x >= len) {
-			break;
-		}
-		if (*p < ' ' || *p > '~' || strchr(urlunsafe, *p)) {
-			if ((x + 3) >= len) {
-				break;
-			}
-			buf[x++] = '%';
-			buf[x++] = hex[*p >> 4];
-			buf[x++] = hex[*p & 0x0f];
-		} else {
-			buf[x++] = *p;
-		}
-	}
-	buf[x] = '\0';
-
-	return x;
+	return;
 }
 
-KS_DECLARE(char *) ks_url_decode(char *s)
-{
-	char *o;
-	unsigned int tmp;
 
-	for (o = s; *s; s++, o++) {
-		if (*s == '%' && strlen(s) > 2 && sscanf(s + 1, "%2x", &tmp) == 1) {
-			*o = (char) tmp;
-			s += 2;
-		} else {
-			*o = *s;
+static const char *LEVEL_NAMES[] = {
+	"EMERG",
+	"ALERT",
+	"CRIT",
+	"ERROR",
+	"WARNING",
+	"NOTICE",
+	"INFO",
+	"DEBUG",
+	NULL
+};
+
+static int ks_log_level = 7;
+
+static const char *cut_path(const char *in)
+{
+	const char *p, *ret = in;
+	char delims[] = "/\\";
+	char *i;
+
+	for (i = delims; *i; i++) {
+		p = in;
+		while ((p = strchr(p, *i)) != 0) {
+			ret = ++p;
 		}
 	}
-	*o = '\0';
-	return s;
+	return ret;
 }
 
+
+static void default_logger(const char *file, const char *func, int line, int level, const char *fmt, ...)
+{
+	const char *fp;
+	char *data;
+	va_list ap;
+	int ret;
+
+	if (level < 0 || level > 7) {
+		level = 7;
+	}
+	if (level > ks_log_level) {
+		return;
+	}
+
+	fp = cut_path(file);
+
+	va_start(ap, fmt);
+
+	ret = ks_vasprintf(&data, fmt, ap);
+
+	if (ret != -1) {
+		fprintf(stderr, "[%s] %s:%d %s() %s", LEVEL_NAMES[level], fp, line, func, data);
+		free(data);
+	}
+
+	va_end(ap);
+
+}
+
+ks_logger_t ks_log = null_logger;
+
+KS_DECLARE(void) ks_global_set_logger(ks_logger_t logger)
+{
+	if (logger) {
+		ks_log = logger;
+	} else {
+		ks_log = null_logger;
+	}
+}
+
+KS_DECLARE(void) ks_global_set_default_logger(int level)
+{
+	if (level < 0 || level > 7) {
+		level = 7;
+	}
+
+	ks_log = default_logger;
+	ks_log_level = level;
+}
