@@ -137,6 +137,7 @@
     <ClCompile Include="src\ks_config.c" />
     <ClCompile Include="src\ks_json.c" />
     <ClCompile Include="src\ks_mpool.c" />
+    <ClCompile Include="src\ks_socket.c" />
     <ClCompile Include="src\ks_string.c" />
     <ClCompile Include="src\ks_thread.c" />
     <ClCompile Include="src\ks_mutex.c" />
