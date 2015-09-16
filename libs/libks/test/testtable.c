@@ -31,6 +31,7 @@
 #include <unistd.h>
 
 #include "table.h"
+#include "tap.h"
 
 #define RANDOM_VALUE(x)		((random() % ((x) * 10)) / 10)
 

@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include "tap.h"
 
 static void fill(char *str, int bytes, char c)
 {

@@ -1,0 +1,20 @@
+AUTOMAKE_OPTIONS = foreign
+
+TESTS =
+check_PROGRAMS = 
+
+
+TESTS += testtable
+check_PROGRAMS += testtable
+
+testtable_SOURCES = testtable.c tap.c
+testtable_CFLAGS = -I $(abs_top_srcdir)/src/include/ -I$(abs_top_srcdir)/test/
+testtable_LDADD = $(abs_top_srcdir)/libks.la
+
+TESTS += testpools
+check_PROGRAMS += testpools
+
+testpools_SOURCES = testpools.c
+testpools_CFLAGS = -I $(abs_top_srcdir)/src/include/ -I$(abs_top_srcdir)/test/
+testpools_LDADD = $(abs_top_srcdir)/libks.la
+

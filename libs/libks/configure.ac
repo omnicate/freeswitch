@@ -167,8 +167,7 @@ AC_FUNC_STRFTIME
 AC_CHECK_LIB(pthread, pthread_setschedparam, [AC_DEFINE(HAVE_PTHREAD_SETSCHEDPARAM, 1, [Define if you have pthread_setschedparam()])])
 
 AC_CONFIG_FILES([Makefile
-	test/testtable/Makefile
-	test/testpools/Makefile
+	test/Makefile
 ])
 
 AC_OUTPUT

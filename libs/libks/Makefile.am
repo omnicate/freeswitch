@@ -1,6 +1,6 @@
 ACLOCAL_AMFLAGS=-I build
 EXTRA_DIST =
-SUBDIRS = . test/testtable test/testpools
+SUBDIRS = . test
 AUTOMAKE_OPTIONS = subdir-objects
 
 AM_CFLAGS    += -I./src -I./src/include
