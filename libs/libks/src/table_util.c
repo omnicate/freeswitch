@@ -23,14 +23,6 @@
 
 #include "ks.h"
 
-#include <ctype.h>
-#include <stdio.h>
-#include <stdlib.h>
-
-#include "table.h"
-
-static char *rcs_id = "$Id: table_util.c,v 1.5 2000/03/09 03:30:42 gray Exp $";
-
 #define WRITE_MODE	0640		/* mode to write out table */
 #define SPECIAL_CHARS	"e\033^^\"\"''\\\\n\nr\rt\tb\bf\fa\007"
 

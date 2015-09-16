@@ -33,23 +33,6 @@
  */
 
 #include "ks.h"
-
-#include <errno.h>
-#include <fcntl.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#ifdef _MSC_VER
-#include <io.h>
-#ifndef open
-#define open _open
-#endif
-#ifndef close
-#define close _close
-#endif
-#else
-#include <unistd.h>
-#endif
 #include <sys/mman.h>
 
 #define KS_POOL_MAGIC	0xABACABA	/* magic for struct */

@@ -50,24 +50,30 @@
 #endif
 
 #include <ks.h>
+
 #ifndef WIN32
+
 #define closesocket(x) shutdown(x, 2); close(x)
-#include <fcntl.h>
-#include <errno.h>
-#else
+
+#else /* WIN32 */
+
 #pragma warning (disable:6386)
 /* These warnings need to be ignored warning in sdk header */
 #include <Ws2tcpip.h>
 #include <windows.h>
 #pragma comment(lib, "Ws2_32.lib")
+
 #ifndef errno
 #define errno WSAGetLastError()
 #endif
+
 #ifndef EINTR
 #define EINTR WSAEINTR
 #endif
+
 #pragma warning (default:6386)
-#endif
+
+#endif /* WIN32 */
 
 #ifdef KS_USE_POLL
 #include <poll.h>

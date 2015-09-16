@@ -32,7 +32,6 @@
  */
 
 #include "ks.h"
-#include "ks_config.h"
 
 KS_DECLARE(int) ks_config_open_file(ks_config_t *cfg, const char *file_path)
 {

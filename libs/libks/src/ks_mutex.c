@@ -23,7 +23,6 @@
 #endif
 
 #include "ks.h"
-#include "ks_threadmutex.h"
 
 #ifdef WIN32
 #include <process.h>

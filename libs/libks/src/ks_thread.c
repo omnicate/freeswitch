@@ -18,8 +18,6 @@
  */
 
 #include "ks.h"
-#include "ks_threadmutex.h"
-
 
 size_t thread_default_stacksize = 240 * 1024;
 

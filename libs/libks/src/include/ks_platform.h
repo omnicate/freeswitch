@@ -58,6 +58,11 @@ extern "C" {
 #include <string.h>
 #include <math.h>
 #include <assert.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <ctype.h>
+#include <float.h>
+#include <limits.h>
 #ifndef __WINDOWS__
 #include <sys/time.h>
 #include <sys/types.h>
@@ -65,7 +70,6 @@ extern "C" {
 #include <netinet/tcp.h>
 #include <sys/signal.h>
 #include <unistd.h>
-#include <ctype.h>
 #include <strings.h>
 #include <stdint.h>
 #include <sys/ioctl.h>
@@ -76,6 +80,16 @@ extern "C" {
 #endif
 	
 #ifdef _MSC_VER
+
+#include <io.h>
+
+#ifndef open
+#define open _open
+#endif
+
+#ifndef close
+#define close _close
+#endif
 
 #ifndef __inline__
 #define __inline__ __inline

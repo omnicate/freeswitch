@@ -31,18 +31,8 @@
 
 #include "ks.h"
 
-#if !defined(_XOPEN_SOURCE) && !defined(__FreeBSD__) && !defined(__NetBSD__) && !defined(__OpenBSD__)
-#define _XOPEN_SOURCE 600
-#endif
-
-#include <fcntl.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
 #if defined(unix) || defined(__APPLE__) || defined(__linux__)
 
-#include <unistd.h>
 #if defined(__linux__)
 #include <alloca.h>
 #endif

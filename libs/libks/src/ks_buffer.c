@@ -32,7 +32,7 @@
  */
 
 
-#include "ks_buffer.h"
+#include "ks.h"
 
 static unsigned buffer_id = 0;
 
