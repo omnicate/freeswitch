@@ -58,7 +58,7 @@ extern "C" {
 #include <string.h>
 #include <math.h>
 #include <assert.h>
-#ifndef WIN32
+#ifndef __WINDOWS__
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/select.h>
@@ -79,6 +79,10 @@ extern "C" {
 
 #ifndef __inline__
 #define __inline__ __inline
+#endif
+
+#ifndef strdup
+#define strdup _strdup
 #endif
 
 #if (_MSC_VER >= 1400)			/* VC8+ */
@@ -122,7 +126,7 @@ extern "C" {
 #define ks_assert(_x) assert(_x)
 #endif
 
-#ifdef WIN32
+#ifdef __WINDOWS__
 #include <winsock2.h>
 #include <windows.h>
 	typedef SOCKET ks_socket_t;
@@ -145,7 +149,7 @@ extern "C" {
 	typedef int ks_filehandle_t;
 #endif
 
-#ifdef WIN32
+#ifdef __WINDOWS__
 #if defined(KS_DECLARE_STATIC)
 #define KS_DECLARE(type)			type __stdcall
 #define KS_DECLARE_NONSTD(type)		type __cdecl
