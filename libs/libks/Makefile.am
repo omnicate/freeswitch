@@ -1,6 +1,6 @@
 ACLOCAL_AMFLAGS=-I build
 EXTRA_DIST =
-SUBDIRS = 
+SUBDIRS = . test/testtable test/testpools
 AUTOMAKE_OPTIONS = subdir-objects
 
 AM_CFLAGS    += -I./src -I./src/include
@@ -15,25 +15,7 @@ libks_la_LDFLAGS  =  -version-info 0:1:0 -lncurses -lpthread -lm
 library_includedir	= $(prefix)/include
 library_include_HEADERS = src/include/ks_config.h src/include/ks.h src/include/ks_threadmutex.h src/include/ks_json.h src/include/ks_buffer.h src/include/ks_pool.h src/include/table.h src/include/table_loc.h src/include/simclist.h
 
-noinst_PROGRAMS = testpools testtable
 
-testpools_SOURCES = test/testpools/testpools.c
-testpools_LDADD = libks.la
-
-testtable_SOURCES = test/testtable/testtable.c
-testtable_LDADD = libks.la
-
-test-pools: testpools
-	@echo Testing memory pool
-	@echo $(LINE)
-	./testpools && echo ok
-
-test-table: testtable
-	@echo Testing hash
-	@echo $(LINE)
-	./testtable && echo ok
-
-test-all: test-pools test-table
 
 
 
