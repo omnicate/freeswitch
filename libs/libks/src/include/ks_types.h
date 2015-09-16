@@ -85,8 +85,8 @@ extern "C" {
 		/* Memory pool errors */
 		KS_STATUS_ARG_NULL,        /* function argument is null */
 		KS_STATUS_ARG_INVALID,     /* function argument is invalid */
-		KS_STATUS_PNT,	           /* invalid ks_mpool pointer */
-		KS_STATUS_POOL_OVER,	   /* ks_mpool structure was overwritten */
+		KS_STATUS_PNT,	           /* invalid ks_pool pointer */
+		KS_STATUS_POOL_OVER,	   /* ks_pool structure was overwritten */
 		KS_STATUS_PAGE_SIZE,	   /* could not get system page-size */
 		KS_STATUS_OPEN_ZERO,	   /* could not open /dev/zero */
 		KS_STATUS_NO_MEM,	       /* no memory available */
@@ -167,17 +167,17 @@ extern "C" {
 #define KS_LOG_ALERT KS_PRE, KS_LOG_LEVEL_ALERT
 #define KS_LOG_EMERG KS_PRE, KS_LOG_LEVEL_EMERG
 
-	struct ks_mpool_s;
+	struct ks_pool_s;
 
-	typedef struct ks_mpool_s ks_mpool_t;
+	typedef struct ks_pool_s ks_pool_t;
 
 	typedef enum {
 		KS_MPCL_ANNOUNCE,
 		KS_MPCL_TEARDOWN,
 		KS_MPCL_DESTROY
-	} ks_mpool_cleanup_action_t;
+	} ks_pool_cleanup_action_t;
 
-	typedef void (*ks_mpool_cleanup_fn_t) (ks_mpool_t *mpool, void *ptr, void *arg, int type, ks_mpool_cleanup_action_t action);
+	typedef void (*ks_pool_cleanup_fn_t) (ks_pool_t *mpool, void *ptr, void *arg, int type, ks_pool_cleanup_action_t action);
 
 	typedef void (*ks_logger_t) (const char *file, const char *func, int line, int level, const char *fmt, ...);
 	typedef void (*ks_listen_callback_t) (ks_socket_t server_sock, ks_socket_t client_sock, struct sockaddr_in *addr);

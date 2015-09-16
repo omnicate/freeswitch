@@ -28,7 +28,7 @@ void ks_thread_override_default_stacksize(size_t size)
 	thread_default_stacksize = size;
 }
 
-static void ks_thread_cleanup(ks_mpool_t *mpool, void *ptr, void *arg, int type, ks_mpool_cleanup_action_t action)
+static void ks_thread_cleanup(ks_pool_t *mpool, void *ptr, void *arg, int type, ks_pool_cleanup_action_t action)
 {
 	ks_thread_t *thread = (ks_thread_t *) ptr;
 
@@ -87,7 +87,7 @@ KS_DECLARE(ks_status_t) ks_thread_join(ks_thread_t *thread) {
 }
 
 KS_DECLARE(ks_status_t) ks_thread_create_ex(ks_thread_t **rthread, ks_thread_function_t func, void *data,
-										 uint32_t flags, size_t stack_size, ks_thread_priority_t priority, ks_mpool_t *pool)
+										 uint32_t flags, size_t stack_size, ks_thread_priority_t priority, ks_pool_t *pool)
 {
 	ks_thread_t *thread = NULL;
 	ks_status_t status = KS_STATUS_FAIL;
@@ -99,7 +99,7 @@ KS_DECLARE(ks_status_t) ks_thread_create_ex(ks_thread_t **rthread, ks_thread_fun
 
 	if (!func || !pool) goto done;
 
-	thread = (ks_thread_t *) ks_mpool_alloc(pool, sizeof(ks_thread_t), &err);
+	thread = (ks_thread_t *) ks_pool_alloc(pool, sizeof(ks_thread_t), &err);
 
 	if (!thread) goto done;
 
@@ -159,13 +159,13 @@ KS_DECLARE(ks_status_t) ks_thread_create_ex(ks_thread_t **rthread, ks_thread_fun
 	if (thread) {
 		thread->running = 0;
 		if (pool) {
-			err = ks_mpool_safe_free(pool, thread);
+			err = ks_pool_safe_free(pool, thread);
 		}
 	}
   done:
 	if (status == KS_STATUS_SUCCESS) {
 		*rthread = thread;
-		ks_mpool_set_cleanup(pool, thread, NULL, 0, ks_thread_cleanup);
+		ks_pool_set_cleanup(pool, thread, NULL, 0, ks_thread_cleanup);
 	}
 
 	return status;

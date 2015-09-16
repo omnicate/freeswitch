@@ -17,7 +17,7 @@ struct foo {
 };
 
 
-void cleanup(ks_mpool_t *mpool, void *ptr, void *arg, int type, ks_mpool_cleanup_action_t action)
+void cleanup(ks_pool_t *mpool, void *ptr, void *arg, int type, ks_pool_cleanup_action_t action)
 {
 	struct foo *foo = (struct foo *) ptr;
 
@@ -39,7 +39,7 @@ void cleanup(ks_mpool_t *mpool, void *ptr, void *arg, int type, ks_mpool_cleanup
 
 int main(int argc, char **argv)
 {
-	ks_mpool_t *pool;
+	ks_pool_t *pool;
 	int err = 0;
 	char *str = NULL;
 	int bytes = 1024;
@@ -57,19 +57,19 @@ int main(int argc, char **argv)
 		}
 	}
 
-	status = ks_mpool_open(&pool, &err);
+	status = ks_pool_open(&pool, &err);
 
 	printf("OPEN:\n");
 	if (status != KS_STATUS_SUCCESS) {
-		fprintf(stderr, "OPEN ERR: %d [%s]\n", err, ks_mpool_strerror(err));
+		fprintf(stderr, "OPEN ERR: %d [%s]\n", err, ks_pool_strerror(err));
 		exit(255);
 	}
 
 	printf("ALLOC:\n");
-	str = ks_mpool_alloc(pool, bytes, &err);
+	str = ks_pool_alloc(pool, bytes, &err);
 
-	if (err != KS_MPOOL_ERROR_NONE) {
-		fprintf(stderr, "ALLOC ERR: [%s]\n", ks_mpool_strerror(err));
+	if (err != KS_POOL_ERROR_NONE) {
+		fprintf(stderr, "ALLOC ERR: [%s]\n", ks_pool_strerror(err));
 		exit(255);
 	}
 
@@ -78,18 +78,18 @@ int main(int argc, char **argv)
 
 	printf("FREE:\n");
 
-	err = ks_mpool_safe_free(pool, str);
-	if (err != KS_MPOOL_ERROR_NONE) {
-		fprintf(stderr, "FREE ERR: [%s]\n", ks_mpool_strerror(err));
+	err = ks_pool_safe_free(pool, str);
+	if (err != KS_POOL_ERROR_NONE) {
+		fprintf(stderr, "FREE ERR: [%s]\n", ks_pool_strerror(err));
 		exit(255);
 	}
 
 	printf("ALLOC2:\n");
 
-	str = ks_mpool_alloc(pool, bytes, &err);
+	str = ks_pool_alloc(pool, bytes, &err);
 
-	if (err != KS_MPOOL_ERROR_NONE) {
-		fprintf(stderr, "ALLOC2 ERR: [%s]\n", ks_mpool_strerror(err));
+	if (err != KS_POOL_ERROR_NONE) {
+		fprintf(stderr, "ALLOC2 ERR: [%s]\n", ks_pool_strerror(err));
 		exit(255);
 	}
 
@@ -99,10 +99,10 @@ int main(int argc, char **argv)
 
 	printf("ALLOC OBJ:\n");
 
-	foo = ks_mpool_alloc(pool, sizeof(struct foo), &err);
+	foo = ks_pool_alloc(pool, sizeof(struct foo), &err);
 
-	if (err != KS_MPOOL_ERROR_NONE) {
-		fprintf(stderr, "ALLOC OBJ: [%s]\n", ks_mpool_strerror(err));
+	if (err != KS_POOL_ERROR_NONE) {
+		fprintf(stderr, "ALLOC OBJ: [%s]\n", ks_pool_strerror(err));
 		exit(255);
 	} else {
 		printf("ALLOC OBJ [%p]:\n", (void *) foo);
@@ -110,23 +110,23 @@ int main(int argc, char **argv)
 
 	foo->x = 12;
 	foo->str = strdup("This is a test 1234 abcd; This will be called on explicit free\n");
-	ks_mpool_set_cleanup(pool, foo, NULL, 0, cleanup);
+	ks_pool_set_cleanup(pool, foo, NULL, 0, cleanup);
 
 	printf("FREE OBJ:\n");
 
-	err = ks_mpool_safe_free(pool, foo);
-	if (err != KS_MPOOL_ERROR_NONE) {
-		fprintf(stderr, "FREE OBJ ERR: [%s]\n", ks_mpool_strerror(err));
+	err = ks_pool_safe_free(pool, foo);
+	if (err != KS_POOL_ERROR_NONE) {
+		fprintf(stderr, "FREE OBJ ERR: [%s]\n", ks_pool_strerror(err));
 		exit(255);
 	}
 
 
 	printf("ALLOC OBJ2:\n");
 
-	foo = ks_mpool_alloc(pool, sizeof(struct foo), &err);
+	foo = ks_pool_alloc(pool, sizeof(struct foo), &err);
 
-	if (err != KS_MPOOL_ERROR_NONE) {
-		fprintf(stderr, "ALLOC OBJ2: [%s]\n", ks_mpool_strerror(err));
+	if (err != KS_POOL_ERROR_NONE) {
+		fprintf(stderr, "ALLOC OBJ2: [%s]\n", ks_pool_strerror(err));
 		exit(255);
 	} else {
 		printf("ALLOC OBJ2 [%p]:\n", (void *) foo);
@@ -134,15 +134,15 @@ int main(int argc, char **argv)
 
 	foo->x = 12;
 	foo->str = strdup("This is a second test 1234 abcd; This will be called on pool clear/destroy\n");
-	ks_mpool_set_cleanup(pool, foo, NULL, 0, cleanup);
+	ks_pool_set_cleanup(pool, foo, NULL, 0, cleanup);
 
 
 	printf("ALLOC OBJ3:\n");
 
-	foo = ks_mpool_alloc(pool, sizeof(struct foo), &err);
+	foo = ks_pool_alloc(pool, sizeof(struct foo), &err);
 
-	if (err != KS_MPOOL_ERROR_NONE) {
-		fprintf(stderr, "ALLOC OBJ3: [%s]\n", ks_mpool_strerror(err));
+	if (err != KS_POOL_ERROR_NONE) {
+		fprintf(stderr, "ALLOC OBJ3: [%s]\n", ks_pool_strerror(err));
 		exit(255);
 	} else {
 		printf("ALLOC OBJ3 [%p]:\n", (void *) foo);
@@ -150,16 +150,16 @@ int main(int argc, char **argv)
 
 	foo->x = 12;
 	foo->str = strdup("This is a third test 1234 abcd; This will be called on pool clear/destroy\n");
-	ks_mpool_set_cleanup(pool, foo, NULL, 0, cleanup);
+	ks_pool_set_cleanup(pool, foo, NULL, 0, cleanup);
 
 
 
 	printf("RESIZE:\n");
 	bytes *= 2;
-	str = ks_mpool_resize(pool, str, bytes, &err);
+	str = ks_pool_resize(pool, str, bytes, &err);
 
-	if (err != KS_MPOOL_ERROR_NONE) {
-		fprintf(stderr, "RESIZE ERR: [%s]\n", ks_mpool_strerror(err));
+	if (err != KS_POOL_ERROR_NONE) {
+		fprintf(stderr, "RESIZE ERR: [%s]\n", ks_pool_strerror(err));
 		exit(255);
 	}
 
@@ -169,26 +169,26 @@ int main(int argc, char **argv)
 
 	printf("FREE 2:\n");
 
-	err = ks_mpool_free(pool, str);
-	if (err != KS_MPOOL_ERROR_NONE) {
-		fprintf(stderr, "FREE2 ERR: [%s]\n", ks_mpool_strerror(err));
+	err = ks_pool_free(pool, str);
+	if (err != KS_POOL_ERROR_NONE) {
+		fprintf(stderr, "FREE2 ERR: [%s]\n", ks_pool_strerror(err));
 		exit(255);
 	}
 
 
 	printf("CLEAR:\n");
-	err = ks_mpool_clear(pool);
+	err = ks_pool_clear(pool);
 
-	if (err != KS_MPOOL_ERROR_NONE) {
-		fprintf(stderr, "CLEAR ERR: [%s]\n", ks_mpool_strerror(err));
+	if (err != KS_POOL_ERROR_NONE) {
+		fprintf(stderr, "CLEAR ERR: [%s]\n", ks_pool_strerror(err));
 		exit(255);
 	}
 
 	printf("CLOSE:\n");
-	status = ks_mpool_close(&pool, &err);
+	status = ks_pool_close(&pool, &err);
 	
 	if (status != KS_STATUS_SUCCESS) {
-		fprintf(stderr, "CLOSE ERR: [%s]\n", ks_mpool_strerror(err));
+		fprintf(stderr, "CLOSE ERR: [%s]\n", ks_pool_strerror(err));
 		exit(255);
 	}
 	

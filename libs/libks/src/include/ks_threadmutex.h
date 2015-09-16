@@ -53,7 +53,7 @@ extern "C" {
 		uint32_t flags;
 		uint8_t running;
 		uint8_t priority;
-		ks_mpool_t *pool;
+		ks_pool_t *pool;
 	};
 
 	typedef enum {
@@ -69,7 +69,7 @@ extern "C" {
 	} ks_thread_flags_t;
 
 	KS_DECLARE(ks_status_t) ks_thread_create_ex(ks_thread_t **thread, ks_thread_function_t func, void *data,
-											 uint32_t flags, size_t stack_size, ks_thread_priority_t priority, ks_mpool_t *pool);
+											 uint32_t flags, size_t stack_size, ks_thread_priority_t priority, ks_pool_t *pool);
 	KS_DECLARE(ks_status_t) ks_thread_join(ks_thread_t *thread);
 
 #define ks_thread_create(thread, func, data, pool)						\
@@ -82,7 +82,7 @@ extern "C" {
 
 	typedef struct ks_mutex ks_mutex_t;
 
-	KS_DECLARE(ks_status_t) ks_mutex_create(ks_mutex_t **mutex, unsigned int flags, ks_mpool_t *pool);
+	KS_DECLARE(ks_status_t) ks_mutex_create(ks_mutex_t **mutex, unsigned int flags, ks_pool_t *pool);
 	KS_DECLARE(ks_status_t) ks_mutex_lock(ks_mutex_t *mutex);
 	KS_DECLARE(ks_status_t) ks_mutex_trylock(ks_mutex_t *mutex);
 	KS_DECLARE(ks_status_t) ks_mutex_unlock(ks_mutex_t *mutex);
@@ -90,7 +90,7 @@ extern "C" {
 
 	typedef struct ks_cond ks_cond_t;
 
-	KS_DECLARE(ks_status_t) ks_cond_create(ks_cond_t **cond, ks_mpool_t *pool);
+	KS_DECLARE(ks_status_t) ks_cond_create(ks_cond_t **cond, ks_pool_t *pool);
 	KS_DECLARE(ks_status_t) ks_cond_lock(ks_cond_t *cond);
 	KS_DECLARE(ks_status_t) ks_cond_unlock(ks_cond_t *cond);
 	KS_DECLARE(ks_status_t) ks_cond_signal(ks_cond_t *cond);
@@ -100,7 +100,7 @@ extern "C" {
 
 	typedef struct ks_rwl ks_rwl_t;
 
-	KS_DECLARE(ks_status_t) ks_rwl_create(ks_rwl_t **rwlock, ks_mpool_t *pool);
+	KS_DECLARE(ks_status_t) ks_rwl_create(ks_rwl_t **rwlock, ks_pool_t *pool);
 	KS_DECLARE(ks_status_t) ks_rwl_read_lock(ks_rwl_t *rwlock);
 	KS_DECLARE(ks_status_t) ks_rwl_write_lock(ks_rwl_t *rwlock);
 	KS_DECLARE(ks_status_t) ks_rwl_read_unlock(ks_rwl_t *rwlock);

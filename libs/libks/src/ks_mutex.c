@@ -43,11 +43,11 @@ struct ks_mutex {
 #else
 	pthread_mutex_t mutex;
 #endif
-	ks_mpool_t * pool;
+	ks_pool_t * pool;
 	ks_mutex_type_t type;
 };
 
-static void ks_mutex_cleanup(ks_mpool_t *mpool, void *ptr, void *arg, int type, ks_mpool_cleanup_action_t action)
+static void ks_mutex_cleanup(ks_pool_t *mpool, void *ptr, void *arg, int type, ks_pool_cleanup_action_t action)
 {
 	ks_mutex_t *mutex = (ks_mutex_t *) ptr;
 
@@ -71,7 +71,7 @@ static void ks_mutex_cleanup(ks_mpool_t *mpool, void *ptr, void *arg, int type, 
 }
 
 
-KS_DECLARE(ks_status_t) ks_mutex_create(ks_mutex_t **mutex, unsigned int flags, ks_mpool_t *pool)
+KS_DECLARE(ks_status_t) ks_mutex_create(ks_mutex_t **mutex, unsigned int flags, ks_pool_t *pool)
 {
 	ks_status_t status = KS_STATUS_FAIL;
 #ifndef WIN32
@@ -83,7 +83,7 @@ KS_DECLARE(ks_status_t) ks_mutex_create(ks_mutex_t **mutex, unsigned int flags, 
 	if (!pool)
 		goto done;
 
-	check = (ks_mutex_t *) ks_mpool_alloc(pool, sizeof(**mutex), &err);
+	check = (ks_mutex_t *) ks_pool_alloc(pool, sizeof(**mutex), &err);
 
 	if (!check)
 		goto done;
@@ -124,7 +124,7 @@ KS_DECLARE(ks_status_t) ks_mutex_create(ks_mutex_t **mutex, unsigned int flags, 
 #endif
 	*mutex = check;
 	status = KS_STATUS_SUCCESS;
-	ks_mpool_set_cleanup(pool, check, NULL, 0, ks_mutex_cleanup);
+	ks_pool_set_cleanup(pool, check, NULL, 0, ks_mutex_cleanup);
 
   done:
 	return status;
@@ -141,7 +141,7 @@ KS_DECLARE(ks_status_t) ks_mutex_destroy(ks_mutex_t **mutex)
 		return KS_STATUS_FAIL;
 	}
 
-	err = ks_mpool_safe_free(mp->pool, mp);
+	err = ks_pool_safe_free(mp->pool, mp);
 
 	return KS_STATUS_SUCCESS;
 }

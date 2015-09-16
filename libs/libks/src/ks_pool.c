@@ -52,13 +52,13 @@
 #endif
 #include <sys/mman.h>
 
-#define KS_MPOOL_MAGIC	0xABACABA	/* magic for struct */
+#define KS_POOL_MAGIC	0xABACABA	/* magic for struct */
 #define BLOCK_MAGIC	0xB1B1007	/* magic for blocks */
 #define FENCE_MAGIC0	(unsigned char)(0xFAU)	/* 1st magic mem byte */
 #define FENCE_MAGIC1	(unsigned char)(0xD3U)	/* 2nd magic mem byte */
 
 #define FENCE_SIZE		2		/* fence space */
-#define MIN_ALLOCATION		(sizeof(ks_mpool_free_t))	/* min alloc */
+#define MIN_ALLOCATION		(sizeof(ks_pool_free_t))	/* min alloc */
 #define MAX_FREE_SEARCH		10240	/* max size to search */
 #define MAX_FREE_LIST_SEARCH	100	/* max looking for free mem */
 
@@ -95,29 +95,29 @@ typedef struct alloc_prefix_s {
 #define DEFAULT_PAGE_MULT		16	/* pagesize = this * getpagesize */
 
 /* How many pages SIZE bytes resides in.  We add in the block header. */
-#define PAGES_IN_SIZE(mp_p, size)	(((size) + sizeof(ks_mpool_block_t) +	\
+#define PAGES_IN_SIZE(mp_p, size)	(((size) + sizeof(ks_pool_block_t) +	\
 									  (mp_p)->mp_page_size - 1) /		\
 									 (mp_p)->mp_page_size)
 #define SIZE_OF_PAGES(mp_p, page_n)	((page_n) * (mp_p)->mp_page_size)
 #define MAX_BITS	30			/* we only can allocate 1gb chunks */
 
 #define MAX_BLOCK_USER_MEMORY(mp_p)	((mp_p)->mp_page_size - \
-									 sizeof(ks_mpool_block_t))
+									 sizeof(ks_pool_block_t))
 #define FIRST_ADDR_IN_BLOCK(block_p)	(void *)((char *)(block_p) +	\
-												 sizeof(ks_mpool_block_t))
+												 sizeof(ks_pool_block_t))
 #define MEMORY_IN_BLOCK(block_p)	((char *)(block_p)->mb_bounds_p -	\
 									 ((char *)(block_p) +				\
-									  sizeof(ks_mpool_block_t)))
+									  sizeof(ks_pool_block_t)))
 
-typedef struct ks_mpool_cleanup_node_s {
-	ks_mpool_cleanup_fn_t fn;
+typedef struct ks_pool_cleanup_node_s {
+	ks_pool_cleanup_fn_t fn;
 	void *ptr;
 	void *arg;
 	int type;
-	struct ks_mpool_cleanup_node_s *next;
-} ks_mpool_cleanup_node_t;
+	struct ks_pool_cleanup_node_s *next;
+} ks_pool_cleanup_node_t;
 
-struct ks_mpool_s {
+struct ks_pool_s {
 	unsigned int mp_magic;		/* magic number for struct */
 	unsigned int mp_flags;		/* flags for the struct */
 	unsigned long mp_alloc_c;	/* number of allocations */
@@ -127,30 +127,30 @@ struct ks_mpool_s {
 	unsigned int mp_max_pages;	/* maximum number of pages to use */
 	unsigned int mp_page_size;	/* page-size of our system */
 	off_t mp_top;				/* top of our allocations in fd */
-	ks_mpool_log_func_t mp_log_func;	/* log callback function */
+	ks_pool_log_func_t mp_log_func;	/* log callback function */
 	void *mp_addr;				/* current address for mmaping */
 	void *mp_min_p;				/* min address in pool for checks */
 	void *mp_bounds_p;			/* max address in pool for checks */
-	struct ks_mpool_block_st *mp_first_p;	/* first memory block we are using */
-	struct ks_mpool_block_st *mp_last_p;	/* last memory block we are using */
-	struct ks_mpool_block_st *mp_free[MAX_BITS + 1];	/* free lists based on size */
+	struct ks_pool_block_st *mp_first_p;	/* first memory block we are using */
+	struct ks_pool_block_st *mp_last_p;	/* last memory block we are using */
+	struct ks_pool_block_st *mp_free[MAX_BITS + 1];	/* free lists based on size */
 	unsigned int mp_magic2;		/* upper magic for overwrite sanity */
-	ks_mpool_cleanup_node_t *clfn_list;
+	ks_pool_cleanup_node_t *clfn_list;
 };
 
 /* for debuggers to be able to interrogate the generic type in the .h file */
-typedef ks_mpool_t ks_mpool_ext_t;
+typedef ks_pool_t ks_pool_ext_t;
 
 /*
  * Block header structure.  This structure *MUST* be long-word
  * aligned.
  */
-typedef struct ks_mpool_block_st {
+typedef struct ks_pool_block_st {
 	unsigned int mb_magic;		/* magic number for block header */
 	void *mb_bounds_p;			/* block boundary location */
-	struct ks_mpool_block_st *mb_next_p;	/* linked list next pointer */
+	struct ks_pool_block_st *mb_next_p;	/* linked list next pointer */
 	unsigned int mb_magic2;		/* upper magic for overwrite sanity */
-} ks_mpool_block_t;
+} ks_pool_block_t;
 
 /*
  * Free list structure.
@@ -158,7 +158,7 @@ typedef struct ks_mpool_block_st {
 typedef struct {
 	void *mf_next_p;			/* pointer to the next free address */
 	unsigned long mf_size;		/* size of the free block */
-} ks_mpool_free_t;
+} ks_pool_free_t;
 
 #ifndef MAP_ANON
 #define MAP_ANON MAP_ANONYMOUS
@@ -188,9 +188,9 @@ long getpagesize(void)
 /* We need mutex here probably or this notion of cleanup stuff cannot be threadsafe */
 
 #if 0
-static ks_mpool_cleanup_node_t *find_cleanup_node(ks_mpool_t *mp_p, void *ptr)
+static ks_pool_cleanup_node_t *find_cleanup_node(ks_pool_t *mp_p, void *ptr)
 {
-	ks_mpool_cleanup_node_t *np, *cnode = NULL;
+	ks_pool_cleanup_node_t *np, *cnode = NULL;
 	
 	ks_assert(mp_p);
 	ks_assert(ptr);
@@ -209,9 +209,9 @@ static ks_mpool_cleanup_node_t *find_cleanup_node(ks_mpool_t *mp_p, void *ptr)
 }
 #endif
 
-static void peform_pool_cleanup_on_free(ks_mpool_t *mp_p, void *ptr)
+static void peform_pool_cleanup_on_free(ks_pool_t *mp_p, void *ptr)
 {
-	ks_mpool_cleanup_node_t *np, *cnode, *last = NULL;
+	ks_pool_cleanup_node_t *np, *cnode, *last = NULL;
 
 	np = mp_p->clfn_list;
 
@@ -236,9 +236,9 @@ static void peform_pool_cleanup_on_free(ks_mpool_t *mp_p, void *ptr)
 	}
 }
 
-static void peform_pool_cleanup(ks_mpool_t *mp_p)
+static void peform_pool_cleanup(ks_pool_t *mp_p)
 {
-	ks_mpool_cleanup_node_t *np;
+	ks_pool_cleanup_node_t *np;
 
 	for (np = mp_p->clfn_list; np; np = np->next) {
 		np->fn(mp_p, np->ptr, np->arg, np->type, KS_MPCL_ANNOUNCE);
@@ -255,9 +255,9 @@ static void peform_pool_cleanup(ks_mpool_t *mp_p)
 	mp_p->clfn_list = NULL;
 }
 
-KS_DECLARE(ks_status_t) ks_mpool_set_cleanup(ks_mpool_t *mp_p, void *ptr, void *arg, int type, ks_mpool_cleanup_fn_t fn)
+KS_DECLARE(ks_status_t) ks_pool_set_cleanup(ks_pool_t *mp_p, void *ptr, void *arg, int type, ks_pool_cleanup_fn_t fn)
 {
-	ks_mpool_cleanup_node_t *cnode;
+	ks_pool_cleanup_node_t *cnode;
 	int err = 0;
 
 	ks_assert(mp_p);
@@ -265,7 +265,7 @@ KS_DECLARE(ks_status_t) ks_mpool_set_cleanup(ks_mpool_t *mp_p, void *ptr, void *
 	ks_assert(fn);
 
 	/* don't set cleanup on this cnode obj or it will be an endless loop */
-	cnode = (ks_mpool_cleanup_node_t *) ks_mpool_alloc(mp_p, sizeof(*cnode), &err);
+	cnode = (ks_pool_cleanup_node_t *) ks_pool_alloc(mp_p, sizeof(*cnode), &err);
 	
 	if (!cnode) {
 		return KS_STATUS_FAIL;
@@ -325,7 +325,7 @@ static void startup(void)
 		 * Note our minimum number of bits that can store a pointer and
 		 * the size of the block.
 		 */
-		if (min_bit_free_size == 0 && size >= sizeof(ks_mpool_free_t)) {
+		if (min_bit_free_size == 0 && size >= sizeof(ks_pool_free_t)) {
 			min_bit_free_size = bit_c;
 		}
 
@@ -439,9 +439,9 @@ static unsigned long bits_to_size(const int bit_n)
  * page_n -> Number of pages to alloc.
  *
  * error_p <- Pointer to integer which, if not NULL, will be set with
- * a ks_mpool error code.
+ * a ks_pool error code.
  */
-static void *alloc_pages(ks_mpool_t *mp_p, const unsigned int page_n, int *error_p)
+static void *alloc_pages(ks_pool_t *mp_p, const unsigned int page_n, int *error_p)
 {
 	void *mem;
 	unsigned long size;
@@ -449,7 +449,7 @@ static void *alloc_pages(ks_mpool_t *mp_p, const unsigned int page_n, int *error
 
 	/* are we over our max-pages? */
 	if (mp_p->mp_max_pages > 0 && mp_p->mp_page_c >= mp_p->mp_max_pages) {
-		SET_POINTER(error_p, KS_MPOOL_ERROR_NO_PAGES);
+		SET_POINTER(error_p, KS_POOL_ERROR_NO_PAGES);
 		return NULL;
 	}
 
@@ -475,9 +475,9 @@ static void *alloc_pages(ks_mpool_t *mp_p, const unsigned int page_n, int *error
 
 	if (mem == (void *) MAP_FAILED) {
 		if (errno == ENOMEM) {
-			SET_POINTER(error_p, KS_MPOOL_ERROR_NO_MEM);
+			SET_POINTER(error_p, KS_POOL_ERROR_NO_MEM);
 		} else {
-			SET_POINTER(error_p, KS_MPOOL_ERROR_MMAP);
+			SET_POINTER(error_p, KS_POOL_ERROR_MMAP);
 		}
 		return NULL;
 	}
@@ -490,7 +490,7 @@ static void *alloc_pages(ks_mpool_t *mp_p, const unsigned int page_n, int *error
 
 	mp_p->mp_page_c += page_n;
 
-	SET_POINTER(error_p, KS_MPOOL_ERROR_NONE);
+	SET_POINTER(error_p, KS_POOL_ERROR_NONE);
 	return mem;
 }
 
@@ -503,9 +503,9 @@ static void *alloc_pages(ks_mpool_t *mp_p, const unsigned int page_n, int *error
  *
  * RETURNS:
  *
- * Success - KS_MPOOL_ERROR_NONE
+ * Success - KS_POOL_ERROR_NONE
  *
- * Failure - Ks_Mpool error code
+ * Failure - Ks_Pool error code
  *
  * ARGUMENTS:
  *
@@ -518,7 +518,7 @@ static void *alloc_pages(ks_mpool_t *mp_p, const unsigned int page_n, int *error
 static int free_pages(void *pages, const unsigned long size)
 {
 	(void) munmap(pages, size);
-	return KS_MPOOL_ERROR_NONE;
+	return KS_POOL_ERROR_NONE;
 }
 
 /*
@@ -530,9 +530,9 @@ static int free_pages(void *pages, const unsigned long size)
  *
  * RETURNS:
  *
- * Success - KS_MPOOL_ERROR_NONE
+ * Success - KS_POOL_ERROR_NONE
  *
- * Failure - Ks_Mpool error code
+ * Failure - Ks_Pool error code
  *
  * ARGUMENTS:
  *
@@ -548,9 +548,9 @@ static int check_magic(const void *addr, const unsigned long size)
 	mem_p = (unsigned char *) addr + size;
 
 	if (*mem_p == FENCE_MAGIC0 && *(mem_p + 1) == FENCE_MAGIC1) {
-		return KS_MPOOL_ERROR_NONE;
+		return KS_POOL_ERROR_NONE;
 	} else {
-		return KS_MPOOL_ERROR_PNT_OVER;
+		return KS_POOL_ERROR_PNT_OVER;
 	}
 }
 
@@ -584,9 +584,9 @@ static void write_magic(const void *addr)
  *
  * RETURNS:
  *
- * Success - KS_MPOOL_ERROR_NONE
+ * Success - KS_POOL_ERROR_NONE
  *
- * Failure - Ks_Mpool error code
+ * Failure - Ks_Pool error code
  *
  * ARGUMENTS:
  *
@@ -597,18 +597,18 @@ static void write_magic(const void *addr)
  *
  * size -> Size of the address space.
  */
-static int free_pointer(ks_mpool_t *mp_p, void *addr, const unsigned long size)
+static int free_pointer(ks_pool_t *mp_p, void *addr, const unsigned long size)
 {
 	unsigned int bit_n;
 	unsigned long real_size;
-	ks_mpool_free_t free_pnt;
+	ks_pool_free_t free_pnt;
 
 #ifdef DEBUG
 	(void) printf("freeing a block at %lx of %lu bytes\n", (long) addr, size);
 #endif
 
 	if (size == 0) {
-		return KS_MPOOL_ERROR_NONE;
+		return KS_POOL_ERROR_NONE;
 	}
 
 	/*
@@ -616,7 +616,7 @@ static int free_pointer(ks_mpool_t *mp_p, void *addr, const unsigned long size)
 	 * we change the size
 	 */
 	if (size > MAX_BLOCK_USER_MEMORY(mp_p)) {
-		real_size = SIZE_OF_PAGES(mp_p, PAGES_IN_SIZE(mp_p, size)) - sizeof(ks_mpool_block_t);
+		real_size = SIZE_OF_PAGES(mp_p, PAGES_IN_SIZE(mp_p, size)) - sizeof(ks_pool_block_t);
 	} else {
 		real_size = size;
 	}
@@ -634,7 +634,7 @@ static int free_pointer(ks_mpool_t *mp_p, void *addr, const unsigned long size)
 	 * list however this might be prohibitive.
 	 */
 	if (mp_p->mp_free[bit_n] == addr) {
-		return KS_MPOOL_ERROR_IS_FREE;
+		return KS_POOL_ERROR_IS_FREE;
 	}
 
 	/* add the freed pointer to the free list */
@@ -661,7 +661,7 @@ static int free_pointer(ks_mpool_t *mp_p, void *addr, const unsigned long size)
 		mp_p->mp_free[bit_n] = addr;
 	}
 
-	return KS_MPOOL_ERROR_NONE;
+	return KS_POOL_ERROR_NONE;
 }
 
 /*
@@ -674,9 +674,9 @@ static int free_pointer(ks_mpool_t *mp_p, void *addr, const unsigned long size)
  *
  * RETURNS:
  *
- * Success - KS_MPOOL_ERROR_NONE
+ * Success - KS_POOL_ERROR_NONE
  *
- * Failure - Ks_Mpool error code
+ * Failure - Ks_Pool error code
  *
  * ARGUMENTS:
  *
@@ -686,9 +686,9 @@ static int free_pointer(ks_mpool_t *mp_p, void *addr, const unsigned long size)
  *
  * size -> Size of the space that we are taking from address.
  */
-static int split_block(ks_mpool_t *mp_p, void *free_addr, const unsigned long size)
+static int split_block(ks_pool_t *mp_p, void *free_addr, const unsigned long size)
 {
-	ks_mpool_block_t *block_p, *new_block_p;
+	ks_pool_block_t *block_p, *new_block_p;
 	int ret, page_n;
 	void *end_p;
 
@@ -697,15 +697,15 @@ static int split_block(ks_mpool_t *mp_p, void *free_addr, const unsigned long si
 	 * the pointer must be the 1st one in the block if it is spans
 	 * multiple blocks.
 	 */
-	block_p = (ks_mpool_block_t *) ((char *) free_addr - sizeof(ks_mpool_block_t));
+	block_p = (ks_pool_block_t *) ((char *) free_addr - sizeof(ks_pool_block_t));
 	if (block_p->mb_magic != BLOCK_MAGIC || block_p->mb_magic2 != BLOCK_MAGIC) {
-		return KS_MPOOL_ERROR_POOL_OVER;
+		return KS_POOL_ERROR_POOL_OVER;
 	}
 
 	page_n = PAGES_IN_SIZE(mp_p, size);
 
 	/* we are creating a new block structure for the 2nd ... */
-	new_block_p = (ks_mpool_block_t *) ((char *) block_p + SIZE_OF_PAGES(mp_p, page_n));
+	new_block_p = (ks_pool_block_t *) ((char *) block_p + SIZE_OF_PAGES(mp_p, page_n));
 	new_block_p->mb_magic = BLOCK_MAGIC;
 	/* New bounds is 1st block bounds.  The 1st block's is reset below. */
 	new_block_p->mb_bounds_p = block_p->mb_bounds_p;
@@ -723,18 +723,18 @@ static int split_block(ks_mpool_t *mp_p, void *free_addr, const unsigned long si
 		/* now free the rest of the 1st block block */
 		end_p = (char *) free_addr + size;
 		ret = free_pointer(mp_p, end_p, (unsigned long)((char *) block_p->mb_bounds_p - (char *) end_p));
-		if (ret != KS_MPOOL_ERROR_NONE) {
+		if (ret != KS_POOL_ERROR_NONE) {
 			return ret;
 		}
 	}
 
 	/* now free the rest of the block */
 	ret = free_pointer(mp_p, FIRST_ADDR_IN_BLOCK(new_block_p), (unsigned long)MEMORY_IN_BLOCK(new_block_p));
-	if (ret != KS_MPOOL_ERROR_NONE) {
+	if (ret != KS_POOL_ERROR_NONE) {
 		return ret;
 	}
 
-	return KS_MPOOL_ERROR_NONE;
+	return KS_POOL_ERROR_NONE;
 }
 
 /*
@@ -757,12 +757,12 @@ static int split_block(ks_mpool_t *mp_p, void *free_addr, const unsigned long si
  * byte_size -> Size of the address space that we need.
  *
  * error_p <- Pointer to integer which, if not NULL, will be set with
- * a ks_mpool error code.
+ * a ks_pool error code.
  */
-static void *get_space(ks_mpool_t *mp_p, const unsigned long byte_size, int *error_p)
+static void *get_space(ks_pool_t *mp_p, const unsigned long byte_size, int *error_p)
 {
-	ks_mpool_block_t *block_p;
-	ks_mpool_free_t free_pnt;
+	ks_pool_block_t *block_p;
+	ks_pool_free_t free_pnt;
 	int ret;
 	unsigned long size;
 	unsigned int bit_c, page_n, left;
@@ -848,7 +848,7 @@ static void *get_space(ks_mpool_t *mp_p, const unsigned long byte_size, int *err
 			/* are we are splitting up a multiblock chunk into fewer blocks? */
 			if (PAGES_IN_SIZE(mp_p, free_pnt.mf_size) > PAGES_IN_SIZE(mp_p, size)) {
 				ret = split_block(mp_p, free_addr, size);
-				if (ret != KS_MPOOL_ERROR_NONE) {
+				if (ret != KS_POOL_ERROR_NONE) {
 					SET_POINTER(error_p, ret);
 					return NULL;
 				}
@@ -877,7 +877,7 @@ static void *get_space(ks_mpool_t *mp_p, const unsigned long byte_size, int *err
 	if (left > 0 && size <= MAX_BLOCK_USER_MEMORY(mp_p)) {
 		/* free the rest of the block */
 		ret = free_pointer(mp_p, free_end, left);
-		if (ret != KS_MPOOL_ERROR_NONE) {
+		if (ret != KS_POOL_ERROR_NONE) {
 			SET_POINTER(error_p, ret);
 			return NULL;
 		}
@@ -914,9 +914,9 @@ static void *get_space(ks_mpool_t *mp_p, const unsigned long byte_size, int *err
  * byte_size -> Number of bytes to allocate in the pool.  Must be >0.
  *
  * error_p <- Pointer to integer which, if not NULL, will be set with
- * a ks_mpool error code.
+ * a ks_pool error code.
  */
-static void *alloc_mem(ks_mpool_t *mp_p, const unsigned long byte_size, int *error_p)
+static void *alloc_mem(ks_pool_t *mp_p, const unsigned long byte_size, int *error_p)
 {
 	unsigned long size, fence;
 	void *addr;
@@ -951,7 +951,7 @@ static void *alloc_mem(ks_mpool_t *mp_p, const unsigned long byte_size, int *err
 		mp_p->mp_max_alloc = mp_p->mp_user_alloc;
 	}
 
-	SET_POINTER(error_p, KS_MPOOL_ERROR_NONE);
+	SET_POINTER(error_p, KS_POOL_ERROR_NONE);
 	return (uint8_t *)addr + PREFIX_SIZE;
 }
 
@@ -964,9 +964,9 @@ static void *alloc_mem(ks_mpool_t *mp_p, const unsigned long byte_size, int *err
  *
  * RETURNS:
  *
- * Success - KS_MPOOL_ERROR_NONE
+ * Success - KS_POOL_ERROR_NONE
  *
- * Failure - Ks_Mpool error code
+ * Failure - Ks_Pool error code
  *
  * ARGUMENTS:
  *
@@ -976,17 +976,17 @@ static void *alloc_mem(ks_mpool_t *mp_p, const unsigned long byte_size, int *err
  * addr <-> Address to free.
  *
  */
-static int free_mem(ks_mpool_t *mp_p, void *addr)
+static int free_mem(ks_pool_t *mp_p, void *addr)
 {
 	unsigned long size, old_size, fence;
 	int ret;
-	ks_mpool_block_t *block_p;
+	ks_pool_block_t *block_p;
 	alloc_prefix_t *prefix;
 
 
 	prefix = (alloc_prefix_t *) ((char *) addr - PREFIX_SIZE);
 	if (!(prefix->m1 == PRE_MAGIC1 && prefix->m2 == PRE_MAGIC2)) {
-		return KS_MPOOL_ERROR_INVALID_POINTER;
+		return KS_POOL_ERROR_INVALID_POINTER;
 	}
 
 	size = prefix->size;
@@ -996,9 +996,9 @@ static int free_mem(ks_mpool_t *mp_p, void *addr)
 	 * the front of the block.
 	 */
 	if (size > MAX_BLOCK_USER_MEMORY(mp_p)) {
-		block_p = (ks_mpool_block_t *) ((char *) addr - PREFIX_SIZE - sizeof(ks_mpool_block_t));
+		block_p = (ks_pool_block_t *) ((char *) addr - PREFIX_SIZE - sizeof(ks_pool_block_t));
 		if (block_p->mb_magic != BLOCK_MAGIC || block_p->mb_magic2 != BLOCK_MAGIC) {
-			return KS_MPOOL_ERROR_POOL_OVER;
+			return KS_POOL_ERROR_POOL_OVER;
 		}
 	}
 
@@ -1017,7 +1017,7 @@ static int free_mem(ks_mpool_t *mp_p, void *addr)
 	/* move pointer to actual beginning */
 	addr = prefix;
 
-	if (ret != KS_MPOOL_ERROR_NONE) {
+	if (ret != KS_POOL_ERROR_NONE) {
 		return ret;
 	}
 
@@ -1025,7 +1025,7 @@ static int free_mem(ks_mpool_t *mp_p, void *addr)
 
 	/* now we free the pointer */
 	ret = free_pointer(mp_p, addr, old_size + fence);
-	if (ret != KS_MPOOL_ERROR_NONE) {
+	if (ret != KS_POOL_ERROR_NONE) {
 		return ret;
 	}
 	mp_p->mp_user_alloc -= old_size;
@@ -1033,13 +1033,13 @@ static int free_mem(ks_mpool_t *mp_p, void *addr)
 	/* adjust our stats */
 	mp_p->mp_alloc_c--;
 
-	return KS_MPOOL_ERROR_NONE;
+	return KS_POOL_ERROR_NONE;
 }
 
 /***************************** exported routines *****************************/
 
 /*
- * ks_mpool_t *ks_mpool_open
+ * ks_pool_t *ks_pool_open
  *
  * DESCRIPTION:
  *
@@ -1047,7 +1047,7 @@ static int free_mem(ks_mpool_t *mp_p, void *addr)
  *
  * RETURNS:
  *
- * Success - Pool pointer which must be passed to ks_mpool_close to
+ * Success - Pool pointer which must be passed to ks_pool_close to
  * deallocate.
  *
  * Failure - NULL
@@ -1055,7 +1055,7 @@ static int free_mem(ks_mpool_t *mp_p, void *addr)
  * ARGUMENTS:
  *
  * flags -> Flags to set attributes of the memory pool.  See the top
- * of ks_mpool.h.
+ * of ks_pool.h.
  *
  * page_size -> Set the internal memory page-size.  This must be a
  * multiple of the getpagesize() value.  Set to 0 for the default.
@@ -1063,13 +1063,13 @@ static int free_mem(ks_mpool_t *mp_p, void *addr)
  * start_addr -> Starting address to try and allocate memory pools.
  *
  * error_p <- Pointer to integer which, if not NULL, will be set with
- * a ks_mpool error code.
+ * a ks_pool error code.
  */
-static ks_mpool_t *ks_mpool_raw_open(const unsigned int flags, const unsigned int page_size, void *start_addr, int *error_p)
+static ks_pool_t *ks_pool_raw_open(const unsigned int flags, const unsigned int page_size, void *start_addr, int *error_p)
 {
-	ks_mpool_block_t *block_p;
+	ks_pool_block_t *block_p;
 	int page_n, ret;
-	ks_mpool_t mp, *mp_p;
+	ks_pool_t mp, *mp_p;
 	void *free_addr;
 
 	if (!enabled_b) {
@@ -1079,7 +1079,7 @@ static ks_mpool_t *ks_mpool_raw_open(const unsigned int flags, const unsigned in
 	/* zero our temp struct */
 	memset(&mp, 0, sizeof(mp));
 
-	mp.mp_magic = KS_MPOOL_MAGIC;
+	mp.mp_magic = KS_POOL_MAGIC;
 	mp.mp_flags = flags;
 	mp.mp_alloc_c = 0;
 	mp.mp_user_alloc = 0;
@@ -1094,19 +1094,19 @@ static ks_mpool_t *ks_mpool_raw_open(const unsigned int flags, const unsigned in
 	mp.mp_bounds_p = NULL;
 	mp.mp_first_p = NULL;
 	mp.mp_last_p = NULL;
-	mp.mp_magic2 = KS_MPOOL_MAGIC;
+	mp.mp_magic2 = KS_POOL_MAGIC;
 
 	/* get and sanity check our page size */
 	if (page_size > 0) {
 		mp.mp_page_size = page_size;
 		if (mp.mp_page_size % getpagesize() != 0) {
-			SET_POINTER(error_p, KS_MPOOL_ERROR_ARG_INVALID);
+			SET_POINTER(error_p, KS_POOL_ERROR_ARG_INVALID);
 			return NULL;
 		}
 	} else {
 		mp.mp_page_size = getpagesize() * DEFAULT_PAGE_MULT;
 		if (mp.mp_page_size % 1024 != 0) {
-			SET_POINTER(error_p, KS_MPOOL_ERROR_PAGE_SIZE);
+			SET_POINTER(error_p, KS_POOL_ERROR_PAGE_SIZE);
 			return NULL;
 		}
 	}
@@ -1117,12 +1117,12 @@ static ks_mpool_t *ks_mpool_raw_open(const unsigned int flags, const unsigned in
 
 
 	/*
-	 * Find out how many pages we need for our ks_mpool structure.
+	 * Find out how many pages we need for our ks_pool structure.
 	 *
-	 * NOTE: this adds possibly unneeded space for ks_mpool_block_t which
+	 * NOTE: this adds possibly unneeded space for ks_pool_block_t which
 	 * may not be in this block.
 	 */
-	page_n = PAGES_IN_SIZE(&mp, sizeof(ks_mpool_t));
+	page_n = PAGES_IN_SIZE(&mp, sizeof(ks_pool_t));
 
 	/* now allocate us space for the actual struct */
 	mp_p = alloc_pages(&mp, page_n, error_p);
@@ -1135,10 +1135,10 @@ static ks_mpool_t *ks_mpool_raw_open(const unsigned int flags, const unsigned in
 	 * we want to lesson the chance of an allocation overwriting the
 	 * main structure.
 	 */
-	if (BIT_IS_SET(flags, KS_MPOOL_FLAG_HEAVY_PACKING)) {
+	if (BIT_IS_SET(flags, KS_POOL_FLAG_HEAVY_PACKING)) {
 
 		/* we add a block header to the front of the block */
-		block_p = (ks_mpool_block_t *) mp_p;
+		block_p = (ks_pool_block_t *) mp_p;
 
 		/* init the block header */
 		block_p->mb_magic = BLOCK_MAGIC;
@@ -1146,13 +1146,13 @@ static ks_mpool_t *ks_mpool_raw_open(const unsigned int flags, const unsigned in
 		block_p->mb_next_p = NULL;
 		block_p->mb_magic2 = BLOCK_MAGIC;
 
-		/* the ks_mpool pointer is then the 2nd thing in the block */
+		/* the ks_pool pointer is then the 2nd thing in the block */
 		mp_p = FIRST_ADDR_IN_BLOCK(block_p);
-		free_addr = (char *) mp_p + sizeof(ks_mpool_t);
+		free_addr = (char *) mp_p + sizeof(ks_pool_t);
 
 		/* free the rest of the block */
 		ret = free_pointer(&mp, free_addr, (unsigned long)((char *) block_p->mb_bounds_p - (char *) free_addr));
-		if (ret != KS_MPOOL_ERROR_NONE) {
+		if (ret != KS_POOL_ERROR_NONE) {
 			/* NOTE: after this line mp_p will be invalid */
 			(void) free_pages(block_p, SIZE_OF_PAGES(&mp, page_n));
 
@@ -1161,31 +1161,31 @@ static ks_mpool_t *ks_mpool_raw_open(const unsigned int flags, const unsigned in
 		}
 
 		/*
-		 * NOTE: if we are HEAVY_PACKING then the 1st block with the ks_mpool
+		 * NOTE: if we are HEAVY_PACKING then the 1st block with the ks_pool
 		 * header is not on the block linked list.
 		 */
 
 		/* now copy our tmp structure into our new memory area */
-		memcpy(mp_p, &mp, sizeof(ks_mpool_t));
+		memcpy(mp_p, &mp, sizeof(ks_pool_t));
 
 		/* we setup min/max to our current address which is as good as any */
 		mp_p->mp_min_p = block_p;
 		mp_p->mp_bounds_p = block_p->mb_bounds_p;
 	} else {
 		/* now copy our tmp structure into our new memory area */
-		memcpy(mp_p, &mp, sizeof(ks_mpool_t));
+		memcpy(mp_p, &mp, sizeof(ks_pool_t));
 
 		/* we setup min/max to our current address which is as good as any */
 		mp_p->mp_min_p = mp_p;
 		mp_p->mp_bounds_p = (char *) mp_p + SIZE_OF_PAGES(mp_p, page_n);
 	}
 
-	SET_POINTER(error_p, KS_MPOOL_ERROR_NONE);
+	SET_POINTER(error_p, KS_POOL_ERROR_NONE);
 	return mp_p;
 }
 
 /*
- * ks_mpool_t *ks_mpool_open
+ * ks_pool_t *ks_pool_open
  *
  * DESCRIPTION:
  *
@@ -1202,14 +1202,14 @@ static ks_mpool_t *ks_mpool_raw_open(const unsigned int flags, const unsigned in
  * poolP <- pointer to new pool that will be set on success
  *
  * error_p <- Pointer to integer which, if not NULL, will be set with
- * a ks_mpool error code.
+ * a ks_pool error code.
  */
 
-KS_DECLARE(ks_status_t) ks_mpool_open(ks_mpool_t **poolP, int *error_p)
+KS_DECLARE(ks_status_t) ks_pool_open(ks_pool_t **poolP, int *error_p)
 {
-	ks_mpool_t *pool = ks_mpool_raw_open(KS_MPOOL_FLAG_DEFAULT, 0, NULL, error_p);
+	ks_pool_t *pool = ks_pool_raw_open(KS_POOL_FLAG_DEFAULT, 0, NULL, error_p);
 
-	if (pool && (!error_p || *error_p == KS_MPOOL_ERROR_NONE)) {
+	if (pool && (!error_p || *error_p == KS_POOL_ERROR_NONE)) {
 		*poolP = pool;
 		return KS_STATUS_SUCCESS;
 	} else {
@@ -1219,56 +1219,56 @@ KS_DECLARE(ks_status_t) ks_mpool_open(ks_mpool_t **poolP, int *error_p)
 }
 
 /*
- * int ks_mpool_raw_close
+ * int ks_pool_raw_close
  *
  * DESCRIPTION:
  *
  * Close/free a memory allocation pool previously opened with
- * ks_mpool_open.
+ * ks_pool_open.
  *
  * RETURNS:
  *
- * Success - KS_MPOOL_ERROR_NONE
+ * Success - KS_POOL_ERROR_NONE
  *
- * Failure - Ks_Mpool error code
+ * Failure - Ks_Pool error code
  *
  * ARGUMENTS:
  *
  * mp_p <-> Pointer to our memory pool.
  */
-static int ks_mpool_raw_close(ks_mpool_t *mp_p)
+static int ks_pool_raw_close(ks_pool_t *mp_p)
 {
-	ks_mpool_block_t *block_p, *next_p;
+	ks_pool_block_t *block_p, *next_p;
 	void *addr;
 	unsigned long size;
-	int ret, final = KS_MPOOL_ERROR_NONE;
+	int ret, final = KS_POOL_ERROR_NONE;
 
 	/* special case, just return no-error */
 	if (mp_p == NULL) {
-		return KS_MPOOL_ERROR_ARG_NULL;
+		return KS_POOL_ERROR_ARG_NULL;
 	}
-	if (mp_p->mp_magic != KS_MPOOL_MAGIC) {
-		return KS_MPOOL_ERROR_PNT;
+	if (mp_p->mp_magic != KS_POOL_MAGIC) {
+		return KS_POOL_ERROR_PNT;
 	}
-	if (mp_p->mp_magic2 != KS_MPOOL_MAGIC) {
-		return KS_MPOOL_ERROR_POOL_OVER;
+	if (mp_p->mp_magic2 != KS_POOL_MAGIC) {
+		return KS_POOL_ERROR_POOL_OVER;
 	}
 
 	if (mp_p->mp_log_func != NULL) {
-		mp_p->mp_log_func(mp_p, KS_MPOOL_FUNC_CLOSE, 0, 0, NULL, NULL, 0);
+		mp_p->mp_log_func(mp_p, KS_POOL_FUNC_CLOSE, 0, 0, NULL, NULL, 0);
 	}
 
 	peform_pool_cleanup(mp_p);
 
 	/*
-	 * NOTE: if we are HEAVY_PACKING then the 1st block with the ks_mpool
+	 * NOTE: if we are HEAVY_PACKING then the 1st block with the ks_pool
 	 * header is not on the linked list.
 	 */
 
 	/* free/invalidate the blocks */
 	for (block_p = mp_p->mp_first_p; block_p != NULL; block_p = next_p) {
 		if (block_p->mb_magic != BLOCK_MAGIC || block_p->mb_magic2 != BLOCK_MAGIC) {
-			final = KS_MPOOL_ERROR_POOL_OVER;
+			final = KS_POOL_ERROR_POOL_OVER;
 			break;
 		}
 		block_p->mb_magic = 0;
@@ -1277,22 +1277,22 @@ static int ks_mpool_raw_close(ks_mpool_t *mp_p)
 		next_p = block_p->mb_next_p;
 		ret = free_pages(block_p, (unsigned long)((char *) block_p->mb_bounds_p - (char *) block_p));
 
-		if (ret != KS_MPOOL_ERROR_NONE) {
+		if (ret != KS_POOL_ERROR_NONE) {
 			final = ret;
 		}
 	}
 
-	/* invalidate the ks_mpool before we ditch it */
+	/* invalidate the ks_pool before we ditch it */
 	mp_p->mp_magic = 0;
 	mp_p->mp_magic2 = 0;
 
 	/* if we are heavy packing then we need to free the 1st block later */
-	if (BIT_IS_SET(mp_p->mp_flags, KS_MPOOL_FLAG_HEAVY_PACKING)) {
-		addr = (char *) mp_p - sizeof(ks_mpool_block_t);
+	if (BIT_IS_SET(mp_p->mp_flags, KS_POOL_FLAG_HEAVY_PACKING)) {
+		addr = (char *) mp_p - sizeof(ks_pool_block_t);
 	} else {
 		addr = mp_p;
 	}
-	size = SIZE_OF_PAGES(mp_p, PAGES_IN_SIZE(mp_p, sizeof(ks_mpool_t)));
+	size = SIZE_OF_PAGES(mp_p, PAGES_IN_SIZE(mp_p, sizeof(ks_pool_t)));
 
 	(void) munmap(addr, size);
 
@@ -1302,18 +1302,18 @@ static int ks_mpool_raw_close(ks_mpool_t *mp_p)
 
 
 /*
- * ks_status_t ks_mpool_close
+ * ks_status_t ks_pool_close
  *
  * DESCRIPTION:
  *
  * Close/free a memory allocation pool previously opened with
- * ks_mpool_open.
+ * ks_pool_open.
  *
  * RETURNS:
  *
- * Success - KS_MPOOL_ERROR_NONE
+ * Success - KS_POOL_ERROR_NONE
  *
- * Failure - Ks_Mpool error code
+ * Failure - Ks_Pool error code
  *
  * ARGUMENTS:
  *
@@ -1321,17 +1321,17 @@ static int ks_mpool_raw_close(ks_mpool_t *mp_p)
  * error_p <- Pointer to error
  */
 
-KS_DECLARE(ks_status_t) ks_mpool_close(ks_mpool_t **mp_pP, int *error_p)
+KS_DECLARE(ks_status_t) ks_pool_close(ks_pool_t **mp_pP, int *error_p)
 {
 	int err;
 
 	ks_assert(mp_pP);
 
-	err = ks_mpool_raw_close(*mp_pP);
+	err = ks_pool_raw_close(*mp_pP);
 	if (error_p)
 		*error_p = err;
 
-	if (err == KS_MPOOL_ERROR_NONE) {
+	if (err == KS_POOL_ERROR_NONE) {
 		*mp_pP = NULL;
 		return KS_STATUS_SUCCESS;
 	} else {
@@ -1340,7 +1340,7 @@ KS_DECLARE(ks_status_t) ks_mpool_close(ks_mpool_t **mp_pP, int *error_p)
 }
 
 /*
- * int ks_mpool_clear
+ * int ks_pool_clear
  *
  * DESCRIPTION:
  *
@@ -1348,33 +1348,33 @@ KS_DECLARE(ks_status_t) ks_mpool_close(ks_mpool_t **mp_pP, int *error_p)
  *
  * RETURNS:
  *
- * Success - KS_MPOOL_ERROR_NONE
+ * Success - KS_POOL_ERROR_NONE
  *
- * Failure - Ks_Mpool error code
+ * Failure - Ks_Pool error code
  *
  * ARGUMENTS:
  *
  * mp_p <-> Pointer to our memory pool.
  */
-KS_DECLARE(int) ks_mpool_clear(ks_mpool_t *mp_p)
+KS_DECLARE(int) ks_pool_clear(ks_pool_t *mp_p)
 {
-	ks_mpool_block_t *block_p;
-	int final = KS_MPOOL_ERROR_NONE, bit_n, ret;
+	ks_pool_block_t *block_p;
+	int final = KS_POOL_ERROR_NONE, bit_n, ret;
 	void *first_p;
 
 	/* special case, just return no-error */
 	if (mp_p == NULL) {
-		return KS_MPOOL_ERROR_ARG_NULL;
+		return KS_POOL_ERROR_ARG_NULL;
 	}
-	if (mp_p->mp_magic != KS_MPOOL_MAGIC) {
-		return KS_MPOOL_ERROR_PNT;
+	if (mp_p->mp_magic != KS_POOL_MAGIC) {
+		return KS_POOL_ERROR_PNT;
 	}
-	if (mp_p->mp_magic2 != KS_MPOOL_MAGIC) {
-		return KS_MPOOL_ERROR_POOL_OVER;
+	if (mp_p->mp_magic2 != KS_POOL_MAGIC) {
+		return KS_POOL_ERROR_POOL_OVER;
 	}
 
 	if (mp_p->mp_log_func != NULL) {
-		mp_p->mp_log_func(mp_p, KS_MPOOL_FUNC_CLEAR, 0, 0, NULL, NULL, 0);
+		mp_p->mp_log_func(mp_p, KS_POOL_FUNC_CLEAR, 0, 0, NULL, NULL, 0);
 	}
 
 	peform_pool_cleanup(mp_p);
@@ -1387,7 +1387,7 @@ KS_DECLARE(int) ks_mpool_clear(ks_mpool_t *mp_p)
 	/* free the blocks */
 	for (block_p = mp_p->mp_first_p; block_p != NULL; block_p = block_p->mb_next_p) {
 		if (block_p->mb_magic != BLOCK_MAGIC || block_p->mb_magic2 != BLOCK_MAGIC) {
-			final = KS_MPOOL_ERROR_POOL_OVER;
+			final = KS_POOL_ERROR_POOL_OVER;
 			break;
 		}
 
@@ -1395,7 +1395,7 @@ KS_DECLARE(int) ks_mpool_clear(ks_mpool_t *mp_p)
 
 		/* free the memory */
 		ret = free_pointer(mp_p, first_p, (unsigned long)MEMORY_IN_BLOCK(block_p));
-		if (ret != KS_MPOOL_ERROR_NONE) {
+		if (ret != KS_POOL_ERROR_NONE) {
 			final = ret;
 		}
 	}
@@ -1404,7 +1404,7 @@ KS_DECLARE(int) ks_mpool_clear(ks_mpool_t *mp_p)
 }
 
 /*
- * void *ks_mpool_alloc
+ * void *ks_pool_alloc
  *
  * DESCRIPTION:
  *
@@ -1424,39 +1424,39 @@ KS_DECLARE(int) ks_mpool_clear(ks_mpool_t *mp_p)
  * byte_size -> Number of bytes to allocate in the pool.  Must be >0.
  *
  * error_p <- Pointer to integer which, if not NULL, will be set with
- * a ks_mpool error code.
+ * a ks_pool error code.
  */
-KS_DECLARE(void *) ks_mpool_alloc(ks_mpool_t *mp_p, const unsigned long byte_size, int *error_p)
+KS_DECLARE(void *) ks_pool_alloc(ks_pool_t *mp_p, const unsigned long byte_size, int *error_p)
 {
 	void *addr;
 
 	ks_assert(mp_p);
 
-	if (mp_p->mp_magic != KS_MPOOL_MAGIC) {
-		SET_POINTER(error_p, KS_MPOOL_ERROR_PNT);
+	if (mp_p->mp_magic != KS_POOL_MAGIC) {
+		SET_POINTER(error_p, KS_POOL_ERROR_PNT);
 		return NULL;
 	}
-	if (mp_p->mp_magic2 != KS_MPOOL_MAGIC) {
-		SET_POINTER(error_p, KS_MPOOL_ERROR_POOL_OVER);
+	if (mp_p->mp_magic2 != KS_POOL_MAGIC) {
+		SET_POINTER(error_p, KS_POOL_ERROR_POOL_OVER);
 		return NULL;
 	}
 
 	if (byte_size == 0) {
-		SET_POINTER(error_p, KS_MPOOL_ERROR_ARG_INVALID);
+		SET_POINTER(error_p, KS_POOL_ERROR_ARG_INVALID);
 		return NULL;
 	}
 
 	addr = alloc_mem(mp_p, byte_size, error_p);
 
 	if (mp_p->mp_log_func != NULL) {
-		mp_p->mp_log_func(mp_p, KS_MPOOL_FUNC_ALLOC, byte_size, 0, addr, NULL, 0);
+		mp_p->mp_log_func(mp_p, KS_POOL_FUNC_ALLOC, byte_size, 0, addr, NULL, 0);
 	}
 
 	return addr;
 }
 
 /*
- * void *ks_mpool_calloc
+ * void *ks_pool_calloc
  *
  * DESCRIPTION:
  *
@@ -1479,9 +1479,9 @@ KS_DECLARE(void *) ks_mpool_alloc(ks_mpool_t *mp_p, const unsigned long byte_siz
  * ele_size -> Number of bytes per element being allocated.
  *
  * error_p <- Pointer to integer which, if not NULL, will be set with
- * a ks_mpool error code.
+ * a ks_pool error code.
  */
-KS_DECLARE(void *) ks_mpool_calloc(ks_mpool_t *mp_p, const unsigned long ele_n, const unsigned long ele_size, int *error_p)
+KS_DECLARE(void *) ks_pool_calloc(ks_pool_t *mp_p, const unsigned long ele_n, const unsigned long ele_size, int *error_p)
 {
 	void *addr;
 	unsigned long byte_size;
@@ -1490,25 +1490,25 @@ KS_DECLARE(void *) ks_mpool_calloc(ks_mpool_t *mp_p, const unsigned long ele_n, 
 		/* special case -- do a normal calloc */
 		addr = (void *) calloc(ele_n, ele_size);
 		if (addr == NULL) {
-			SET_POINTER(error_p, KS_MPOOL_ERROR_ALLOC);
+			SET_POINTER(error_p, KS_POOL_ERROR_ALLOC);
 			return NULL;
 		} else {
-			SET_POINTER(error_p, KS_MPOOL_ERROR_NONE);
+			SET_POINTER(error_p, KS_POOL_ERROR_NONE);
 			return addr;
 		}
 
 	}
-	if (mp_p->mp_magic != KS_MPOOL_MAGIC) {
-		SET_POINTER(error_p, KS_MPOOL_ERROR_PNT);
+	if (mp_p->mp_magic != KS_POOL_MAGIC) {
+		SET_POINTER(error_p, KS_POOL_ERROR_PNT);
 		return NULL;
 	}
-	if (mp_p->mp_magic2 != KS_MPOOL_MAGIC) {
-		SET_POINTER(error_p, KS_MPOOL_ERROR_POOL_OVER);
+	if (mp_p->mp_magic2 != KS_POOL_MAGIC) {
+		SET_POINTER(error_p, KS_POOL_ERROR_POOL_OVER);
 		return NULL;
 	}
 
 	if (ele_n == 0 || ele_size == 0) {
-		SET_POINTER(error_p, KS_MPOOL_ERROR_ARG_INVALID);
+		SET_POINTER(error_p, KS_POOL_ERROR_ARG_INVALID);
 		return NULL;
 	}
 
@@ -1519,7 +1519,7 @@ KS_DECLARE(void *) ks_mpool_calloc(ks_mpool_t *mp_p, const unsigned long ele_n, 
 	}
 
 	if (mp_p->mp_log_func != NULL) {
-		mp_p->mp_log_func(mp_p, KS_MPOOL_FUNC_CALLOC, ele_size, ele_n, addr, NULL, 0);
+		mp_p->mp_log_func(mp_p, KS_POOL_FUNC_CALLOC, ele_size, ele_n, addr, NULL, 0);
 	}
 
 	/* NOTE: error_p set above */
@@ -1527,7 +1527,7 @@ KS_DECLARE(void *) ks_mpool_calloc(ks_mpool_t *mp_p, const unsigned long ele_n, 
 }
 
 /*
- * int ks_mpool_free
+ * int ks_pool_free
  *
  * DESCRIPTION:
  *
@@ -1535,9 +1535,9 @@ KS_DECLARE(void *) ks_mpool_calloc(ks_mpool_t *mp_p, const unsigned long ele_n, 
  *
  * RETURNS:
  *
- * Success - KS_MPOOL_ERROR_NONE
+ * Success - KS_POOL_ERROR_NONE
  *
- * Failure - Ks_Mpool error code
+ * Failure - Ks_Pool error code
  *
  * ARGUMENTS:
  *
@@ -1547,29 +1547,29 @@ KS_DECLARE(void *) ks_mpool_calloc(ks_mpool_t *mp_p, const unsigned long ele_n, 
  * addr <-> Address to free.
  *
  */
-KS_DECLARE(int) ks_mpool_free(ks_mpool_t *mp_p, void *addr)
+KS_DECLARE(int) ks_pool_free(ks_pool_t *mp_p, void *addr)
 {
 
 	ks_assert(mp_p);
 	ks_assert(addr);
 
-	if (mp_p->mp_magic != KS_MPOOL_MAGIC) {
-		return KS_MPOOL_ERROR_PNT;
+	if (mp_p->mp_magic != KS_POOL_MAGIC) {
+		return KS_POOL_ERROR_PNT;
 	}
-	if (mp_p->mp_magic2 != KS_MPOOL_MAGIC) {
-		return KS_MPOOL_ERROR_POOL_OVER;
+	if (mp_p->mp_magic2 != KS_POOL_MAGIC) {
+		return KS_POOL_ERROR_POOL_OVER;
 	}
 
 	if (mp_p->mp_log_func != NULL) {
 		alloc_prefix_t *prefix = (alloc_prefix_t *) ((char *) addr - PREFIX_SIZE);
-		mp_p->mp_log_func(mp_p, KS_MPOOL_FUNC_FREE, prefix->size, 0, NULL, addr, 0);
+		mp_p->mp_log_func(mp_p, KS_POOL_FUNC_FREE, prefix->size, 0, NULL, addr, 0);
 	}
 
 	return free_mem(mp_p, addr);
 }
 
 /*
- * void *ks_mpool_resize
+ * void *ks_pool_resize
  *
  * DESCRIPTION:
  *
@@ -1592,32 +1592,32 @@ KS_DECLARE(int) ks_mpool_free(ks_mpool_t *mp_p, void *addr)
  * new_byte_size -> New size of the allocation.
  *
  * error_p <- Pointer to integer which, if not NULL, will be set with
- * a ks_mpool error code.
+ * a ks_pool error code.
  */
-KS_DECLARE(void *) ks_mpool_resize(ks_mpool_t *mp_p, void *old_addr, const unsigned long new_byte_size, int *error_p)
+KS_DECLARE(void *) ks_pool_resize(ks_pool_t *mp_p, void *old_addr, const unsigned long new_byte_size, int *error_p)
 {
 	unsigned long copy_size, new_size, old_size, old_byte_size;
 	void *new_addr;
-	ks_mpool_block_t *block_p;
+	ks_pool_block_t *block_p;
 	int ret;
 	alloc_prefix_t *prefix;
 
 	ks_assert(mp_p);
 	ks_assert(old_addr);
 
-	if (mp_p->mp_magic != KS_MPOOL_MAGIC) {
-		SET_POINTER(error_p, KS_MPOOL_ERROR_PNT);
+	if (mp_p->mp_magic != KS_POOL_MAGIC) {
+		SET_POINTER(error_p, KS_POOL_ERROR_PNT);
 		return NULL;
 	}
-	if (mp_p->mp_magic2 != KS_MPOOL_MAGIC) {
-		SET_POINTER(error_p, KS_MPOOL_ERROR_POOL_OVER);
+	if (mp_p->mp_magic2 != KS_POOL_MAGIC) {
+		SET_POINTER(error_p, KS_POOL_ERROR_POOL_OVER);
 		return NULL;
 	}
 
 	prefix = (alloc_prefix_t *) ((char *) old_addr - PREFIX_SIZE);
 
 	if (!(prefix->m1 == PRE_MAGIC1 && prefix->m2 == PRE_MAGIC2)) {
-		SET_POINTER(error_p, KS_MPOOL_ERROR_INVALID_POINTER);
+		SET_POINTER(error_p, KS_POOL_ERROR_INVALID_POINTER);
 		return NULL;
 	}
 
@@ -1628,9 +1628,9 @@ KS_DECLARE(void *) ks_mpool_resize(ks_mpool_t *mp_p, void *old_addr, const unsig
 	 * the front of the block.
 	 */
 	if (old_byte_size > MAX_BLOCK_USER_MEMORY(mp_p)) {
-		block_p = (ks_mpool_block_t *) ((char *) old_addr - PREFIX_SIZE - sizeof(ks_mpool_block_t));
+		block_p = (ks_pool_block_t *) ((char *) old_addr - PREFIX_SIZE - sizeof(ks_pool_block_t));
 		if (block_p->mb_magic != BLOCK_MAGIC || block_p->mb_magic2 != BLOCK_MAGIC) {
-			SET_POINTER(error_p, KS_MPOOL_ERROR_POOL_OVER);
+			SET_POINTER(error_p, KS_POOL_ERROR_POOL_OVER);
 			return NULL;
 		}
 	}
@@ -1646,7 +1646,7 @@ KS_DECLARE(void *) ks_mpool_resize(ks_mpool_t *mp_p, void *old_addr, const unsig
 
 	if (old_size > 0) {
 		ret = check_magic(old_addr, old_size);
-		if (ret != KS_MPOOL_ERROR_NONE) {
+		if (ret != KS_POOL_ERROR_NONE) {
 			SET_POINTER(error_p, ret);
 			return NULL;
 		}
@@ -1672,7 +1672,7 @@ KS_DECLARE(void *) ks_mpool_resize(ks_mpool_t *mp_p, void *old_addr, const unsig
 	/* we need to get another address */
 	new_addr = alloc_mem(mp_p, new_size, error_p);
 	if (new_addr == NULL) {
-		/* error_p set in ks_mpool_alloc */
+		/* error_p set in ks_pool_alloc */
 		return NULL;
 	}
 
@@ -1685,7 +1685,7 @@ KS_DECLARE(void *) ks_mpool_resize(ks_mpool_t *mp_p, void *old_addr, const unsig
 
 	/* free the old address */
 	ret = free_mem(mp_p, (uint8_t *)old_addr + PREFIX_SIZE);
-	if (ret != KS_MPOOL_ERROR_NONE) {
+	if (ret != KS_POOL_ERROR_NONE) {
 		/* if the old free failed, try and free the new address */
 		(void) free_mem(mp_p, new_addr);
 		SET_POINTER(error_p, ret);
@@ -1693,15 +1693,15 @@ KS_DECLARE(void *) ks_mpool_resize(ks_mpool_t *mp_p, void *old_addr, const unsig
 	}
 
 	if (mp_p->mp_log_func != NULL) {
-		mp_p->mp_log_func(mp_p, KS_MPOOL_FUNC_RESIZE, new_byte_size, 0, new_addr, old_addr, old_byte_size);
+		mp_p->mp_log_func(mp_p, KS_POOL_FUNC_RESIZE, new_byte_size, 0, new_addr, old_addr, old_byte_size);
 	}
 
-	SET_POINTER(error_p, KS_MPOOL_ERROR_NONE);
+	SET_POINTER(error_p, KS_POOL_ERROR_NONE);
 	return new_addr;
 }
 
 /*
- * int ks_mpool_stats
+ * int ks_pool_stats
  *
  * DESCRIPTION:
  *
@@ -1709,9 +1709,9 @@ KS_DECLARE(void *) ks_mpool_resize(ks_mpool_t *mp_p, void *old_addr, const unsig
  *
  * RETURNS:
  *
- * Success - KS_MPOOL_ERROR_NONE
+ * Success - KS_POOL_ERROR_NONE
  *
- * Failure - Ks_Mpool error code
+ * Failure - Ks_Pool error code
  *
  * ARGUMENTS:
  *
@@ -1734,17 +1734,17 @@ KS_DECLARE(void *) ks_mpool_resize(ks_mpool_t *mp_p, void *old_addr, const unsig
  * will be set to the total amount of space (including administrative
  * overhead) used by the pool.
  */
-KS_DECLARE(int) ks_mpool_stats(const ks_mpool_t *mp_p, unsigned int *page_size_p,
+KS_DECLARE(int) ks_pool_stats(const ks_pool_t *mp_p, unsigned int *page_size_p,
 							   unsigned long *num_alloced_p, unsigned long *user_alloced_p, unsigned long *max_alloced_p, unsigned long *tot_alloced_p)
 {
 	if (mp_p == NULL) {
-		return KS_MPOOL_ERROR_ARG_NULL;
+		return KS_POOL_ERROR_ARG_NULL;
 	}
-	if (mp_p->mp_magic != KS_MPOOL_MAGIC) {
-		return KS_MPOOL_ERROR_PNT;
+	if (mp_p->mp_magic != KS_POOL_MAGIC) {
+		return KS_POOL_ERROR_PNT;
 	}
-	if (mp_p->mp_magic2 != KS_MPOOL_MAGIC) {
-		return KS_MPOOL_ERROR_POOL_OVER;
+	if (mp_p->mp_magic2 != KS_POOL_MAGIC) {
+		return KS_POOL_ERROR_POOL_OVER;
 	}
 
 	SET_POINTER(page_size_p, mp_p->mp_page_size);
@@ -1753,65 +1753,65 @@ KS_DECLARE(int) ks_mpool_stats(const ks_mpool_t *mp_p, unsigned int *page_size_p
 	SET_POINTER(max_alloced_p, mp_p->mp_max_alloc);
 	SET_POINTER(tot_alloced_p, SIZE_OF_PAGES(mp_p, mp_p->mp_page_c));
 
-	return KS_MPOOL_ERROR_NONE;
+	return KS_POOL_ERROR_NONE;
 }
 
 /*
- * int ks_mpool_set_log_func
+ * int ks_pool_set_log_func
  *
  * DESCRIPTION:
  *
  * Set a logging callback function to be called whenever there was a
- * memory transaction.  See ks_mpool_log_func_t.
+ * memory transaction.  See ks_pool_log_func_t.
  *
  * RETURNS:
  *
- * Success - KS_MPOOL_ERROR_NONE
+ * Success - KS_POOL_ERROR_NONE
  *
- * Failure - Ks_Mpool error code
+ * Failure - Ks_Pool error code
  *
  * ARGUMENTS:
  *
  * mp_p <-> Pointer to the memory pool.
  *
- * log_func -> Log function (defined in ks_mpool.h) which will be called
- * with each ks_mpool transaction.
+ * log_func -> Log function (defined in ks_pool.h) which will be called
+ * with each ks_pool transaction.
  */
-KS_DECLARE(int) ks_mpool_set_log_func(ks_mpool_t *mp_p, ks_mpool_log_func_t log_func)
+KS_DECLARE(int) ks_pool_set_log_func(ks_pool_t *mp_p, ks_pool_log_func_t log_func)
 {
 	if (mp_p == NULL) {
-		return KS_MPOOL_ERROR_ARG_NULL;
+		return KS_POOL_ERROR_ARG_NULL;
 	}
-	if (mp_p->mp_magic != KS_MPOOL_MAGIC) {
-		return KS_MPOOL_ERROR_PNT;
+	if (mp_p->mp_magic != KS_POOL_MAGIC) {
+		return KS_POOL_ERROR_PNT;
 	}
-	if (mp_p->mp_magic2 != KS_MPOOL_MAGIC) {
-		return KS_MPOOL_ERROR_POOL_OVER;
+	if (mp_p->mp_magic2 != KS_POOL_MAGIC) {
+		return KS_POOL_ERROR_POOL_OVER;
 	}
 
 	mp_p->mp_log_func = log_func;
 
-	return KS_MPOOL_ERROR_NONE;
+	return KS_POOL_ERROR_NONE;
 }
 
 /*
- * int ks_mpool_set_max_pages
+ * int ks_pool_set_max_pages
  *
  * DESCRIPTION:
  *
  * Set the maximum number of pages that the library will use.  Once it
- * hits the limit it will return KS_MPOOL_ERROR_NO_PAGES.
+ * hits the limit it will return KS_POOL_ERROR_NO_PAGES.
  *
- * NOTE: if the KS_MPOOL_FLAG_HEAVY_PACKING is set then this max-pages
- * value will include the page with the ks_mpool header structure in it.
+ * NOTE: if the KS_POOL_FLAG_HEAVY_PACKING is set then this max-pages
+ * value will include the page with the ks_pool header structure in it.
  * If the flag is _not_ set then the max-pages will not include this
  * first page.
  *
  * RETURNS:
  *
- * Success - KS_MPOOL_ERROR_NONE
+ * Success - KS_POOL_ERROR_NONE
  *
- * Failure - Ks_Mpool error code
+ * Failure - Ks_Pool error code
  *
  * ARGUMENTS:
  *
@@ -1819,33 +1819,33 @@ KS_DECLARE(int) ks_mpool_set_log_func(ks_mpool_t *mp_p, ks_mpool_log_func_t log_
  *
  * max_pages -> Maximum number of pages used by the library.
  */
-KS_DECLARE(int) ks_mpool_set_max_pages(ks_mpool_t *mp_p, const unsigned int max_pages)
+KS_DECLARE(int) ks_pool_set_max_pages(ks_pool_t *mp_p, const unsigned int max_pages)
 {
 	if (mp_p == NULL) {
-		return KS_MPOOL_ERROR_ARG_NULL;
+		return KS_POOL_ERROR_ARG_NULL;
 	}
-	if (mp_p->mp_magic != KS_MPOOL_MAGIC) {
-		return KS_MPOOL_ERROR_PNT;
+	if (mp_p->mp_magic != KS_POOL_MAGIC) {
+		return KS_POOL_ERROR_PNT;
 	}
-	if (mp_p->mp_magic2 != KS_MPOOL_MAGIC) {
-		return KS_MPOOL_ERROR_POOL_OVER;
+	if (mp_p->mp_magic2 != KS_POOL_MAGIC) {
+		return KS_POOL_ERROR_POOL_OVER;
 	}
 
-	if (BIT_IS_SET(mp_p->mp_flags, KS_MPOOL_FLAG_HEAVY_PACKING)) {
+	if (BIT_IS_SET(mp_p->mp_flags, KS_POOL_FLAG_HEAVY_PACKING)) {
 		mp_p->mp_max_pages = max_pages;
 	} else {
 		/*
 		 * If we are not heavy-packing the pool then we don't count the
-		 * 1st page allocated which holds the ks_mpool header structure.
+		 * 1st page allocated which holds the ks_pool header structure.
 		 */
 		mp_p->mp_max_pages = max_pages + 1;
 	}
 
-	return KS_MPOOL_ERROR_NONE;
+	return KS_POOL_ERROR_NONE;
 }
 
 /*
- * const char *ks_mpool_strerror
+ * const char *ks_pool_strerror
  *
  * DESCRIPTION:
  *
@@ -1861,70 +1861,70 @@ KS_DECLARE(int) ks_mpool_set_max_pages(ks_mpool_t *mp_p, const unsigned int max_
  *
  * error -> Error number that we are converting.
  */
-KS_DECLARE(const char *) ks_mpool_strerror(const int error)
+KS_DECLARE(const char *) ks_pool_strerror(const int error)
 {
 	switch (error) {
-	case KS_MPOOL_ERROR_NONE:
+	case KS_POOL_ERROR_NONE:
 		return "no error";
 		break;
-	case KS_MPOOL_ERROR_ARG_NULL:
+	case KS_POOL_ERROR_ARG_NULL:
 		return "function argument is null";
 		break;
-	case KS_MPOOL_ERROR_ARG_INVALID:
+	case KS_POOL_ERROR_ARG_INVALID:
 		return "function argument is invalid";
 		break;
-	case KS_MPOOL_ERROR_PNT:
-		return "invalid ks_mpool pointer";
+	case KS_POOL_ERROR_PNT:
+		return "invalid ks_pool pointer";
 		break;
-	case KS_MPOOL_ERROR_POOL_OVER:
-		return "ks_mpool structure was overwritten";
+	case KS_POOL_ERROR_POOL_OVER:
+		return "ks_pool structure was overwritten";
 		break;
-	case KS_MPOOL_ERROR_PAGE_SIZE:
+	case KS_POOL_ERROR_PAGE_SIZE:
 		return "could not get system page-size";
 		break;
-	case KS_MPOOL_ERROR_OPEN_ZERO:
+	case KS_POOL_ERROR_OPEN_ZERO:
 		return "could not open /dev/zero";
 		break;
-	case KS_MPOOL_ERROR_NO_MEM:
+	case KS_POOL_ERROR_NO_MEM:
 		return "no memory available";
 		break;
-	case KS_MPOOL_ERROR_MMAP:
+	case KS_POOL_ERROR_MMAP:
 		return "problems with mmap";
 		break;
-	case KS_MPOOL_ERROR_SIZE:
+	case KS_POOL_ERROR_SIZE:
 		return "error processing requested size";
 		break;
-	case KS_MPOOL_ERROR_TOO_BIG:
+	case KS_POOL_ERROR_TOO_BIG:
 		return "allocation exceeds pool max size";
 		break;
-	case KS_MPOOL_ERROR_MEM:
+	case KS_POOL_ERROR_MEM:
 		return "invalid memory address";
 		break;
-	case KS_MPOOL_ERROR_MEM_OVER:
+	case KS_POOL_ERROR_MEM_OVER:
 		return "memory lower bounds overwritten";
 		break;
-	case KS_MPOOL_ERROR_NOT_FOUND:
+	case KS_POOL_ERROR_NOT_FOUND:
 		return "memory block not found in pool";
 		break;
-	case KS_MPOOL_ERROR_IS_FREE:
+	case KS_POOL_ERROR_IS_FREE:
 		return "memory address has already been freed";
 		break;
-	case KS_MPOOL_ERROR_BLOCK_STAT:
+	case KS_POOL_ERROR_BLOCK_STAT:
 		return "invalid internal block status";
 		break;
-	case KS_MPOOL_ERROR_FREE_ADDR:
+	case KS_POOL_ERROR_FREE_ADDR:
 		return "invalid internal free address";
 		break;
-	case KS_MPOOL_ERROR_NO_PAGES:
+	case KS_POOL_ERROR_NO_PAGES:
 		return "no available pages left in pool";
 		break;
-	case KS_MPOOL_ERROR_ALLOC:
+	case KS_POOL_ERROR_ALLOC:
 		return "system alloc function failed";
 		break;
-	case KS_MPOOL_ERROR_PNT_OVER:
+	case KS_POOL_ERROR_PNT_OVER:
 		return "user pointer admin space overwritten";
 		break;
-	case KS_MPOOL_ERROR_INVALID_POINTER:
+	case KS_POOL_ERROR_INVALID_POINTER:
 		return "pointer is not valid";
 		break;
 	default:
