@@ -58,8 +58,8 @@
 
 #define KS_MPOOL_MAIN
 
-#include "ks_mpool.h"
-#include "ks_mpool_loc.h"
+#include "ks_pool.h"
+#include "ks_pool_loc.h"
 
 #ifndef MAP_ANON
 #define MAP_ANON MAP_ANONYMOUS

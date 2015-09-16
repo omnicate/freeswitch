@@ -137,7 +137,7 @@
     <ClCompile Include="src\ks_config.c" />
     <ClCompile Include="src\ks_json.c" />
     <ClCompile Include="src\ks_log.c" />
-    <ClCompile Include="src\ks_mpool.c" />
+    <ClCompile Include="src\ks_pool.c" />
     <ClCompile Include="src\ks_socket.c" />
     <ClCompile Include="src\ks_string.c" />
     <ClCompile Include="src\ks_thread.c" />
@@ -148,7 +148,6 @@
     <ClCompile Include="src\win\mman.c" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="src\include\cc.h" />
     <ClInclude Include="src\include\ks.h" />
     <ClInclude Include="src\include\ks_buffer.h" />
     <ClInclude Include="src\include\ks_config.h" />
@@ -156,8 +155,8 @@
     <ClInclude Include="src\include\ks_platform.h" />
     <ClInclude Include="src\include\ks_threadmutex.h" />
     <ClInclude Include="src\include\ks_types.h" />
-    <ClInclude Include="src\include\mpool.h" />
-    <ClInclude Include="src\include\mpool_loc.h" />
+    <ClInclude Include="src\include\ks_pool.h" />
+    <ClInclude Include="src\include\ks_pool_loc.h" />
     <ClInclude Include="src\include\simclist.h" />
     <ClInclude Include="src\include\table.h" />
     <ClInclude Include="src\include\table_loc.h" />

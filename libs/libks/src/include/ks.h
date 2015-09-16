@@ -60,7 +60,7 @@ extern "C" {
 #include "ks_threadmutex.h"
 #include "ks_config.h"
 #include "ks_buffer.h"
-#include "ks_mpool.h"
+#include "ks_pool.h"
 #include "simclist.h"
 #include "table.h"
 

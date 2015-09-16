@@ -131,7 +131,7 @@ typedef void (*ks_mpool_log_func_t) (const void *mp_p,
 
 #ifdef KS_MPOOL_MAIN
 
-#include "ks_mpool_loc.h"
+#include "ks_pool_loc.h"
 
 #endif
 
