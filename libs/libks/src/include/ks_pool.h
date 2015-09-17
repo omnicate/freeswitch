@@ -56,32 +56,6 @@ typedef enum {
  */
 } ks_pool_flag_t;
 
-
-/*
- * Ks_Pool error codes
- */
-#define KS_POOL_ERROR_NONE 1	/* no error */
-#define KS_POOL_ERROR_ARG_NULL 2	/* function argument is null */
-#define KS_POOL_ERROR_ARG_INVALID 3	/* function argument is invalid */
-#define KS_POOL_ERROR_PNT  4	/* invalid ks_pool pointer */
-#define KS_POOL_ERROR_POOL_OVER 5	/* ks_pool structure was overwritten */
-#define KS_POOL_ERROR_PAGE_SIZE 6	/* could not get system page-size */
-#define KS_POOL_ERROR_OPEN_ZERO 7	/* could not open /dev/zero */
-#define KS_POOL_ERROR_NO_MEM 8	/* no memory available */
-#define KS_POOL_ERROR_MMAP 9	/* problems with mmap */
-#define KS_POOL_ERROR_SIZE 10	/* error processing requested size */
-#define KS_POOL_ERROR_TOO_BIG 11	/* allocation exceeded max size */
-#define KS_POOL_ERROR_MEM  12	/* invalid memory address */
-#define KS_POOL_ERROR_MEM_OVER 13	/* memory lower bounds overwritten */
-#define KS_POOL_ERROR_NOT_FOUND 14	/* memory block not found in pool */
-#define KS_POOL_ERROR_IS_FREE 15	/* memory block already free */
-#define KS_POOL_ERROR_BLOCK_STAT 16	/* invalid internal block status */
-#define KS_POOL_ERROR_FREE_ADDR 17	/* invalid internal free address */
-#define KS_POOL_ERROR_UNUSED  18	/* UNUSED */
-#define KS_POOL_ERROR_NO_PAGES 19	/* ran out of pages in pool */
-#define KS_POOL_ERROR_ALLOC 20	/* calloc,malloc,free,realloc failed */
-#define KS_POOL_ERROR_PNT_OVER 21	/* pointer structure was overwritten */
-#define KS_POOL_ERROR_INVALID_POINTER 22	/* address is not valid */
 /*
  * Ks_Pool function IDs for the ks_pool_log_func callback function.
  */
@@ -196,7 +170,7 @@ KS_DECLARE(ks_status_t) ks_pool_open(ks_pool_t **poolP, int *error_p);
  *
  * RETURNS:
  *
- * Success - KS_POOL_ERROR_NONE
+ * Success - KS_STATUS_SUCCESS
  *
  * Failure - Ks_Pool error code
  *
@@ -216,7 +190,7 @@ KS_DECLARE(ks_status_t) ks_pool_open(ks_pool_t **poolP, int *error_p);
  *
  * RETURNS:
  *
- * Success - KS_POOL_ERROR_NONE
+ * Success - KS_STATUS_SUCCESS
  *
  * Failure - Ks_Pool error code
  *
@@ -237,7 +211,7 @@ KS_DECLARE(ks_status_t) ks_pool_close(ks_pool_t **mp_pP, int *error_p);
  *
  * RETURNS:
  *
- * Success - KS_POOL_ERROR_NONE
+ * Success - KS_STATUS_SUCCESS
  *
  * Failure - Ks_Pool error code
  *
@@ -309,7 +283,7 @@ KS_DECLARE(void *) ks_pool_calloc(ks_pool_t *mp_p, const unsigned long ele_n, co
  *
  * RETURNS:
  *
- * Success - KS_POOL_ERROR_NONE
+ * Success - KS_STATUS_SUCCESS
  *
  * Failure - Ks_Pool error code
  *
@@ -360,7 +334,7 @@ KS_DECLARE(void *) ks_pool_resize(ks_pool_t *mp_p, void *old_addr, const unsigne
  *
  * RETURNS:
  *
- * Success - KS_POOL_ERROR_NONE
+ * Success - KS_STATUS_SUCCESS
  *
  * Failure - Ks_Pool error code
  *
@@ -398,7 +372,7 @@ KS_DECLARE(int) ks_pool_stats(const ks_pool_t *mp_p, unsigned int *page_size_p,
  *
  * RETURNS:
  *
- * Success - KS_POOL_ERROR_NONE
+ * Success - KS_STATUS_SUCCESS
  *
  * Failure - Ks_Pool error code
  *
@@ -417,7 +391,7 @@ KS_DECLARE(int) ks_pool_set_log_func(ks_pool_t *mp_p, ks_pool_log_func_t log_fun
  * DESCRIPTION:
  *
  * Set the maximum number of pages that the library will use.  Once it
- * hits the limit it will return KS_POOL_ERROR_NO_PAGES.
+ * hits the limit it will return KS_STATUS_NO_PAGES.
  *
  * NOTE: if the KS_POOL_FLAG_HEAVY_PACKING is set then this max-pages
  * value will include the page with the ks_pool header structure in it.
@@ -426,7 +400,7 @@ KS_DECLARE(int) ks_pool_set_log_func(ks_pool_t *mp_p, ks_pool_log_func_t log_fun
  *
  * RETURNS:
  *
- * Success - KS_POOL_ERROR_NONE
+ * Success - KS_STATUS_SUCCESS
  *
  * Failure - Ks_Pool error code
  *
