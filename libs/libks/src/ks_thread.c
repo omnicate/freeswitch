@@ -89,7 +89,6 @@ KS_DECLARE(ks_status_t) ks_thread_create_ex(ks_thread_t **rthread, ks_thread_fun
 {
 	ks_thread_t *thread = NULL;
 	ks_status_t status = KS_STATUS_FAIL;
-	int err;
 
 	if (!rthread) goto done;
 
@@ -97,7 +96,7 @@ KS_DECLARE(ks_status_t) ks_thread_create_ex(ks_thread_t **rthread, ks_thread_fun
 
 	if (!func || !pool) goto done;
 
-	thread = (ks_thread_t *) ks_pool_alloc(pool, sizeof(ks_thread_t), &err);
+	thread = (ks_thread_t *) ks_pool_alloc(pool, sizeof(ks_thread_t));
 
 	if (!thread) goto done;
 
@@ -157,7 +156,7 @@ KS_DECLARE(ks_status_t) ks_thread_create_ex(ks_thread_t **rthread, ks_thread_fun
 	if (thread) {
 		thread->running = 0;
 		if (pool) {
-			err = ks_pool_safe_free(pool, thread);
+			ks_pool_safe_free(pool, thread);
 		}
 	}
   done:

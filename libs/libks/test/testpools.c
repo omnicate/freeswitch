@@ -57,19 +57,19 @@ int main(int argc, char **argv)
 		}
 	}
 
-	status = ks_pool_open(&pool, &err);
+	status = ks_pool_open(&pool);
 
 	printf("OPEN:\n");
 	if (status != KS_STATUS_SUCCESS) {
-		fprintf(stderr, "OPEN ERR: %d [%s]\n", err, ks_pool_strerror(err));
+		fprintf(stderr, "OPEN ERR: %d [%s]\n", err, ks_pool_strerror(status));
 		exit(255);
 	}
 
 	printf("ALLOC:\n");
-	str = ks_pool_alloc(pool, bytes, &err);
+	str = ks_pool_alloc(pool, bytes);
 
-	if (err != KS_STATUS_SUCCESS) {
-		fprintf(stderr, "ALLOC ERR: [%s]\n", ks_pool_strerror(err));
+	if (!str) {
+		fprintf(stderr, "ALLOC ERR\n");
 		exit(255);
 	}
 
@@ -78,18 +78,18 @@ int main(int argc, char **argv)
 
 	printf("FREE:\n");
 
-	err = ks_pool_safe_free(pool, str);
-	if (err != KS_STATUS_SUCCESS) {
+	status = ks_pool_safe_free(pool, str);
+	if (status != KS_STATUS_SUCCESS) {
 		fprintf(stderr, "FREE ERR: [%s]\n", ks_pool_strerror(err));
 		exit(255);
 	}
 
 	printf("ALLOC2:\n");
 
-	str = ks_pool_alloc(pool, bytes, &err);
+	str = ks_pool_alloc(pool, bytes);
 
-	if (err != KS_STATUS_SUCCESS) {
-		fprintf(stderr, "ALLOC2 ERR: [%s]\n", ks_pool_strerror(err));
+	if (!str) {
+		fprintf(stderr, "ALLOC2 ERR: [FAILED]\n");
 		exit(255);
 	}
 
@@ -99,10 +99,10 @@ int main(int argc, char **argv)
 
 	printf("ALLOC OBJ:\n");
 
-	foo = ks_pool_alloc(pool, sizeof(struct foo), &err);
+	foo = ks_pool_alloc(pool, sizeof(struct foo));
 
-	if (err != KS_STATUS_SUCCESS) {
-		fprintf(stderr, "ALLOC OBJ: [%s]\n", ks_pool_strerror(err));
+	if (!foo) {
+		fprintf(stderr, "ALLOC OBJ: [FAILED]\n");
 		exit(255);
 	} else {
 		printf("ALLOC OBJ [%p]:\n", (void *) foo);
@@ -114,19 +114,19 @@ int main(int argc, char **argv)
 
 	printf("FREE OBJ:\n");
 
-	err = ks_pool_safe_free(pool, foo);
-	if (err != KS_STATUS_SUCCESS) {
-		fprintf(stderr, "FREE OBJ ERR: [%s]\n", ks_pool_strerror(err));
+	status = ks_pool_safe_free(pool, foo);
+	if (status != KS_STATUS_SUCCESS) {
+		fprintf(stderr, "FREE OBJ ERR: [%s]\n", ks_pool_strerror(status));
 		exit(255);
 	}
 
 
 	printf("ALLOC OBJ2:\n");
 
-	foo = ks_pool_alloc(pool, sizeof(struct foo), &err);
+	foo = ks_pool_alloc(pool, sizeof(struct foo));
 
-	if (err != KS_STATUS_SUCCESS) {
-		fprintf(stderr, "ALLOC OBJ2: [%s]\n", ks_pool_strerror(err));
+	if (!foo) {
+		fprintf(stderr, "ALLOC OBJ2: [FAILED]\n");
 		exit(255);
 	} else {
 		printf("ALLOC OBJ2 [%p]:\n", (void *) foo);
@@ -139,10 +139,10 @@ int main(int argc, char **argv)
 
 	printf("ALLOC OBJ3:\n");
 
-	foo = ks_pool_alloc(pool, sizeof(struct foo), &err);
+	foo = ks_pool_alloc(pool, sizeof(struct foo));
 
-	if (err != KS_STATUS_SUCCESS) {
-		fprintf(stderr, "ALLOC OBJ3: [%s]\n", ks_pool_strerror(err));
+	if (!foo) {
+		fprintf(stderr, "ALLOC OBJ3: [FAILED]\n");
 		exit(255);
 	} else {
 		printf("ALLOC OBJ3 [%p]:\n", (void *) foo);
@@ -156,10 +156,10 @@ int main(int argc, char **argv)
 
 	printf("RESIZE:\n");
 	bytes *= 2;
-	str = ks_pool_resize(pool, str, bytes, &err);
+	str = ks_pool_resize(pool, str, bytes);
 
-	if (err != KS_STATUS_SUCCESS) {
-		fprintf(stderr, "RESIZE ERR: [%s]\n", ks_pool_strerror(err));
+	if (!str) {
+		fprintf(stderr, "RESIZE ERR: [FAILED]\n");
 		exit(255);
 	}
 
@@ -169,23 +169,23 @@ int main(int argc, char **argv)
 
 	printf("FREE 2:\n");
 
-	err = ks_pool_free(pool, str);
-	if (err != KS_STATUS_SUCCESS) {
-		fprintf(stderr, "FREE2 ERR: [%s]\n", ks_pool_strerror(err));
+	status = ks_pool_free(pool, str);
+	if (status != KS_STATUS_SUCCESS) {
+		fprintf(stderr, "FREE2 ERR: [%s]\n", ks_pool_strerror(status));
 		exit(255);
 	}
 
 
 	printf("CLEAR:\n");
-	err = ks_pool_clear(pool);
+	status = ks_pool_clear(pool);
 
-	if (err != KS_STATUS_SUCCESS) {
-		fprintf(stderr, "CLEAR ERR: [%s]\n", ks_pool_strerror(err));
+	if (status != KS_STATUS_SUCCESS) {
+		fprintf(stderr, "CLEAR ERR: [%s]\n", ks_pool_strerror(status));
 		exit(255);
 	}
 
 	printf("CLOSE:\n");
-	status = ks_pool_close(&pool, &err);
+	status = ks_pool_close(&pool);
 	
 	if (status != KS_STATUS_SUCCESS) {
 		fprintf(stderr, "CLOSE ERR: [%s]\n", ks_pool_strerror(err));

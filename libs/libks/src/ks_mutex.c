@@ -77,15 +77,13 @@ KS_DECLARE(ks_status_t) ks_mutex_create(ks_mutex_t **mutex, unsigned int flags, 
 	pthread_mutexattr_t attr;
 #endif
 	ks_mutex_t *check = NULL;
-	int err = 0;
 
 	if (!pool)
 		goto done;
 
-	check = (ks_mutex_t *) ks_pool_alloc(pool, sizeof(**mutex), &err);
-
-	if (!check)
+	if (!(check = (ks_mutex_t *) ks_pool_alloc(pool, sizeof(**mutex)))) {
 		goto done;
+	}
 
 	check->pool = pool;
 	check->type = KS_MUTEX_TYPE_DEFAULT;
