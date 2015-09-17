@@ -1381,6 +1381,58 @@ KS_DECLARE(ks_status_t) ks_pool_clear(ks_pool_t *mp_p)
 }
 
 /*
+ * void *ks_pool_alloc_ex
+ *
+ * DESCRIPTION:
+ *
+ * Allocate space for bytes inside of an already open memory pool.
+ *
+ * RETURNS:
+ *
+ * Success - Pointer to the address to use.
+ *
+ * Failure - NULL
+ *
+ * ARGUMENTS:
+ *
+ * mp_p <-> Pointer to the memory pool.
+ *
+ *
+ * byte_size -> Number of bytes to allocate in the pool.  Must be >0.
+ *
+ * error_p <- Pointer to integer which, if not NULL, will be set with
+ * a ks_pool error code.
+ */
+KS_DECLARE(void *) ks_pool_alloc_ex(ks_pool_t *mp_p, const unsigned long byte_size, ks_status_t *error_p)
+{
+	void *addr;
+
+	ks_assert(mp_p);
+
+	if (mp_p->mp_magic != KS_POOL_MAGIC) {
+		SET_POINTER(error_p, KS_STATUS_PNT);
+		return NULL;
+	}
+	if (mp_p->mp_magic2 != KS_POOL_MAGIC) {
+		SET_POINTER(error_p, KS_STATUS_POOL_OVER);
+		return NULL;
+	}
+
+	if (byte_size == 0) {
+		SET_POINTER(error_p, KS_STATUS_ARG_INVALID);
+		return NULL;
+	}
+
+	addr = alloc_mem(mp_p, byte_size, error_p);
+
+	if (mp_p->mp_log_func != NULL) {
+		mp_p->mp_log_func(mp_p, KS_POOL_FUNC_ALLOC, byte_size, 0, addr, NULL, 0);
+	}
+
+	return addr;
+}
+
+/*
  * void *ks_pool_alloc
  *
  * DESCRIPTION:
@@ -1403,28 +1455,65 @@ KS_DECLARE(ks_status_t) ks_pool_clear(ks_pool_t *mp_p)
  */
 KS_DECLARE(void *) ks_pool_alloc(ks_pool_t *mp_p, const unsigned long byte_size)
 {
+	return ks_pool_alloc_ex(mp_p, byte_size, NULL);
+}
+
+
+/*
+ * void *ks_pool_calloc_ex
+ *
+ * DESCRIPTION:
+ *
+ * Allocate space for elements of bytes in the memory pool and zero
+ * the space afterwards.
+ *
+ * RETURNS:
+ *
+ * Success - Pointer to the address to use.
+ *
+ * Failure - NULL
+ *
+ * ARGUMENTS:
+ *
+ * mp_p <-> Pointer to the memory pool.  If NULL then it will do a
+ * normal calloc.
+ *
+ * ele_n -> Number of elements to allocate.
+ *
+ * ele_size -> Number of bytes per element being allocated.
+ *
+ * error_p <- Pointer to integer which, if not NULL, will be set with
+ * a ks_pool error code.
+ */
+KS_DECLARE(void *) ks_pool_calloc_ex(ks_pool_t *mp_p, const unsigned long ele_n, const unsigned long ele_size, ks_status_t *error_p)
+{
 	void *addr;
+	unsigned long byte_size;
 
 	ks_assert(mp_p);
 
 	if (mp_p->mp_magic != KS_POOL_MAGIC) {
-		//		SET_POINTER(error_p, KS_STATUS_PNT);
+		SET_POINTER(error_p, KS_STATUS_PNT);
 		return NULL;
 	}
 	if (mp_p->mp_magic2 != KS_POOL_MAGIC) {
-		//		SET_POINTER(error_p, KS_STATUS_POOL_OVER);
+		SET_POINTER(error_p, KS_STATUS_POOL_OVER);
 		return NULL;
 	}
 
-	if (byte_size == 0) {
-		//		SET_POINTER(error_p, KS_STATUS_ARG_INVALID);
+	if (ele_n == 0 || ele_size == 0) {
+		SET_POINTER(error_p, KS_STATUS_ARG_INVALID);
 		return NULL;
 	}
 
-	addr = alloc_mem(mp_p, byte_size, NULL); //error_p);
+	byte_size = ele_n * ele_size;
+	addr = alloc_mem(mp_p, byte_size, error_p);
+	if (addr != NULL) {
+		memset(addr, 0, byte_size);
+	}
 
 	if (mp_p->mp_log_func != NULL) {
-		mp_p->mp_log_func(mp_p, KS_POOL_FUNC_ALLOC, byte_size, 0, addr, NULL, 0);
+		mp_p->mp_log_func(mp_p, KS_POOL_FUNC_CALLOC, ele_size, ele_n, addr, NULL, 0);
 	}
 
 	return addr;
@@ -1456,36 +1545,7 @@ KS_DECLARE(void *) ks_pool_alloc(ks_pool_t *mp_p, const unsigned long byte_size)
  */
 KS_DECLARE(void *) ks_pool_calloc(ks_pool_t *mp_p, const unsigned long ele_n, const unsigned long ele_size)
 {
-	void *addr;
-	unsigned long byte_size;
-
-	ks_assert(mp_p);
-
-	if (mp_p->mp_magic != KS_POOL_MAGIC) {
-		//		SET_POINTER(error_p, KS_STATUS_PNT);
-		return NULL;
-	}
-	if (mp_p->mp_magic2 != KS_POOL_MAGIC) {
-		//		SET_POINTER(error_p, KS_STATUS_POOL_OVER);
-		return NULL;
-	}
-
-	if (ele_n == 0 || ele_size == 0) {
-		//		SET_POINTER(error_p, KS_STATUS_ARG_INVALID);
-		return NULL;
-	}
-
-	byte_size = ele_n * ele_size;
-	addr = alloc_mem(mp_p, byte_size, NULL); //error_p);
-	if (addr != NULL) {
-		memset(addr, 0, byte_size);
-	}
-
-	if (mp_p->mp_log_func != NULL) {
-		mp_p->mp_log_func(mp_p, KS_POOL_FUNC_CALLOC, ele_size, ele_n, addr, NULL, 0);
-	}
-
-	return addr;
+	return ks_pool_calloc_ex(mp_p, ele_n, ele_size, NULL);
 }
 
 /*
@@ -1531,6 +1591,138 @@ KS_DECLARE(ks_status_t) ks_pool_free(ks_pool_t *mp_p, void *addr)
 }
 
 /*
+ * void *ks_pool_resize_ex
+ *
+ * DESCRIPTION:
+ *
+ * Reallocate an address in a mmeory pool to a new size.  This is
+ * different from realloc in that it needs the old address' size.  
+ *
+ * RETURNS:
+ *
+ * Success - Pointer to the address to use.
+ *
+ * Failure - NULL
+ *
+ * ARGUMENTS:
+ *
+ * mp_p <-> Pointer to the memory pool.
+ *
+ *
+ * old_addr -> Previously allocated address.
+ *
+ * new_byte_size -> New size of the allocation.
+ *
+ * error_p <- Pointer to integer which, if not NULL, will be set with
+ * a ks_pool error code.
+ */
+KS_DECLARE(void *) ks_pool_resize_ex(ks_pool_t *mp_p, void *old_addr, const unsigned long new_byte_size, ks_status_t *error_p)
+{
+	unsigned long copy_size, new_size, old_size, old_byte_size;
+	void *new_addr;
+	ks_pool_block_t *block_p;
+	int ret;
+	alloc_prefix_t *prefix;
+
+	ks_assert(mp_p);
+	ks_assert(old_addr);
+
+	if (mp_p->mp_magic != KS_POOL_MAGIC) {
+		SET_POINTER(error_p, KS_STATUS_PNT);
+		return NULL;
+	}
+	if (mp_p->mp_magic2 != KS_POOL_MAGIC) {
+		SET_POINTER(error_p, KS_STATUS_POOL_OVER);
+		return NULL;
+	}
+
+	prefix = (alloc_prefix_t *) ((char *) old_addr - PREFIX_SIZE);
+
+	if (!(prefix->m1 == PRE_MAGIC1 && prefix->m2 == PRE_MAGIC2)) {
+		SET_POINTER(error_p, KS_STATUS_INVALID_POINTER);
+		return NULL;
+	}
+
+	old_byte_size = prefix->size;
+
+	/*
+	 * If the size is larger than a block then the allocation must be at
+	 * the front of the block.
+	 */
+	if (old_byte_size > MAX_BLOCK_USER_MEMORY(mp_p)) {
+		block_p = (ks_pool_block_t *) ((char *) old_addr - PREFIX_SIZE - sizeof(ks_pool_block_t));
+		if (block_p->mb_magic != BLOCK_MAGIC || block_p->mb_magic2 != BLOCK_MAGIC) {
+			SET_POINTER(error_p, KS_STATUS_POOL_OVER);
+			return NULL;
+		}
+	}
+
+	/* make sure we have enough bytes */
+	if (old_byte_size < MIN_ALLOCATION) {
+		old_size = MIN_ALLOCATION;
+	} else {
+		old_size = old_byte_size;
+	}
+
+	/* verify that the size matches exactly */
+
+	if (old_size > 0) {
+		ret = check_magic(old_addr, old_size);
+		if (ret != KS_STATUS_SUCCESS) {
+			SET_POINTER(error_p, ret);
+			return NULL;
+		}
+	}
+
+	/* move pointer to actual beginning */
+	old_addr = prefix;
+
+	/* make sure we have enough bytes */
+	if (new_byte_size < MIN_ALLOCATION) {
+		new_size = MIN_ALLOCATION;
+	} else {
+		new_size = new_byte_size;
+	}
+
+	/*
+	 * NOTE: we could here see if the size is the same or less and then
+	 * use the current memory and free the space above.  This is harder
+	 * than it sounds if we are changing the block size of the
+	 * allocation.
+	 */
+
+	/* we need to get another address */
+	new_addr = alloc_mem(mp_p, new_size, error_p);
+	if (new_addr == NULL) {
+		/* error_p set in ks_pool_alloc */
+		return NULL;
+	}
+
+	if (new_byte_size > old_byte_size) {
+		copy_size = old_byte_size;
+	} else {
+		copy_size = new_byte_size;
+	}
+	memcpy(new_addr, old_addr, copy_size);
+
+	/* free the old address */
+	ret = free_mem(mp_p, (uint8_t *)old_addr + PREFIX_SIZE);
+	if (ret != KS_STATUS_SUCCESS) {
+		/* if the old free failed, try and free the new address */
+		(void) free_mem(mp_p, new_addr);
+		SET_POINTER(error_p, ret);
+		return NULL;
+	}
+
+	if (mp_p->mp_log_func != NULL) {
+		mp_p->mp_log_func(mp_p, KS_POOL_FUNC_RESIZE, new_byte_size, 0, new_addr, old_addr, old_byte_size);
+	}
+
+	SET_POINTER(error_p, KS_STATUS_SUCCESS);
+	return new_addr;
+}
+
+/*
  * void *ks_pool_resize
  *
  * DESCRIPTION:
@@ -1556,108 +1748,7 @@ KS_DECLARE(ks_status_t) ks_pool_free(ks_pool_t *mp_p, void *addr)
  */
 KS_DECLARE(void *) ks_pool_resize(ks_pool_t *mp_p, void *old_addr, const unsigned long new_byte_size)
 {
-	unsigned long copy_size, new_size, old_size, old_byte_size;
-	void *new_addr;
-	ks_pool_block_t *block_p;
-	int ret;
-	alloc_prefix_t *prefix;
-
-	ks_assert(mp_p);
-	ks_assert(old_addr);
-
-	if (mp_p->mp_magic != KS_POOL_MAGIC) {
-		//		SET_POINTER(error_p, KS_STATUS_PNT);
-		return NULL;
-	}
-	if (mp_p->mp_magic2 != KS_POOL_MAGIC) {
-		//		SET_POINTER(error_p, KS_STATUS_POOL_OVER);
-		return NULL;
-	}
-
-	prefix = (alloc_prefix_t *) ((char *) old_addr - PREFIX_SIZE);
-
-	if (!(prefix->m1 == PRE_MAGIC1 && prefix->m2 == PRE_MAGIC2)) {
-		//		SET_POINTER(error_p, KS_STATUS_INVALID_POINTER);
-		return NULL;
-	}
-
-	old_byte_size = prefix->size;
-
-	/*
-	 * If the size is larger than a block then the allocation must be at
-	 * the front of the block.
-	 */
-	if (old_byte_size > MAX_BLOCK_USER_MEMORY(mp_p)) {
-		block_p = (ks_pool_block_t *) ((char *) old_addr - PREFIX_SIZE - sizeof(ks_pool_block_t));
-		if (block_p->mb_magic != BLOCK_MAGIC || block_p->mb_magic2 != BLOCK_MAGIC) {
-			//			SET_POINTER(error_p, KS_STATUS_POOL_OVER);
-			return NULL;
-		}
-	}
-
-	/* make sure we have enough bytes */
-	if (old_byte_size < MIN_ALLOCATION) {
-		old_size = MIN_ALLOCATION;
-	} else {
-		old_size = old_byte_size;
-	}
-
-	/* verify that the size matches exactly */
-
-	if (old_size > 0) {
-		ret = check_magic(old_addr, old_size);
-		if (ret != KS_STATUS_SUCCESS) {
-			//			SET_POINTER(error_p, ret);
-			return NULL;
-		}
-	}
-
-	/* move pointer to actual beginning */
-	old_addr = prefix;
-
-	/* make sure we have enough bytes */
-	if (new_byte_size < MIN_ALLOCATION) {
-		new_size = MIN_ALLOCATION;
-	} else {
-		new_size = new_byte_size;
-	}
-
-	/*
-	 * NOTE: we could here see if the size is the same or less and then
-	 * use the current memory and free the space above.  This is harder
-	 * than it sounds if we are changing the block size of the
-	 * allocation.
-	 */
-
-	/* we need to get another address */
-	new_addr = alloc_mem(mp_p, new_size, NULL);//error_p);
-	if (new_addr == NULL) {
-		/* error_p set in ks_pool_alloc */
-		return NULL;
-	}
-
-	if (new_byte_size > old_byte_size) {
-		copy_size = old_byte_size;
-	} else {
-		copy_size = new_byte_size;
-	}
-	memcpy(new_addr, old_addr, copy_size);
-
-	/* free the old address */
-	ret = free_mem(mp_p, (uint8_t *)old_addr + PREFIX_SIZE);
-	if (ret != KS_STATUS_SUCCESS) {
-		/* if the old free failed, try and free the new address */
-		(void) free_mem(mp_p, new_addr);
-		//		SET_POINTER(error_p, ret);
-		return NULL;
-	}
-
-	if (mp_p->mp_log_func != NULL) {
-		mp_p->mp_log_func(mp_p, KS_POOL_FUNC_RESIZE, new_byte_size, 0, new_addr, old_addr, old_byte_size);
-	}
-
-	//	SET_POINTER(error_p, KS_STATUS_SUCCESS);
-	return new_addr;
+	return ks_pool_resize_ex(mp_p, old_addr, new_byte_size, NULL);
 }
 
 /*

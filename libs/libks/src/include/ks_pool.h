@@ -189,6 +189,31 @@ KS_DECLARE(ks_status_t) ks_pool_clear(ks_pool_t *mp_p);
 KS_DECLARE(void *) ks_pool_alloc(ks_pool_t *mp_p, const unsigned long byte_size);
 
 /*
+ * void *ks_pool_alloc_ex
+ *
+ * DESCRIPTION:
+ *
+ * Allocate space for bytes inside of an already open memory pool.
+ *
+ * RETURNS:
+ *
+ * Success - Pointer to the address to use.
+ *
+ * Failure - NULL
+ *
+ * ARGUMENTS:
+ *
+ * mp_p <-> Pointer to the memory pool.  If NULL then it will do a
+ * normal malloc.
+ *
+ * byte_size -> Number of bytes to allocate in the pool.  Must be >0.
+ *
+ * error_p <- Pointer to integer which, if not NULL, will be set with
+ * a ks_pool error code.
+ */
+KS_DECLARE(void *) ks_pool_alloc_ex(ks_pool_t *mp_p, const unsigned long byte_size, ks_status_t *error_p);
+
+/*
  * void *ks_pool_calloc
  *
  * DESCRIPTION:
@@ -213,6 +238,34 @@ KS_DECLARE(void *) ks_pool_alloc(ks_pool_t *mp_p, const unsigned long byte_size)
  *
  */
 KS_DECLARE(void *) ks_pool_calloc(ks_pool_t *mp_p, const unsigned long ele_n, const unsigned long ele_size);
+
+/*
+ * void *ks_pool_calloc_ex
+ *
+ * DESCRIPTION:
+ *
+ * Allocate space for elements of bytes in the memory pool and zero
+ * the space afterwards.
+ *
+ * RETURNS:
+ *
+ * Success - Pointer to the address to use.
+ *
+ * Failure - NULL
+ *
+ * ARGUMENTS:
+ *
+ * mp_p <-> Pointer to the memory pool.  If NULL then it will do a
+ * normal calloc.
+ *
+ * ele_n -> Number of elements to allocate.
+ *
+ * ele_size -> Number of bytes per element being allocated.
+ *
+ * error_p <- Pointer to integer which, if not NULL, will be set with
+ * a ks_pool error code.
+ */
+KS_DECLARE(void *) ks_pool_calloc_ex(ks_pool_t *mp_p, const unsigned long ele_n, const unsigned long ele_size, ks_status_t *error_p);
 
 /*
  * int ks_pool_free
@@ -262,6 +315,33 @@ KS_DECLARE(ks_status_t) ks_pool_free(ks_pool_t *mp_p, void *addr);
  *
  */
 KS_DECLARE(void *) ks_pool_resize(ks_pool_t *mp_p, void *old_addr, const unsigned long new_byte_size);
+
+/*
+ * void *ks_pool_resize_ex
+ *
+ * DESCRIPTION:
+ *
+ * Reallocate an address in a mmeory pool to a new size.  
+ *
+ * RETURNS:
+ *
+ * Success - Pointer to the address to use.
+ *
+ * Failure - NULL
+ *
+ * ARGUMENTS:
+ *
+ * mp_p <-> Pointer to the memory pool.  If NULL then it will do a
+ * normal realloc.
+ *
+ * old_addr -> Previously allocated address.
+ *
+ * new_byte_size -> New size of the allocation.
+ *
+ * error_p <- Pointer to integer which, if not NULL, will be set with
+ * a ks_pool error code.
+ */
+KS_DECLARE(void *) ks_pool_resize_ex(ks_pool_t *mp_p, void *old_addr, const unsigned long new_byte_size, ks_status_t *error_p);
 
 /*
  * int ks_pool_stats
