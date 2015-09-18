@@ -198,44 +198,134 @@ KS_DECLARE(ks_status_t) ks_mutex_unlock(ks_mutex_t *mutex)
 
 struct ks_cond {
 #ifdef WIN32
+	CRITICAL_SECTION mutex;
+	CONDITION_VARIABLE cond;
 #else
+	pthread_mutex_t mutex;
+	pthread_cond_t cond;
 #endif
 	ks_pool_t * pool;
 };
 
+static void ks_cond_cleanup(ks_pool_t *mpool, void *ptr, void *arg, int type, ks_pool_cleanup_action_t action)
+{
+	ks_cond_t *cond = (ks_cond_t *) ptr;
+
+	switch(action) {
+	case KS_MPCL_ANNOUNCE:
+		break;
+	case KS_MPCL_TEARDOWN:
+		break;
+	case KS_MPCL_DESTROY:
+#ifdef WIN32
+		DeleteCriticalSection(&cond->mutex);
+#else
+		pthread_mutex_destroy(&cond->mutex);
+		pthread_cond_destroy(&cond->cond);
+#endif
+		break;
+	}
+}
+
+
 KS_DECLARE(ks_status_t) ks_cond_create(ks_cond_t **cond, ks_pool_t *pool)
 {
-	return KS_STATUS_SUCCESS;
+	ks_status_t status = KS_STATUS_FAIL;
+	ks_cond_t *check = NULL;
+
+	if (!pool)
+		goto done;
+
+	if (!(check = (ks_cond_t *) ks_pool_alloc(pool, sizeof(**cond)))) {
+		goto done;
+	}
+
+	check->pool = pool;
+
+#ifdef WIN32
+	InitializeCriticalSection(&check->mutex);
+	InitializeConditionVariable(&check->cond);
+#else
+	if (pthread_mutex_init(&check->mutex, NULL))
+		goto done;
+	if (pthread_cond_init(&check->cond, NULL)) {
+		pthread_mutex_destroy(&check->mutex);
+		goto done;
+	}
+#endif
+
+	*cond = check;
+	status = KS_STATUS_SUCCESS;
+	ks_pool_set_cleanup(pool, check, NULL, 0, ks_cond_cleanup);
+
+  done:
+	return status;
 }
 
 KS_DECLARE(ks_status_t) ks_cond_lock(ks_cond_t *cond)
 {
+#ifdef WIN32
+	EnterCriticalSection(&cond->mutex);
+#else
+	if (pthread_mutex_lock(&cond->mutex))
+		return KS_STATUS_FAIL;
+#endif
 	return KS_STATUS_SUCCESS;
 }
 
 KS_DECLARE(ks_status_t) ks_cond_unlock(ks_cond_t *cond)
 {
+#ifdef WIN32
+	LeaveCriticalSection(&cond->mutex);
+#else
+	if (pthread_mutex_unlock(&cond->mutex))
+		return KS_STATUS_FAIL;
+#endif
 	return KS_STATUS_SUCCESS;
 }
 
 KS_DECLARE(ks_status_t) ks_cond_signal(ks_cond_t *cond)
 {
+#ifdef WIN32
+	WakeConditionVariable(&cond->cond);
+#else
+	pthread_cond_signal(&cond->cond);
+#endif
 	return KS_STATUS_SUCCESS;
 }
 
 KS_DECLARE(ks_status_t) ks_cond_broadcast(ks_cond_t *cond)
 {
+#ifdef WIN32
+	WakeAllConditionVariable(&cond->cond);
+#else
+	pthread_cond_broadcast(&cond->cond);
+#endif
 	return KS_STATUS_SUCCESS;
 }
 
 KS_DECLARE(ks_status_t) ks_cond_wait(ks_cond_t *cond)
 {
+#ifdef WIN32
+	SleepConditionVariableCS(&cond->cond, &cond->mutex, INFINITE);
+#else
+	pthread_cond_wait(&cond->cond, &cond->mutex);
+#endif
+
 	return KS_STATUS_SUCCESS;
 }
 
 KS_DECLARE(ks_status_t) ks_cond_destroy(ks_cond_t **cond)
 {
-	return KS_STATUS_SUCCESS;
+	ks_cond_t *condp = *cond;
+
+	*cond = NULL;
+
+	if (!condp) {
+		return KS_STATUS_FAIL;
+	}
+
+	return ks_pool_safe_free(condp->pool, cond);
 }
 
 
