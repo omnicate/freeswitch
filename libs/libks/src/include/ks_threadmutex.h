@@ -103,6 +103,8 @@ extern "C" {
 	KS_DECLARE(ks_status_t) ks_rwl_create(ks_rwl_t **rwlock, ks_pool_t *pool);
 	KS_DECLARE(ks_status_t) ks_rwl_read_lock(ks_rwl_t *rwlock);
 	KS_DECLARE(ks_status_t) ks_rwl_write_lock(ks_rwl_t *rwlock);
+	KS_DECLARE(ks_status_t) ks_rwl_try_read_lock(ks_rwl_t *rwlock);
+	KS_DECLARE(ks_status_t) ks_rwl_try_write_lock(ks_rwl_t *rwlock);
 	KS_DECLARE(ks_status_t) ks_rwl_read_unlock(ks_rwl_t *rwlock);
 	KS_DECLARE(ks_status_t) ks_rwl_write_unlock(ks_rwl_t *rwlock);
 	KS_DECLARE(ks_status_t) ks_rwl_destroy(ks_rwl_t **rwlock);

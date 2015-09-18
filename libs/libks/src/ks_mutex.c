@@ -130,7 +130,6 @@ KS_DECLARE(ks_status_t) ks_mutex_create(ks_mutex_t **mutex, unsigned int flags, 
 KS_DECLARE(ks_status_t) ks_mutex_destroy(ks_mutex_t **mutex)
 {
 	ks_mutex_t *mp = *mutex;
-	int err;
 
 	*mutex = NULL;
 
@@ -138,9 +137,7 @@ KS_DECLARE(ks_status_t) ks_mutex_destroy(ks_mutex_t **mutex)
 		return KS_STATUS_FAIL;
 	}
 
-	err = ks_pool_safe_free(mp->pool, mp);
-
-	return KS_STATUS_SUCCESS;
+	return ks_pool_safe_free(mp->pool, mp);
 }
 
 KS_DECLARE(ks_status_t) ks_mutex_lock(ks_mutex_t *mutex)
@@ -198,6 +195,192 @@ KS_DECLARE(ks_status_t) ks_mutex_unlock(ks_mutex_t *mutex)
 }
 
 
+
+struct ks_cond {
+#ifdef WIN32
+#else
+#endif
+	ks_pool_t * pool;
+};
+
+KS_DECLARE(ks_status_t) ks_cond_create(ks_cond_t **cond, ks_pool_t *pool)
+{
+	return KS_STATUS_SUCCESS;
+}
+
+KS_DECLARE(ks_status_t) ks_cond_lock(ks_cond_t *cond)
+{
+	return KS_STATUS_SUCCESS;
+}
+
+KS_DECLARE(ks_status_t) ks_cond_unlock(ks_cond_t *cond)
+{
+	return KS_STATUS_SUCCESS;
+}
+
+KS_DECLARE(ks_status_t) ks_cond_signal(ks_cond_t *cond)
+{
+	return KS_STATUS_SUCCESS;
+}
+
+KS_DECLARE(ks_status_t) ks_cond_broadcast(ks_cond_t *cond)
+{
+	return KS_STATUS_SUCCESS;
+}
+
+KS_DECLARE(ks_status_t) ks_cond_wait(ks_cond_t *cond)
+{
+	return KS_STATUS_SUCCESS;
+}
+
+KS_DECLARE(ks_status_t) ks_cond_destroy(ks_cond_t **cond)
+{
+	return KS_STATUS_SUCCESS;
+}
+
+
+struct ks_rwl {
+#ifdef WIN32
+	SRWLOCK rwlock;
+#else
+	pthread_rwlock_t rwlock;
+#endif
+	ks_pool_t * pool;
+};
+
+static void ks_rwl_cleanup(ks_pool_t *mpool, void *ptr, void *arg, int type, ks_pool_cleanup_action_t action)
+{
+	ks_rwl_t *rwlock = (ks_rwl_t *) ptr;
+
+	switch(action) {
+	case KS_MPCL_ANNOUNCE:
+		break;
+	case KS_MPCL_TEARDOWN:
+		break;
+	case KS_MPCL_DESTROY:
+#ifndef WIN32
+#else
+		pthread_rwlock_destroy(&rwlock->rwlock);
+#endif
+		break;
+	}
+}
+
+KS_DECLARE(ks_status_t) ks_rwl_create(ks_rwl_t **rwlock, ks_pool_t *pool)
+{
+	ks_status_t status = KS_STATUS_FAIL;
+	ks_rwl_t *check = NULL;
+	*rwlock = NULL;
+
+	if (!pool) {
+		goto done;
+	}
+
+	if (!(check = (ks_rwl_t *) ks_pool_alloc(pool, sizeof(**rwlock)))) {
+		goto done;
+	}
+
+	check->pool = pool;
+
+#ifdef WIN32
+	InitializeSRWLock(&check->rwlock);
+	if (!check->rwlock) {
+		goto done;
+	}
+#else
+	if (!(pthread_rwlock_init(&check->rwlock, NULL))) {
+		goto done;
+	}
+#endif
+
+	*rwlock = check;
+	status = KS_STATUS_SUCCESS;
+	ks_pool_set_cleanup(pool, check, NULL, 0, ks_rwl_cleanup);
+ done:
+	return status;
+}
+
+KS_DECLARE(ks_status_t) ks_rwl_read_lock(ks_rwl_t *rwlock)
+{
+#ifdef WIN32
+	AcquireSRWLockShared(&rwlock->rwlock);
+#else
+	pthread_rwlock_rdlock(&rwlock->rwlock);
+#endif
+	return KS_STATUS_SUCCESS;
+}
+
+KS_DECLARE(ks_status_t) ks_rwl_write_lock(ks_rwl_t *rwlock)
+{
+#ifdef WIN32
+	AcquireSRWLockExclusive(&rwlock->rwlock);
+#else
+	pthread_rwlock_wrlock(&rwlock->rwlock);
+#endif
+	return KS_STATUS_SUCCESS;
+}
+
+KS_DECLARE(ks_status_t) ks_rwl_try_read_lock(ks_rwl_t *rwlock)
+{
+#ifdef WIN32
+	if (!TryAcquireSRWLockShared(&rwlock->rwlock)) {
+		return KS_STATUS_FAIL;
+	}
+#else
+	if (pthread_rwlock_tryrdlock(&rwlock->rwlock)) {
+		return KS_STATUS_FAIL;
+	}
+#endif
+	return KS_STATUS_SUCCESS;
+}
+
+KS_DECLARE(ks_status_t) ks_rwl_try_write_lock(ks_rwl_t *rwlock)
+{
+#ifdef WIN32
+	if (!TryAcquireSRWLockExclusive(&rwlock->rwlock)) {
+		return KS_STATUS_FAIL;
+	}
+#else
+	if (pthread_rwlock_trywrlock(&rwlock->rwlock)) {
+		return KS_STATUS_FAIL;
+	}
+#endif
+	return KS_STATUS_SUCCESS;
+}
+
+KS_DECLARE(ks_status_t) ks_rwl_read_unlock(ks_rwl_t *rwlock)
+{
+#ifdef WIN32
+	ReleaseSRWLockShared(&rwlock->rwlock);
+#else
+	pthread_rwlock_unlock(&rwlock->rwlock);
+#endif
+	return KS_STATUS_SUCCESS;
+}
+
+KS_DECLARE(ks_status_t) ks_rwl_write_unlock(ks_rwl_t *rwlock)
+{
+#ifdef WIN32
+	ReleaseSRWLockExclusive(&rwlock->rwlock);
+#else
+	pthread_rwlock_unlock(&rwlock->rwlock);
+#endif
+	return KS_STATUS_SUCCESS;
+}
+
+KS_DECLARE(ks_status_t) ks_rwl_destroy(ks_rwl_t **rwlock)
+{
+	ks_rwl_t *rwlockp = *rwlock;
+	int err;
+
+	*rwlock = NULL;
+
+	if (!rwlockp) {
+		return KS_STATUS_FAIL;
+	}
+
+	return ks_pool_safe_free(rwlockp->pool, rwlockp);
+}
 
 
 
