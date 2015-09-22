@@ -378,7 +378,7 @@ KS_DECLARE(ks_status_t) ks_rwl_create(ks_rwl_t **rwlock, ks_pool_t *pool)
 		goto done;
 	}
 #else
-	if (!(pthread_rwlock_init(&check->rwlock, NULL))) {
+	if ((pthread_rwlock_init(&check->rwlock, NULL))) {
 		goto done;
 	}
 #endif

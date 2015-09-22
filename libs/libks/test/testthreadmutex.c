@@ -4,9 +4,11 @@
 static ks_pool_t *pool;
 static ks_mutex_t *mutex;
 static ks_mutex_t *mutex_non_recursive;
+static ks_rwl_t *rwlock;
 static int counter1 = 0;
 static int counter2 = 0;
 static int counter3 = 0;
+static int counter4 = 0;
 static int threadscount = 0;
 
 static ks_thread_t *thread1;
@@ -21,8 +23,51 @@ static ks_thread_t *thread9;
 static ks_thread_t *thread10;
 static ks_thread_t *thread11;
 static ks_thread_t *thread12;
+static ks_thread_t *thread13;
+static ks_thread_t *thread14;
+static ks_thread_t *thread15;
+static ks_thread_t *thread16;
 
 #define LOOP_COUNT 10000
+
+static void *thread_test_rwlock_func(ks_thread_t *thread, void *data)
+{
+    int loop = 1;
+
+    while (1)
+    {
+        ks_rwl_read_lock(rwlock);
+        if (counter4 == LOOP_COUNT) {
+            loop = 0;
+		}
+        ks_rwl_read_unlock(rwlock);
+
+        if (!loop) {
+            break;
+		}
+
+        ks_rwl_write_lock(rwlock);
+        if (counter4 != LOOP_COUNT) {
+			counter4++;
+        }
+        ks_rwl_write_unlock(rwlock);
+    }
+    return NULL;
+} 
+
+static void check_rwl(void)
+{
+	ok( (ks_pool_open(&pool) == KS_STATUS_SUCCESS) );
+	ok( (ks_rwl_create(&rwlock, pool) == KS_STATUS_SUCCESS) );
+	ok( (ks_thread_create(&thread13, thread_test_rwlock_func, NULL, pool) == KS_STATUS_SUCCESS) );
+	ok( (ks_thread_create(&thread14, thread_test_rwlock_func, NULL, pool) == KS_STATUS_SUCCESS) );
+	ok( (ks_thread_create(&thread15, thread_test_rwlock_func, NULL, pool) == KS_STATUS_SUCCESS) );
+	ok( (ks_thread_create(&thread16, thread_test_rwlock_func, NULL, pool) == KS_STATUS_SUCCESS) );
+	ok( (ks_pool_close(&pool) == KS_STATUS_SUCCESS) );
+	ok( (counter4 == LOOP_COUNT) );
+
+}
+
 static void *thread_test_function_cleanup(ks_thread_t *thread, void *data)
 {
 	int i;
@@ -78,10 +123,10 @@ static void *thread_test_function_atatched(ks_thread_t *thread, void *data)
 static void create_threads_cleanup(void)
 {
 	void *d = (void *)(intptr_t)1;
-	ok( (ks_thread_create(&thread1, thread_test_function_cleanup, d, pool) == KS_STATUS_SUCCESS) );
-	ok( (ks_thread_create(&thread2, thread_test_function_cleanup, d, pool) == KS_STATUS_SUCCESS) );
-	ok( (ks_thread_create(&thread3, thread_test_function_cleanup, d, pool) == KS_STATUS_SUCCESS) );
-	ok( (ks_thread_create(&thread4, thread_test_function_cleanup, d, pool) == KS_STATUS_SUCCESS) );
+	ok( (ks_thread_create(&thread9, thread_test_function_cleanup, d, pool) == KS_STATUS_SUCCESS) );
+	ok( (ks_thread_create(&thread10, thread_test_function_cleanup, d, pool) == KS_STATUS_SUCCESS) );
+	ok( (ks_thread_create(&thread11, thread_test_function_cleanup, d, pool) == KS_STATUS_SUCCESS) );
+	ok( (ks_thread_create(&thread12, thread_test_function_cleanup, d, pool) == KS_STATUS_SUCCESS) );
 }
 
 static void create_threads_atatched(void)
@@ -137,6 +182,11 @@ static void check_cleanup(void)
 	ok( (counter3 == 4) );
 }
 
+static void check_pool_close(void)
+{
+	ok( (ks_pool_close(&pool) == KS_STATUS_SUCCESS) );
+}
+
 static void create_mutex(void)
 {
 	ok( (ks_mutex_create(&mutex, KS_MUTEX_FLAG_DEFAULT, pool) == KS_STATUS_SUCCESS) );
@@ -175,7 +225,7 @@ static void test_non_recursive_mutex(void)
 
 int main(int argc, char **argv)
 {
-	plan(25);
+	plan(33);
 
 	create_pool();
 	create_mutex();
@@ -190,7 +240,8 @@ int main(int argc, char **argv)
 	check_detached();
 	create_threads_cleanup();
 	check_cleanup();
-
+	check_rwl();
+	
 	done_testing();
 	exit(0);
 }
