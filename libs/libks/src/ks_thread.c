@@ -122,7 +122,7 @@ KS_DECLARE(int) ks_thread_set_priority(int nice_val)
     }
 #endif
 
-	if (nice) {
+	if (nice_val) {
 #ifdef HAVE_SETPRIORITY
 		/*
 		 * setpriority() works on FreeBSD (6.2), nice() doesn't
