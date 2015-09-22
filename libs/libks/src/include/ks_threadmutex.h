@@ -73,7 +73,7 @@ extern "C" {
 	KS_DECLARE(ks_status_t) ks_thread_join(ks_thread_t *thread);
 
 #define ks_thread_create(thread, func, data, pool)						\
-	ks_thread_creaet_ex(thread, func, data, KS_THREAD_FLAG_DEFAULT, KS_THREAD_DEFAULT_STACK, KS_PRI_NORMAL, pool)
+	ks_thread_create_ex(thread, func, data, KS_THREAD_FLAG_DEFAULT, KS_THREAD_DEFAULT_STACK, KS_PRI_NORMAL, pool)
 
 	typedef enum {
 		KS_MUTEX_FLAG_DEFAULT       = 0,
