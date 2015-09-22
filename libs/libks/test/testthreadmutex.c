@@ -1,16 +1,6 @@
 #include "ks.h"
 #include "tap.h"
 
-static ks_pool_t *pool;
-static ks_mutex_t *mutex;
-static ks_mutex_t *mutex_non_recursive;
-static ks_rwl_t *rwlock;
-static int counter1 = 0;
-static int counter2 = 0;
-static int counter3 = 0;
-static int counter4 = 0;
-static int threadscount = 0;
-
 static ks_thread_t *thread1;
 static ks_thread_t *thread2;
 static ks_thread_t *thread3;
@@ -27,8 +17,77 @@ static ks_thread_t *thread13;
 static ks_thread_t *thread14;
 static ks_thread_t *thread15;
 static ks_thread_t *thread16;
+static ks_thread_t *thread17;
+static ks_thread_t *thread18;
+static ks_thread_t *thread19;
+static ks_thread_t *thread20;
+
+static ks_pool_t *pool;
+static ks_mutex_t *mutex;
+static ks_mutex_t *mutex_non_recursive;
+static ks_rwl_t *rwlock;
+static ks_cond_t *cond;
+static int counter1 = 0;
+static int counter2 = 0;
+static int counter3 = 0;
+static int counter4 = 0;
+static int counter5 = 0;
+static int counter6 = 0;
+static int threadscount = 0;
 
 #define LOOP_COUNT 10000
+
+static void *thread_test_cond_producer_func(ks_thread_t *thread, void *data)
+{
+	for (;;) {
+		ks_cond_lock(cond);
+		if (counter5 >= LOOP_COUNT) {
+			ks_cond_unlock(cond);
+			break;
+		}
+		counter5++;
+		if (counter6 == 0) {
+			ks_cond_signal(cond);
+		}
+		counter6++;
+		ks_cond_unlock(cond);
+		*((int *) data) += 1;
+	}
+	
+    return NULL;
+} 
+
+static void *thread_test_cond_consumer_func(ks_thread_t *thread, void *data)
+{
+	int i;
+
+	for (i = 0; i < LOOP_COUNT; i++) {
+		ks_cond_lock(cond);
+		while (counter6 == 0) {
+			ks_cond_wait(cond);
+		}
+		counter6--;
+		ks_cond_unlock(cond);
+	}
+    return NULL;
+} 
+
+static void check_cond(void)
+{
+	int count1 = 0;
+	int count2 = 0;
+	int count3 = 0;
+
+	ok( (ks_pool_open(&pool) == KS_STATUS_SUCCESS) );
+	ok( (ks_cond_create(&cond, pool) == KS_STATUS_SUCCESS) );
+	ok( (ks_thread_create(&thread17, thread_test_cond_producer_func, &count1, pool) == KS_STATUS_SUCCESS) );
+	ok( (ks_thread_create(&thread18, thread_test_cond_producer_func, &count2, pool) == KS_STATUS_SUCCESS) );
+	ok( (ks_thread_create(&thread19, thread_test_cond_producer_func, &count3, pool) == KS_STATUS_SUCCESS) );
+	ok( (ks_thread_create(&thread20, thread_test_cond_consumer_func, NULL, pool) == KS_STATUS_SUCCESS) );
+	ok( (ks_pool_close(&pool) == KS_STATUS_SUCCESS) );
+	ok( (count1 + count2 + count3 == LOOP_COUNT) );
+}
+
 
 static void *thread_test_rwlock_func(ks_thread_t *thread, void *data)
 {
@@ -225,7 +284,7 @@ static void test_non_recursive_mutex(void)
 
 int main(int argc, char **argv)
 {
-	plan(33);
+	plan(41);
 
 	create_pool();
 	create_mutex();
@@ -241,6 +300,7 @@ int main(int argc, char **argv)
 	create_threads_cleanup();
 	check_cleanup();
 	check_rwl();
+	check_cond();
 	
 	done_testing();
 	exit(0);
