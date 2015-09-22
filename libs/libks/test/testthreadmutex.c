@@ -116,8 +116,17 @@ static void *thread_test_rwlock_func(ks_thread_t *thread, void *data)
 
 static void check_rwl(void)
 {
+	ks_status_t status;
+
 	ok( (ks_pool_open(&pool) == KS_STATUS_SUCCESS) );
 	ok( (ks_rwl_create(&rwlock, pool) == KS_STATUS_SUCCESS) );
+	ks_rwl_read_lock(rwlock);
+	status = ks_rwl_try_read_lock(rwlock);
+	ok( status == KS_STATUS_SUCCESS );
+	if ( status == KS_STATUS_SUCCESS ) {
+		ks_rwl_read_unlock(rwlock);
+	}
+	ks_rwl_read_unlock(rwlock);
 	ok( (ks_thread_create(&thread13, thread_test_rwlock_func, NULL, pool) == KS_STATUS_SUCCESS) );
 	ok( (ks_thread_create(&thread14, thread_test_rwlock_func, NULL, pool) == KS_STATUS_SUCCESS) );
 	ok( (ks_thread_create(&thread15, thread_test_rwlock_func, NULL, pool) == KS_STATUS_SUCCESS) );
@@ -284,7 +293,7 @@ static void test_non_recursive_mutex(void)
 
 int main(int argc, char **argv)
 {
-	plan(41);
+	plan(42);
 
 	create_pool();
 	create_mutex();
