@@ -21,6 +21,33 @@
 
 size_t thread_default_stacksize = 240 * 1024;
 
+#ifndef WIN32
+pthread_once_t init_priority = PTHREAD_ONCE_INIT;
+#endif
+
+static void ks_thread_init_priority(void)
+{
+#ifdef WIN32
+    SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
+#else
+#ifdef USE_SCHED_SETSCHEDULER
+    /*
+     * Try to use a round-robin scheduler
+     * with a fallback if that does not work
+     */
+    struct sched_param sched = { 0 };
+    sched.sched_priority = KS_PRI_LOW;
+    if (sched_setscheduler(0, SCHED_FIFO, &sched)) {
+        sched.sched_priority = 0;
+        if (sched_setscheduler(0, SCHED_OTHER, &sched)) {
+            return;
+        }
+    }
+#endif
+#endif
+    return;
+}
+
 void ks_thread_override_default_stacksize(size_t size)
 {
 	thread_default_stacksize = size;
@@ -56,10 +83,11 @@ static void *KS_THREAD_CALLING_CONVENTION thread_launch(void *args)
 
 #ifdef HAVE_PTHREAD_SETSCHEDPARAM
 	if (thread->priority) {
-		int policy;
+		int policy = SCHED_FIFO;
 		struct sched_param param = { 0 };
 		pthread_t tt = pthread_self();
 
+		pthread_once(&init_priority, ks_thread_init_priority);
 		pthread_getschedparam(tt, &policy, &param);
 		param.sched_priority = thread->priority;
 		pthread_setschedparam(tt, policy, &param);
@@ -72,6 +100,47 @@ static void *KS_THREAD_CALLING_CONVENTION thread_launch(void *args)
 #endif
 
 	return exit_val;
+}
+
+KS_DECLARE(int) ks_thread_set_priority(int nice_val)
+{
+#ifdef WIN32
+    SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS);
+#else
+#ifdef USE_SCHED_SETSCHEDULER
+    /*
+     * Try to use a round-robin scheduler
+     * with a fallback if that does not work
+     */
+    struct sched_param sched = { 0 };
+    sched.sched_priority = KS_PRI_LOW;
+    if (sched_setscheduler(0, SCHED_FIFO, &sched)) {
+        sched.sched_priority = 0;
+        if (sched_setscheduler(0, SCHED_OTHER, &sched)) {
+            return -1;
+        }
+    }
+#endif
+
+	if (nice) {
+#ifdef HAVE_SETPRIORITY
+		/*
+		 * setpriority() works on FreeBSD (6.2), nice() doesn't
+		 */
+		if (setpriority(PRIO_PROCESS, getpid(), nice_val) < 0) {
+			ks_log(KS_LOG_CRIT, "Could not set nice level\n");
+			return -1;
+		}
+#else
+		if (nice(nice_val) != nice_val) {
+			ks_log(KS_LOG_CRIT, "Could not set nice level\n");
+			return -1;
+		}
+#endif
+	}
+#endif
+
+    return 0;
 }
 
 KS_DECLARE(uint8_t) ks_thread_priority(ks_thread_t *thread) {

@@ -73,6 +73,27 @@ case "$host" in
         ;;
 esac
 
+
+#
+# sched_setcheduler + round-robin scheduler prerequisites
+#
+AC_CHECK_HEADERS([sched.h])
+AC_CHECK_DECL([SCHED_RR],
+	[AC_DEFINE([HAVE_SCHED_RR],[1],[SCHED_RR constant for sched_setscheduler])],,
+	[#ifdef HAVE_SCHED_H
+	 #include <sched.h>
+	 #endif])
+AC_CHECK_FUNCS([sched_setscheduler])
+
+if test "x${ac_cv_func_sched_setscheduler}" = "xyes" -a \
+        "x${ac_cv_have_decl_SCHED_RR}" = "xyes"
+then
+        AC_DEFINE([USE_SCHED_SETSCHEDULER],[1],[Enable round-robin scheduler using sched_setscheduler])
+	AM_CFLAGS="${AM_CFLAGS} -DUSE_SCHED_SETSCHEDULER=1"
+fi
+
+
+
 #
 # gcc visibility cflag checks
 #
@@ -164,7 +185,10 @@ AC_FUNC_MALLOC
 AC_TYPE_SIGNAL
 AC_FUNC_STRFTIME
 
-AC_CHECK_LIB(pthread, pthread_setschedparam, [AC_DEFINE(HAVE_PTHREAD_SETSCHEDPARAM, 1, [Define if you have pthread_setschedparam()])])
+AC_CHECK_LIB(pthread, pthread_setschedparam, [
+AC_DEFINE(HAVE_PTHREAD_SETSCHEDPARAM, 1, [Define if you have pthread_setschedparam()])
+AM_CFLAGS="${AM_CFLAGS} -DHAVE_PTHREAD_SETSCHEDPARAM=1"
+])
 
 AC_CONFIG_FILES([Makefile
 	test/Makefile

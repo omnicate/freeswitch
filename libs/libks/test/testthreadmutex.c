@@ -21,6 +21,7 @@ static ks_thread_t *thread17;
 static ks_thread_t *thread18;
 static ks_thread_t *thread19;
 static ks_thread_t *thread20;
+static ks_thread_t *thread21;
 
 static ks_pool_t *pool;
 static ks_mutex_t *mutex;
@@ -36,6 +37,15 @@ static int counter6 = 0;
 static int threadscount = 0;
 
 #define LOOP_COUNT 10000
+
+static void *thread_priority(ks_thread_t *thread, void *data)
+{
+	while (thread->running) {
+		sleep(1);
+	}
+
+	return NULL;
+}
 
 static void *thread_test_cond_producer_func(ks_thread_t *thread, void *data)
 {
@@ -221,6 +231,19 @@ static void create_threads_detatched(void)
 	ok( status == KS_STATUS_SUCCESS );
 }
 
+static void check_thread_priority(void)
+{
+	ks_status_t status;
+	void *d = (void *)(intptr_t)1;
+
+	status = ks_thread_create_ex(&thread21, thread_priority, d, KS_THREAD_FLAG_DETATCHED, KS_THREAD_DEFAULT_STACK, KS_PRI_IMPORTANT, pool);
+	ok( status == KS_STATUS_SUCCESS );
+	sleep(1);
+	ok( ks_thread_priority(thread21) == KS_PRI_IMPORTANT );
+
+	ks_pool_free(pool, thread21);
+}
+
 static void join_threads(void)
 {
 	ok( (KS_STATUS_SUCCESS == ks_thread_join(thread1)) );
@@ -293,13 +316,14 @@ static void test_non_recursive_mutex(void)
 
 int main(int argc, char **argv)
 {
-	plan(42);
+	plan(44);
 
 	create_pool();
 	create_mutex();
 	create_mutex_non_recursive();
 	test_recursive_mutex();
 	test_non_recursive_mutex();
+	check_thread_priority();
 	create_threads_atatched();
 	join_threads();
 	check_atatched();

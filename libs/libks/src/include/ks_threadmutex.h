@@ -68,6 +68,8 @@ extern "C" {
 		KS_THREAD_FLAG_DETATCHED = (1 << 0)
 	} ks_thread_flags_t;
 
+	KS_DECLARE(int) ks_thread_set_priority(int nice_val);
+
 	KS_DECLARE(ks_status_t) ks_thread_create_ex(ks_thread_t **thread, ks_thread_function_t func, void *data,
 											 uint32_t flags, size_t stack_size, ks_thread_priority_t priority, ks_pool_t *pool);
 	KS_DECLARE(ks_status_t) ks_thread_join(ks_thread_t *thread);
