@@ -74,6 +74,30 @@ static void *KS_THREAD_CALLING_CONVENTION thread_launch(void *args)
 	return exit_val;
 }
 
+KS_DECLARE(uint8_t) ks_thread_priority(ks_thread_t *thread) {
+	uint8_t priority = 0;
+#ifdef WIN32
+	DWORD pri = GetThreadPriority(thread->handle);
+
+	if (pri >= THREAD_PRIORITY_TIME_CRITICAL) {
+		priority = 99;
+	} else if (pri >= THREAD_PRIORITY_ABOVE_NORMAL) {
+		priority = 50;
+	} else if (pri >= HREAD_PRIORITY_NORMAL) {
+		priority = 10;
+	} else {
+		priority = 1;
+	}
+#else
+	int policy;
+	struct sched_param param = { 0 };
+
+	pthread_getschedparam(thread->handle, &policy, &param);
+	priority = param.sched_priority;
+#endif
+	return priority;
+}
+
 KS_DECLARE(ks_status_t) ks_thread_join(ks_thread_t *thread) {
 #ifdef WIN32
 	WaitForSingleObject(thread->handle, INFINITE);

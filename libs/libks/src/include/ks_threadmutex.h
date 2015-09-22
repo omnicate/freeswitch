@@ -71,6 +71,7 @@ extern "C" {
 	KS_DECLARE(ks_status_t) ks_thread_create_ex(ks_thread_t **thread, ks_thread_function_t func, void *data,
 											 uint32_t flags, size_t stack_size, ks_thread_priority_t priority, ks_pool_t *pool);
 	KS_DECLARE(ks_status_t) ks_thread_join(ks_thread_t *thread);
+	KS_DECLARE(uint8_t) ks_thread_priority(ks_thread_t *thread);
 
 #define ks_thread_create(thread, func, data, pool)						\
 	ks_thread_create_ex(thread, func, data, KS_THREAD_FLAG_DEFAULT, KS_THREAD_DEFAULT_STACK, KS_PRI_NORMAL, pool)
