@@ -18,3 +18,10 @@ testpools_SOURCES = testpools.c
 testpools_CFLAGS = -I $(abs_top_srcdir)/src/include/ -I$(abs_top_srcdir)/test/
 testpools_LDADD = $(abs_top_srcdir)/libks.la
 
+TESTS += testthreadmutex
+check_PROGRAMS += testthreadmutex
+
+testthreadmutex_SOURCES = testthreadmutex.c tap.c
+testthreadmutex_CFLAGS = -I $(abs_top_srcdir)/src/include/ -I$(abs_top_srcdir)/test/ -g -ggdb -O0
+testthreadmutex_LDADD = $(abs_top_srcdir)/libks.la
+
