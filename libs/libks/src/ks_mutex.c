@@ -197,11 +197,10 @@ KS_DECLARE(ks_status_t) ks_mutex_unlock(ks_mutex_t *mutex)
 
 
 struct ks_cond {
+	ks_mutex_t *mutex;
 #ifdef WIN32
-	CRITICAL_SECTION mutex;
 	CONDITION_VARIABLE cond;
 #else
-	pthread_mutex_t mutex;
 	pthread_cond_t cond;
 #endif
 	ks_pool_t * pool;
@@ -217,10 +216,8 @@ static void ks_cond_cleanup(ks_pool_t *mpool, void *ptr, void *arg, int type, ks
 	case KS_MPCL_TEARDOWN:
 		break;
 	case KS_MPCL_DESTROY:
-#ifdef WIN32
-		DeleteCriticalSection(&cond->mutex);
-#else
-		pthread_mutex_destroy(&cond->mutex);
+		ks_mutex_destroy(&cond->mutex);
+#ifndef WIN32
 		pthread_cond_destroy(&cond->cond);
 #endif
 		break;
@@ -232,9 +229,8 @@ KS_DECLARE(ks_status_t) ks_cond_create(ks_cond_t **cond, ks_pool_t *pool)
 {
 	ks_status_t status = KS_STATUS_FAIL;
 	ks_cond_t *check = NULL;
-#ifndef WIN32
-	pthread_mutexattr_t attr;
-#endif
+
+	*cond = NULL;
 
 	if (!pool)
 		goto done;
@@ -245,21 +241,15 @@ KS_DECLARE(ks_status_t) ks_cond_create(ks_cond_t **cond, ks_pool_t *pool)
 
 	check->pool = pool;
 
+	if (ks_mutex_create(&check->mutex, KS_MUTEX_FLAG_DEFAULT, pool) != KS_STATUS_SUCCESS) {
+		goto done;
+	}
+
 #ifdef WIN32
-	InitializeCriticalSection(&check->mutex);
 	InitializeConditionVariable(&check->cond);
 #else
-	if (pthread_mutexattr_init(&attr))
-		goto done;
-
-	if (pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE))
-		goto done;
-
-	if (pthread_mutex_init(&check->mutex, &attr))
-		goto done;
-
 	if (pthread_cond_init(&check->cond, NULL)) {
-		pthread_mutex_destroy(&check->mutex);
+		ks_mutex_destroy(&check->mutex);
 		goto done;
 	}
 #endif
@@ -274,36 +264,17 @@ KS_DECLARE(ks_status_t) ks_cond_create(ks_cond_t **cond, ks_pool_t *pool)
 
 KS_DECLARE(ks_status_t) ks_cond_lock(ks_cond_t *cond)
 {
-#ifdef WIN32
-	EnterCriticalSection(&cond->mutex);
-#else
-	if (pthread_mutex_lock(&cond->mutex))
-		return KS_STATUS_FAIL;
-#endif
-	return KS_STATUS_SUCCESS;
+	return ks_mutex_lock(cond->mutex);
 }
 
 KS_DECLARE(ks_status_t) ks_cond_trylock(ks_cond_t *cond)
 {
-#ifdef WIN32
-	if (!TryEnterCriticalSection(&cond->mutex))
-		return KS_STATUS_FAIL;
-#else
-	if (pthread_mutex_trylock(&cond->mutex))
-		return KS_STATUS_FAIL;
-#endif
-	return KS_STATUS_SUCCESS;
+	return ks_mutex_trylock(cond->mutex);
 }
 
 KS_DECLARE(ks_status_t) ks_cond_unlock(ks_cond_t *cond)
 {
-#ifdef WIN32
-	LeaveCriticalSection(&cond->mutex);
-#else
-	if (pthread_mutex_unlock(&cond->mutex))
-		return KS_STATUS_FAIL;
-#endif
-	return KS_STATUS_SUCCESS;
+	return ks_mutex_unlock(cond->mutex);
 }
 
 KS_DECLARE(ks_status_t) ks_cond_signal(ks_cond_t *cond)
@@ -361,9 +332,9 @@ KS_DECLARE(ks_status_t) ks_cond_try_broadcast(ks_cond_t *cond)
 KS_DECLARE(ks_status_t) ks_cond_wait(ks_cond_t *cond)
 {
 #ifdef WIN32
-	SleepConditionVariableCS(&cond->cond, &cond->mutex, INFINITE);
+	SleepConditionVariableCS(&cond->cond, &cond->mutex->mutex, INFINITE);
 #else
-	pthread_cond_wait(&cond->cond, &cond->mutex);
+	pthread_cond_wait(&cond->cond, &cond->mutex->mutex);
 #endif
 
 	return KS_STATUS_SUCCESS;
