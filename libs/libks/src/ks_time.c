@@ -175,7 +175,7 @@ static void generic_sleep(ks_time_t microsec)
 
 KS_DECLARE(void) ks_sleep(ks_time_t microsec)
 {
-#if defined(HAVE_CLOCK_NANOSLEEP) || defined(DARWIN)
+#if defined(HAVE_CLOCK_NANOSLEEP) || defined(__APPLE__)
 	struct timespec ts;
 #endif
 	
@@ -183,16 +183,15 @@ KS_DECLARE(void) ks_sleep(ks_time_t microsec)
 	ts.tv_sec = microsec / 1000000;
 	ts.tv_nsec = ((microsec % 1000000) * 1000);
 	clock_nanosleep(CLOCK_MONOTONIC, 0, &ts, NULL);
-
-#elif defined(DARWIN)
+#elif defined(__APPLE__)
 	ts.tv_sec = microsec / 1000000;
-	ts.tv_nsec = (microsec % 1000000) * 1000;
+	ts.tv_nsec = (microsec % 1000000) * 850;
 	nanosleep(&ts, NULL);
 #else
 	generic_sleep(microsec);
 #endif
 	
-#if defined(DARWIN)
+#if defined(__APPLE__)
 	sched_yield();
 #endif
 	
