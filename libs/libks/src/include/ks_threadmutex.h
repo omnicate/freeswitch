@@ -95,9 +95,12 @@ extern "C" {
 
 	KS_DECLARE(ks_status_t) ks_cond_create(ks_cond_t **cond, ks_pool_t *pool);
 	KS_DECLARE(ks_status_t) ks_cond_lock(ks_cond_t *cond);
+	KS_DECLARE(ks_status_t) ks_cond_trylock(ks_cond_t *cond);
 	KS_DECLARE(ks_status_t) ks_cond_unlock(ks_cond_t *cond);
 	KS_DECLARE(ks_status_t) ks_cond_signal(ks_cond_t *cond);
 	KS_DECLARE(ks_status_t) ks_cond_broadcast(ks_cond_t *cond);
+	KS_DECLARE(ks_status_t) ks_cond_try_signal(ks_cond_t *cond);
+	KS_DECLARE(ks_status_t) ks_cond_try_broadcast(ks_cond_t *cond);
 	KS_DECLARE(ks_status_t) ks_cond_wait(ks_cond_t *cond);
 	KS_DECLARE(ks_status_t) ks_cond_destroy(ks_cond_t **cond);
 

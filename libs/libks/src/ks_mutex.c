@@ -232,6 +232,9 @@ KS_DECLARE(ks_status_t) ks_cond_create(ks_cond_t **cond, ks_pool_t *pool)
 {
 	ks_status_t status = KS_STATUS_FAIL;
 	ks_cond_t *check = NULL;
+#ifndef WIN32
+	pthread_mutexattr_t attr;
+#endif
 
 	if (!pool)
 		goto done;
@@ -246,8 +249,15 @@ KS_DECLARE(ks_status_t) ks_cond_create(ks_cond_t **cond, ks_pool_t *pool)
 	InitializeCriticalSection(&check->mutex);
 	InitializeConditionVariable(&check->cond);
 #else
-	if (pthread_mutex_init(&check->mutex, NULL))
+	if (pthread_mutexattr_init(&attr))
 		goto done;
+
+	if (pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE))
+		goto done;
+
+	if (pthread_mutex_init(&check->mutex, &attr))
+		goto done;
+
 	if (pthread_cond_init(&check->cond, NULL)) {
 		pthread_mutex_destroy(&check->mutex);
 		goto done;
@@ -273,6 +283,18 @@ KS_DECLARE(ks_status_t) ks_cond_lock(ks_cond_t *cond)
 	return KS_STATUS_SUCCESS;
 }
 
+KS_DECLARE(ks_status_t) ks_cond_trylock(ks_cond_t *cond)
+{
+#ifdef WIN32
+	if (!TryEnterCriticalSection(&cond->mutex))
+		return KS_STATUS_FAIL;
+#else
+	if (pthread_mutex_trylock(&cond->mutex))
+		return KS_STATUS_FAIL;
+#endif
+	return KS_STATUS_SUCCESS;
+}
+
 KS_DECLARE(ks_status_t) ks_cond_unlock(ks_cond_t *cond)
 {
 #ifdef WIN32
@@ -286,21 +308,53 @@ KS_DECLARE(ks_status_t) ks_cond_unlock(ks_cond_t *cond)
 
 KS_DECLARE(ks_status_t) ks_cond_signal(ks_cond_t *cond)
 {
+	ks_cond_lock(cond);
 #ifdef WIN32
 	WakeConditionVariable(&cond->cond);
 #else
 	pthread_cond_signal(&cond->cond);
 #endif
+	ks_cond_unlock(cond);
 	return KS_STATUS_SUCCESS;
 }
 
 KS_DECLARE(ks_status_t) ks_cond_broadcast(ks_cond_t *cond)
 {
+	ks_cond_lock(cond);
 #ifdef WIN32
 	WakeAllConditionVariable(&cond->cond);
 #else
 	pthread_cond_broadcast(&cond->cond);
 #endif
+	ks_cond_unlock(cond);
+	return KS_STATUS_SUCCESS;
+}
+
+KS_DECLARE(ks_status_t) ks_cond_try_signal(ks_cond_t *cond)
+{
+	if (ks_cond_trylock(cond) != KS_STATUS_SUCCESS) {
+		return KS_STATUS_FAIL;
+	}
+#ifdef WIN32
+	WakeConditionVariable(&cond->cond);
+#else
+	pthread_cond_signal(&cond->cond);
+#endif
+	ks_cond_unlock(cond);
+	return KS_STATUS_SUCCESS;
+}
+
+KS_DECLARE(ks_status_t) ks_cond_try_broadcast(ks_cond_t *cond)
+{
+	if (ks_cond_trylock(cond) != KS_STATUS_SUCCESS) {
+		return KS_STATUS_FAIL;
+	}
+#ifdef WIN32
+	WakeAllConditionVariable(&cond->cond);
+#else
+	pthread_cond_broadcast(&cond->cond);
+#endif
+	ks_cond_unlock(cond);
 	return KS_STATUS_SUCCESS;
 }
 
