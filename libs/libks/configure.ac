@@ -74,6 +74,11 @@ case "$host" in
 esac
 
 
+AC_CHECK_LIB(rt, clock_gettime, [AC_DEFINE(HAVE_CLOCK_GETTIME, 1, [Define if you have clock_gettime()])])
+AC_CHECK_LIB(rt, clock_getres, [AC_DEFINE(HAVE_CLOCK_GETRES, 1, [Define if you have clock_getres()])])
+AC_CHECK_LIB(rt, clock_nanosleep, [AC_DEFINE(HAVE_CLOCK_NANOSLEEP, 1, [Define if you have clock_nanosleep()])])
+AC_CHECK_FUNCS([usleep])
+
 #
 # sched_setcheduler + round-robin scheduler prerequisites
 #

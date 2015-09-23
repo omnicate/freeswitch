@@ -25,3 +25,10 @@ testthreadmutex_SOURCES = testthreadmutex.c tap.c
 testthreadmutex_CFLAGS = -I $(abs_top_srcdir)/src/include/ -I$(abs_top_srcdir)/test/ -g -ggdb -O0
 testthreadmutex_LDADD = $(abs_top_srcdir)/libks.la
 
+
+TESTS += testtime
+check_PROGRAMS += testtime
+
+testtime_SOURCES = testtime.c tap.c
+testtime_CFLAGS = -I $(abs_top_srcdir)/src/include/ -I$(abs_top_srcdir)/test/ -g -ggdb -O0
+testtime_LDADD = $(abs_top_srcdir)/libks.la

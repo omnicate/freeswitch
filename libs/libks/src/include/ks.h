@@ -61,6 +61,7 @@ extern "C" {
 #include "ks_config.h"
 #include "ks_buffer.h"
 #include "ks_pool.h"
+#include "ks_time.h"
 #include "simclist.h"
 #include "table.h"
 

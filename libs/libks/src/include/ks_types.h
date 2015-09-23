@@ -182,6 +182,8 @@ extern "C" {
 	typedef void (*ks_logger_t) (const char *file, const char *func, int line, int level, const char *fmt, ...);
 	typedef void (*ks_listen_callback_t) (ks_socket_t server_sock, ks_socket_t client_sock, struct sockaddr_in *addr);
 
+	typedef int64_t ks_time_t;
+
 
 #ifdef __cplusplus
 }
