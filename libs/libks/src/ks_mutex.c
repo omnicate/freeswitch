@@ -374,7 +374,6 @@ static void ks_rwl_cleanup(ks_pool_t *mpool, void *ptr, void *arg, int type, ks_
 		break;
 	case KS_MPCL_DESTROY:
 #ifndef WIN32
-#else
 		pthread_rwlock_destroy(&rwlock->rwlock);
 #endif
 		break;
@@ -486,7 +485,6 @@ KS_DECLARE(ks_status_t) ks_rwl_write_unlock(ks_rwl_t *rwlock)
 KS_DECLARE(ks_status_t) ks_rwl_destroy(ks_rwl_t **rwlock)
 {
 	ks_rwl_t *rwlockp = *rwlock;
-	int err;
 
 	*rwlock = NULL;
 

@@ -161,6 +161,7 @@ KS_DECLARE(ks_time_t) ks_time_now(void)
 	return now;
 }
 
+#if !defined(HAVE_CLOCK_NANOSLEEP) && !defined(__APPLE__)
 static void generic_sleep(ks_time_t microsec)
 {
 #ifdef HAVE_USLEEP
@@ -172,6 +173,7 @@ static void generic_sleep(ks_time_t microsec)
 	select(0, NULL, NULL, NULL, &tv);
 #endif
 }
+#endif
 
 KS_DECLARE(void) ks_sleep(ks_time_t microsec)
 {

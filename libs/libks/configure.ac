@@ -35,7 +35,6 @@ AC_ARG_ENABLE(debug,
 
 if test "${enable_debug}" = "yes"; then
         AC_DEFINE([DEBUG],[],[Enable extra debugging.])
-        AX_CFLAGS_WARN_ALL_ANSI
 fi
 
 AM_CONDITIONAL([WANT_DEBUG],[test "${enable_debug}" = "yes"])
@@ -73,6 +72,7 @@ case "$host" in
         ;;
 esac
 
+AX_CFLAGS_WARN_ALL_ANSI
 
 AC_CHECK_LIB(rt, clock_gettime, [AC_DEFINE(HAVE_CLOCK_GETTIME, 1, [Define if you have clock_gettime()])])
 AC_CHECK_LIB(rt, clock_getres, [AC_DEFINE(HAVE_CLOCK_GETRES, 1, [Define if you have clock_getres()])])
