@@ -318,6 +318,8 @@ int main(int argc, char **argv)
 {
 	plan(44);
 
+	diag("Starting testing for %d tests\n", 44);
+
 	create_pool();
 	create_mutex();
 	create_mutex_non_recursive();
