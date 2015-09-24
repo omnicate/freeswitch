@@ -38,7 +38,7 @@ int main(int argc, char **argv)
 	diff = (now - then) / 1000;
 	printf("DIFF %ums\n", diff);
 
-	ok( diff > 1990 && diff < 2010 );
+	ok( diff > 1950 && diff < 2050 );
 
 	done_testing();
 
