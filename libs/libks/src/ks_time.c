@@ -175,6 +175,45 @@ static void generic_sleep(ks_time_t microsec)
 }
 #endif
 
+#if defined(__APPLE__)
+static int _apple_factor = 1000;
+static int _apple_sync = 0;
+static inline void apple_sync(void)
+{
+	struct timespec ts;
+	int microsec = 20000;
+	int x, diff;
+	ks_time_t a,b;
+	
+	if (_apple_sync) {
+		return;
+	}
+
+	for (x = 0; x < 100; x++) {
+		a = ks_time_now();
+		ts.tv_sec = microsec / 1000000;
+		ts.tv_nsec = ((microsec % 1000000) * _apple_factor);
+		nanosleep(&ts, NULL);
+		b = ks_time_now();
+		diff = b - a;
+		printf("WTF %d %d\n", diff, _apple_factor);
+		if (diff > microsec - 10 && diff < microsec + 10) {
+			break;
+		}
+
+		if (diff > microsec) {
+			_apple_factor -= 4;
+		} else {
+			_apple_factor += 4;
+		}
+	}
+	
+	_apple_sync = 1;
+
+}
+#endif
+
+
 KS_DECLARE(void) ks_sleep(ks_time_t microsec)
 {
 #if defined(HAVE_CLOCK_NANOSLEEP) || defined(__APPLE__)
@@ -186,8 +225,9 @@ KS_DECLARE(void) ks_sleep(ks_time_t microsec)
 	ts.tv_nsec = ((microsec % 1000000) * 1000);
 	clock_nanosleep(CLOCK_MONOTONIC, 0, &ts, NULL);
 #elif defined(__APPLE__)
+	apple_sync();
 	ts.tv_sec = microsec / 1000000;
-	ts.tv_nsec = (microsec % 1000000) * 850;
+	ts.tv_nsec = (microsec % 1000000) * _apple_factor;
 	nanosleep(&ts, NULL);
 #else
 	generic_sleep(microsec);

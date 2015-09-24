@@ -9,6 +9,8 @@ int main(int argc, char **argv)
 
 	plan(2);
 
+	ks_sleep(10000);
+
 	then = ks_time_now();
 	
 	ks_sleep(2000000);
