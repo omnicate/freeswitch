@@ -32,8 +32,12 @@ int main(int argc, char **argv)
 	diff = (now - then) / 1000;
 	printf("DIFF %ums\n", diff);
 
+#if defined(__APPLE__)
+	/* the clock on osx seems to be particularly bad at being accurate, we need a bit more room for error*/
+	ok( diff > 1900 && diff < 2100 );
+#else
 	ok( diff > 1950 && diff < 2050 );
-
+#endif
 	done_testing();
 
 	exit(0);
