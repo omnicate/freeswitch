@@ -148,7 +148,6 @@ static void check_rwl(void)
 
 static void *thread_test_function_cleanup(ks_thread_t *thread, void *data)
 {
-	int i;
 	int d = (int)(intptr_t)data;
 
 	while (thread->running) {
@@ -269,7 +268,6 @@ static void create_pool(void)
 
 static void check_cleanup(void)
 {
-	ok( (ks_pool_close(&pool) == KS_STATUS_SUCCESS) );
 	ok( (counter3 == 4) );
 }
 
@@ -333,6 +331,7 @@ int main(int argc, char **argv)
 	while (threadscount != 4) sleep(1);
 	check_detached();
 	create_threads_cleanup();
+	check_pool_close();
 	check_cleanup();
 	check_rwl();
 	check_cond();
