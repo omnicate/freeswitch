@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007-2014, Anthony Minessale II
+ * Copyright (c) 2007-2015, Anthony Minessale II
  * All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
@@ -52,15 +52,11 @@
 #ifndef KS_CONFIG_H
 #define KS_CONFIG_H
 
+KS_BEGIN_EXTERN_C
+
 #include "ks.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif							/* defined(__cplusplus) */
-
-
 #define KS_URL_SEPARATOR "://"
-
 
 #ifdef WIN32
 #define KS_PATH_SEPARATOR "\\"
@@ -160,9 +156,7 @@ atoi(expr))) ? 1 : 0
 
 /** @} */
 
-#ifdef __cplusplus
-}
-#endif							/* defined(__cplusplus) */
+KS_END_EXTERN_C
 #endif							/* defined(KS_CONFIG_H) */
 /* For Emacs:
  * Local Variables:

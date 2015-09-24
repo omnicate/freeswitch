@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007-2014, Anthony Minessale II
+ * Copyright (c) 2007-2015, Anthony Minessale II
  * All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
@@ -34,16 +34,15 @@
 #ifndef _KS_TIME_H_
 #define _KS_TIME_H_
 
-#ifdef __cplusplus
-extern "C" {
-#endif							/* defined(__cplusplus) */
+#include "ks.h"
+
+KS_BEGIN_EXTERN_C
 
 	KS_DECLARE(ks_time_t) ks_time_now(void);
 	KS_DECLARE(void) ks_sleep(ks_time_t microsec);
 
-#ifdef __cplusplus
-}
-#endif							/* defined(__cplusplus) */
+KS_END_EXTERN_C
+
 #endif							/* defined(_KS_TIME_H_) */
 
 /* For Emacs:

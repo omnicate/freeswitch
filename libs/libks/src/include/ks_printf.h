@@ -13,7 +13,10 @@
 #ifndef KS_PRINTF_H
 #define KS_PRINTF_H
 
+#include "ks.h"
+
 KS_BEGIN_EXTERN_C
+
 /**
  * This routine is a variant of the "sprintf()" from the
  * standard C library.  The resulting string is written into memory
@@ -63,4 +66,16 @@ KS_DECLARE(char *) ks_vpprintf(ks_pool_t *pool, const char *zFormat, va_list ap)
 KS_DECLARE(char *) ks_pprintf(ks_pool_t *pool, const char *zFormat, ...);
 
 KS_END_EXTERN_C
+
 #endif /* KS_PRINTF_H */
+
+/* For Emacs:
+ * Local Variables:
+ * mode:c
+ * indent-tabs-mode:t
+ * tab-width:4
+ * c-basic-offset:4
+ * End:
+ * For VIM:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
+ */

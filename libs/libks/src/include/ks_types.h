@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007-2014, Anthony Minessale II
+ * Copyright (c) 2007-2015, Anthony Minessale II
  * All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
@@ -34,9 +34,9 @@
 #ifndef _KS_TYPES_H_
 #define _KS_TYPES_H_
 
-#ifdef __cplusplus
-extern "C" {
-#endif							/* defined(__cplusplus) */
+#include "ks.h"
+
+KS_BEGIN_EXTERN_C
 
 #define KS_STR2ENUM_P(_FUNC1, _FUNC2, _TYPE) KS_DECLARE(_TYPE) _FUNC1 (const char *name); KS_DECLARE(const char *) _FUNC2 (_TYPE type);                       
 
@@ -185,10 +185,10 @@ extern "C" {
 	typedef int64_t ks_time_t;
 
 
-#ifdef __cplusplus
-}
-#endif							/* defined(__cplusplus) */
+KS_END_EXTERN_C
+
 #endif							/* defined(_KS_TYPES_H_) */
+
 /* For Emacs:
  * Local Variables:
  * mode:c

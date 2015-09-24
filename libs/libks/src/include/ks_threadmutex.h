@@ -1,6 +1,6 @@
 /*
  * Cross Platform Thread/Mutex abstraction
- * Copyright(C) 2007 Michael Jerris
+ * Copyright(C) 2015 Michael Jerris
  *
  * You may opt to use, copy, modify, merge, publish, distribute and/or sell
  * copies of the Software, and permit persons to whom the Software is
@@ -17,11 +17,12 @@
  *
  */
 
-
 #ifndef _KS_THREADMUTEX_H
 #define _KS_THREADMUTEX_H
 
 #include "ks.h"
+
+KS_BEGIN_EXTERN_C
 
 #ifdef WIN32
 #include <process.h>
@@ -32,10 +33,6 @@
 #endif
 
 #define KS_THREAD_DEFAULT_STACK 240 * 1024
-
-#ifdef __cplusplus
-extern "C" {
-#endif							/* defined(__cplusplus) */
 
 	typedef struct ks_thread ks_thread_t;
 	typedef void *(*ks_thread_function_t) (ks_thread_t *, void *);
@@ -116,9 +113,8 @@ extern "C" {
 	KS_DECLARE(ks_status_t) ks_rwl_destroy(ks_rwl_t **rwlock);
 
 
-#ifdef __cplusplus
-}
-#endif							/* defined(__cplusplus) */
+KS_END_EXTERN_C
+
 #endif							/* defined(_KS_THREADMUTEX_H) */
 
 /* For Emacs:

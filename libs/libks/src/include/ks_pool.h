@@ -25,7 +25,8 @@
 #define __KS_POOL_H__
 
 #include "ks.h"
-#include <sys/types.h>
+
+KS_BEGIN_EXTERN_C
 
 /*
  * ks_pool flags to ks_pool_alloc or ks_pool_set_attr
@@ -461,6 +462,7 @@ KS_DECLARE(char *) ks_pstrmemdup(ks_pool_t *pool, const char *str, size_t len);
 KS_DECLARE(void *) ks_pmemdup(ks_pool_t *pool, const void *buf, size_t len);
 KS_DECLARE(char *) ks_pstrcat(ks_pool_t *pool, ...);
 
+KS_END_EXTERN_C
 
 #endif /* ! __KS_POOL_H__ */
 

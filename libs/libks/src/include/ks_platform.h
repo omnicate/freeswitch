@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007-2014, Anthony Minessale II
+ * Copyright (c) 2007-2015, Anthony Minessale II
  * All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
@@ -34,9 +34,7 @@
 #ifndef _KS_PLATFORM_H_
 #define _KS_PLATFORM_H_
 
-#ifdef __cplusplus
-extern "C" {
-#endif							/* defined(__cplusplus) */
+KS_BEGIN_EXTERN_C
 
 #if !defined(_XOPEN_SOURCE) && !defined(__FreeBSD__) && !defined(__NetBSD__) && !defined(__OpenBSD__) && !defined(__APPLE__)
 #define _XOPEN_SOURCE 600
@@ -63,9 +61,9 @@ extern "C" {
 #include <ctype.h>
 #include <float.h>
 #include <limits.h>
+#include <sys/types.h>
 #ifndef __WINDOWS__
 #include <sys/time.h>
-#include <sys/types.h>
 #include <sys/select.h>
 #include <netinet/tcp.h>
 #include <sys/signal.h>
@@ -189,9 +187,7 @@ extern "C" {
 #endif
 #endif
 
-#ifdef __cplusplus
-}
-#endif							/* defined(__cplusplus) */
+KS_END_EXTERN_C
 #endif							/* defined(_KS_PLATFORM_H_) */
 /* For Emacs:
  * Local Variables:
