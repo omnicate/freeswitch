@@ -909,6 +909,37 @@ KS_DECLARE(char *) ks_mprintf(const char *zFormat, ...)
 }
 
 /*
+** pool_realloc function
+*/
+static void *pool_realloc(void *old, int size, void *arg)
+{
+	return ks_pool_resize(arg, old, size);
+}
+
+/*
+** Print into pool memory. Omit the internal %-conversion extensions.
+*/
+KS_DECLARE(char *) ks_vpprintf(ks_pool_t *pool, const char *zFormat, va_list ap)
+{
+	char zBase[KS_PRINT_BUF_SIZE];
+	return base_vprintf(pool_realloc, 0, zBase, sizeof(zBase), zFormat, ap, pool);
+}
+
+/*
+** Print into pool memory.  Omit the internal %-conversion extensions.
+*/
+KS_DECLARE(char *) ks_pprintf(ks_pool_t *pool, const char *zFormat, ...)
+{
+	va_list ap;
+	char *z;
+	char zBase[KS_PRINT_BUF_SIZE];
+	va_start(ap, zFormat);
+	z = base_vprintf(pool_realloc, 0, zBase, sizeof(zBase), zFormat, ap, pool);
+	va_end(ap);
+	return z;
+}
+
+/*
 ** ks_vsnprintf() works like vsnprintf() except that it ignores the
 ** current locale settings.  This is important for SQLite because we
 ** are not able to use a "," as the decimal point in place of "." as
