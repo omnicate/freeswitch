@@ -58,6 +58,7 @@ KS_BEGIN_EXTERN_C
 KS_DECLARE(char *) ks_mprintf(const char *zFormat, ...);
 KS_DECLARE(char *) ks_vmprintf(const char *zFormat, va_list ap);
 KS_DECLARE(char *) ks_snprintfv(char *zBuf, int n, const char *zFormat, ...);
+KS_DECLARE(char *) ks_vsnprintf(char *zbuf, int n, const char *zFormat, va_list ap);
 
 KS_END_EXTERN_C
 #endif /* KS_PRINTF_H */

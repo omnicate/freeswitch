@@ -799,7 +799,8 @@ struct sgMprintf {
 	int nChar;					/* Length of the string so far */
 	int nTotal;					/* Output size if unconstrained */
 	int nAlloc;					/* Amount of space allocated in zText */
-	void *(*xRealloc) (void *, int);	/* Function used to realloc memory */
+	void *arg;                  /* Third arg to the realloc callback */
+	void *(*xRealloc) (void *, int, void *);	/* Function used to realloc memory */
 };
 
 /*
@@ -818,13 +819,13 @@ static void mout(void *arg, const char *zNewText, int nNewChar)
 		} else {
 			pM->nAlloc = pM->nChar + nNewChar * 2 + 1;
 			if (pM->zText == pM->zBase) {
-				pM->zText = pM->xRealloc(0, pM->nAlloc);
+				pM->zText = pM->xRealloc(0, pM->nAlloc, pM->arg);
 				if (pM->zText && pM->nChar) {
 					memcpy(pM->zText, pM->zBase, pM->nChar);
 				}
 			} else {
 				char *zNew;
-				zNew = pM->xRealloc(pM->zText, pM->nAlloc);
+				zNew = pM->xRealloc(pM->zText, pM->nAlloc, pM->arg);
 				if (zNew) {
 					pM->zText = zNew;
 				}
@@ -844,12 +845,13 @@ static void mout(void *arg, const char *zNewText, int nNewChar)
 ** This routine is a wrapper around xprintf() that invokes mout() as
 ** the consumer.
 */
-static char *base_vprintf(void *(*xRealloc) (void *, int),	/* Routine to realloc memory. May be NULL */
+static char *base_vprintf(void *(*xRealloc) (void *, int, void *),	/* Routine to realloc memory. May be NULL */
 						  int useInternal,	/* Use internal %-conversions if true */
 						  char *zInitBuf,	/* Initially write here, before mallocing */
 						  int nInitBuf,	/* Size of zInitBuf[] */
 						  const char *zFormat,	/* format string */
-						  va_list ap	/* arguments */
+						  va_list ap,	/* arguments */
+						  void *realloc_arg /*arg to pass to realloc function*/
 	)
 {
 	struct sgMprintf sM;
@@ -857,15 +859,16 @@ static char *base_vprintf(void *(*xRealloc) (void *, int),	/* Routine to realloc
 	sM.nChar = sM.nTotal = 0;
 	sM.nAlloc = nInitBuf;
 	sM.xRealloc = xRealloc;
+	sM.arg = realloc_arg;
 	vxprintf(mout, &sM, useInternal, zFormat, ap);
 	if (xRealloc) {
 		if (sM.zText == sM.zBase) {
-			sM.zText = xRealloc(0, sM.nChar + 1);
+			sM.zText = xRealloc(0, sM.nChar + 1, realloc_arg);
 			if (sM.zText) {
 				memcpy(sM.zText, sM.zBase, sM.nChar + 1);
 			}
 		} else if (sM.nAlloc > sM.nChar + 10) {
-			char *zNew = xRealloc(sM.zText, sM.nChar + 1);
+			char *zNew = xRealloc(sM.zText, sM.nChar + 1, realloc_arg);
 			if (zNew) {
 				sM.zText = zNew;
 			}
@@ -877,7 +880,7 @@ static char *base_vprintf(void *(*xRealloc) (void *, int),	/* Routine to realloc
 /*
 ** Realloc that is a real function, not a macro.
 */
-static void *printf_realloc(void *old, int size)
+static void *printf_realloc(void *old, int size, void *arg)
 {
 	return realloc(old, size);
 }
@@ -888,7 +891,7 @@ static void *printf_realloc(void *old, int size)
 KS_DECLARE(char *) ks_vmprintf(const char *zFormat, va_list ap)
 {
 	char zBase[KS_PRINT_BUF_SIZE];
-	return base_vprintf(printf_realloc, 0, zBase, sizeof(zBase), zFormat, ap);
+	return base_vprintf(printf_realloc, 0, zBase, sizeof(zBase), zFormat, ap, NULL);
 }
 
 /*
@@ -900,24 +903,36 @@ KS_DECLARE(char *) ks_mprintf(const char *zFormat, ...)
 	char *z;
 	char zBase[KS_PRINT_BUF_SIZE];
 	va_start(ap, zFormat);
-	z = base_vprintf(printf_realloc, 0, zBase, sizeof(zBase), zFormat, ap);
+	z = base_vprintf(printf_realloc, 0, zBase, sizeof(zBase), zFormat, ap, NULL);
 	va_end(ap);
 	return z;
 }
 
 /*
-** sqlite3_snprintf() works like snprintf() except that it ignores the
+** ks_vsnprintf() works like vsnprintf() except that it ignores the
 ** current locale settings.  This is important for SQLite because we
 ** are not able to use a "," as the decimal point in place of "." as
 ** specified by some locales.
 */
+KS_DECLARE(char *) ks_vsnprintfv(char *zBuf, int n, const char *zFormat, va_list ap)
+{
+	return base_vprintf(0, 0, zBuf, n, zFormat, ap, NULL);
+}
+
+/*
+** ks_snprintf() works like snprintf() except that it ignores the
+** current locale settings.  This is important for SQLite because we
+** are not able to use a "," as the decimal point in place of "." as
+** specified by some locales.
+*/
+
 KS_DECLARE(char *) ks_snprintfv(char *zBuf, int n, const char *zFormat, ...)
 {
 	char *z;
 	va_list ap;
 
 	va_start(ap, zFormat);
-	z = base_vprintf(0, 0, zBuf, n, zFormat, ap);
+	z = base_vprintf(0, 0, zBuf, n, zFormat, ap, NULL);
 	va_end(ap);
 	return z;
 }
