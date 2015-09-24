@@ -16,7 +16,8 @@ libks_la_LDFLAGS  =  -version-info 0:1:0 -lncurses -lpthread -lm
 library_includedir	= $(prefix)/include
 library_include_HEADERS = src/include/ks_config.h src/include/ks.h src/include/ks_threadmutex.h src/include/ks_json.h src/include/ks_buffer.h src/include/ks_pool.h src/include/table.h src/include/table_loc.h src/include/simclist.h src/include/ks_time.h
 
-
+tests: libks.la
+	$(MAKE) -C test tests
 
 
 
