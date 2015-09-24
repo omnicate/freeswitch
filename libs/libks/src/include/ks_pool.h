@@ -455,6 +455,13 @@ KS_DECLARE(ks_status_t) ks_pool_set_cleanup(ks_pool_t *mp_p, void *ptr, void *ar
 
 /*<<<<<<<<<<   This is end of the auto-generated output from fillproto. */
 
+KS_DECLARE(char *) ks_pstrdup(ks_pool_t *pool, const char *str);
+KS_DECLARE(char *) ks_pstrndup(ks_pool_t *pool, const char *str, size_t len);
+KS_DECLARE(char *) ks_pstrmemdup(ks_pool_t *pool, const char *str, size_t len);
+KS_DECLARE(void *) ks_pmemdup(ks_pool_t *pool, const void *buf, size_t len);
+KS_DECLARE(char *) ks_pstrcat(ks_pool_t *pool, ...);
+
+
 #endif /* ! __KS_POOL_H__ */
 
 /* For Emacs:

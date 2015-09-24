@@ -1985,6 +1985,113 @@ KS_DECLARE(const char *) ks_pool_strerror(const ks_status_t error)
 	return "invalid error code";
 }
 
+KS_DECLARE(char *) ks_pstrdup(ks_pool_t *pool, const char *str)
+{
+    char *result;
+    size_t len;
+
+    if (!str) {
+        return NULL;
+    }
+
+    len = strlen(str) + 1;
+    result = ks_pool_alloc(pool, len);
+    memcpy(result, str, len);
+
+    return result;
+}
+
+KS_DECLARE(char *) ks_pstrndup(ks_pool_t *pool, const char *str, size_t len)
+{
+    char *result;
+    const char *end;
+
+    if (!str) {
+        return NULL;
+    }
+
+    end = memchr(str, '\0', len);
+
+    if (!end) {
+        len = end - str;
+	}
+
+    result = ks_pool_alloc(pool, len + 1);
+    memcpy(result, str, len);
+    result[len] = '\0';
+
+    return result;
+}
+
+KS_DECLARE(char *) ks_pstrmemdup(ks_pool_t *pool, const char *str, size_t len)
+{
+    char *result;
+
+    if (!str) {
+        return NULL;
+    }
+
+    result = ks_pool_alloc(pool, len + 1);
+    memcpy(result, str, len);
+    result[len] = '\0';
+
+    return result;
+}
+
+KS_DECLARE(void *) ks_pmemdup(ks_pool_t *pool, const void *buf, size_t len)
+{
+    void *result;
+
+    if (!buf) {
+		return NULL;
+	}
+
+    result = ks_pool_alloc(pool, len);
+    memcpy(result, buf, len);
+
+    return result;
+}
+
+KS_DECLARE(char *) ks_pstrcat(ks_pool_t *pool, ...)
+{
+    char *endp, *argp;
+	char *result;
+    size_t lengths[10];
+    int i = 0;
+    size_t len = 0;
+    va_list ap;
+
+    va_start(ap, pool);
+
+	/* get lengths so we know what to allocate, cache some so we don't have to double strlen those */
+
+    while ((argp = va_arg(ap, char *))) {
+		size_t arglen = strlen(argp);
+        if (i < 10) lengths[i++] = arglen;
+        len += arglen;
+    }
+
+    va_end(ap);
+
+    result = (char *) ks_pool_alloc(pool, len + 1);
+    endp = result;
+
+    va_start(ap, pool);
+
+    i = 0;
+
+    while ((argp = va_arg(ap, char *))) {
+        len = (i < 10) ? lengths[i++] : strlen(argp);
+        memcpy(endp, argp, len);
+        endp += len;
+    }
+
+    va_end(ap);
+
+    *endp = '\0';
+
+    return result;
+}
 
 /* For Emacs:
  * Local Variables:
