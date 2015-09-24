@@ -34,12 +34,18 @@
 #ifndef _KS_H_
 #define _KS_H_
 
+#ifdef __cplusplus
+#define KS_BEGIN_EXTERN_C       extern "C" {
+#define KS_END_EXTERN_C         }
+#else
+#define KS_BEGIN_EXTERN_C
+#define KS_END_EXTERN_C
+#endif
+
 #include <ks_platform.h>
 #include <ks_types.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif							/* defined(__cplusplus) */
+KS_BEGIN_EXTERN_C
 
 #define BUF_CHUNK 65536 * 50
 #define BUF_START 65536 * 100
@@ -56,11 +62,12 @@ extern "C" {
 #define ks_recv(_h) ks_recv_event(_h, 0, NULL)
 #define ks_recv_timed(_h, _ms) ks_recv_event_timed(_h, _ms, 0, NULL)
 
+#include "ks_pool.h"
+#include "ks_printf.h"
 #include "ks_json.h"
 #include "ks_threadmutex.h"
 #include "ks_config.h"
 #include "ks_buffer.h"
-#include "ks_pool.h"
 #include "ks_time.h"
 #include "simclist.h"
 #include "table.h"
@@ -91,10 +98,7 @@ extern "C" {
 		return strcasecmp(s1, s2);
 	}
 
-#ifdef __cplusplus
-}
-#endif /* defined(__cplusplus) */
-
+KS_END_EXTERN_C
 
 #endif /* defined(_KS_H_) */
 
