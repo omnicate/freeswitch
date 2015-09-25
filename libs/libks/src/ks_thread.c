@@ -78,7 +78,6 @@ static void ks_thread_cleanup(ks_pool_t *mpool, void *ptr, void *arg, int type, 
 
 static void *KS_THREAD_CALLING_CONVENTION thread_launch(void *args)
 {
-	void *exit_val;
 	ks_thread_t *thread = (ks_thread_t *) args;
 
 #ifdef HAVE_PTHREAD_SETSCHEDPARAM
@@ -94,12 +93,12 @@ static void *KS_THREAD_CALLING_CONVENTION thread_launch(void *args)
 	}
 #endif
 
-	exit_val = thread->function(thread, thread->private_data);
+	thread->return_data = thread->function(thread, thread->private_data);
 #ifndef WIN32
 	pthread_attr_destroy(&thread->attribute);
 #endif
 
-	return exit_val;
+	return thread->return_data;
 }
 
 KS_DECLARE(int) ks_thread_set_priority(int nice_val)

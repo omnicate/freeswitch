@@ -38,6 +38,7 @@ KS_BEGIN_EXTERN_C
 	typedef void *(*ks_thread_function_t) (ks_thread_t *, void *);
 
 	struct ks_thread {
+		ks_pool_t *pool;
 #ifdef WIN32
 		void *handle;
 #else
@@ -50,7 +51,7 @@ KS_BEGIN_EXTERN_C
 		uint32_t flags;
 		uint8_t running;
 		uint8_t priority;
-		ks_pool_t *pool;
+		void *return_data;
 	};
 
 	typedef enum {
