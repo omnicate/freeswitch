@@ -62,16 +62,6 @@ KS_BEGIN_EXTERN_C
 #define ks_recv(_h) ks_recv_event(_h, 0, NULL)
 #define ks_recv_timed(_h, _ms) ks_recv_event_timed(_h, _ms, 0, NULL)
 
-#include "ks_pool.h"
-#include "ks_printf.h"
-#include "ks_json.h"
-#include "ks_threadmutex.h"
-#include "ks_config.h"
-#include "ks_buffer.h"
-#include "ks_time.h"
-#include "simclist.h"
-#include "table.h"
-
 	KS_DECLARE(int) ks_vasprintf(char **ret, const char *fmt, va_list ap);
 
 	KS_DECLARE_DATA extern ks_logger_t ks_log;
@@ -97,6 +87,17 @@ KS_BEGIN_EXTERN_C
 
 		return strcasecmp(s1, s2);
 	}
+
+#include "ks_pool.h"
+#include "ks_printf.h"
+#include "ks_json.h"
+#include "ks_threadmutex.h"
+#include "ks_hash.h"
+#include "ks_config.h"
+#include "ks_buffer.h"
+#include "ks_time.h"
+#include "simclist.h"
+#include "table.h"
 
 KS_END_EXTERN_C
 

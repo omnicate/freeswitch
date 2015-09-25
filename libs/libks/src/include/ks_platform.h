@@ -187,6 +187,27 @@ KS_BEGIN_EXTERN_C
 #endif
 #endif
 
+/* malloc or DIE macros */
+#ifdef NDEBUG
+#define ks_malloc(ptr, len) (void)( (!!(ptr = malloc(len))) || (fprintf(stderr,"ABORT! Malloc failure at: %s:%d", __FILE__, __LINE__),abort(), 0), ptr )
+#define ks_zmalloc(ptr, len) (void)( (!!(ptr = calloc(1, (len)))) || (fprintf(stderr,"ABORT! Malloc failure at: %s:%d", __FILE__, __LINE__),abort(), 0), ptr)
+#if (_MSC_VER >= 1500)			// VC9+
+#define ks_strdup(ptr, s) (void)( (!!(ptr = _strdup(s))) || (fprintf(stderr,"ABORT! Malloc failure at: %s:%d", __FILE__, __LINE__),abort(), 0), ptr)
+#else
+#define ks_strdup(ptr, s) (void)( (!!(ptr = strdup(s))) || (fprintf(stderr,"ABORT! Malloc failure at: %s:%d", __FILE__, __LINE__),abort(), 0), ptr)
+#endif
+#else
+#if (_MSC_VER >= 1500)			// VC9+
+#define ks_malloc(ptr, len) (void)(assert(((ptr) = malloc((len)))),ptr);__analysis_assume( ptr )
+#define ks_zmalloc(ptr, len) (void)(assert((ptr = calloc(1, (len)))),ptr);__analysis_assume( ptr )
+#define ks_strdup(ptr, s) (void)(assert(((ptr) = _strdup(s))),ptr);__analysis_assume( ptr )
+#else
+#define ks_malloc(ptr, len) (void)(assert(((ptr) = malloc((len)))),ptr)
+#define ks_zmalloc(ptr, len) (void)(assert((ptr = calloc(1, (len)))),ptr)
+#define ks_strdup(ptr, s) (void)(assert(((ptr) = strdup((s)))),ptr)
+#endif
+#endif
+
 KS_END_EXTERN_C
 #endif							/* defined(_KS_PLATFORM_H_) */
 /* For Emacs:

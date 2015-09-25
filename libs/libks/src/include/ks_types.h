@@ -167,22 +167,23 @@ KS_BEGIN_EXTERN_C
 #define KS_LOG_ALERT KS_PRE, KS_LOG_LEVEL_ALERT
 #define KS_LOG_EMERG KS_PRE, KS_LOG_LEVEL_EMERG
 
-	struct ks_pool_s;
+struct ks_pool_s;
 
-	typedef struct ks_pool_s ks_pool_t;
+typedef struct ks_pool_s ks_pool_t;
+typedef void (*ks_hashtable_destructor_t)(void *ptr);
 
-	typedef enum {
-		KS_MPCL_ANNOUNCE,
-		KS_MPCL_TEARDOWN,
-		KS_MPCL_DESTROY
-	} ks_pool_cleanup_action_t;
+typedef enum {
+	KS_MPCL_ANNOUNCE,
+	KS_MPCL_TEARDOWN,
+	KS_MPCL_DESTROY
+} ks_pool_cleanup_action_t;
 
-	typedef void (*ks_pool_cleanup_fn_t) (ks_pool_t *mpool, void *ptr, void *arg, int type, ks_pool_cleanup_action_t action);
+typedef void (*ks_pool_cleanup_fn_t) (ks_pool_t *mpool, void *ptr, void *arg, int type, ks_pool_cleanup_action_t action);
 
-	typedef void (*ks_logger_t) (const char *file, const char *func, int line, int level, const char *fmt, ...);
-	typedef void (*ks_listen_callback_t) (ks_socket_t server_sock, ks_socket_t client_sock, struct sockaddr_in *addr);
+typedef void (*ks_logger_t) (const char *file, const char *func, int line, int level, const char *fmt, ...);
+typedef void (*ks_listen_callback_t) (ks_socket_t server_sock, ks_socket_t client_sock, struct sockaddr_in *addr);
 
-	typedef int64_t ks_time_t;
+typedef int64_t ks_time_t;
 
 
 KS_END_EXTERN_C
