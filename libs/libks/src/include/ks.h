@@ -94,6 +94,7 @@ KS_BEGIN_EXTERN_C
 #include "ks_threadmutex.h"
 #include "ks_hash.h"
 #include "ks_config.h"
+#include "ks_q.h"
 #include "ks_buffer.h"
 #include "ks_time.h"
 #include "simclist.h"

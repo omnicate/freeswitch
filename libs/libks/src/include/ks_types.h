@@ -82,6 +82,7 @@ KS_BEGIN_EXTERN_C
 		KS_STATUS_BREAK,
 		KS_STATUS_DISCONNECTED,
 		KS_STATUS_GENERR,
+		KS_STATUS_INACTIVE,
 		/* Memory pool errors */
 		KS_STATUS_ARG_NULL,        /* function argument is null */
 		KS_STATUS_ARG_INVALID,     /* function argument is invalid */
@@ -185,6 +186,9 @@ typedef void (*ks_listen_callback_t) (ks_socket_t server_sock, ks_socket_t clien
 
 typedef int64_t ks_time_t;
 
+struct ks_q_s;
+typedef struct ks_q_s ks_q_t;
+typedef void (*ks_flush_fn_t)(ks_q_t *q, void *ptr, void *flush_data);
 
 KS_END_EXTERN_C
 

@@ -22,6 +22,11 @@ testtime_SOURCES = testtime.c tap.c
 testtime_CFLAGS = $(AM_CFLAGS)
 testtime_LDADD = $(TEST_LDADD)
 
+check_PROGRAMS += testq
+testq_SOURCES = testq.c tap.c
+testq_CFLAGS = $(AM_CFLAGS)
+testq_LDADD = $(TEST_LDADD)
+
 TESTS=$(check_PROGRAMS)
 
 tests: $(check_PROGRAMS)
