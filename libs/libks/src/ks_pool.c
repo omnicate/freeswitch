@@ -1314,16 +1314,14 @@ KS_DECLARE(ks_status_t) ks_pool_close(ks_pool_t **mp_pP)
 	ks_mutex_t *mutex;
 
 	ks_assert(mp_pP);
-	
+
 	mutex = (*mp_pP)->mutex;
 	ks_mutex_lock(mutex);
 
-	if (*mp_pP) {
-		err = ks_pool_raw_close(*mp_pP);
+	err = ks_pool_raw_close(*mp_pP);
 
-		if (err == KS_STATUS_SUCCESS) {
-			*mp_pP = NULL;
-		}
+	if (err == KS_STATUS_SUCCESS) {
+		*mp_pP = NULL;
 	}
 
 	ks_mutex_unlock(mutex);
