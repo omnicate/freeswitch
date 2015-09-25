@@ -151,7 +151,6 @@ int qtest2(int ttl, int try, int loops)
 
 	if (!try) {
 		ks_q_wait(q);
-		printf("WTF?? %ld\n", ks_q_size(q));
 		ks_q_term(q);
 	}
 
