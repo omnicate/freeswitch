@@ -195,6 +195,20 @@ AC_DEFINE(HAVE_PTHREAD_SETSCHEDPARAM, 1, [Define if you have pthread_setschedpar
 AM_CFLAGS="${AM_CFLAGS} -DHAVE_PTHREAD_SETSCHEDPARAM=1"
 ])
 
+#  Enable clang address sanitizer bit build
+AC_ARG_ENABLE(address_sanitizer,
+  [AC_HELP_STRING([--enable-address-sanitizer],[build with address sanitizer])],
+  [enable_address_sanitizer="$enable_address_sanitizer"],
+  [enable_address_sanitizer="no"])
+
+if test "${enable_address_sanitizer}" = "yes"; then
+  if test "x${ax_cv_c_compiler_vendor}"  =  "xclang" ; then
+    AM_CFLAGS="${AM_CFLAGS} -fsanitize=address -fno-omit-frame-pointer"
+    AM_CXXFLAGS="${AM_CXXFLAGS} -fsanitize=address -fno-omit-frame-pointer"
+    AM_LDFLAGS="${AM_LDFLAGS} -fsanitize=address"
+  fi
+fi
+
 AC_CONFIG_FILES([Makefile
 	test/Makefile
 ])
