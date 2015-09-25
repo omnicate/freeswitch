@@ -219,13 +219,14 @@ KS_DECLARE(ks_status_t) ks_mutex_unlock(ks_mutex_t *mutex)
 
 
 struct ks_cond {
+	ks_pool_t * pool;
 	ks_mutex_t *mutex;
 #ifdef WIN32
 	CONDITION_VARIABLE cond;
 #else
 	pthread_cond_t cond;
 #endif
-	ks_pool_t * pool;
+	uint8_t static_mutex;
 };
 
 static void ks_cond_cleanup(ks_pool_t *mpool, void *ptr, void *arg, int type, ks_pool_cleanup_action_t action)
@@ -238,7 +239,9 @@ static void ks_cond_cleanup(ks_pool_t *mpool, void *ptr, void *arg, int type, ks
 	case KS_MPCL_TEARDOWN:
 		break;
 	case KS_MPCL_DESTROY:
-		ks_mutex_destroy(&cond->mutex);
+		if (!cond->static_mutex) {
+			ks_mutex_destroy(&cond->mutex);
+		}
 #ifndef WIN32
 		pthread_cond_destroy(&cond->cond);
 #endif
@@ -246,8 +249,7 @@ static void ks_cond_cleanup(ks_pool_t *mpool, void *ptr, void *arg, int type, ks
 	}
 }
 
-
-KS_DECLARE(ks_status_t) ks_cond_create(ks_cond_t **cond, ks_pool_t *pool)
+KS_DECLARE(ks_status_t) ks_cond_create_ex(ks_cond_t **cond, ks_pool_t *pool, ks_mutex_t *mutex)
 {
 	ks_status_t status = KS_STATUS_FAIL;
 	ks_cond_t *check = NULL;
@@ -262,16 +264,22 @@ KS_DECLARE(ks_status_t) ks_cond_create(ks_cond_t **cond, ks_pool_t *pool)
 	}
 
 	check->pool = pool;
-
-	if (ks_mutex_create(&check->mutex, KS_MUTEX_FLAG_DEFAULT, pool) != KS_STATUS_SUCCESS) {
-		goto done;
+	if (mutex) {
+		check->mutex = mutex;
+		check->static_mutex = 1;
+	} else {
+		if (ks_mutex_create(&check->mutex, KS_MUTEX_FLAG_DEFAULT, pool) != KS_STATUS_SUCCESS) {
+			goto done;
+		}
 	}
 
 #ifdef WIN32
 	InitializeConditionVariable(&check->cond);
 #else
 	if (pthread_cond_init(&check->cond, NULL)) {
-		ks_mutex_destroy(&check->mutex);
+		if (!check->static_mutex) {
+			ks_mutex_destroy(&check->mutex);
+		}
 		goto done;
 	}
 #endif
@@ -282,6 +290,16 @@ KS_DECLARE(ks_status_t) ks_cond_create(ks_cond_t **cond, ks_pool_t *pool)
 
   done:
 	return status;
+}
+
+KS_DECLARE(ks_mutex_t *) ks_cond_get_mutex(ks_cond_t *cond)
+{
+	return cond->mutex;
+}
+
+KS_DECLARE(ks_status_t) ks_cond_create(ks_cond_t **cond, ks_pool_t *pool)
+{
+	return ks_cond_create_ex(cond, pool, NULL);
 }
 
 KS_DECLARE(ks_status_t) ks_cond_lock(ks_cond_t *cond)
