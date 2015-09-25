@@ -44,6 +44,7 @@ struct ks_mutex {
 #endif
 	ks_pool_t * pool;
 	ks_mutex_type_t type;
+	uint8_t malloc;
 };
 
 static void ks_mutex_cleanup(ks_pool_t *mpool, void *ptr, void *arg, int type, ks_pool_cleanup_action_t action)
@@ -69,6 +70,34 @@ static void ks_mutex_cleanup(ks_pool_t *mpool, void *ptr, void *arg, int type, k
 	}
 }
 
+KS_DECLARE(ks_status_t) ks_mutex_destroy(ks_mutex_t **mutexP)
+{
+	ks_mutex_t *mutex;
+
+	ks_assert(mutexP);
+	
+	mutex = *mutexP;
+	*mutexP = NULL;
+
+	if (!mutex) return KS_STATUS_FAIL;
+	
+	if (mutex->malloc) {
+#ifdef WIN32
+		if (mutex->type == KS_MUTEX_TYPE_NON_RECURSIVE) {
+			CloseHandle(mutex->handle);
+		} else {
+			DeleteCriticalSection(&mutex->mutex);
+		}
+#else
+		pthread_mutex_destroy(&mutex->mutex);
+#endif
+		free(mutex);
+	} else {
+		ks_pool_free(mutex->pool, (void *)mutex);
+	}
+
+	return KS_STATUS_SUCCESS;
+}
 
 KS_DECLARE(ks_status_t) ks_mutex_create(ks_mutex_t **mutex, unsigned int flags, ks_pool_t *pool)
 {
@@ -78,11 +107,14 @@ KS_DECLARE(ks_status_t) ks_mutex_create(ks_mutex_t **mutex, unsigned int flags, 
 #endif
 	ks_mutex_t *check = NULL;
 
-	if (!pool)
-		goto done;
-
-	if (!(check = (ks_mutex_t *) ks_pool_alloc(pool, sizeof(**mutex)))) {
-		goto done;
+	if (pool) {
+		if (!(check = (ks_mutex_t *) ks_pool_alloc(pool, sizeof(**mutex)))) {
+			goto done;
+		}
+	} else {
+		check = malloc(sizeof(**mutex));
+		memset(check, 0, sizeof(**mutex));
+		check->malloc = 1;
 	}
 
 	check->pool = pool;
@@ -121,23 +153,13 @@ KS_DECLARE(ks_status_t) ks_mutex_create(ks_mutex_t **mutex, unsigned int flags, 
 #endif
 	*mutex = check;
 	status = KS_STATUS_SUCCESS;
-	ks_pool_set_cleanup(pool, check, NULL, 0, ks_mutex_cleanup);
+
+	if (pool) {
+		ks_pool_set_cleanup(pool, check, NULL, 0, ks_mutex_cleanup);
+	}
 
   done:
 	return status;
-}
-
-KS_DECLARE(ks_status_t) ks_mutex_destroy(ks_mutex_t **mutex)
-{
-	ks_mutex_t *mp = *mutex;
-
-	*mutex = NULL;
-
-	if (!mp) {
-		return KS_STATUS_FAIL;
-	}
-
-	return ks_pool_safe_free(mp->pool, mp);
 }
 
 KS_DECLARE(ks_status_t) ks_mutex_lock(ks_mutex_t *mutex)

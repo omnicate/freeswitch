@@ -119,6 +119,7 @@ struct ks_pool_s {
 	struct ks_pool_block_st *mp_free[MAX_BITS + 1];	/* free lists based on size */
 	unsigned int mp_magic2;		/* upper magic for overwrite sanity */
 	ks_pool_cleanup_node_t *clfn_list;
+	ks_mutex_t *mutex;
 };
 
 /* for debuggers to be able to interrogate the generic type in the .h file */
@@ -198,6 +199,7 @@ static void peform_pool_cleanup_on_free(ks_pool_t *mp_p, void *ptr)
 
 	np = mp_p->clfn_list;
 
+	ks_mutex_lock(mp_p->mutex);
 	while(np) {
 		if (np->ptr == ptr) {
 			if (last) {
@@ -217,12 +219,14 @@ static void peform_pool_cleanup_on_free(ks_pool_t *mp_p, void *ptr)
 		last = np;
 		np = np->next;
 	}
+	ks_mutex_unlock(mp_p->mutex);
 }
 
 static void peform_pool_cleanup(ks_pool_t *mp_p)
 {
 	ks_pool_cleanup_node_t *np;
 
+	ks_mutex_lock(mp_p->mutex);
 	for (np = mp_p->clfn_list; np; np = np->next) {
 		np->fn(mp_p, np->ptr, np->arg, np->type, KS_MPCL_ANNOUNCE);
 	}
@@ -234,6 +238,7 @@ static void peform_pool_cleanup(ks_pool_t *mp_p)
 	for (np = mp_p->clfn_list; np; np = np->next) {
 		np->fn(mp_p, np->ptr, np->arg, np->type, KS_MPCL_DESTROY);
 	}
+	ks_mutex_unlock(mp_p->mutex);
 
 	mp_p->clfn_list = NULL;
 }
@@ -1191,6 +1196,7 @@ KS_DECLARE(ks_status_t) ks_pool_open(ks_pool_t **poolP)
 	ks_pool_t *pool = ks_pool_raw_open(KS_POOL_FLAG_DEFAULT, 0, NULL, &err);
 
 	if (pool && (err == KS_STATUS_SUCCESS)) {
+		ks_mutex_create(&pool->mutex, KS_MUTEX_FLAG_DEFAULT, NULL);
 		*poolP = pool;
 		return KS_STATUS_SUCCESS;
 	} else {
@@ -1305,14 +1311,27 @@ static ks_status_t ks_pool_raw_close(ks_pool_t *mp_p)
 KS_DECLARE(ks_status_t) ks_pool_close(ks_pool_t **mp_pP)
 {
     ks_status_t err;
+	ks_mutex_t *mutex;
 
 	ks_assert(mp_pP);
+	
+	mutex = (*mp_pP)->mutex;
+	ks_mutex_lock(mutex);
 
-	err = ks_pool_raw_close(*mp_pP);
+	if (*mp_pP) {
+		err = ks_pool_raw_close(*mp_pP);
+
+		if (err == KS_STATUS_SUCCESS) {
+			*mp_pP = NULL;
+		}
+	}
+
+	ks_mutex_unlock(mutex);
 
 	if (err == KS_STATUS_SUCCESS) {
-		*mp_pP = NULL;
+		ks_mutex_destroy(&mutex);
 	}
+
 	return err;
 }
 
@@ -1350,6 +1369,7 @@ KS_DECLARE(ks_status_t) ks_pool_clear(ks_pool_t *mp_p)
 		return KS_STATUS_POOL_OVER;
 	}
 
+	ks_mutex_lock(mp_p->mutex);
 	if (mp_p->mp_log_func != NULL) {
 		mp_p->mp_log_func(mp_p, KS_POOL_FUNC_CLEAR, 0, 0, NULL, NULL, 0);
 	}
@@ -1376,6 +1396,7 @@ KS_DECLARE(ks_status_t) ks_pool_clear(ks_pool_t *mp_p)
 			final = ret;
 		}
 	}
+	ks_mutex_unlock(mp_p->mutex);
 
 	return final;
 }
@@ -1423,7 +1444,9 @@ KS_DECLARE(void *) ks_pool_alloc_ex(ks_pool_t *mp_p, const unsigned long byte_si
 		return NULL;
 	}
 
+	ks_mutex_lock(mp_p->mutex);
 	addr = alloc_mem(mp_p, byte_size, error_p);
+	ks_mutex_unlock(mp_p->mutex);
 
 	if (mp_p->mp_log_func != NULL) {
 		mp_p->mp_log_func(mp_p, KS_POOL_FUNC_ALLOC, byte_size, 0, addr, NULL, 0);
@@ -1506,11 +1529,13 @@ KS_DECLARE(void *) ks_pool_calloc_ex(ks_pool_t *mp_p, const unsigned long ele_n,
 		return NULL;
 	}
 
+	ks_mutex_lock(mp_p->mutex);
 	byte_size = ele_n * ele_size;
 	addr = alloc_mem(mp_p, byte_size, error_p);
 	if (addr != NULL) {
 		memset(addr, 0, byte_size);
 	}
+	ks_mutex_unlock(mp_p->mutex);
 
 	if (mp_p->mp_log_func != NULL) {
 		mp_p->mp_log_func(mp_p, KS_POOL_FUNC_CALLOC, ele_size, ele_n, addr, NULL, 0);
@@ -1571,15 +1596,21 @@ KS_DECLARE(void *) ks_pool_calloc(ks_pool_t *mp_p, const unsigned long ele_n, co
  */
 KS_DECLARE(ks_status_t) ks_pool_free(ks_pool_t *mp_p, void *addr)
 {
+	ks_status_t r;
 
 	ks_assert(mp_p);
 	ks_assert(addr);
 
+	ks_mutex_lock(mp_p->mutex);
+
 	if (mp_p->mp_magic != KS_POOL_MAGIC) {
-		return KS_STATUS_PNT;
+		r = KS_STATUS_PNT;
+		goto end;
 	}
+
 	if (mp_p->mp_magic2 != KS_POOL_MAGIC) {
-		return KS_STATUS_POOL_OVER;
+		r = KS_STATUS_POOL_OVER;
+		goto end;
 	}
 
 	if (mp_p->mp_log_func != NULL) {
@@ -1587,7 +1618,14 @@ KS_DECLARE(ks_status_t) ks_pool_free(ks_pool_t *mp_p, void *addr)
 		mp_p->mp_log_func(mp_p, KS_POOL_FUNC_FREE, prefix->size, 0, NULL, addr, 0);
 	}
 
-	return free_mem(mp_p, addr);
+	r = free_mem(mp_p, addr);
+
+ end:
+
+	ks_mutex_unlock(mp_p->mutex);
+
+	return r;
+
 }
 
 /*
@@ -1643,6 +1681,8 @@ KS_DECLARE(void *) ks_pool_resize_ex(ks_pool_t *mp_p, void *old_addr, const unsi
 		return NULL;
 	}
 
+
+	ks_mutex_lock(mp_p->mutex);
 	old_byte_size = prefix->size;
 
 	/*
@@ -1653,7 +1693,8 @@ KS_DECLARE(void *) ks_pool_resize_ex(ks_pool_t *mp_p, void *old_addr, const unsi
 		block_p = (ks_pool_block_t *) ((char *) old_addr - PREFIX_SIZE - sizeof(ks_pool_block_t));
 		if (block_p->mb_magic != BLOCK_MAGIC || block_p->mb_magic2 != BLOCK_MAGIC) {
 			SET_POINTER(error_p, KS_STATUS_POOL_OVER);
-			return NULL;
+			new_addr = NULL;
+			goto end;
 		}
 	}
 
@@ -1670,7 +1711,8 @@ KS_DECLARE(void *) ks_pool_resize_ex(ks_pool_t *mp_p, void *old_addr, const unsi
 		ret = check_magic(old_addr, old_size);
 		if (ret != KS_STATUS_SUCCESS) {
 			SET_POINTER(error_p, ret);
-			return NULL;
+			new_addr = NULL;
+			goto end;
 		}
 	}
 
@@ -1695,7 +1737,8 @@ KS_DECLARE(void *) ks_pool_resize_ex(ks_pool_t *mp_p, void *old_addr, const unsi
 	new_addr = alloc_mem(mp_p, new_size, error_p);
 	if (new_addr == NULL) {
 		/* error_p set in ks_pool_alloc */
-		return NULL;
+		new_addr = NULL;
+		goto end;
 	}
 
 	if (new_byte_size > old_byte_size) {
@@ -1711,7 +1754,8 @@ KS_DECLARE(void *) ks_pool_resize_ex(ks_pool_t *mp_p, void *old_addr, const unsi
 		/* if the old free failed, try and free the new address */
 		(void) free_mem(mp_p, new_addr);
 		SET_POINTER(error_p, ret);
-		return NULL;
+		new_addr = NULL;
+		goto end;
 	}
 
 	if (mp_p->mp_log_func != NULL) {
@@ -1719,6 +1763,11 @@ KS_DECLARE(void *) ks_pool_resize_ex(ks_pool_t *mp_p, void *old_addr, const unsi
 	}
 
 	SET_POINTER(error_p, KS_STATUS_SUCCESS);
+
+ end:
+
+	ks_mutex_unlock(mp_p->mutex);
+
 	return new_addr;
 }
 

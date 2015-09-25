@@ -89,7 +89,7 @@ KS_BEGIN_EXTERN_C
 	KS_DECLARE(int) ks_snprintf(char *buffer, size_t count, const char *fmt, ...);
 	KS_DECLARE(int) ks_wait_sock(ks_socket_t sock, uint32_t ms, ks_poll_t flags);
 	KS_DECLARE(unsigned int) ks_separate_string_string(char *buf, const char *delim, char **array, unsigned int arraylen);
-
+    KS_DECLARE(int) ks_cpu_count(void);
 	static __inline__ int ks_safe_strcasecmp(const char *s1, const char *s2) {
 		if (!(s1 && s2)) {
 			return 1;

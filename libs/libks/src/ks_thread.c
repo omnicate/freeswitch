@@ -199,6 +199,7 @@ KS_DECLARE(ks_status_t) ks_thread_create_ex(ks_thread_t **rthread, ks_thread_fun
 	thread->running = 1;
 	thread->flags = flags;
 	thread->priority = priority;
+	thread->pool = pool;
 
 #if defined(WIN32)
 	thread->handle = (void *) _beginthreadex(NULL, (unsigned) thread->stack_size, (unsigned int (__stdcall *) (void *)) thread_launch, thread, 0, NULL);

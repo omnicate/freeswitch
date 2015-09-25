@@ -90,3 +90,19 @@ KS_DECLARE(char *) ks_url_decode(char *s)
 	return s;
 }
 
+KS_DECLARE(int) ks_cpu_count(void)
+{
+	int cpu_count;
+
+#ifndef WIN32
+	cpu_count = sysconf (_SC_NPROCESSORS_ONLN);
+#else
+	{
+		SYSTEM_INFO sysinfo;
+		GetSystemInfo( &sysinfo );
+		cpu_count = sysinfo.dwNumberOfProcessors;
+	}
+#endif
+	
+	return cpu_count;
+}

@@ -1,27 +1,9 @@
 #include "ks.h"
 #include "tap.h"
+#define MAX_STUFF 200
 
-static ks_thread_t *thread1;
-static ks_thread_t *thread2;
-static ks_thread_t *thread3;
-static ks_thread_t *thread4;
-static ks_thread_t *thread5;
-static ks_thread_t *thread6;
-static ks_thread_t *thread7;
-static ks_thread_t *thread8;
-static ks_thread_t *thread9;
-static ks_thread_t *thread10;
-static ks_thread_t *thread11;
-static ks_thread_t *thread12;
-static ks_thread_t *thread13;
-static ks_thread_t *thread14;
-static ks_thread_t *thread15;
-static ks_thread_t *thread16;
-static ks_thread_t *thread17;
-static ks_thread_t *thread18;
-static ks_thread_t *thread19;
-static ks_thread_t *thread20;
-static ks_thread_t *thread21;
+static ks_thread_t *threads[MAX_STUFF];
+static ks_thread_t *thread_p;
 
 static ks_pool_t *pool;
 static ks_mutex_t *mutex;
@@ -35,6 +17,7 @@ static int counter4 = 0;
 static int counter5 = 0;
 static int counter6 = 0;
 static int threadscount = 0;
+static int cpu_count = 0;
 
 #define LOOP_COUNT 10000
 
@@ -84,18 +67,23 @@ static void *thread_test_cond_consumer_func(ks_thread_t *thread, void *data)
 
 static void check_cond(void)
 {
-	int count1 = 0;
-	int count2 = 0;
-	int count3 = 0;
+	int count[MAX_STUFF] = { 0 };
+	int ttl = 0;
 
 	ok( (ks_pool_open(&pool) == KS_STATUS_SUCCESS) );
 	ok( (ks_cond_create(&cond, pool) == KS_STATUS_SUCCESS) );
-	ok( (ks_thread_create(&thread17, thread_test_cond_producer_func, &count1, pool) == KS_STATUS_SUCCESS) );
-	ok( (ks_thread_create(&thread18, thread_test_cond_producer_func, &count2, pool) == KS_STATUS_SUCCESS) );
-	ok( (ks_thread_create(&thread19, thread_test_cond_producer_func, &count3, pool) == KS_STATUS_SUCCESS) );
-	ok( (ks_thread_create(&thread20, thread_test_cond_consumer_func, NULL, pool) == KS_STATUS_SUCCESS) );
+	
+	int i;
+	for(i = 0; i < cpu_count; i++) {
+		ok( (ks_thread_create(&threads[i], thread_test_cond_producer_func, &count[i], pool) == KS_STATUS_SUCCESS) );
+	}
+	ok( (ks_thread_create(&thread_p, thread_test_cond_consumer_func, NULL, pool) == KS_STATUS_SUCCESS) );
 	ok( (ks_pool_close(&pool) == KS_STATUS_SUCCESS) );
-	ok( (count1 + count2 + count3 == LOOP_COUNT) );
+	for(i = 0; i < cpu_count; i++) {
+		ttl += count[i];
+	}
+
+	ok( (ttl == LOOP_COUNT) );
 }
 
 
@@ -137,10 +125,12 @@ static void check_rwl(void)
 		ks_rwl_read_unlock(rwlock);
 	}
 	ks_rwl_read_unlock(rwlock);
-	ok( (ks_thread_create(&thread13, thread_test_rwlock_func, NULL, pool) == KS_STATUS_SUCCESS) );
-	ok( (ks_thread_create(&thread14, thread_test_rwlock_func, NULL, pool) == KS_STATUS_SUCCESS) );
-	ok( (ks_thread_create(&thread15, thread_test_rwlock_func, NULL, pool) == KS_STATUS_SUCCESS) );
-	ok( (ks_thread_create(&thread16, thread_test_rwlock_func, NULL, pool) == KS_STATUS_SUCCESS) );
+
+	int i;
+	for(i = 0; i < cpu_count; i++) {
+		ok( (ks_thread_create(&threads[i], thread_test_rwlock_func, NULL, pool) == KS_STATUS_SUCCESS) );
+	}
+
 	ok( (ks_pool_close(&pool) == KS_STATUS_SUCCESS) );
 	ok( (counter4 == LOOP_COUNT) );
 
@@ -186,7 +176,16 @@ static void *thread_test_function_atatched(ks_thread_t *thread, void *data)
 {
 	int i;
 	int d = (int)(intptr_t)data;
+	void *mem, *last_mem = NULL;
 
+	for (i = 0; i < LOOP_COUNT; i++) {
+		if (last_mem) {
+			ks_pool_safe_free(thread->pool, last_mem);
+		}
+		mem = ks_pool_alloc(thread->pool, 1024);
+		last_mem = mem;
+	}
+	
 	for (i = 0; i < LOOP_COUNT; i++) {
 		ks_mutex_lock(mutex);
 		if (d == 1) {
@@ -194,25 +193,28 @@ static void *thread_test_function_atatched(ks_thread_t *thread, void *data)
 		}
 		ks_mutex_unlock(mutex);
 	}
+	
 	return NULL;
 }
 
 static void create_threads_cleanup(void)
 {
 	void *d = (void *)(intptr_t)1;
-	ok( (ks_thread_create(&thread9, thread_test_function_cleanup, d, pool) == KS_STATUS_SUCCESS) );
-	ok( (ks_thread_create(&thread10, thread_test_function_cleanup, d, pool) == KS_STATUS_SUCCESS) );
-	ok( (ks_thread_create(&thread11, thread_test_function_cleanup, d, pool) == KS_STATUS_SUCCESS) );
-	ok( (ks_thread_create(&thread12, thread_test_function_cleanup, d, pool) == KS_STATUS_SUCCESS) );
+	int i;
+	for(i = 0; i < cpu_count; i++) {
+		ok( (ks_thread_create(&threads[i], thread_test_function_cleanup, d, pool) == KS_STATUS_SUCCESS) );
+	}
+
 }
 
 static void create_threads_atatched(void)
 {
 	void *d = (void *)(intptr_t)1;
-	ok( (ks_thread_create(&thread1, thread_test_function_atatched, d, pool) == KS_STATUS_SUCCESS) );
-	ok( (ks_thread_create(&thread2, thread_test_function_atatched, d, pool) == KS_STATUS_SUCCESS) );
-	ok( (ks_thread_create(&thread3, thread_test_function_atatched, d, pool) == KS_STATUS_SUCCESS) );
-	ok( (ks_thread_create(&thread4, thread_test_function_atatched, d, pool) == KS_STATUS_SUCCESS) );
+
+	int i;
+	for(i = 0; i < cpu_count; i++) {
+		ok( (ks_thread_create(&threads[i], thread_test_function_atatched, d, pool) == KS_STATUS_SUCCESS) );
+	}
 }
 
 static void create_threads_detatched(void)
@@ -220,14 +222,11 @@ static void create_threads_detatched(void)
 	ks_status_t status;
 	void *d = (void *)(intptr_t)1;
 	
-	status = ks_thread_create_ex(&thread5, thread_test_function_detatched, d, KS_THREAD_FLAG_DETATCHED, KS_THREAD_DEFAULT_STACK, KS_PRI_NORMAL, pool);
-	ok( status == KS_STATUS_SUCCESS );
-	status = ks_thread_create_ex(&thread6, thread_test_function_detatched, d, KS_THREAD_FLAG_DETATCHED, KS_THREAD_DEFAULT_STACK, KS_PRI_NORMAL, pool);
-	ok( status == KS_STATUS_SUCCESS );
-	status = ks_thread_create_ex(&thread7, thread_test_function_detatched, d, KS_THREAD_FLAG_DETATCHED, KS_THREAD_DEFAULT_STACK, KS_PRI_NORMAL, pool);
-	ok( status == KS_STATUS_SUCCESS );
-	status = ks_thread_create_ex(&thread8, thread_test_function_detatched, d, KS_THREAD_FLAG_DETATCHED, KS_THREAD_DEFAULT_STACK, KS_PRI_NORMAL, pool);
-	ok( status == KS_STATUS_SUCCESS );
+	int i;
+	for(i = 0; i < cpu_count; i++) {
+		status = ks_thread_create_ex(&threads[i], thread_test_function_detatched, d, KS_THREAD_FLAG_DETATCHED, KS_THREAD_DEFAULT_STACK, KS_PRI_NORMAL, pool);
+		ok( status == KS_STATUS_SUCCESS );
+	}
 }
 
 static void check_thread_priority(void)
@@ -235,30 +234,30 @@ static void check_thread_priority(void)
 	ks_status_t status;
 	void *d = (void *)(intptr_t)1;
 
-	status = ks_thread_create_ex(&thread21, thread_priority, d, KS_THREAD_FLAG_DETATCHED, KS_THREAD_DEFAULT_STACK, KS_PRI_IMPORTANT, pool);
+	status = ks_thread_create_ex(&thread_p, thread_priority, d, KS_THREAD_FLAG_DETATCHED, KS_THREAD_DEFAULT_STACK, KS_PRI_IMPORTANT, pool);
 	ok( status == KS_STATUS_SUCCESS );
 	sleep(1);
-	ok( ks_thread_priority(thread21) == KS_PRI_IMPORTANT );
+	ok( ks_thread_priority(thread_p) == KS_PRI_IMPORTANT );
 
-	ks_pool_free(pool, thread21);
+	ks_pool_free(pool, thread_p);
 }
 
 static void join_threads(void)
 {
-	ok( (KS_STATUS_SUCCESS == ks_thread_join(thread1)) );
-	ok( (KS_STATUS_SUCCESS == ks_thread_join(thread2)) );
-	ok( (KS_STATUS_SUCCESS == ks_thread_join(thread3)) );
-	ok( (KS_STATUS_SUCCESS == ks_thread_join(thread4)) );
+	int i;
+	for(i = 0; i < cpu_count; i++) {
+		ok( (KS_STATUS_SUCCESS == ks_thread_join(threads[i])) );
+	}
 }
 
 static void check_atatched(void)
 {
-	ok( counter1 == (LOOP_COUNT * 4) );
+	ok( counter1 == (LOOP_COUNT * cpu_count) );
 }
 
 static void check_detached(void)
 {
-	ok( counter2 == (LOOP_COUNT * 4) );
+	ok( counter2 == (LOOP_COUNT * cpu_count) );
 }
 
 static void create_pool(void)
@@ -268,7 +267,7 @@ static void create_pool(void)
 
 static void check_cleanup(void)
 {
-	ok( (counter3 == 4) );
+	ok( (counter3 == cpu_count) );
 }
 
 static void check_pool_close(void)
@@ -314,8 +313,12 @@ static void test_non_recursive_mutex(void)
 
 int main(int argc, char **argv)
 {
-	plan(44);
 
+	cpu_count = ks_cpu_count() * 4;
+
+	plan(21 + cpu_count * 6);
+
+	
 	diag("Starting testing for %d tests\n", 44);
 
 	create_pool();
@@ -328,7 +331,7 @@ int main(int argc, char **argv)
 	join_threads();
 	check_atatched();
 	create_threads_detatched();
-	while (threadscount != 4) sleep(1);
+	while (threadscount != cpu_count) sleep(1);
 	check_detached();
 	create_threads_cleanup();
 	check_pool_close();
