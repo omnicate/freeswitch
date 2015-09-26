@@ -386,9 +386,9 @@ KS_DECLARE(ks_status_t) ks_cond_timedwait(ks_cond_t *cond, uint32_t ms)
 	SleepConditionVariableCS(&cond->cond, &cond->mutex->mutex, ms);
 #else
 	struct timespec ts;
-	clock_gettime(CLOCK_REALTIME, &ts);
-	ts.tv_sec  +=  ms / 1000;
-	ts.tv_nsec +=  ms % 1000;
+	ks_time_t n= ks_time_now();
+	ts.tv_sec   = (n / 1000000) + (ms / 1000);
+	ts.tv_nsec  = (n % 1000000) + (ms % 1000);
 	pthread_cond_timedwait(&cond->cond, &cond->mutex->mutex, &ts);
 #endif
 
