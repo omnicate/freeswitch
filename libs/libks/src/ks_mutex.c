@@ -380,6 +380,21 @@ KS_DECLARE(ks_status_t) ks_cond_wait(ks_cond_t *cond)
 	return KS_STATUS_SUCCESS;
 }
 
+KS_DECLARE(ks_status_t) ks_cond_timedwait(ks_cond_t *cond, uint32_t ms)
+{
+#ifdef WIN32
+	SleepConditionVariableCS(&cond->cond, &cond->mutex->mutex, ms);
+#else
+	struct timespec ts;
+	clock_gettime(CLOCK_REALTIME, &ts);
+	ts.tv_sec  +=  ms / 1000;
+	ts.tv_nsec +=  ms % 1000;
+	pthread_cond_timedwait(&cond->cond, &cond->mutex->mutex, &ts);
+#endif
+
+	return KS_STATUS_SUCCESS;
+}
+
 KS_DECLARE(ks_status_t) ks_cond_destroy(ks_cond_t **cond)
 {
 	ks_cond_t *condp = *cond;

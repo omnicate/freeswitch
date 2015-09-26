@@ -101,6 +101,7 @@ KS_BEGIN_EXTERN_C
 	KS_DECLARE(ks_status_t) ks_cond_try_signal(ks_cond_t *cond);
 	KS_DECLARE(ks_status_t) ks_cond_try_broadcast(ks_cond_t *cond);
 	KS_DECLARE(ks_status_t) ks_cond_wait(ks_cond_t *cond);
+	KS_DECLARE(ks_status_t) ks_cond_timedwait(ks_cond_t *cond, uint32_t ms);
 	KS_DECLARE(ks_status_t) ks_cond_destroy(ks_cond_t **cond);
 	KS_DECLARE(ks_mutex_t *) ks_cond_get_mutex(ks_cond_t *cond);
 
