@@ -345,7 +345,7 @@ static ks_status_t do_pop(ks_q_t *q, void **ptr)
 	return KS_STATUS_SUCCESS;
 }
 
-KS_DECLARE(ks_status_t) ks_q_pop(ks_q_t *q, void **ptr)
+KS_DECLARE(ks_status_t) ks_q_pop_timeout(ks_q_t *q, void **ptr, uint32_t timeout)
 {
 	ks_status_t r;
 
@@ -359,8 +359,16 @@ KS_DECLARE(ks_status_t) ks_q_pop(ks_q_t *q, void **ptr)
 	if (q->len == 0) {
 		if (q->active) {
 			q->poppers++;
-			ks_cond_wait(q->pop_cond);
+			if (timeout) {
+				r = ks_cond_timedwait(q->pop_cond, timeout);
+			} else {
+				r = ks_cond_wait(q->pop_cond);
+			}
 			q->poppers--;
+
+			if (timeout && r != KS_STATUS_SUCCESS) {
+				goto end;
+			}
 		}
 
 		if (q->len == 0) {
@@ -385,6 +393,11 @@ KS_DECLARE(ks_status_t) ks_q_pop(ks_q_t *q, void **ptr)
 
 	return r;
 
+}
+
+KS_DECLARE(ks_status_t) ks_q_pop(ks_q_t *q, void **ptr)
+{
+	return ks_q_pop_timeout(q, ptr, 0);
 }
 
 KS_DECLARE(ks_status_t) ks_q_trypop(ks_q_t *q, void **ptr)

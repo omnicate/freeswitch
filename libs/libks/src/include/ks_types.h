@@ -83,6 +83,7 @@ KS_BEGIN_EXTERN_C
 		KS_STATUS_DISCONNECTED,
 		KS_STATUS_GENERR,
 		KS_STATUS_INACTIVE,
+		KS_STATUS_TIMEOUT,
 		/* Memory pool errors */
 		KS_STATUS_ARG_NULL,        /* function argument is null */
 		KS_STATUS_ARG_INVALID,     /* function argument is invalid */

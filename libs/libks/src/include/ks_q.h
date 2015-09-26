@@ -38,6 +38,7 @@
 
 KS_BEGIN_EXTERN_C
 
+KS_DECLARE(ks_status_t) ks_q_pop_timeout(ks_q_t *q, void **ptr, uint32_t timeout);
 KS_DECLARE(ks_status_t) ks_q_wake(ks_q_t *q);
 KS_DECLARE(ks_status_t) ks_q_flush(ks_q_t *q);
 KS_DECLARE(ks_status_t) ks_q_set_flush_fn(ks_q_t *q, ks_flush_fn_t fn, void *flush_data);

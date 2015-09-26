@@ -389,7 +389,14 @@ KS_DECLARE(ks_status_t) ks_cond_timedwait(ks_cond_t *cond, ks_time_t ms)
 	ks_time_t n = ks_time_now() + (ms * 1000);
 	ts.tv_sec   = ks_time_sec(n);
 	ts.tv_nsec  = ks_time_nsec(n);
-	pthread_cond_timedwait(&cond->cond, &cond->mutex->mutex, &ts);
+	if (pthread_cond_timedwait(&cond->cond, &cond->mutex->mutex, &ts)) {
+		switch(errno) {
+		case ETIMEDOUT:
+			return KS_STATUS_TIMEOUT;
+		default:
+			return KS_STATUS_FAIL;
+		}
+	}
 #endif
 
 	return KS_STATUS_SUCCESS;
