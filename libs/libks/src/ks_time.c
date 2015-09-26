@@ -168,8 +168,8 @@ static void generic_sleep(ks_time_t microsec)
 	usleep(microsec);
 #else
 	struct timeval tv;
-	tv.tv_usec = microsec % 1000000;
-	tv.tv_sec = microsec / 1000000;
+	tv.tv_usec = ks_time_usec(microsec);
+	tv.tv_sec = ks_time_sec(microsec);
 	select(0, NULL, NULL, NULL, &tv);
 #endif
 }
@@ -182,12 +182,12 @@ KS_DECLARE(void) ks_sleep(ks_time_t microsec)
 #endif
 	
 #if defined(HAVE_CLOCK_NANOSLEEP)
-	ts.tv_sec = microsec / 1000000;
-	ts.tv_nsec = ((microsec % 1000000) * 1000);
+	ts.tv_sec = ks_time_sec(microsec);
+	ts.tv_nsec = ks_time_nsec(microsec);
 	clock_nanosleep(CLOCK_MONOTONIC, 0, &ts, NULL);
 #elif defined(__APPLE__)
-	ts.tv_sec = microsec / 1000000;
-	ts.tv_nsec = (microsec % 1000000) * 850;
+	ts.tv_sec = ks_time_sec(microsec);
+	ts.tv_nsec = ks_time_usec(microsec) * 850;
 	nanosleep(&ts, NULL);
 #else
 	generic_sleep(microsec);

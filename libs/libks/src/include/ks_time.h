@@ -38,8 +38,12 @@
 
 KS_BEGIN_EXTERN_C
 
-	KS_DECLARE(ks_time_t) ks_time_now(void);
-	KS_DECLARE(void) ks_sleep(ks_time_t microsec);
+#define KS_USEC_PER_SEC 1000000
+#define ks_time_sec(time) ((time) / KS_USEC_PER_SEC)
+#define ks_time_usec(time) ((time) % KS_USEC_PER_SEC)
+#define ks_time_nsec(time) (((time) % KS_USEC_PER_SEC) * 1000)
+KS_DECLARE(ks_time_t) ks_time_now(void);
+KS_DECLARE(void) ks_sleep(ks_time_t microsec);
 
 KS_END_EXTERN_C
 
