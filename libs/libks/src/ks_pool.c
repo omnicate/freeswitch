@@ -1661,7 +1661,11 @@ KS_DECLARE(void *) ks_pool_resize_ex(ks_pool_t *mp_p, void *old_addr, const unsi
 	alloc_prefix_t *prefix;
 
 	ks_assert(mp_p);
-	ks_assert(old_addr);
+	//ks_assert(old_addr);
+
+	if (!old_addr) {
+		return ks_pool_alloc_ex(mp_p, new_byte_size, error_p);
+	}
 
 	if (mp_p->mp_magic != KS_POOL_MAGIC) {
 		SET_POINTER(error_p, KS_STATUS_PNT);

@@ -27,6 +27,11 @@ testq_SOURCES = testq.c tap.c
 testq_CFLAGS = $(AM_CFLAGS)
 testq_LDADD = $(TEST_LDADD)
 
+check_PROGRAMS += testhash
+testhash_SOURCES = testhash.c tap.c
+testhash_CFLAGS = $(AM_CFLAGS)
+testhash_LDADD = $(TEST_LDADD)
+
 TESTS=$(check_PROGRAMS)
 
 tests: $(check_PROGRAMS)

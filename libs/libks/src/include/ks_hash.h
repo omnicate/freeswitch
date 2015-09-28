@@ -1,15 +1,15 @@
 /* 
  * FreeSWITCH Modular Media Switching Software Library / Soft-Switch Application
  *
- * ks_hashtable.h -- Hashtable
+ * ks_hash.h -- Ks_Hash
  *
  */
 
 
-/* hashtable.h Copyright (C) 2002 Christopher Clark <firstname.lastname@cl.cam.ac.uk> */
+/* ks_hash.h Copyright (C) 2002 Christopher Clark <firstname.lastname@cl.cam.ac.uk> */
 
-#ifndef __HASHTABLE_CWC22_H__
-#define __HASHTABLE_CWC22_H__
+#ifndef __KS_HASH_CWC22_H__
+#define __KS_HASH_CWC22_H__
 
 #ifdef _MSC_VER
 #ifndef __inline__
@@ -23,54 +23,54 @@
 extern "C" {
 #endif
 
-typedef struct ks_hashtable ks_hashtable_t;
-typedef struct ks_hashtable_iterator ks_hashtable_iterator_t;
+typedef struct ks_hash ks_hash_t;
+typedef struct ks_hash_iterator ks_hash_iterator_t;
 
 
 /* Example of use:
  *
- *      ks_hashtable_t  *h;
+ *      ks_hash_t  *h;
  *      struct some_key   *k;
  *      struct some_value *v;
  *
  *      static unsigned int         hash_from_key_fn( void *k );
  *      static int                  keys_equal_fn ( void *key1, void *key2 );
  *
- *      h = create_hashtable(16, hash_from_key_fn, keys_equal_fn);
+ *      h = ks_hash_create(16, hash_from_key_fn, keys_equal_fn);
  *      k = (struct some_key *)     malloc(sizeof(struct some_key));
  *      v = (struct some_value *)   malloc(sizeof(struct some_value));
  *
  *      (initialise k and v to suitable values)
  * 
- *      if (! hashtable_insert(h,k,v) )
+ *      if (! ks_hash_insert(h,k,v) )
  *      {     exit(-1);               }
  *
- *      if (NULL == (found = hashtable_search(h,k) ))
+ *      if (NULL == (found = ks_hash_search(h,k) ))
  *      {    printf("not found!");                  }
  *
- *      if (NULL == (found = hashtable_remove(h,k) ))
+ *      if (NULL == (found = ks_hash_remove(h,k) ))
  *      {    printf("Not found\n");                 }
  *
  */
 
-/* Macros may be used to define type-safe(r) hashtable access functions, with
+/* Macros may be used to define type-safe(r) ks_hash access functions, with
  * methods specialized to take known key and value types as parameters.
  * 
  * Example:
  *
  * Insert this at the start of your file:
  *
- * DEFINE_HASHTABLE_INSERT(insert_some, struct some_key, struct some_value);
- * DEFINE_HASHTABLE_SEARCH(search_some, struct some_key, struct some_value);
- * DEFINE_HASHTABLE_REMOVE(remove_some, struct some_key, struct some_value);
+ * DEFINE_KS_HASH_INSERT(insert_some, struct some_key, struct some_value);
+ * DEFINE_KS_HASH_SEARCH(search_some, struct some_key, struct some_value);
+ * DEFINE_KS_HASH_REMOVE(remove_some, struct some_key, struct some_value);
  *
  * This defines the functions 'insert_some', 'search_some' and 'remove_some'.
- * These operate just like hashtable_insert etc., with the same parameters,
+ * These operate just like ks_hash_insert etc., with the same parameters,
  * but their function signatures have 'struct some_key *' rather than
  * 'void *', and hence can generate compile time errors if your program is
  * supplying incorrect data as a key (and similarly for value).
  *
- * Note that the hash and key equality functions passed to create_hashtable
+ * Note that the hash and key equality functions passed to ks_hash_create
  * still take 'void *' parameters instead of 'some key *'. This shouldn't be
  * a difficult issue as they're only defined and passed once, and the other
  * functions will ensure that only valid keys are supplied to them.
@@ -79,31 +79,51 @@ typedef struct ks_hashtable_iterator ks_hashtable_iterator_t;
  * - if performance is important, it may be worth switching back to the
  * unsafe methods once your program has been debugged with the safe methods.
  * This just requires switching to some simple alternative defines - eg:
- * #define insert_some hashtable_insert
+ * #define insert_some ks_hash_insert
  *
  */
 
+
+typedef enum {
+	KS_HASH_FLAG_NONE = 0,
+	KS_HASH_FLAG_DEFAULT = (1 << 0),
+	KS_HASH_FLAG_FREE_KEY = (1 << 1),
+	KS_HASH_FLAG_FREE_VALUE = (1 << 2),
+	KS_HASH_DUP_CHECK = (1 << 3)
+} ks_hash_flag_t;
+
+#define KS_HASH_FREE_BOTH KS_HASH_FLAG_FREE_KEY | KS_HASH_FLAG_FREE_VALUE
+
+typedef enum {
+	KS_HASH_MODE_DEFAULT = 0,
+	KS_HASH_MODE_CASE_SENSITIVE = (1 << 0),
+	KS_HASH_MODE_CASE_INSENSITIVE = (1 << 1),
+	KS_HASH_MODE_INT = (1 << 2)
+} ks_hash_mode_t;
+
+
+
 /*****************************************************************************
- * create_hashtable
+ * ks_hash_create
    
- * @name                    create_hashtable
- * @param   minsize         minimum initial size of hashtable
+ * @name                    ks_hash_create
+ * @param   minsize         minimum initial size of ks_hash
  * @param   hashfunction    function for hashing keys
  * @param   key_eq_fn       function for determining key equality
- * @return                  newly created hashtable or NULL on failure
+ * @return                  newly created ks_hash or NULL on failure
  */
 
 KS_DECLARE(ks_status_t)
-ks_create_hashtable(ks_hashtable_t **hp, unsigned int minsize,
-                 unsigned int (*hashfunction) (void*),
-                 int (*key_eq_fn) (void*,void*));
+ks_hash_create_ex(ks_hash_t **hp, unsigned int minsize,
+				  unsigned int (*hashfunction) (void*),
+				  int (*key_eq_fn) (void*,void*), ks_hash_mode_t mode, ks_hash_flag_t flags, ks_hash_destructor_t destructor, ks_pool_t *pool);
 
 /*****************************************************************************
- * hashtable_insert
+ * ks_hash_insert
    
- * @name        hashtable_insert
- * @param   h   the hashtable to insert into
- * @param   k   the key - hashtable claims ownership and will free on removal
+ * @name        ks_hash_insert
+ * @param   h   the ks_hash to insert into
+ * @param   k   the key - ks_hash claims ownership and will free on removal
  * @param   v   the value - does not claim ownership
  * @return      non-zero for successful insertion
  *
@@ -112,92 +132,91 @@ ks_create_hashtable(ks_hashtable_t **hp, unsigned int minsize,
  *
  * This function does not check for repeated insertions with a duplicate key.
  * The value returned when using a duplicate key is undefined -- when
- * the hashtable changes size, the order of retrieval of duplicate key
+ * the ks_hash changes size, the order of retrieval of duplicate key
  * entries is reversed.
  * If in doubt, remove before insert.
  */
 
 
-typedef enum {
-	HASHTABLE_FLAG_NONE = 0,
-	HASHTABLE_FLAG_FREE_KEY = (1 << 0),
-	HASHTABLE_FLAG_FREE_VALUE = (1 << 1),
-	HASHTABLE_DUP_CHECK = (1 << 2)
-} ks_hashtable_flag_t;
+KS_DECLARE(int) ks_hash_insert_ex(ks_hash_t *h, void *k, void *v, ks_hash_flag_t flags, ks_hash_destructor_t destructor);
+#define ks_hash_insert(_h, _k, _v) ks_hash_insert_ex(_h, _k, _v, 0, NULL)
 
-KS_DECLARE(int) ks_hashtable_insert_destructor(ks_hashtable_t *h, void *k, void *v, ks_hashtable_flag_t flags, ks_hashtable_destructor_t destructor);
-#define ks_hashtable_insert(_h, _k, _v, _f) ks_hashtable_insert_destructor(_h, _k, _v, _f, NULL)
-
-#define DEFINE_HASHTABLE_INSERT(fnname, keytype, valuetype)		\
-	int fnname (ks_hashtable_t *h, keytype *k, valuetype *v)	\
+#define DEFINE_KS_HASH_INSERT(fnname, keytype, valuetype)		\
+	int fnname (ks_hash_t *h, keytype *k, valuetype *v)	\
 	{															\
-		return hashtable_insert(h,k,v);							\
+		return ks_hash_insert(h,k,v);							\
 	}
 
+
+KS_DECLARE(void) ks_hash_set_flags(ks_hash_t *h, ks_hash_flag_t flags);
+KS_DECLARE(void) ks_hash_set_destructor(ks_hash_t *h, ks_hash_destructor_t destructor);
+
 /*****************************************************************************
- * hashtable_search
+ * ks_hash_search
    
- * @name        hashtable_search
- * @param   h   the hashtable to search
+ * @name        ks_hash_search
+ * @param   h   the ks_hash to search
  * @param   k   the key to search for  - does not claim ownership
  * @return      the value associated with the key, or NULL if none found
  */
 
 KS_DECLARE(void *)
-ks_hashtable_search(ks_hashtable_t *h, void *k);
+ks_hash_search(ks_hash_t *h, void *k);
 
-#define DEFINE_HASHTABLE_SEARCH(fnname, keytype, valuetype) \
-	valuetype * fnname (ks_hashtable_t *h, keytype *k)	\
+#define DEFINE_KS_HASH_SEARCH(fnname, keytype, valuetype) \
+	valuetype * fnname (ks_hash_t *h, keytype *k)	\
 	{														\
-		return (valuetype *) (hashtable_search(h,k));		\
+		return (valuetype *) (ks_hash_search(h,k));		\
 	}
 
 /*****************************************************************************
- * hashtable_remove
+ * ks_hash_remove
    
- * @name        hashtable_remove
- * @param   h   the hashtable to remove the item from
+ * @name        ks_hash_remove
+ * @param   h   the ks_hash to remove the item from
  * @param   k   the key to search for  - does not claim ownership
  * @return      the value associated with the key, or NULL if none found
  */
 
 KS_DECLARE(void *) /* returns value */
-ks_hashtable_remove(ks_hashtable_t *h, void *k);
+ks_hash_remove(ks_hash_t *h, void *k);
 
-#define DEFINE_HASHTABLE_REMOVE(fnname, keytype, valuetype) \
-	valuetype * fnname (ks_hashtable_t *h, keytype *k)	\
+#define DEFINE_KS_HASH_REMOVE(fnname, keytype, valuetype) \
+	valuetype * fnname (ks_hash_t *h, keytype *k)	\
 	{														\
-		return (valuetype *) (hashtable_remove(h,k));		\
+		return (valuetype *) (ks_hash_remove(h,k));		\
 	}
 
 
 /*****************************************************************************
- * hashtable_count
+ * ks_hash_count
    
- * @name        hashtable_count
- * @param   h   the hashtable
- * @return      the number of items stored in the hashtable
+ * @name        ks_hash_count
+ * @param   h   the ks_hash
+ * @return      the number of items stored in the ks_hash
  */
 KS_DECLARE(unsigned int)
-ks_hashtable_count(ks_hashtable_t *h);
+ks_hash_count(ks_hash_t *h);
 
 
 /*****************************************************************************
- * hashtable_destroy
+ * ks_hash_destroy
    
- * @name        hashtable_destroy
- * @param   h   the hashtable
+ * @name        ks_hash_destroy
+ * @param   h   the ks_hash
  * @param       free_values     whether to call 'free' on the remaining values
  */
 
 KS_DECLARE(void)
-ks_hashtable_destroy(ks_hashtable_t **h);
+ks_hash_destroy(ks_hash_t **h);
 
-KS_DECLARE(ks_hashtable_iterator_t*) ks_hashtable_first_iter(ks_hashtable_t *h, ks_hashtable_iterator_t *it);
-#define ks_hashtable_first(_h) ks_hashtable_first_iter(_h, NULL)
-KS_DECLARE(ks_hashtable_iterator_t*) ks_hashtable_next(ks_hashtable_iterator_t **iP);
-KS_DECLARE(void) ks_hashtable_this(ks_hashtable_iterator_t *i, const void **key, ks_ssize_t *klen, void **val);
-KS_DECLARE(void) ks_hashtable_this_val(ks_hashtable_iterator_t *i, void *val);
+KS_DECLARE(ks_hash_iterator_t*) ks_hash_first_iter(ks_hash_t *h, ks_hash_iterator_t *it);
+#define ks_hash_first(_h) ks_hash_first_iter(_h, NULL)
+KS_DECLARE(void) ks_hash_last(ks_hash_iterator_t **iP);
+KS_DECLARE(ks_hash_iterator_t*) ks_hash_next(ks_hash_iterator_t **iP);
+KS_DECLARE(void) ks_hash_this(ks_hash_iterator_t *i, const void **key, ks_ssize_t *klen, void **val);
+KS_DECLARE(void) ks_hash_this_val(ks_hash_iterator_t *i, void *val);
+KS_DECLARE(ks_status_t) ks_hash_create(ks_hash_t **hp, ks_hash_mode_t mode, ks_hash_flag_t flags, ks_pool_t *pool);
 
 static inline uint32_t ks_hash_default_int(void *ky) {
 	uint32_t x = *((uint32_t *)ky);
@@ -257,7 +276,7 @@ static inline uint32_t ks_hash_default_ci(void *ky)
 } /* extern C */
 #endif
 
-#endif /* __HASHTABLE_CWC22_H__ */
+#endif /* __KS_HASH_CWC22_H__ */
 
 /*
  * Copyright (c) 2002, Christopher Clark

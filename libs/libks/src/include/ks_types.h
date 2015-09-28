@@ -174,7 +174,7 @@ KS_BEGIN_EXTERN_C
 struct ks_pool_s;
 
 typedef struct ks_pool_s ks_pool_t;
-typedef void (*ks_hashtable_destructor_t)(void *ptr);
+typedef void (*ks_hash_destructor_t)(void *ptr);
 
 typedef enum {
 	KS_MPCL_ANNOUNCE,
