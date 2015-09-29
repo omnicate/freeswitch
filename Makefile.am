@@ -781,6 +781,11 @@ support:
 # of longer test target names. Since the tests are expected to be run easily and rapidly after minor source
 # changes this is the most effective structure.
 
+libs/libtap/libtap.a:
+	make -C libs/libtap/ libtap.a
+
+
+
 TESTS =
 check_PROGRAMS =
 

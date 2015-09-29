@@ -1,0 +1,12 @@
+[submodule "libs/libtap"]
+	path = libs/libtap
+	url = https://github.com/zorgnax/libtap.git
+[submodule "libs/libre"]
+	path = libs/libre
+	url = https://github.com/traviscross/libre.git
+[submodule "libs/librem"]
+	path = libs/librem
+	url = https://github.com/traviscross/librem.git
+[submodule "libs/libbaresip"]
+	path = libs/libbaresip
+	url = https://github.com/alfredh/baresip.git

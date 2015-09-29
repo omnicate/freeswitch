@@ -66,7 +66,7 @@ int main () {
   micro_total = small_end_ts - small_start_ts;
   micro_per = micro_total / (double) loops;
   rate_per_sec = 1000000 / micro_per;
-  note("switch_hash insert: Total %ldus / %ld loops, %.2f us per loop, %.0f loops per second\n", 
+  diag("switch_hash insert: Total %ldus / %ld loops, %.2f us per loop, %.0f loops per second\n", 
        micro_total, loops, micro_per, rate_per_sec);
 #endif
 
@@ -91,7 +91,7 @@ int main () {
   micro_total = small_end_ts - small_start_ts;
   micro_per = micro_total / (double) loops;
   rate_per_sec = 1000000 / micro_per;
-  note("switch_hash find: Total %ldus / %ld loops, %.2f us per loop, %.0f loops per second\n", 
+  diag("switch_hash find: Total %ldus / %ld loops, %.2f us per loop, %.0f loops per second\n", 
        micro_total, loops, micro_per, rate_per_sec);
 #endif
 
@@ -116,7 +116,7 @@ int main () {
   micro_total = small_end_ts - small_start_ts;
   micro_per = micro_total / (double) loops;
   rate_per_sec = 1000000 / micro_per;
-  note("switch_hash delete: Total %ldus / %d loops, %.2f us per loop, %.0f loops per second\n", 
+  diag("switch_hash delete: Total %ldus / %d loops, %.2f us per loop, %.0f loops per second\n", 
        micro_total, loops, micro_per, rate_per_sec);
 #endif
 
@@ -133,7 +133,7 @@ int main () {
   micro_total = end_ts - start_ts;
   micro_per = micro_total / (double) loops;
   rate_per_sec = 1000000 / micro_per;
-  note("switch_hash Total %ldus / %d loops, %.2f us per loop, %.0f loops per second\n", 
+  diag("switch_hash Total %ldus / %d loops, %.2f us per loop, %.0f loops per second\n", 
        micro_total, loops, micro_per, rate_per_sec);
 
   switch_core_destroy();

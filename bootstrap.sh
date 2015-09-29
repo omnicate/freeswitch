@@ -447,6 +447,11 @@ bootstrap_libs() {
   ${BGJOB} && wait
 }
 
+bootstrap_git_submodules() {
+  git submodule init
+  git submodule update
+}
+
 run() {
   setup_modules
   setup_gnu
@@ -459,6 +464,7 @@ run() {
   check_libtoolize
   print_autotools_vers
   bootstrap_libs
+  bootstrap_git_submodules
   return 0
 }
 
