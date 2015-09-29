@@ -25,6 +25,20 @@ size_t thread_default_stacksize = 240 * 1024;
 pthread_once_t init_priority = PTHREAD_ONCE_INIT;
 #endif
 
+KS_DECLARE(ks_thread_os_handle_t) ks_thread_os_handle(ks_thread_t *thread)
+{
+	return thread->handle;
+}
+
+KS_DECLARE(ks_thread_os_handle_t) ks_thread_self(void)
+{
+#ifdef WIN32
+	return GetCurrentThread();
+#else
+	return pthread_self();
+#endif
+}
+
 static void ks_thread_init_priority(void)
 {
 #ifdef WIN32
