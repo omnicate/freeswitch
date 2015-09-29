@@ -26,6 +26,11 @@ extern "C" {
 typedef struct ks_hash ks_hash_t;
 typedef struct ks_hash_iterator ks_hash_iterator_t;
 
+typedef enum {
+	KS_UNLOCKED,
+	KS_READLOCKED
+} ks_locked_t;
+
 
 /* Example of use:
  *
@@ -89,16 +94,19 @@ typedef enum {
 	KS_HASH_FLAG_DEFAULT = (1 << 0),
 	KS_HASH_FLAG_FREE_KEY = (1 << 1),
 	KS_HASH_FLAG_FREE_VALUE = (1 << 2),
-	KS_HASH_DUP_CHECK = (1 << 3)
+	KS_HASH_FLAG_RWLOCK = (1 << 3),
+	KS_HASH_FLAG_DUP_CHECK = (1 << 4)
 } ks_hash_flag_t;
 
 #define KS_HASH_FREE_BOTH KS_HASH_FLAG_FREE_KEY | KS_HASH_FLAG_FREE_VALUE
 
 typedef enum {
 	KS_HASH_MODE_DEFAULT = 0,
-	KS_HASH_MODE_CASE_SENSITIVE = (1 << 0),
-	KS_HASH_MODE_CASE_INSENSITIVE = (1 << 1),
-	KS_HASH_MODE_INT = (1 << 2)
+	KS_HASH_MODE_CASE_SENSITIVE,
+	KS_HASH_MODE_CASE_INSENSITIVE,
+	KS_HASH_MODE_INT,
+	KS_HASH_MODE_INT64,
+	KS_HASH_MODE_PTR
 } ks_hash_mode_t;
 
 
@@ -161,7 +169,7 @@ KS_DECLARE(void) ks_hash_set_destructor(ks_hash_t *h, ks_hash_destructor_t destr
  */
 
 KS_DECLARE(void *)
-ks_hash_search(ks_hash_t *h, void *k);
+ks_hash_search(ks_hash_t *h, void *k, ks_locked_t locked);
 
 #define DEFINE_KS_HASH_SEARCH(fnname, keytype, valuetype) \
 	valuetype * fnname (ks_hash_t *h, keytype *k)	\
@@ -198,7 +206,6 @@ ks_hash_remove(ks_hash_t *h, void *k);
 KS_DECLARE(unsigned int)
 ks_hash_count(ks_hash_t *h);
 
-
 /*****************************************************************************
  * ks_hash_destroy
    
@@ -210,13 +217,35 @@ ks_hash_count(ks_hash_t *h);
 KS_DECLARE(void)
 ks_hash_destroy(ks_hash_t **h);
 
-KS_DECLARE(ks_hash_iterator_t*) ks_hash_first_iter(ks_hash_t *h, ks_hash_iterator_t *it);
-#define ks_hash_first(_h) ks_hash_first_iter(_h, NULL)
+KS_DECLARE(ks_hash_iterator_t*) ks_hash_first(ks_hash_t *h, ks_locked_t locked);
 KS_DECLARE(void) ks_hash_last(ks_hash_iterator_t **iP);
 KS_DECLARE(ks_hash_iterator_t*) ks_hash_next(ks_hash_iterator_t **iP);
 KS_DECLARE(void) ks_hash_this(ks_hash_iterator_t *i, const void **key, ks_ssize_t *klen, void **val);
 KS_DECLARE(void) ks_hash_this_val(ks_hash_iterator_t *i, void *val);
 KS_DECLARE(ks_status_t) ks_hash_create(ks_hash_t **hp, ks_hash_mode_t mode, ks_hash_flag_t flags, ks_pool_t *pool);
+
+KS_DECLARE(void) ks_hash_write_lock(ks_hash_t *h);
+KS_DECLARE(void) ks_hash_write_unlock(ks_hash_t *h);
+KS_DECLARE(ks_status_t) ks_hash_read_lock(ks_hash_t *h);
+KS_DECLARE(ks_status_t) ks_hash_read_unlock(ks_hash_t *h);
+
+
+static inline uint32_t ks_hash_default_int64(void *ky)
+{
+	int64_t key = *((int64_t *)ky);
+	key = (~key) + (key << 18);
+	key = key ^ (key >> 31);
+	key = key * 21;
+	key = key ^ (key >> 11);
+	key = key + (key << 6);
+	key = key ^ (key >> 22);
+	return (uint32_t) key;
+}
+
+static inline int ks_hash_equalkeys_int64(void *k1, void *k2)
+{
+    return *(uint64_t *)k1 == *(uint64_t *)k2;
+}
 
 static inline uint32_t ks_hash_default_int(void *ky) {
 	uint32_t x = *((uint32_t *)ky);
@@ -230,6 +259,26 @@ static inline int ks_hash_equalkeys_int(void *k1, void *k2)
 {
     return *(uint32_t *)k1 == *(uint32_t *)k2;
 }
+#if 0
+}
+#endif
+
+static inline uint32_t ks_hash_default_ptr(void *ky)
+{
+#ifdef KS_64BIT
+	return ks_hash_default_int64(ky);
+#endif
+	return ks_hash_default_int(ky);
+}
+
+static inline int ks_hash_equalkeys_ptr(void *k1, void *k2)
+{
+#ifdef KS_64BIT
+	return ks_hash_equalkeys_int64(k1, k2);
+#endif
+	return ks_hash_equalkeys_int(k1, k2);
+}
+
 
 static inline int ks_hash_equalkeys(void *k1, void *k2)
 {

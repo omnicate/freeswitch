@@ -48,6 +48,10 @@ KS_BEGIN_EXTERN_C
 #define __WINDOWS__
 #endif
 
+#if UINTPTR_MAX == 0xffffffffffffffff
+#define KS_64BIT 1
+#endif
+
 #include <stdarg.h>
 #include <time.h>
 #include <stdarg.h>

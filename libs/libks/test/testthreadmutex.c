@@ -131,6 +131,11 @@ static void check_rwl(void)
 		ok( (ks_thread_create(&threads[i], thread_test_rwlock_func, NULL, pool) == KS_STATUS_SUCCESS) );
 	}
 
+
+	for(i = 0; i < cpu_count; i++) {
+		ks_thread_join(threads[i]);
+	}
+
 	ok( (ks_pool_close(&pool) == KS_STATUS_SUCCESS) );
 	ok( (counter4 == LOOP_COUNT) );
 

@@ -120,6 +120,8 @@ struct ks_pool_s {
 	unsigned int mp_magic2;		/* upper magic for overwrite sanity */
 	ks_pool_cleanup_node_t *clfn_list;
 	ks_mutex_t *mutex;
+	ks_mutex_t *cleanup_mutex;
+	uint8_t cleaning_up;
 };
 
 /* for debuggers to be able to interrogate the generic type in the .h file */
@@ -193,13 +195,20 @@ static ks_pool_cleanup_node_t *find_cleanup_node(ks_pool_t *mp_p, void *ptr)
 }
 #endif
 
-static void peform_pool_cleanup_on_free(ks_pool_t *mp_p, void *ptr)
+static void perform_pool_cleanup_on_free(ks_pool_t *mp_p, void *ptr)
 {
 	ks_pool_cleanup_node_t *np, *cnode, *last = NULL;
 
 	np = mp_p->clfn_list;
 
 	ks_mutex_lock(mp_p->mutex);
+	if (mp_p->cleaning_up) {
+		ks_mutex_unlock(mp_p->mutex);
+		return;
+	}
+	ks_mutex_unlock(mp_p->mutex);
+
+	ks_mutex_lock(mp_p->cleanup_mutex);
 	while(np) {
 		if (np->ptr == ptr) {
 			if (last) {
@@ -219,14 +228,22 @@ static void peform_pool_cleanup_on_free(ks_pool_t *mp_p, void *ptr)
 		last = np;
 		np = np->next;
 	}
-	ks_mutex_unlock(mp_p->mutex);
+	ks_mutex_unlock(mp_p->cleanup_mutex);
 }
 
-static void peform_pool_cleanup(ks_pool_t *mp_p)
+static void perform_pool_cleanup(ks_pool_t *mp_p)
 {
 	ks_pool_cleanup_node_t *np;
 
 	ks_mutex_lock(mp_p->mutex);
+	if (mp_p->cleaning_up) {
+		ks_mutex_unlock(mp_p->mutex);
+		return;
+	}
+	mp_p->cleaning_up = 1;
+	ks_mutex_unlock(mp_p->mutex);
+
+	ks_mutex_lock(mp_p->cleanup_mutex);
 	for (np = mp_p->clfn_list; np; np = np->next) {
 		np->fn(mp_p, np->ptr, np->arg, np->type, KS_MPCL_ANNOUNCE);
 	}
@@ -238,7 +255,7 @@ static void peform_pool_cleanup(ks_pool_t *mp_p)
 	for (np = mp_p->clfn_list; np; np = np->next) {
 		np->fn(mp_p, np->ptr, np->arg, np->type, KS_MPCL_DESTROY);
 	}
-	ks_mutex_unlock(mp_p->mutex);
+	ks_mutex_unlock(mp_p->cleanup_mutex);
 
 	mp_p->clfn_list = NULL;
 }
@@ -263,8 +280,10 @@ KS_DECLARE(ks_status_t) ks_pool_set_cleanup(ks_pool_t *mp_p, void *ptr, void *ar
 	cnode->fn = fn;
 	cnode->type = type;
 
+	ks_mutex_lock(mp_p->cleanup_mutex);
 	cnode->next = mp_p->clfn_list;
 	mp_p->clfn_list = cnode;
+	ks_mutex_unlock(mp_p->cleanup_mutex);
 
 	return KS_STATUS_SUCCESS;
 }
@@ -999,7 +1018,7 @@ static int free_mem(ks_pool_t *mp_p, void *addr)
 	/* find the user's magic numbers */
 	ret = check_magic(addr, old_size);
 
-	peform_pool_cleanup_on_free(mp_p, addr);
+	perform_pool_cleanup_on_free(mp_p, addr);
 
 	/* move pointer to actual beginning */
 	addr = prefix;
@@ -1197,6 +1216,7 @@ KS_DECLARE(ks_status_t) ks_pool_open(ks_pool_t **poolP)
 
 	if (pool && (err == KS_STATUS_SUCCESS)) {
 		ks_mutex_create(&pool->mutex, KS_MUTEX_FLAG_DEFAULT, NULL);
+		ks_mutex_create(&pool->cleanup_mutex, KS_MUTEX_FLAG_DEFAULT, NULL);
 		*poolP = pool;
 		return KS_STATUS_SUCCESS;
 	} else {
@@ -1245,8 +1265,10 @@ static ks_status_t ks_pool_raw_close(ks_pool_t *mp_p)
 		mp_p->mp_log_func(mp_p, KS_POOL_FUNC_CLOSE, 0, 0, NULL, NULL, 0);
 	}
 
-	peform_pool_cleanup(mp_p);
+	perform_pool_cleanup(mp_p);
 
+	ks_mutex_t *mutex = mp_p->mutex, *cleanup_mutex = mp_p->cleanup_mutex;
+	ks_mutex_lock(mutex);
 	/*
 	 * NOTE: if we are HEAVY_PACKING then the 1st block with the ks_pool
 	 * header is not on the linked list.
@@ -1280,9 +1302,12 @@ static ks_status_t ks_pool_raw_close(ks_pool_t *mp_p)
 		addr = mp_p;
 	}
 	size = SIZE_OF_PAGES(mp_p, PAGES_IN_SIZE(mp_p, sizeof(ks_pool_t)));
-
+	
 	(void) munmap(addr, size);
 
+	ks_mutex_unlock(mutex);
+	ks_mutex_destroy(&mutex);
+	ks_mutex_destroy(&cleanup_mutex);
 
 	return final;
 }
@@ -1311,23 +1336,13 @@ static ks_status_t ks_pool_raw_close(ks_pool_t *mp_p)
 KS_DECLARE(ks_status_t) ks_pool_close(ks_pool_t **mp_pP)
 {
     ks_status_t err;
-	ks_mutex_t *mutex;
 
 	ks_assert(mp_pP);
-
-	mutex = (*mp_pP)->mutex;
-	ks_mutex_lock(mutex);
 
 	err = ks_pool_raw_close(*mp_pP);
 
 	if (err == KS_STATUS_SUCCESS) {
 		*mp_pP = NULL;
-	}
-
-	ks_mutex_unlock(mutex);
-
-	if (err == KS_STATUS_SUCCESS) {
-		ks_mutex_destroy(&mutex);
 	}
 
 	return err;
@@ -1372,7 +1387,7 @@ KS_DECLARE(ks_status_t) ks_pool_clear(ks_pool_t *mp_p)
 		mp_p->mp_log_func(mp_p, KS_POOL_FUNC_CLEAR, 0, 0, NULL, NULL, 0);
 	}
 
-	peform_pool_cleanup(mp_p);
+	perform_pool_cleanup(mp_p);
 
 	/* reset all of our free lists */
 	for (bit_n = 0; bit_n <= MAX_BITS; bit_n++) {
