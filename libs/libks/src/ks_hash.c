@@ -120,7 +120,7 @@ const float max_load_factor = 0.65f;
 
 /*****************************************************************************/
 
-static void ks_hash_cleanup(ks_pool_t *mpool, void *ptr, void *arg, int type, ks_pool_cleanup_action_t action)
+static void ks_hash_cleanup(ks_pool_t *mpool, void *ptr, void *arg, int type, ks_pool_cleanup_action_t action, ks_pool_cleanup_type_t ctype)
 {
 	//ks_hash_t *hash = (ks_hash_t *) ptr;
 

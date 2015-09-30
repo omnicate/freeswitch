@@ -17,7 +17,7 @@ struct foo {
 };
 
 
-void cleanup(ks_pool_t *mpool, void *ptr, void *arg, int type, ks_pool_cleanup_action_t action)
+void cleanup(ks_pool_t *mpool, void *ptr, void *arg, int type, ks_pool_cleanup_action_t action, ks_pool_cleanup_type_t ctype)
 {
 	struct foo *foo = (struct foo *) ptr;
 

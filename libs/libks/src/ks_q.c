@@ -56,35 +56,38 @@ struct ks_q_s {
 	uint8_t active;
 };
 
-static void ks_q_cleanup(ks_pool_t *mpool, void *ptr, void *arg, int type, ks_pool_cleanup_action_t action)
+static void ks_q_cleanup(ks_pool_t *mpool, void *ptr, void *arg, int type, ks_pool_cleanup_action_t action, ks_pool_cleanup_type_t ctype)
 {
 	ks_q_t *q = (ks_q_t *) ptr;
 	ks_qnode_t *np, *fp;
+
+	if (ctype == KS_MPCL_GLOBAL_FREE) {
+		return;
+	}
 
 	switch(action) {
 	case KS_MPCL_ANNOUNCE:
 		break;
 	case KS_MPCL_TEARDOWN:
+		np = q->head;
+		while(np) {
+			fp = np;
+			np = np->next;
+			ks_pool_free(q->pool, fp);
+		}
+		
+		np = q->empty;
+		while(np) {
+			fp = np;
+			np = np->next;
+			ks_pool_free(q->pool, fp);
+		}
 		break;
 	case KS_MPCL_DESTROY:
 		ks_cond_destroy(&q->pop_cond);
 		ks_cond_destroy(&q->push_cond);
 		ks_mutex_destroy(&q->list_mutex);
 		break;
-	}
-
-	np = q->head;
-	while(np) {
-		fp = np;
-		np = np->next;
-		ks_pool_free(q->pool, fp);
-	}
-
-	np = q->empty;
-	while(np) {
-		fp = np;
-		np = np->next;
-		ks_pool_free(q->pool, fp);
 	}
 }
 

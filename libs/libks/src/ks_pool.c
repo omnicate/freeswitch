@@ -219,9 +219,9 @@ static void perform_pool_cleanup_on_free(ks_pool_t *mp_p, void *ptr)
 
 			cnode = np;
 			np = np->next;
-			cnode->fn(mp_p, cnode->ptr, cnode->arg, cnode->type, KS_MPCL_ANNOUNCE);
-			cnode->fn(mp_p, cnode->ptr, cnode->arg, cnode->type, KS_MPCL_TEARDOWN);
-			cnode->fn(mp_p, cnode->ptr, cnode->arg, cnode->type, KS_MPCL_DESTROY);
+			cnode->fn(mp_p, cnode->ptr, cnode->arg, cnode->type, KS_MPCL_ANNOUNCE, KS_MPCL_FREE);
+			cnode->fn(mp_p, cnode->ptr, cnode->arg, cnode->type, KS_MPCL_TEARDOWN, KS_MPCL_FREE);
+			cnode->fn(mp_p, cnode->ptr, cnode->arg, cnode->type, KS_MPCL_DESTROY, KS_MPCL_FREE);
 
 			continue;
 		}
@@ -245,15 +245,15 @@ static void perform_pool_cleanup(ks_pool_t *mp_p)
 
 	ks_mutex_lock(mp_p->cleanup_mutex);
 	for (np = mp_p->clfn_list; np; np = np->next) {
-		np->fn(mp_p, np->ptr, np->arg, np->type, KS_MPCL_ANNOUNCE);
+		np->fn(mp_p, np->ptr, np->arg, np->type, KS_MPCL_ANNOUNCE, KS_MPCL_GLOBAL_FREE);
 	}
 
 	for (np = mp_p->clfn_list; np; np = np->next) {
-		np->fn(mp_p, np->ptr, np->arg, np->type, KS_MPCL_TEARDOWN);
+		np->fn(mp_p, np->ptr, np->arg, np->type, KS_MPCL_TEARDOWN, KS_MPCL_GLOBAL_FREE);
 	}
 
 	for (np = mp_p->clfn_list; np; np = np->next) {
-		np->fn(mp_p, np->ptr, np->arg, np->type, KS_MPCL_DESTROY);
+		np->fn(mp_p, np->ptr, np->arg, np->type, KS_MPCL_DESTROY, KS_MPCL_GLOBAL_FREE);
 	}
 	ks_mutex_unlock(mp_p->cleanup_mutex);
 

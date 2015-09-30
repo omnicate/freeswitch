@@ -47,7 +47,7 @@ struct ks_mutex {
 	uint8_t malloc;
 };
 
-static void ks_mutex_cleanup(ks_pool_t *mpool, void *ptr, void *arg, int type, ks_pool_cleanup_action_t action)
+static void ks_mutex_cleanup(ks_pool_t *mpool, void *ptr, void *arg, int type, ks_pool_cleanup_action_t action, ks_pool_cleanup_type_t ctype)
 {
 	ks_mutex_t *mutex = (ks_mutex_t *) ptr;
 
@@ -229,7 +229,7 @@ struct ks_cond {
 	uint8_t static_mutex;
 };
 
-static void ks_cond_cleanup(ks_pool_t *mpool, void *ptr, void *arg, int type, ks_pool_cleanup_action_t action)
+static void ks_cond_cleanup(ks_pool_t *mpool, void *ptr, void *arg, int type, ks_pool_cleanup_action_t action, ks_pool_cleanup_type_t ctype)
 {
 	ks_cond_t *cond = (ks_cond_t *) ptr;
 
@@ -434,7 +434,7 @@ struct ks_rwl {
 	uint32_t wlc;
 };
 
-static void ks_rwl_cleanup(ks_pool_t *mpool, void *ptr, void *arg, int type, ks_pool_cleanup_action_t action)
+static void ks_rwl_cleanup(ks_pool_t *mpool, void *ptr, void *arg, int type, ks_pool_cleanup_action_t action, ks_pool_cleanup_type_t ctype)
 {
 	ks_rwl_t *rwlock = (ks_rwl_t *) ptr;
 
