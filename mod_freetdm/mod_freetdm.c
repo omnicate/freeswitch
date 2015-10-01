@@ -3074,6 +3074,13 @@ static FIO_SIGNAL_CB_FUNCTION(on_clear_channel_signal)
 				tech_pvt = switch_core_session_get_private(session);
 				switch_set_flag_locked(tech_pvt, TFLAG_DEAD);
 				channel = switch_core_session_get_channel(session);
+				{
+					char ct[10]={0};
+					sprintf(ct,"%d",caller_data->hangup_cause);
+					switch_channel_set_variable_partner(channel, "q850_term_cause", ct);
+				}
+
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "hangup_cause=%d\n", caller_data->hangup_cause);
 				switch_channel_hangup(channel, caller_data->hangup_cause);
 				switch_core_session_rwunlock(session);
 			}

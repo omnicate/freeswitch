@@ -458,7 +458,11 @@ void ft_to_sngss7_acm (ftdm_channel_t * ftdmchan)
 	acm.bckCallInd.cadPtyStatInd.pres	= PRSNT_NODEF;
 	acm.bckCallInd.cadPtyStatInd.val	= 0x01;
 	acm.bckCallInd.cadPtyCatInd.pres	= PRSNT_NODEF;
-	acm.bckCallInd.cadPtyCatInd.val		= CADCAT_ORDSUBS;
+	if (g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].switchType == LSI_SW_UK) {
+		acm.bckCallInd.cadPtyCatInd.val		= CADCAT_NOIND;
+	} else {
+		acm.bckCallInd.cadPtyCatInd.val		= CADCAT_ORDSUBS;
+	}
 	backwardInd = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "acm_bi_cpc");
 	if (!ftdm_strlen_zero(backwardInd)) {
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found user supplied backward indicator Called Party Category ACM, value \"%s\"\n", backwardInd);
@@ -472,7 +476,11 @@ void ft_to_sngss7_acm (ftdm_channel_t * ftdmchan)
 	acm.bckCallInd.end2EndMethInd.pres	= PRSNT_NODEF;
 	acm.bckCallInd.end2EndMethInd.val	= E2EMTH_NOMETH;
 	acm.bckCallInd.intInd.pres			= PRSNT_NODEF;
-	acm.bckCallInd.intInd.val 			= INTIND_NOINTW;
+	if (g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].switchType == LSI_SW_UK) {
+		acm.bckCallInd.intInd.val 			= INTIND_INTW; 
+	} else {
+		acm.bckCallInd.intInd.val 			= INTIND_NOINTW; 
+	}
 	acm.bckCallInd.end2EndInfoInd.pres	= PRSNT_NODEF;
 	acm.bckCallInd.end2EndInfoInd.val	= E2EINF_NOINFO;
 
@@ -524,6 +532,14 @@ void ft_to_sngss7_acm (ftdm_channel_t * ftdmchan)
 		break;
 	/**********************************************************************/
 	} /* switch (ftdmchan->caller_data.bearer_capability) */
+
+
+#if 0
+	/* for BT making echo control consistent with IAM field */
+	acm.bckCallInd.echoCtrlDevInd.val	= sngss7_info->echoControlIncluded;
+	SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Tx ACM with EchoControl[%d]\n", sngss7_info->circuit->cic, acm.bckCallInd.echoCtrlDevInd.val);
+#endif
+
 	acm.bckCallInd.sccpMethInd.pres		= PRSNT_NODEF;
 	acm.bckCallInd.sccpMethInd.val		= SCCPMTH_NOIND;
 
@@ -643,6 +659,23 @@ void ft_to_sngss7_rel (ftdm_channel_t * ftdmchan)
 		copy_cdPtyNum_to_sngss7(ftdmchan, &rel.redirNum, (char*)redirect_num);
 	} else {
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "No user supplied re-direct number in REL, using 0x01\"%s\"\n", "");
+	}
+
+	if (g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].switchType == LSI_SW_UK) {
+		/* BT specific location value based on cause as mentioned in BT spec ND0117 */
+		rel.causeDgn.location.val = ILOC_NETINTER;
+
+		if ((rel.causeDgn.causeVal.val == 24) ||
+				(rel.causeDgn.causeVal.val == 31) ||
+				(rel.causeDgn.causeVal.val == 17) ||
+				(rel.causeDgn.causeVal.val == 21) ||
+				(rel.causeDgn.causeVal.val == 4)) {
+			rel.causeDgn.location.val = ILOC_USER;
+		}
+
+		if (rel.causeDgn.causeVal.val == 34) {
+			rel.causeDgn.location.val = ILOC_TRANNET;
+		}
 	}
 
 	rel.causeDgn.cdeStand.pres = PRSNT_NODEF;
