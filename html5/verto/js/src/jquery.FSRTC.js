@@ -300,6 +300,16 @@
         }
     }
 
+    $.FSRTC.prototype.getPeer = function(){
+	    var self = this;
+	    console.warn("in getPeer");
+	    	console.warn(self.peer);
+	    if (self.peer) {
+	    	return self.peer;
+	    }
+    }
+
+
     $.FSRTC.prototype.stop = function() {
         var self = this;
 
@@ -689,6 +699,8 @@
         }
 
         var peer = new PeerConnection(iceServers, optional);
+	console.warn("HERE!!!");
+	console.warn(peer);
 
         openOffererChannel();
         var x = 0;
@@ -786,7 +798,66 @@
             if (options.onRemoteStream) options.onRemoteStream(remoteMediaStream);
 
             //console.debug('on:add:stream', remoteMediaStream);
+	
+	    getStats(peer)
+
         };
+
+	function getStats(pc) {
+	    myGetStats(pc, function (results) {
+		var statscache = localStorage.getItem("mediastats");
+		    /*
+		for (var i = 0; i < results.length; ++i) {
+		    var res = results[i];
+		    console.log(res);
+		} */
+		if (statscache) {
+			var mediastats =  $.parseJSON(statscache);
+			if (mediastats.length >= 10){
+				mediastats.shift();
+			}
+		} else {
+			var mediastats = [];
+		}
+		mediastats.push(results);
+		localStorage.setItem("mediastats", $.toJSON(mediastats));
+		setTimeout(function () {
+		    getStats(pc);
+		}, 1000);
+	    });
+	}
+
+
+	function myGetStats(pc, callback) {
+	    if (!!navigator.mozGetUserMedia) {
+		pc.getStats(
+		    function (res) {
+			var items = [];
+			res.forEach(function (result) {
+			    items.push(result);
+			});
+			callback(items);
+		    },
+		    callback
+		);
+	    } else {
+		pc.getStats(function (res) {
+		    var items = [];
+		    res.result().forEach(function (result) {
+			var item = {};
+			result.names().forEach(function (name) {
+			    item[name] = result.stat(name);
+			});
+			item.id = result.id;
+			item.type = result.type;
+			item.timestamp = result.timestamp;
+			items.push(item);
+		    });
+		    callback(items);
+		});
+	    }
+	};
+
 
         var constraints = options.constraints || {
 	    offerToReceiveAudio: true,

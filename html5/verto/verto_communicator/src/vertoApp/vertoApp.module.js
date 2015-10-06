@@ -14,6 +14,7 @@
     '720kb.tooltips',
     'ui.gravatar',
     'directive.g+signin',
+    'chart.js',
   ]);
 
   vertoApp.config(['$routeProvider', 'gravatarServiceProvider',

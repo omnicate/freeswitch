@@ -193,6 +193,9 @@
         $scope.openModal('partials/contributors.html', 'ContributorsController');
       };
 
+      $scope.showStats = function() {
+        $scope.openModal('partials/stats.html', 'StatsController');
+      };
       /**
        * Updates the display adding the new number touched.
        *
