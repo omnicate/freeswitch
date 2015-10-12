@@ -50,7 +50,7 @@
 static sng_isup_event_interface_t sng_event;
 static ftdm_io_interface_t g_ftdm_sngss7_interface;
 ftdm_sngss7_data_t g_ftdm_sngss7_data;
-ftdm_sngss7_opr_mode g_ftdm_operating_mode;
+ftdm_sngss7_global_data_t g_ftdm_sngss7_span_data;
 ftdm_sngss7_call_reject_queue_t  sngss7_reject_queue;	/* Call reject queue */
 
 /******************************************************************************/
@@ -432,12 +432,19 @@ static void *ftdm_sangoma_ss7_run(ftdm_thread_t * me, void *obj)
 	ftdm_channel_t 		*ftdmchan = NULL;
 	sngss7_event_data_t     *sngss7_event = NULL;
 	sngss7_span_data_t	*sngss7_span = (sngss7_span_data_t *)ftdmspan->signal_data;
+	ftdm_sngss7_operating_modes_e opr_mode = SNG_SS7_OPR_MODE_NONE;
 
 
 	int b_alarm_test = 1;
 	sngss7_chan_data_t *ss7_info=NULL;
 
 	ftdm_log (FTDM_LOG_INFO, "ftmod_sangoma_ss7 monitor thread for span=%u started.\n", ftdmspan->span_id);
+
+	/* get the operation type */
+	opr_mode = ftmod_ss7_get_operating_mode(ftdmspan->span_id);
+	if (opr_mode == SNG_SS7_OPR_MODE_NONE) {
+		return NULL;
+	}
 
 	/* set IN_THREAD flag so that we know this thread is running */
 	ftdm_set_flag (ftdmspan, FTDM_SPAN_IN_THREAD);
@@ -463,8 +470,10 @@ static void *ftdm_sangoma_ss7_run(ftdm_thread_t * me, void *obj)
 		goto ftdm_sangoma_ss7_run_exit;
 	}
 
-	if(SNG_SS7_OPR_MODE_M2UA_SG == g_ftdm_operating_mode){
-		ftdm_log (FTDM_LOG_INFO, "FreeTDM running as M2UA_SG mode, freetdm dont have to do anything \n"); 
+	if ((SNG_SS7_OPR_MODE_M3UA_SG == opr_mode) ||
+			(SNG_SS7_OPR_MODE_M2UA_SG == opr_mode)) {
+
+		ftdm_log (FTDM_LOG_INFO, "FreeTDM running as %s mode, freetdm dont have to do anything \n", ftdm_opr_mode_tostr(opr_mode));
 
 		while (ftdm_running () && !(ftdm_test_flag (ftdmspan, FTDM_SPAN_STOP_THREAD))) {
 
@@ -2517,11 +2526,18 @@ suspend_goto_restart:
 /******************************************************************************/
 static FIO_CHANNEL_INDICATE_FUNCTION(ftdm_sangoma_ss7_indicate)
 {
+    ftdm_sngss7_operating_modes_e opr_mode = SNG_SS7_OPR_MODE_NONE;
     ftdm_status_t status = FTDM_FAIL;
+
+    /* get the operation type */
+    opr_mode = ftmod_ss7_get_operating_mode(ftdmchan->span_id);
+    if (opr_mode == SNG_SS7_OPR_MODE_NONE) {
+	    return status;
+    }
 
     switch (indication) {
         case FTDM_CHANNEL_INDICATE_RAW:
-            if (SNG_SS7_OPR_MODE_MTP2_API == g_ftdm_operating_mode) {
+            if (SNG_SS7_OPR_MODE_MTP2_API == opr_mode) {
                 return ftmod_sangoma_ss7_mtp2_indicate(ftdmchan);
             }
             break;
@@ -2635,8 +2651,16 @@ static FIO_CHANNEL_GET_SIG_STATUS_FUNCTION(ftdm_sangoma_ss7_get_sig_status)
 /******************************************************************************/
 static FIO_CHANNEL_SET_SIG_STATUS_FUNCTION(ftdm_sangoma_ss7_set_sig_status)
 {
+    ftdm_sngss7_operating_modes_e opr_mode = SNG_SS7_OPR_MODE_NONE;
     ftdm_status_t rstatus = FTDM_FAIL;
-    if (SNG_SS7_OPR_MODE_MTP2_API == g_ftdm_operating_mode) {
+
+    /* get the operation type */
+    opr_mode = ftmod_ss7_get_operating_mode(ftdmchan->span_id);
+    if (opr_mode == SNG_SS7_OPR_MODE_NONE) {
+	    return rstatus;
+    }
+
+    if (SNG_SS7_OPR_MODE_MTP2_API == opr_mode) {
         rstatus = ftmod_sangoma_ss7_mtp2_set_sig_status(ftdmchan, status);
     } else {
         SS7_ERROR ("Cannot set channel status in this module\n");
@@ -2655,13 +2679,19 @@ static ftdm_status_t ftdm_sangoma_ss7_start(ftdm_span_t * span)
 	sng_isup_inf_t		*sngss7_intf = NULL;
 	int 			x;
 	int			first_channel;
+	ftdm_sngss7_operating_modes_e opr_mode = SNG_SS7_OPR_MODE_NONE;
 
 	first_channel=0;
 
 
 	SS7_INFO ("Starting span %s:%u.\n", span->name, span->span_id);
 
-	if (SNG_SS7_OPR_MODE_MTP2_API == g_ftdm_operating_mode) {
+	opr_mode = ftmod_ss7_get_operating_mode(span->span_id);
+	if (opr_mode == SNG_SS7_OPR_MODE_NONE) {
+		return FTDM_FAIL;
+	}
+
+	if (SNG_SS7_OPR_MODE_MTP2_API == opr_mode) {
 		return sngss7_activate_mtp2api(span);
 	}
 
@@ -2729,9 +2759,12 @@ static ftdm_status_t ftdm_sangoma_ss7_start(ftdm_span_t * span)
 		/* unlock the channel */
 		ftdm_mutex_unlock(ftdmchan->mutex);
 	}
-
+	if ((SNG_SS7_OPR_MODE_M3UA_SG == opr_mode) ||
+			(SNG_SS7_OPR_MODE_M3UA_ASP == opr_mode)) {
+		g_ftdm_sngss7_data.cfg.g_m3ua_cfg.sched.tmr_sched	= ((sngss7_span_data_t *)(span->signal_data))->sched;
+	}
 	/* activate all the configured ss7 links */
-	if (ft_to_sngss7_activate_all()) {
+	if (ft_to_sngss7_activate_all(opr_mode)) {
 		SS7_CRITICAL ("Failed to activate LibSngSS7!\n");
 		return FTDM_FAIL;
 	}
@@ -2750,10 +2783,14 @@ static ftdm_status_t ftdm_sangoma_ss7_start(ftdm_span_t * span)
 /******************************************************************************/
 ftdm_status_t ftdm_sangoma_ss7_stop(ftdm_span_t * span)
 {
+	ftdm_sngss7_operating_modes_e opr_mode = SNG_SS7_OPR_MODE_NONE;
 	/*this function is called by the FT-Core to stop this span */
 	int timeout=0;
 
 	ftdm_log (FTDM_LOG_INFO, "Stopping span %s:%u.\n", span->name,span->span_id);
+
+	/* get the operation type */
+	opr_mode = ftmod_ss7_get_operating_mode(span->span_id);
 
 	/* throw the STOP_THREAD flag to signal monitor thread stop */
 	ftdm_set_flag (span, FTDM_SPAN_STOP_THREAD);
@@ -2775,7 +2812,7 @@ ftdm_status_t ftdm_sangoma_ss7_stop(ftdm_span_t * span)
 
 	/* KONRAD FIX ME - deconfigure any circuits, links, attached to this span */
 
-    if (SNG_SS7_OPR_MODE_M2UA_SG == g_ftdm_operating_mode) {
+    if (SNG_SS7_OPR_MODE_M2UA_SG == opr_mode) {
         ftmod_ss7_m2ua_span_stop(span->span_id);
     }
 
@@ -2789,6 +2826,7 @@ static FIO_CONFIGURE_SPAN_SIGNALING_FUNCTION(ftdm_sangoma_ss7_span_config)
 {
 	sngss7_span_data_t *ss7_span_info;
 	ftdm_sngss7_call_reject_queue_t *reject_queue = NULL;
+	ftdm_sngss7_operating_modes_e opr_mode = SNG_SS7_OPR_MODE_NONE;
 
 	ftdm_log (FTDM_LOG_INFO, "Configuring ftmod_sangoma_ss7 span = %s(%d)...\n",
 			span->name,
@@ -2846,17 +2884,23 @@ static FIO_CONFIGURE_SPAN_SIGNALING_FUNCTION(ftdm_sangoma_ss7_span_config)
 		return FTDM_FAIL;
 	}
 
-	if(SNG_SS7_OPR_MODE_M2UA_SG == g_ftdm_operating_mode){
+	/* get the operation type */
+	opr_mode = ftmod_ss7_get_operating_mode(span->span_id);
+	if (opr_mode == SNG_SS7_OPR_MODE_NONE) {
+		return FTDM_FAIL;
+	}
+
+	if(SNG_SS7_OPR_MODE_M2UA_SG == opr_mode) {
 		ftdm_log (FTDM_LOG_INFO, "FreeTDM running as M2UA_SG mode, Setting Span type to FTDM_SIGTYPE_M2UA\n"); 
 		span->signal_type = FTDM_SIGTYPE_M2UA;
 	}
 
-	if (SNG_SS7_OPR_MODE_MTP2_API == g_ftdm_operating_mode) {
+	if (SNG_SS7_OPR_MODE_MTP2_API == opr_mode) {
 		if(FTDM_SUCCESS != sngss7_cfg_mtp2api(span)){
 			ftdm_log (FTDM_LOG_CRIT, "Failed to configure LibSngSS7: MTP2 API \n");
 			return FTDM_FAIL;
 		}
-	} else if (ft_to_sngss7_cfg_all()) { /* configure libsngss7 */
+	} else if (ft_to_sngss7_cfg_all(opr_mode)) { /* configure libsngss7 */
 		ftdm_log (FTDM_LOG_CRIT, "Failed to configure LibSngSS7!\n");
 		ftdm_sleep (100);
 		return FTDM_FAIL;
@@ -2908,7 +2952,7 @@ static FIO_SIG_LOAD_FUNCTION(ftdm_sangoma_ss7_init)
 	ss7_rmtcong_lst = NULL;
 
 	/* initalize the global gen_config flag */
-	g_ftdm_sngss7_data.gen_config = 0;
+	memset(&g_ftdm_sngss7_data.gen_config, 0, sizeof(sng_ss7_gen_config_t));
 
 	/* function trace initizalation */
 	g_ftdm_sngss7_data.function_trace = 1;
@@ -2941,6 +2985,7 @@ static FIO_SIG_LOAD_FUNCTION(ftdm_sangoma_ss7_init)
 	sng_event.sm.sng_cc_alarm = handle_sng_cc_alarm;
 	sng_event.sm.sng_relay_alarm = handle_sng_relay_alarm;
 	sng_event.sm.sng_m2ua_alarm = handle_sng_m2ua_alarm;
+	sng_event.sm.sng_m3ua_alarm = handle_sng_m3ua_alarm;
 	sng_event.sm.sng_nif_alarm  = handle_sng_nif_alarm;
 	sng_event.sm.sng_tucl_alarm = handle_sng_tucl_alarm;
 	sng_event.sm.sng_sctp_alarm = handle_sng_sctp_alarm;
@@ -3032,10 +3077,15 @@ static FIO_SIG_UNLOAD_FUNCTION(ftdm_sangoma_ss7_unload)
 		sngss7_clear_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_RY_STARTED);
 	}
 
-	if(SNG_SS7_OPR_MODE_ISUP != g_ftdm_operating_mode){
+	if((ftmod_ss7_is_operating_mode_pres(SNG_SS7_OPR_MODE_M2UA_SG)) ||
+	   (ftmod_ss7_is_operating_mode_pres(SNG_SS7_OPR_MODE_M2UA_ASP))) {
 		ftmod_ss7_m2ua_free();
 	}
 
+	if((ftmod_ss7_is_operating_mode_pres(SNG_SS7_OPR_MODE_M3UA_SG)) ||
+	   (ftmod_ss7_is_operating_mode_pres(SNG_SS7_OPR_MODE_M3UA_ASP))) {
+		ftmod_ss7_m3ua_free();
+	}
 
 	if (sngss7_test_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_SM_STARTED)) {
 		sng_isup_free_sm();

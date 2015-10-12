@@ -53,7 +53,9 @@
 
 #include "sng_ss7/sng_ss7.h"
 #include "ftmod_sangoma_ss7_m2ua.h"
+#include "ftmod_sangoma_ss7_m3ua.h"
 #include "ftmod_sangoma_ss7_mtp2api.h"
+#include "ftmod_sangoma_ss7_sctp.h"
 
 /******************************************************************************/
 
@@ -151,7 +153,8 @@ typedef enum {
 
 typedef enum {
 	SNG_RTE_UP	= 0,
-	SNG_RTE_DN
+	SNG_RTE_DN,
+	SNG_RTE_IP
 } sng_route_direction_t;
 
 typedef enum {
@@ -193,6 +196,8 @@ typedef struct sng_switch_type {
 	char sng_type[MAX_NAME_LEN];
 	uint32_t tril_mtp3_type;
 	uint32_t tril_isup_type;
+	uint32_t tril_m3ua_su_type;
+	uint32_t tril_m3ua_su2_type;
 } sng_switch_type_t;
 
 typedef struct sng_ssf_type {
@@ -372,6 +377,7 @@ typedef struct sng_route {
 	uint32_t		lsetSel;
 	uint32_t		slsLnk;
 	uint32_t		tfrReq;
+	uint32_t 		tQuery;     /* MTP3 timer to query DPC status from M3UA in M3UA SG mode */
 } sng_route_t;
 
 typedef struct sng_isup_intf {
@@ -473,6 +479,7 @@ typedef struct sng_nsap {
 	uint32_t		linkType;
 	uint32_t		switchType;
 	uint32_t		ssf;
+	uint32_t 		opr_mode;
 } sng_nsap_t;
 
 typedef struct sng_isap {
@@ -521,26 +528,6 @@ typedef struct sng_transparent_ckt {
 	int ccSpan_id;
 	int chan_id;
 } sng_transparent_ckt_t;
-/**********************************************
-sctp structures and data definitions
-**********************************************/
-
-typedef struct sng_sctp_gen_cfg {
-} sng_sctp_gen_cfg_t;
-
-typedef struct sng_sctp_link {
-	char		name[MAX_NAME_LEN];
-	uint32_t	flags;
-	uint32_t	id;
-	uint32_t	port;
-	uint32_t	numSrcAddr;
-	uint32_t	srcAddrList[SCT_MAX_NET_ADDRS+1];	
-} sng_sctp_link_t;
-
-typedef struct sng_sctp_cfg {
-	sng_sctp_gen_cfg_t	genCfg;
-	sng_sctp_link_t		linkCfg[MAX_SCTP_LINK+1];
-} sng_sctp_cfg_t;
 
 typedef struct sng_acc_cfg {
 	uint32_t trf_red_rate;
@@ -574,6 +561,7 @@ typedef struct sng_ss7_cfg {
 	uint32_t		force_early_media;
 	sng_m2ua_gbl_cfg_t 	g_m2ua_cfg;
 	sng_sctp_cfg_t		sctpCfg;
+	sng_m3ua_gbl_cfg_t 	g_m3ua_cfg;
 	uint32_t 		sng_acc;
 	sng_acc_cfg_t		accCfg;
 	int 			msg_priority;
@@ -598,9 +586,21 @@ typedef enum {
 } sng_link_failure_action;
 
 
+typedef struct sng_ss7_gen_config {
+	int cm;
+	int mtp;
+	int mtp2api;
+	int mtp3;
+	int m2ua;
+	int m3ua;
+	int isup;
+	int cc;
+	int relay;
+} sng_ss7_gen_config_t;
+
 typedef struct ftdm_sngss7_data {
 	sng_ss7_cfg_t		cfg;
-	int			gen_config;
+	sng_ss7_gen_config_t	gen_config;
 	int			function_trace;
 	int			function_trace_level;
 	int			message_trace;
@@ -665,7 +665,10 @@ typedef enum{
 	SNG_SS7_OPR_MODE_M2UA_SG,
 	SNG_SS7_OPR_MODE_ISUP,
 	SNG_SS7_OPR_MODE_M2UA_ASP,
-	SNG_SS7_OPR_MODE_MTP2_API
+	SNG_SS7_OPR_MODE_MTP2_API,
+	SNG_SS7_OPR_MODE_M3UA_SG,
+    SNG_SS7_OPR_MODE_M3UA_ASP
+    /* Adding new type, dont forget to add entry to below enum_to_str api */
 }ftdm_sngss7_operating_modes_e;
 
 static inline const char* ftdm_opr_mode_tostr(ftdm_sngss7_operating_modes_e mode)
@@ -680,14 +683,24 @@ static inline const char* ftdm_opr_mode_tostr(ftdm_sngss7_operating_modes_e mode
 			return "M2UA-ASP";
 		case SNG_SS7_OPR_MODE_MTP2_API:
 			return "MTP2-API";
+		case SNG_SS7_OPR_MODE_M3UA_SG:
+			return "M3UA-SG";
+		case SNG_SS7_OPR_MODE_M3UA_ASP:
+			return "M3UA-ASP";
 		default:
 			return "Invalid";
 	}
 	return "Invalid";
 }
 
+typedef struct ftdm_sngss7_span_data {
+	int span_id;
+	ftdm_sngss7_operating_modes_e opr_mode;
+} ftdm_sngss7_span_data_t;
 
-typedef ftdm_sngss7_operating_modes_e ftdm_sngss7_opr_mode;
+typedef struct ftdm_sngss7_global_data {
+	ftdm_sngss7_span_data_t span_data[FTDM_MAX_CHANNELS_SPAN];
+} ftdm_sngss7_global_data_t;
 
 typedef struct sngss7_timer_data {
 	ftdm_timer_id_t			hb_timer_id;
@@ -978,12 +991,15 @@ typedef enum {
 	SNGSS7_NIF_PRESENT	 = (1 << 22),
 	SNGSS7_NIF_STARTED       = (1 << 23),
 
+	SNGSS7_M3UA_PRESENT	 = (1 << 24),
+	SNGSS7_M3UA_STARTED      = (1 << 25),
 } sng_task_flag_t;
 /******************************************************************************/
 
 /* GLOBALS ********************************************************************/
 extern ftdm_sngss7_data_t		g_ftdm_sngss7_data;
-extern ftdm_sngss7_opr_mode		g_ftdm_operating_mode;
+extern ftdm_sngss7_global_data_t 	g_ftdm_sngss7_span_data;
+/*extern ftdm_sngss7_opr_mode		g_ftdm_operating_mode;*/
 extern sng_ssf_type_t			sng_ssf_type_map[];
 extern sng_switch_type_t		sng_switch_type_map[];
 extern sng_link_type_t			sng_link_type_map[];
@@ -1017,6 +1033,7 @@ void handle_sng_isup_alarm(Pst *pst, SiMngmt *sta);
 void handle_sng_cc_alarm(Pst *pst, CcMngmt *sta);
 void handle_sng_relay_alarm(Pst *pst, RyMngmt *sta);
 void handle_sng_m2ua_alarm(Pst *pst, MwMgmt *sta);
+void handle_sng_m3ua_alarm(Pst *pst, ItMgmt *sta);
 void handle_sng_nif_alarm(Pst *pst, NwMgmt *sta);
 void handle_sng_tucl_alarm(Pst *pst, HiMngmt *sta);
 void handle_sng_sctp_alarm(Pst *pst, SbMgmt *sta);
@@ -1027,7 +1044,7 @@ ftdm_status_t handle_relay_disconnect_on_down(RyMngmt *sta);
 ftdm_status_t handle_relay_disconnect_on_error(RyMngmt *sta);
 
 /* in ftmod_sangoma_ss7_cfg.c */
-int ft_to_sngss7_cfg_all(void);
+int ft_to_sngss7_cfg_all(ftdm_sngss7_operating_modes_e opr_mode);
 ftdm_status_t ft_to_sngss7_cfg_mtp2_api(ftdm_channel_t *ftdmchan);
 int ftmod_ss7_mtp1_gen_config(void);
 int ftmod_ss7_mtp2_gen_config(void);
@@ -1035,21 +1052,21 @@ int ftmod_ss7_mtp3_gen_config(void);
 int ftmod_ss7_mtp3_li_gen_config(void);
 int ftmod_ss7_isup_gen_config(void);
 int ftmod_ss7_cc_gen_config(void);
-int ftmod_ss7_mtp1_psap_config(int id);
+int ftmod_ss7_mtp1_psap_config(int id, ftdm_sngss7_operating_modes_e opr_mode);
 int ftmod_ss7_mtp2_dlsap_config(int id);
 int ftmod_ss7_mtp3_li_dlsap_config(int id);
-int ftmod_ss7_mtp3_dlsap_config(int id);
+int ftmod_ss7_mtp3_dlsap_config(int id, ftdm_sngss7_operating_modes_e opr_mode);
 int ftmod_ss7_mtp3_nsap_config(int id);
 int ftmod_ss7_mtp3_linkset_config(int id);
 int ftmod_ss7_mtp3_route_config(int id);
-int ftmod_ss7_isup_nsap_config(int id);
+int ftmod_ss7_isup_nsap_config(int id, ftdm_sngss7_operating_modes_e opr_mode);
 int ftmod_ss7_isup_intf_config(int id);
 int ftmod_ss7_isup_ckt_config(int id);
 int ftmod_ss7_isup_isap_config(int id);
 int ftmod_ss7_cc_isap_config(int id);
 
 /* in ftmod_sangoma_ss7_cntrl.c */
-int  ft_to_sngss7_activate_all(void);
+int  ft_to_sngss7_activate_all(ftdm_sngss7_operating_modes_e opr_mode);
 ftdm_status_t sngss7_activate_mtp2api(ftdm_span_t * span);
 ftdm_status_t sngss7_cfg_mtp2api(ftdm_span_t * span);
 int ft_to_sngss7_activate_mtp2(ftdm_channel_t *ftdmchan);
@@ -1207,6 +1224,9 @@ ftdm_status_t ftmod_sangoma_ss7_mtp2_indicate(ftdm_channel_t *ftdmchan);
 
 /* in ftmod_sangoma_ss7_xml.c */
 int ftmod_ss7_parse_xml(ftdm_conf_parameter_t *ftdm_parameters, ftdm_span_t *span);
+ftdm_sngss7_operating_modes_e ftmod_ss7_get_operating_mode(int span_id);
+int ftmod_ss7_is_operating_mode_pres(ftdm_sngss7_operating_modes_e opr_mode);
+ftdm_status_t ftmod_ss7_check_gen_config_status(void);
 int ftmod_ss7_get_circuit_start_range(int procId);
 int ftmod_ss7_get_circuit_end_range(int procId);
 

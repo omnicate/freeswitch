@@ -56,20 +56,24 @@ sng_ssf_type_t sng_ssf_type_map[] =
 
 sng_switch_type_t sng_switch_type_map[] =
 {
-	{ 1, "itu88"  , LSI_SW_ITU     , LSI_SW_ITU     },
-	{ 1, "itu92"  , LSI_SW_ITU     , LSI_SW_ITU     },
-	{ 1, "itu97"  , LSI_SW_ITU97   , LSI_SW_ITU97   },
-	{ 1, "itu00"  , LSI_SW_ITU2000 , LSI_SW_ITU2000 },
-	{ 1, "ansi88" , LSI_SW_ANS88   , LSI_SW_ANS88   },
-	{ 1, "ansi92" , LSI_SW_ANS92   , LSI_SW_ANS92   },
-	{ 1, "ansi95" , LSI_SW_ANS92   , LSI_SW_ANS92   },
-	{ 1, "etsiv2" , LSI_SW_ETSI    , LSI_SW_ETSI    },
-	{ 1, "etsiv3" , LSI_SW_ETSIV3  , LSI_SW_ETSIV3  },
-	{ 1, "india"  , LSI_SW_INDIA   , LSI_SW_INDIA   },
-	{ 1, "uk"     , LSI_SW_UK      , LSI_SW_UK      },
-	{ 1, "russia" , LSI_SW_RUSSIA  , LSI_SW_RUSSIA  },
-	{ 1, "china"  , LSI_SW_CHINA   , LSI_SW_CHINA   },
-	{ 0, "", 0, 0 },
+	/*              MTP3             ISUP             M3UA-SU       M3UA-SU2        */
+        { 1, "itu88"  , LSI_SW_ITU     , LSI_SW_ITU     , LIT_SW_ITU    , LIT_SW2_ITU     },
+        { 1, "itu92"  , LSI_SW_ITU     , LSI_SW_ITU     , LIT_SW_ITU    , LIT_SW2_ITU     },
+        { 1, "itu97"  , LSI_SW_ITU97   , LSI_SW_ITU97   , LIT_SW_ITU    , LIT_SW2_ITU     },
+        { 1, "itu00"  , LSI_SW_ITU2000 , LSI_SW_ITU2000 , LIT_SW_ITU    , LIT_SW2_ITU     },
+        { 1, "ansi88" , LSI_SW_ANS88   , LSI_SW_ANS88   , LIT_SW_ANS    , LIT_SW2_ANS     },
+        { 1, "ansi92" , LSI_SW_ANS92   , LSI_SW_ANS92   , LIT_SW_ANS    , LIT_SW2_ANS     },
+        { 1, "ansi95" , LSI_SW_ANS92   , LSI_SW_ANS92   , LIT_SW_ANS    , LIT_SW2_ANS     },
+        { 1, "ansi96" , 0              , 0              , LIT_SW_ANS96  , LIT_SW2_ANS     },
+        { 1, "etsiv2" , LSI_SW_ETSI    , LSI_SW_ETSI    , LSN_SW_ITU    , LIT_SW2_ETS     },
+        { 1, "etsiv3" , LSI_SW_ETSIV3  , LSI_SW_ETSIV3  , LSN_SW_ITU    , LIT_SW2_ETS     },
+        { 1, "india"  , LSI_SW_INDIA   , LSI_SW_INDIA   , 0             , LIT_SW2_UNUSED  },
+        { 1, "uk"     , LSI_SW_UK      , LSI_SW_UK      , 0             , LIT_SW2_UNUSED  },
+        { 1, "russia" , LSI_SW_RUSSIA  , LSI_SW_RUSSIA  , 0             , LIT_SW2_UNUSED  },
+        { 1, "china"  , LSI_SW_CHINA   , LSI_SW_CHINA   , LIT_SW_CHINA  , LIT_SW2_UNUSED  },
+        { 1, "itu"    , 0              , 0              , LIT_SW_ITU    , LIT_SW2_ITU     },
+        { 1, "unused" , 0              , 0              , 0             , LIT_SW2_UNUSED  },
+        { 0, ""       , 0              , 0              , 0             , LIT_SW2_UNUSED  },
 };
 
 sng_link_type_t sng_link_type_map[] =
@@ -170,8 +174,8 @@ static int ftmod_ss7_parse_sng_gen(ftdm_conf_node_t *sng_gen, char* operating_mo
 static int ftmod_ss7_parse_sng_relay(ftdm_conf_node_t *sng_relay);
 static int ftmod_ss7_parse_relay_channel(ftdm_conf_node_t *relay_chan);
 
-static int ftmod_ss7_parse_mtp1_links(ftdm_conf_node_t *mtp1_links);
-static int ftmod_ss7_parse_mtp1_link(ftdm_conf_node_t *mtp1_link);
+static int ftmod_ss7_parse_mtp1_links(ftdm_conf_node_t *mtp1_links, ftdm_sngss7_operating_modes_e opr_mode);
+static int ftmod_ss7_parse_mtp1_link(ftdm_conf_node_t *mtp1_link, ftdm_sngss7_operating_modes_e opr_mode);
 
 static int ftmod_ss7_parse_mtp2_links(ftdm_conf_node_t *mtp2_links);
 static int ftmod_ss7_parse_mtp2_link(ftdm_conf_node_t *mtp2_link);
@@ -182,11 +186,11 @@ static int ftmod_ss7_parse_mtp3_link(ftdm_conf_node_t *mtp3_link);
 static int ftmod_ss7_parse_mtp_linksets(ftdm_conf_node_t *mtp_linksets);
 static int ftmod_ss7_parse_mtp_linkset(ftdm_conf_node_t *mtp_linkset);
 
-static int ftmod_ss7_parse_mtp_routes(ftdm_conf_node_t *mtp_routes, ftdm_span_t *span);
-static int ftmod_ss7_parse_mtp_route(ftdm_conf_node_t *mtp_route, ftdm_span_t *span);
+static int ftmod_ss7_parse_mtp_routes(ftdm_conf_node_t *mtp_routes, ftdm_span_t *span, ftdm_sngss7_operating_modes_e opr_mode);
+static int ftmod_ss7_parse_mtp_route(ftdm_conf_node_t *mtp_route, ftdm_span_t *span, ftdm_sngss7_operating_modes_e opr_mode);
 
-static int ftmod_ss7_parse_isup_interfaces(ftdm_conf_node_t *isup_interfaces);
-static int ftmod_ss7_parse_isup_interface(ftdm_conf_node_t *isup_interface);
+static int ftmod_ss7_parse_isup_interfaces(ftdm_conf_node_t *isup_interfaces, ftdm_sngss7_operating_modes_e opr_mode);
+static int ftmod_ss7_parse_isup_interface(ftdm_conf_node_t *isup_interface, ftdm_sngss7_operating_modes_e opr_mode);
 
 static int ftmod_ss7_parse_cc_spans(ftdm_conf_node_t *cc_spans);
 static int ftmod_ss7_parse_cc_span(ftdm_conf_node_t *cc_span);
@@ -197,36 +201,36 @@ static int ftmod_ss7_fill_in_mtp2_link(sng_mtp2_link_t *mtp2Link);
 static int ftmod_ss7_fill_in_mtp3_link(sng_mtp3_link_t *mtp3Link);
 static int ftmod_ss7_fill_in_mtpLinkSet(sng_link_set_t *mtpLinkSet);
 static int ftmod_ss7_fill_in_mtp3_route(sng_route_t *mtp3_route);
-static int ftmod_ss7_fill_in_nsap(sng_route_t *mtp3_route);
+static int ftmod_ss7_fill_in_nsap(sng_route_t *mtp3_route, ftdm_sngss7_operating_modes_e opr_mode);
 /* Fill in ACC Timer */
 static int ftmod_ss7_fill_in_acc_timer(sng_route_t *mtp3_route, ftdm_span_t *span);
 static int ftmod_ss7_fill_in_isup_interface(sng_isup_inf_t *sng_isup);
 static int ftmod_ss7_fill_in_isap(sng_isap_t *sng_isap);
 static int ftmod_ss7_fill_in_ccSpan(sng_ccSpan_t *ccSpan);
-static int ftmod_ss7_fill_in_self_route(int spc, int linkType, int switchType, int ssf);
-static int ftmod_ss7_fill_in_circuits(sng_span_t *sngSpan);
+static int ftmod_ss7_fill_in_self_route(int spc, int linkType, int switchType, int ssf, int tQuery);
+static int ftmod_ss7_fill_in_circuits(sng_span_t *sngSpan, ftdm_sngss7_operating_modes_e opr_mode);
 
 static int ftmod_ss7_next_timeslot(char *ch_map, sng_timeslot_t *timeslot);
 static void ftmod_ss7_set_glare_resolution (const char *method);
-static int ftmod_ss7_set_operating_mode(const char* span_opr_mode, const char* sng_gen_opr_mode);
+static int ftmod_ss7_set_operating_mode(const char* span_opr_mode, const char* sng_gen_opr_mode, ftdm_span_t *span);
 
 /******************************************************************************/
 
 /* FUNCTIONS ******************************************************************/
 
-static int ftmod_ss7_set_operating_mode(const char* span_opr_mode, const char* sng_gen_opr_mode)
+static int ftmod_ss7_set_operating_mode(const char* span_opr_mode, const char* sng_gen_opr_mode, ftdm_span_t *span)
 {
     ftdm_sngss7_operating_modes_e mode = SNG_SS7_OPR_MODE_NONE;
     char opr_mode[128];
+    int idx = 0;
 
     memset(opr_mode, 0, sizeof(opr_mode));
 
     /* 1)  Initially operating mode will be set to INVALID
     *  2)  operating-mode can be the part of sng_gen and span configuration 
-    *  3)  we are only supporting one operating mode per system, NOT supporting per span operating mode 
-    *  4)  IF first span configuration or sng_ss7 we set operating mode to X and then subsequent span
+    *  3)  IF first span configuration or sng_ss7 we set operating mode to X and then subsequent span
     *      configuration defined another operating mode , return error 
-    *  5)  If operating mode present in span config..this will take priority then configured in sng_gen
+    *  4)  If operating mode present in span config..this will take priority then configured in sng_gen
     *  */
 
     if (span_opr_mode && ('\0' != span_opr_mode[0])) {
@@ -239,22 +243,42 @@ static int ftmod_ss7_set_operating_mode(const char* span_opr_mode, const char* s
 
     if (!strcasecmp(opr_mode, "ISUP")) {
         mode = SNG_SS7_OPR_MODE_ISUP;
-    } else if (!strcasecmp(opr_mode, "M2UA_SG")) {                                                       
+    } else if (!strcasecmp(opr_mode, "M2UA_SG")) {
         mode = SNG_SS7_OPR_MODE_M2UA_SG;
-    } else if (!strcasecmp(opr_mode, "M2UA_ASP")) {                                                    
+    } else if (!strcasecmp(opr_mode, "M2UA_ASP")) {
         mode = SNG_SS7_OPR_MODE_M2UA_ASP;
     } else if (!strcasecmp(opr_mode, "MTP2_API")) {                                                  
         mode = SNG_SS7_OPR_MODE_MTP2_API;
+    } else if (!strcasecmp(opr_mode, "M3UA_SG")) {
+        mode = SNG_SS7_OPR_MODE_M3UA_SG;
+    } else if (!strcasecmp(opr_mode, "M3UA_ASP")) {
+        mode = SNG_SS7_OPR_MODE_M3UA_ASP;
     } else {
         return FTDM_SUCCESS;
     }
 
-    if ( SNG_SS7_OPR_MODE_NONE == g_ftdm_operating_mode ) {
-        g_ftdm_operating_mode = mode;
-    } else if (g_ftdm_operating_mode != mode) {
-        SS7_ERROR("Different operating Mode[%s] then configured[%s] \n", 
-                opr_mode, ftdm_opr_mode_tostr(g_ftdm_operating_mode));                                      
-        return FTDM_FAIL;
+    for (idx = 0; idx < FTDM_MAX_CHANNELS_SPAN; idx++) {
+	    if (g_ftdm_sngss7_span_data.span_data[idx].span_id) {
+		    if (g_ftdm_sngss7_span_data.span_data[idx].span_id == span->span_id) {
+			    if (g_ftdm_sngss7_span_data.span_data[idx].opr_mode == mode) {
+				    return FTDM_SUCCESS;
+			    } else {
+				    SS7_ERROR("Different operating Mode[%s] than configured[%s] for span %d[%s]!\n",
+				    opr_mode, ftdm_opr_mode_tostr(g_ftdm_sngss7_span_data.span_data[idx].opr_mode), span->span_id, span->name);
+				    return FTDM_FAIL;
+			    }
+		    }
+	    } else if (g_ftdm_sngss7_span_data.span_data[idx].opr_mode == SNG_SS7_OPR_MODE_NONE) {
+		    g_ftdm_sngss7_span_data.span_data[idx].span_id = span->span_id;
+		    g_ftdm_sngss7_span_data.span_data[idx].opr_mode = mode;
+		    SS7_INFO("Setting operating Mode[%s] for span %d[%s]!\n",
+			     ftdm_opr_mode_tostr(g_ftdm_sngss7_span_data.span_data[idx].opr_mode), span->span_id, span->name);
+		    break;
+	    } else {
+		    SS7_ERROR("Different operating Mode[%s] than configured[%s] for span %d[%s]!\n",
+			      opr_mode, ftdm_opr_mode_tostr(g_ftdm_sngss7_span_data.span_data[idx].opr_mode), span->span_id, span->name);
+		    return FTDM_FAIL;
+	    }
     }
 
     return FTDM_SUCCESS;
@@ -269,6 +293,7 @@ int ftmod_ss7_parse_xml(ftdm_conf_parameter_t *ftdm_parameters, ftdm_span_t *spa
 	const char			*val = NULL;
 	const char			*operating_mode = NULL;
 	ftdm_conf_node_t	*ptr = NULL;
+	ftdm_sngss7_operating_modes_e opr_mode = SNG_SS7_OPR_MODE_NONE;
 
 	/* clean out the isup ckt */
 	memset(&sngSpan, 0x0, sizeof(sngSpan));
@@ -279,10 +304,6 @@ int ftmod_ss7_parse_xml(ftdm_conf_parameter_t *ftdm_parameters, ftdm_span_t *spa
 	var = ftdm_parameters[i].var;
 	val = ftdm_parameters[i].val;
 
-    /* Default value will be set after processing of sng_gen  to
-     * confirm that operating mode not defined neither in sng gen nor in span cfg */
-	//g_ftdm_operating_mode = SNG_SS7_OPR_MODE_ISUP;
-    
     /* operating mode can be present in sng_gen or per span as of now */
     /* if operating mode present in sng_gen and span then span has to take priority */
 
@@ -333,10 +354,19 @@ int ftmod_ss7_parse_xml(ftdm_conf_parameter_t *ftdm_parameters, ftdm_span_t *spa
 	/* fill the pointer to span into isupCkt */
 	sngSpan.span = span;
 
-    if ((SNG_SS7_OPR_MODE_ISUP == g_ftdm_operating_mode) || 
-            (SNG_SS7_OPR_MODE_M2UA_ASP == g_ftdm_operating_mode)){
+	/* Get operating mode on span basis */
+	opr_mode = ftmod_ss7_get_operating_mode(span->span_id);
+	if (opr_mode == SNG_SS7_OPR_MODE_NONE) {
+		SS7_ERROR("Invalid Operating mode [%s] set for span %d[%s]!\n",
+			  ftdm_opr_mode_tostr(opr_mode), span->span_id, span->name);
+		goto ftmod_ss7_parse_xml_error;
+	}
+
+    if ((SNG_SS7_OPR_MODE_ISUP == opr_mode) ||
+            (SNG_SS7_OPR_MODE_M2UA_ASP == opr_mode) ||
+            (SNG_SS7_OPR_MODE_M3UA_ASP == opr_mode)) {
         /* setup the circuits structure */
-        if(ftmod_ss7_fill_in_circuits(&sngSpan)) {
+        if (ftmod_ss7_fill_in_circuits(&sngSpan, opr_mode)) {
             SS7_ERROR("Failed to fill in circuits structure!\n");
             goto ftmod_ss7_parse_xml_error;
         }
@@ -366,7 +396,16 @@ static int ftmod_ss7_parse_sng_isup(ftdm_conf_node_t *sng_isup, const char* span
 	ftdm_conf_node_t	*m2ua_peer_ifaces = NULL;
 	ftdm_conf_node_t	*m2ua_clust_ifaces = NULL;
 	ftdm_conf_node_t	*sctp_ifaces = NULL;
-	char                 	sng_gen_opr_mode[128];
+	char           		sng_gen_opr_mode[128];
+	ftdm_conf_node_t	*m3ua_network_ifaces = NULL;
+	ftdm_conf_node_t	*m3ua_ps_ifaces = NULL;
+	ftdm_conf_node_t	*m3ua_psp_ifaces = NULL;
+	ftdm_conf_node_t	*m3ua_user_ifaces = NULL;
+	ftdm_conf_node_t	*m3ua_nif_ifaces = NULL;
+	ftdm_conf_node_t	*m3ua_route_ifaces = NULL;
+
+	ftdm_sngss7_operating_modes_e opr_mode = SNG_SS7_OPR_MODE_NONE;
+
 
 	memset(&sng_gen_opr_mode[0], 0, sizeof(sng_gen_opr_mode));
 
@@ -524,6 +563,67 @@ static int ftmod_ss7_parse_sng_isup(ftdm_conf_node_t *sng_isup, const char* span
 				return FTDM_FAIL;
 			}
 		/**********************************************************************/
+		} else if (!strcasecmp(tmp_node->name, "sng_m3ua_network_interfaces")) {
+			/**********************************************************************/
+			if (m3ua_network_ifaces == NULL) {
+				m3ua_network_ifaces = tmp_node;
+				SS7_DEBUG("Found a <sng_m3ua_network_interfaces> section!\n");
+			} else {
+				SS7_ERROR("Found a second <sng_m3ua_network_interfaces> section!\n");
+				return FTDM_FAIL;
+			}
+			/**********************************************************************/
+		} else if (!strcasecmp(tmp_node->name, "sng_m3ua_peer_server_interfaces")) {
+			/**********************************************************************/
+			if (m3ua_ps_ifaces == NULL) {
+				m3ua_ps_ifaces = tmp_node;
+				SS7_DEBUG("Found a <sng_m3ua_peer_server_interfaces> section!\n");
+			} else {
+				SS7_ERROR("Found a second <sng_m3ua_peer_server_interfaces> section!\n");
+				return FTDM_FAIL;
+			}
+			/**********************************************************************/
+		} else if (!strcasecmp(tmp_node->name, "sng_m3ua_peer_server_process_interfaces")) {
+			/**********************************************************************/
+			if (m3ua_psp_ifaces == NULL) {
+				m3ua_psp_ifaces = tmp_node;
+				SS7_DEBUG("Found a <sng_m3ua_peer_server_process_interfaces> section!\n");
+			} else {
+				SS7_ERROR("Found a second <sng_m3ua_peer_server_process_interfaces> section!\n");
+				return FTDM_FAIL;
+			}
+			/**********************************************************************/
+		} else if (!strcasecmp(tmp_node->name, "sng_m3ua_user_interfaces")) {
+			/**********************************************************************/
+			if (m3ua_user_ifaces == NULL) {
+				m3ua_user_ifaces = tmp_node;
+				SS7_DEBUG("Found a <sng_m3ua_user_interfaces> section!\n");
+			} else {
+				SS7_ERROR("Found a second <sng_m3ua_user_interfaces> section!\n");
+				return FTDM_FAIL;
+			}
+			/**********************************************************************/
+		} else if (!strcasecmp(tmp_node->name, "sng_m3ua_nif_interfaces")) {
+			/**********************************************************************/
+			if (m3ua_nif_ifaces == NULL) {
+				m3ua_nif_ifaces = tmp_node;
+				SS7_DEBUG("Found a <sng_m3ua_nif_interfaces> section!\n");
+			} else {
+				SS7_ERROR("Found a second <sng_m3ua_nif_interfaces> section!\n");
+				return FTDM_FAIL;
+			}
+			/**********************************************************************/
+
+		} else if (!strcasecmp(tmp_node->name, "sng_m3ua_route_interfaces")) {
+			/**********************************************************************/
+			if (m3ua_route_ifaces == NULL) {
+				m3ua_route_ifaces = tmp_node;
+				SS7_DEBUG("Found a <sng_m3ua_route_interfaces> section!\n");
+			} else {
+				SS7_ERROR("Found a second <sng_m3ua_route_interfaces> section!\n");
+				return FTDM_FAIL;
+			}
+			/**********************************************************************/
 		} else {
 		/**********************************************************************/
 			SS7_ERROR("\tFound an unknown section \"%s\"!\n", tmp_node->name);
@@ -541,24 +641,31 @@ static int ftmod_ss7_parse_sng_isup(ftdm_conf_node_t *sng_isup, const char* span
 		return FTDM_FAIL;
 	}
 
-    if (FTDM_FAIL == ftmod_ss7_set_operating_mode(span_opr_mode, sng_gen_opr_mode)) {
-        return FTDM_FAIL;
-    } 
+	if (FTDM_FAIL == ftmod_ss7_set_operating_mode(span_opr_mode, sng_gen_opr_mode, span)) {
+		return FTDM_FAIL;
+	}
 
-    SS7_INFO("Setting FreeTDM Operating Mode[%s]\n",ftdm_opr_mode_tostr(g_ftdm_operating_mode));
+	opr_mode = ftmod_ss7_get_operating_mode(span->span_id);
+	if (opr_mode == SNG_SS7_OPR_MODE_NONE) {
+		SS7_ERROR("Invalid Operating mode [%s] set for span %d[%s]!\n",
+			  ftdm_opr_mode_tostr(opr_mode), span->span_id, span->name);
+		return FTDM_FAIL;
+	} else {
+		SS7_INFO("Setting FreeTDM Operating Mode[%s]\n",ftdm_opr_mode_tostr(opr_mode));
+	}
 
 	if (relay_channels && ftmod_ss7_parse_sng_relay(relay_channels)) {
 		SS7_ERROR("Failed to parse \"relay_channels\"!\n");
 		return FTDM_FAIL;
 	}
 
+	/****************************************************************************************************/
+	if ((SNG_SS7_OPR_MODE_ISUP == opr_mode) ||
+			(SNG_SS7_OPR_MODE_M2UA_SG == opr_mode) ||
+			(SNG_SS7_OPR_MODE_M3UA_SG == opr_mode) ||
+			(SNG_SS7_OPR_MODE_MTP2_API == opr_mode)) {
 
-/****************************************************************************************************/
-	if((SNG_SS7_OPR_MODE_ISUP == g_ftdm_operating_mode) || 
-			(SNG_SS7_OPR_MODE_M2UA_SG == g_ftdm_operating_mode) ||
-            (SNG_SS7_OPR_MODE_MTP2_API == g_ftdm_operating_mode)) {
-
-		if (ftmod_ss7_parse_mtp1_links(mtp1_links)) {
+		if (ftmod_ss7_parse_mtp1_links(mtp1_links, opr_mode)) {
 			SS7_ERROR("Failed to parse \"mtp1_links\"!\n");
 			return FTDM_FAIL;
 		}
@@ -569,11 +676,13 @@ static int ftmod_ss7_parse_sng_isup(ftdm_conf_node_t *sng_isup, const char* span
 		}
 	}
 
-    if ( SNG_SS7_OPR_MODE_MTP2_API == g_ftdm_operating_mode ) goto done;
 /****************************************************************************************************/
+	if ( SNG_SS7_OPR_MODE_MTP2_API == opr_mode ) goto done;
+	/****************************************************************************************************/
 
-	if((SNG_SS7_OPR_MODE_ISUP == g_ftdm_operating_mode) || 
-			(SNG_SS7_OPR_MODE_M2UA_ASP == g_ftdm_operating_mode)){
+	if ((SNG_SS7_OPR_MODE_ISUP == opr_mode) ||
+			(SNG_SS7_OPR_MODE_M3UA_SG == opr_mode) ||
+			(SNG_SS7_OPR_MODE_M2UA_ASP == opr_mode)) {
 
 		if (mtp3_links && ftmod_ss7_parse_mtp3_links(mtp3_links)) {
 			SS7_ERROR("Failed to parse \"mtp3_links\"!\n");
@@ -585,32 +694,29 @@ static int ftmod_ss7_parse_sng_isup(ftdm_conf_node_t *sng_isup, const char* span
 			return FTDM_FAIL;
 		}
 
-		if (ftmod_ss7_parse_mtp_routes(mtp_routes, span)) {
+		if (ftmod_ss7_parse_mtp_routes(mtp_routes, span, opr_mode)) {
 			SS7_ERROR("Failed to parse \"mtp_routes\"!\n");
-			return FTDM_FAIL;
-		}
-
-		if (isup_interfaces && ftmod_ss7_parse_isup_interfaces(isup_interfaces)) {
-			SS7_ERROR("Failed to parse \"isup_interfaces\"!\n");
-			return FTDM_FAIL;
-		}
-
-		if (cc_spans && ftmod_ss7_parse_cc_spans(cc_spans)) {
-			SS7_ERROR("Failed to parse \"cc_spans\"!\n");
 			return FTDM_FAIL;
 		}
 	}
 /****************************************************************************************************/
 
-	if((SNG_SS7_OPR_MODE_M2UA_SG == g_ftdm_operating_mode) || 
-			(SNG_SS7_OPR_MODE_M2UA_ASP == g_ftdm_operating_mode)){
+	if ((SNG_SS7_OPR_MODE_M2UA_SG == opr_mode) ||
+			(SNG_SS7_OPR_MODE_M3UA_SG == opr_mode) ||
+			(SNG_SS7_OPR_MODE_M3UA_ASP == opr_mode) ||
+			(SNG_SS7_OPR_MODE_M2UA_ASP == opr_mode)) {
 
 		if (ftmod_ss7_parse_sctp_links(sctp_ifaces) != FTDM_SUCCESS) {
 			SS7_ERROR("Failed to parse <sctp_links>!\n");
 			return FTDM_FAIL;
 		}
+	}
+/****************************************************************************************************/
 
-		if ((SNG_SS7_OPR_MODE_M2UA_SG == g_ftdm_operating_mode) && 
+	if ((SNG_SS7_OPR_MODE_M2UA_SG == opr_mode) ||
+		(SNG_SS7_OPR_MODE_M2UA_ASP == opr_mode)) {
+
+		if ((SNG_SS7_OPR_MODE_M2UA_SG == opr_mode) &&
 		    (nif_ifaces && ftmod_ss7_parse_nif_interfaces(nif_ifaces))) {
 			SS7_ERROR("Failed to parse \"nif_ifaces\"!\n");
 			return FTDM_FAIL;
@@ -630,6 +736,66 @@ static int ftmod_ss7_parse_sng_isup(ftdm_conf_node_t *sng_isup, const char* span
 		}
 	}
 /****************************************************************************************************/
+
+    if ((SNG_SS7_OPR_MODE_M3UA_SG == opr_mode) ||
+			(SNG_SS7_OPR_MODE_M3UA_ASP == opr_mode)) {
+
+        if (m3ua_network_ifaces && (FTDM_SUCCESS != ftmod_ss7_parse_m3ua_networks(m3ua_network_ifaces))) {
+            SS7_ERROR("Failed to parse <sng_m3ua_network_interfaces>!\n");
+            return FTDM_FAIL;
+        }
+
+        if (m3ua_ps_ifaces && (FTDM_SUCCESS != ftmod_ss7_parse_m3ua_peerservers(m3ua_ps_ifaces))) {
+            SS7_ERROR("Failed to parse <sng_m3ua_peer_server_interfaces>!\n");
+            return FTDM_FAIL;
+        }
+
+        if (m3ua_psp_ifaces && (FTDM_SUCCESS != ftmod_ss7_parse_m3ua_psps(m3ua_psp_ifaces))) {
+            SS7_ERROR("Failed to parse <sng_m3ua_peer_server_process_interfaces>!\n");
+            return FTDM_FAIL;
+        }
+
+        if (SNG_SS7_OPR_MODE_M3UA_ASP == opr_mode) {
+            if (m3ua_user_ifaces && (FTDM_SUCCESS != ftmod_ss7_parse_m3ua_users(m3ua_user_ifaces))) {
+                SS7_ERROR("Failed to parse <sng_m3ua_user_interfaces>!\n");
+                return FTDM_FAIL;
+            }
+        } else {
+            if (m3ua_nif_ifaces && (FTDM_SUCCESS != ftmod_ss7_parse_m3ua_nif(m3ua_nif_ifaces))) {
+                SS7_ERROR("Failed to parse <sng_m3ua_nif_interfaces>!\n");
+                return FTDM_FAIL;
+            }
+        }
+
+        if (m3ua_route_ifaces && (FTDM_SUCCESS != ftmod_ss7_parse_m3ua_routes(m3ua_route_ifaces, opr_mode))) {
+            SS7_ERROR("Failed to parse <sng_m3ua_route_interfaces>!\n");
+            return FTDM_FAIL;
+        }
+    }
+
+/****************************************************************************************************/
+	if ((SNG_SS7_OPR_MODE_ISUP == opr_mode) ||
+            (SNG_SS7_OPR_MODE_M3UA_ASP == opr_mode) ||
+            (SNG_SS7_OPR_MODE_M2UA_ASP == opr_mode)) {
+
+		if (isup_interfaces && ftmod_ss7_parse_isup_interfaces(isup_interfaces, opr_mode)) {
+			SS7_ERROR("Failed to parse \"isup_interfaces\"!\n");
+			return FTDM_FAIL;
+		}
+
+		if (cc_spans && ftmod_ss7_parse_cc_spans(cc_spans)) {
+			SS7_ERROR("Failed to parse \"cc_spans\"!\n");
+			return FTDM_FAIL;
+		}
+	}
+/****************************************************************************************************/
+	if (SNG_SS7_OPR_MODE_M3UA_SG == opr_mode) {
+        /* now configure MTP3/M3UA related routes */
+        ftmod_m3ua_cfg_mtp3_m3ua_routes(opr_mode);
+    }
+
+/****************************************************************************************************/
+
 done:
 	return FTDM_SUCCESS;
 }
@@ -909,7 +1075,7 @@ static int ftmod_ss7_parse_relay_channel(ftdm_conf_node_t *relay_chan)
 }
 
 /******************************************************************************/
-static int ftmod_ss7_parse_mtp1_links(ftdm_conf_node_t *mtp1_links)
+static int ftmod_ss7_parse_mtp1_links(ftdm_conf_node_t *mtp1_links, ftdm_sngss7_operating_modes_e opr_mode)
 {
 	ftdm_conf_node_t	*mtp1_link = NULL;
 
@@ -927,7 +1093,7 @@ static int ftmod_ss7_parse_mtp1_links(ftdm_conf_node_t *mtp1_links)
 	/* run through all of the links found  */
 	while (mtp1_link != NULL) {
 		/* try to the parse mtp_link */
-		if (ftmod_ss7_parse_mtp1_link(mtp1_link)) {
+		if (ftmod_ss7_parse_mtp1_link(mtp1_link, opr_mode)) {
 			SS7_ERROR("Failed to parse \"mtp1_link\"!\n");
 			return FTDM_FAIL;
 		}
@@ -941,7 +1107,7 @@ static int ftmod_ss7_parse_mtp1_links(ftdm_conf_node_t *mtp1_links)
 }
 
 /******************************************************************************/
-static int ftmod_ss7_parse_mtp1_link(ftdm_conf_node_t *mtp1_link)
+static int ftmod_ss7_parse_mtp1_link(ftdm_conf_node_t *mtp1_link, ftdm_sngss7_operating_modes_e opr_mode)
 {
 	sng_mtp1_link_t		 	mtp1Link;
 	ftdm_conf_parameter_t	*parm = mtp1_link->parameters;
@@ -1009,7 +1175,7 @@ static int ftmod_ss7_parse_mtp1_link(ftdm_conf_node_t *mtp1_link)
         return FTDM_FAIL;
     }
 
-    if (SNG_SS7_OPR_MODE_MTP2_API == g_ftdm_operating_mode) {
+    if (SNG_SS7_OPR_MODE_MTP2_API == opr_mode) {
         if (!ftdm_strlen_zero(mtp1Link.span_name)) {
             ftdm_span_find_by_name(mtp1Link.span_name, &ftdmspan);
             if (!ftdmspan) {
@@ -1621,7 +1787,7 @@ static int ftmod_ss7_parse_mtp_linkset(ftdm_conf_node_t *mtp_linkset)
 }
 
 /******************************************************************************/
-static int ftmod_ss7_parse_mtp_routes(ftdm_conf_node_t *mtp_routes, ftdm_span_t *span)
+static int ftmod_ss7_parse_mtp_routes(ftdm_conf_node_t *mtp_routes, ftdm_span_t *span, ftdm_sngss7_operating_modes_e opr_mode)
 {
 	ftdm_conf_node_t	*mtp_route = NULL;
 
@@ -1638,7 +1804,7 @@ static int ftmod_ss7_parse_mtp_routes(ftdm_conf_node_t *mtp_routes, ftdm_span_t 
 
 	while (mtp_route != NULL) {
 		/* parse the found mtp_route */
-		if (ftmod_ss7_parse_mtp_route(mtp_route, span)) {
+		if (ftmod_ss7_parse_mtp_route(mtp_route, span, opr_mode)) {
 			SS7_ERROR("Failed to parse \"mtp_route\"\n");
 			return FTDM_FAIL;
 		}
@@ -1651,16 +1817,19 @@ static int ftmod_ss7_parse_mtp_routes(ftdm_conf_node_t *mtp_routes, ftdm_span_t 
 }
 
 /******************************************************************************/
-static int ftmod_ss7_parse_mtp_route(ftdm_conf_node_t *mtp_route, ftdm_span_t *span)
+static int ftmod_ss7_parse_mtp_route(ftdm_conf_node_t *mtp_route, ftdm_span_t *span, ftdm_sngss7_operating_modes_e opr_mode)
 {
 	sng_route_t		 	mtpRoute;
-	ftdm_conf_parameter_t	*parm = mtp_route->parameters;
-	int					num_parms = mtp_route->n_parameters;
-	int					i;
-	sng_link_set_list_t		*lnkSet;
-
-	ftdm_conf_node_t		*linkset;
-	int					numLinks;
+	ftdm_conf_parameter_t		*parm = mtp_route->parameters;
+	int				num_parms = mtp_route->n_parameters;
+	int				i = 0;
+	sng_link_set_list_t		*lnkSet = NULL;
+	ftdm_conf_node_t		*linkset = NULL;
+	int				numLinks;
+	int				spc=0;
+	int				idx=0;
+	/* By default the mode for which the span is configured is the considered as the Route config mode */
+	ftdm_sngss7_operating_modes_e   tmp_mode = opr_mode;
 
 	memset(&mtpRoute, 0x0, sizeof(mtpRoute));
 	if (strcasecmp(mtp_route->name, "mtp_route")) {
@@ -1723,6 +1892,13 @@ static int ftmod_ss7_parse_mtp_route(ftdm_conf_node_t *mtp_route, ftdm_span_t *s
 				mtpRoute.tfrReq = 0;
 			}
 			SS7_DEBUG("Found an mtp3 tfrReq = %d\n",mtpRoute.tfrReq);
+		} else if (!strcasecmp(parm->var, "operating-mode")) {
+			if (!strcasecmp(parm->val, "M3UA_SG")) {
+				tmp_mode = SNG_SS7_OPR_MODE_M3UA_SG;
+			} else if (!strcasecmp(parm->val, "ISUP")) {
+				tmp_mode = SNG_SS7_OPR_MODE_ISUP;
+			}
+			SS7_DEBUG("Found an mtp route operation Mode = %d\n", tmp_mode);
 		} else if (!strcasecmp(parm->var, "acc-max-bucket")) {
 			if (g_ftdm_sngss7_data.cfg.sng_acc) {
 				mtpRoute.max_bkt_size = atoi(parm->val);
@@ -1733,6 +1909,9 @@ static int ftmod_ss7_parse_mtp_route(ftdm_conf_node_t *mtp_route, ftdm_span_t *s
 		} else if (!strcasecmp(parm->var, "mtp3.t8")) {
 			mtpRoute.t8 = atoi(parm->val);
 			SS7_DEBUG("Found an mtp3 t8 = %d\n",mtpRoute.t8);
+		} else if (!strcasecmp(parm->var, "mtp3.tQuery")) {
+			mtpRoute.tQuery = atoi(parm->val);
+			SS7_DEBUG("Found an mtp3 tQuery = %d\n",mtpRoute.tQuery);
 		} else if (!strcasecmp(parm->var, "mtp3.t10")) {
 			mtpRoute.t10 = atoi(parm->val);
 			SS7_DEBUG("Found an mtp3 t10 = %d\n",mtpRoute.t10);
@@ -1760,6 +1939,11 @@ static int ftmod_ss7_parse_mtp_route(ftdm_conf_node_t *mtp_route, ftdm_span_t *s
 		} else if (!strcasecmp(parm->var, "mtp3.t26")) {
 			mtpRoute.t26 = atoi(parm->val);
 			SS7_DEBUG("Found an mtp3 t26 = %d\n",mtpRoute.t26);
+		} else if (!strcasecmp(parm->var, "spc")) {
+		/**********************************************************************/
+			spc = atoi(parm->val);
+			SS7_DEBUG("Found an spc = %d\n",spc);
+		/**********************************************************************/
 		} else if (!strcasecmp(parm->var, "dpc.t29")) {
 			mtpRoute.t29 = atoi(parm->val);
 			SS7_DEBUG("Found ACC t29 Timer = %d\n",mtpRoute.t29);
@@ -1808,6 +1992,20 @@ static int ftmod_ss7_parse_mtp_route(ftdm_conf_node_t *mtp_route, ftdm_span_t *s
 		/* increment the number of cmbLinkSets on this linkset */
 		g_ftdm_sngss7_data.cfg.mtpLinkSet[lnkSet->lsId].numLinks++;
 
+		if (SNG_SS7_OPR_MODE_M3UA_SG == opr_mode) {
+			/* fill spc information to mtp3 link config block
+			 * mtp3 config block will be identify based on linkset-id*/
+			idx = 1;
+			while (idx < (MAX_MTP_LINKS)) {
+				if ((g_ftdm_sngss7_data.cfg.mtp3Link[idx].id != 0) &&
+						(g_ftdm_sngss7_data.cfg.mtp3Link[idx].linkSetId == lnkSet->lsId)) {
+					SS7_DEBUG("Found mtp3Link linkset id = %d \n", lnkSet->lsId);
+					g_ftdm_sngss7_data.cfg.mtp3Link[idx].spc = spc;
+					SS7_DEBUG("Updated spc[%d] in mtp3Link[%d] \n", spc, idx);
+				}
+				idx++;
+			}
+		}
 		/* update the linked list */
 		lnkSet->next = ftdm_malloc(sizeof(sng_link_set_list_t));
 		lnkSet = lnkSet->next;
@@ -1816,7 +2014,7 @@ static int ftmod_ss7_parse_mtp_route(ftdm_conf_node_t *mtp_route, ftdm_span_t *s
 	}
 
 	ftmod_ss7_fill_in_mtp3_route(&mtpRoute);
-	ftmod_ss7_fill_in_nsap(&mtpRoute);
+	ftmod_ss7_fill_in_nsap(&mtpRoute, tmp_mode);
 
 	/* If automatic congestion is enable then only check fill in acc timer */
 	if (g_ftdm_sngss7_data.cfg.sng_acc) {
@@ -1826,7 +2024,7 @@ static int ftmod_ss7_parse_mtp_route(ftdm_conf_node_t *mtp_route, ftdm_span_t *s
 }
 
 /******************************************************************************/
-static int ftmod_ss7_parse_isup_interfaces(ftdm_conf_node_t *isup_interfaces)
+static int ftmod_ss7_parse_isup_interfaces(ftdm_conf_node_t *isup_interfaces, ftdm_sngss7_operating_modes_e opr_mode)
 {
 	ftdm_conf_node_t	*isup_interface = NULL;
 
@@ -1843,7 +2041,7 @@ static int ftmod_ss7_parse_isup_interfaces(ftdm_conf_node_t *isup_interfaces)
 
 	while (isup_interface != NULL) {
 		/* parse the found mtp_route */
-		if (ftmod_ss7_parse_isup_interface(isup_interface)) {
+		if (ftmod_ss7_parse_isup_interface(isup_interface, opr_mode)) {
 			SS7_ERROR("Failed to parse \"isup_interface\"\n");
 			return FTDM_FAIL;
 		}
@@ -1856,7 +2054,7 @@ static int ftmod_ss7_parse_isup_interfaces(ftdm_conf_node_t *isup_interfaces)
 }
 
 /******************************************************************************/
-static int ftmod_ss7_parse_isup_interface(ftdm_conf_node_t *isup_interface)
+static int ftmod_ss7_parse_isup_interface(ftdm_conf_node_t *isup_interface, ftdm_sngss7_operating_modes_e opr_mode)
 {
 	sng_isup_inf_t			sng_isup;
 	sng_isap_t				sng_isap;
@@ -1866,6 +2064,7 @@ static int ftmod_ss7_parse_isup_interface(ftdm_conf_node_t *isup_interface)
 	int						i;
 	int						ret;
 	int						flag_def_rel_loc = 0;
+	sng_m3ua_gbl_cfg_t      			*c=NULL;
 
 	/* initalize the isup intf and isap structure */
 	memset(&sng_isup, 0x0, sizeof(sng_isup));
@@ -2045,6 +2244,23 @@ static int ftmod_ss7_parse_isup_interface(ftdm_conf_node_t *isup_interface)
 	/* default the interface to paused state */
 	sngss7_set_flag(&sng_isup, SNGSS7_PAUSED);
 
+	/**************************************************************************/
+	if (SNG_SS7_OPR_MODE_M3UA_ASP == opr_mode) {
+
+		c = &g_ftdm_sngss7_data.cfg.g_m3ua_cfg;
+		sng_isup.dpc            = c->rteCfg[sng_isup.mtpRouteId].dpc;
+		sng_isup.switchType     = c->nwkCfg[c->rteCfg[sng_isup.mtpRouteId].nwkId].isup_switch_type;
+		sng_isap.switchType     = c->nwkCfg[c->rteCfg[sng_isup.mtpRouteId].nwkId].isup_switch_type;
+		sng_isup.nwId           = c->rteCfg[sng_isup.mtpRouteId].nwkId;
+		sng_isup.ssf            = c->nwkCfg[c->rteCfg[sng_isup.mtpRouteId].nwkId].ssf;
+		SS7_INFO("dpc[%d] SwitchType[%d], ssf[%d]\n",sng_isup.dpc, sng_isup.switchType,sng_isup.ssf);
+
+		ftmod_ss7_fill_in_isap(&sng_isap);
+		sng_isup.isap 		= sng_isap.id;
+		ftmod_ss7_fill_in_isup_interface(&sng_isup);
+
+		goto done;
+	}
 	/* trickle down the SPC to all sub entities */
 	lnkSet = &g_ftdm_sngss7_data.cfg.mtpRoute[sng_isup.mtpRouteId].lnkSets;
 	while (lnkSet->next != NULL) {
@@ -2085,13 +2301,15 @@ static int ftmod_ss7_parse_isup_interface(ftdm_conf_node_t *isup_interface)
 	if(ftmod_ss7_fill_in_self_route(sng_isup.spc,
 									g_ftdm_sngss7_data.cfg.mtpRoute[i].linkType,
 									g_ftdm_sngss7_data.cfg.mtpRoute[i].switchType,
-									g_ftdm_sngss7_data.cfg.mtpRoute[i].ssf)) {
+									g_ftdm_sngss7_data.cfg.mtpRoute[i].ssf,
+									g_ftdm_sngss7_data.cfg.mtpRoute[i].tQuery)) {
 
 		SS7_ERROR("Failed to fill in self route structure!\n");
 		return FTDM_FAIL;
 
 	}
 
+done:
 	return FTDM_SUCCESS;
 }
 
@@ -2785,6 +3003,12 @@ static int ftmod_ss7_fill_in_mtp3_route(sng_route_t *mtp3_route)
 	g_ftdm_sngss7_data.cfg.mtpRoute[i].lnkSets		= mtp3_route->lnkSets;
 	g_ftdm_sngss7_data.cfg.mtpRoute[i].ssf			= mtp3_route->ssf;
 	g_ftdm_sngss7_data.cfg.mtpRoute[i].dir			= SNG_RTE_DN;
+
+	if (mtp3_route->tQuery != 0) {
+		g_ftdm_sngss7_data.cfg.mtpRoute[i].tQuery 	= mtp3_route->tQuery;
+	} else {
+		g_ftdm_sngss7_data.cfg.mtpRoute[i].tQuery 	= 500; /* 5 sec */
+	}
 	if (mtp3_route->t6 != 0) {
 		g_ftdm_sngss7_data.cfg.mtpRoute[i].t6		= mtp3_route->t6;
 	} else {
@@ -2845,7 +3069,7 @@ static int ftmod_ss7_fill_in_mtp3_route(sng_route_t *mtp3_route)
 }
 
 /******************************************************************************/
-static int ftmod_ss7_fill_in_self_route(int spc, int linkType, int switchType, int ssf)
+static int ftmod_ss7_fill_in_self_route(int spc, int linkType, int switchType, int ssf, int tQuery)
 {
 	int i = 1;
 
@@ -2897,12 +3121,13 @@ static int ftmod_ss7_fill_in_self_route(int spc, int linkType, int switchType, i
 	g_ftdm_sngss7_data.cfg.mtpRoute[i].t19			= 690;
 	g_ftdm_sngss7_data.cfg.mtpRoute[i].t21			= 650; 
 	g_ftdm_sngss7_data.cfg.mtpRoute[i].t25			= 100;
+	g_ftdm_sngss7_data.cfg.mtpRoute[i].tQuery 		= tQuery;
 
 	return 0;
 }
 
 /******************************************************************************/
-static int ftmod_ss7_fill_in_nsap(sng_route_t *mtp3_route)
+static int ftmod_ss7_fill_in_nsap(sng_route_t *mtp3_route, ftdm_sngss7_operating_modes_e opr_mode)
 {
 	int i;
 
@@ -2911,7 +3136,8 @@ static int ftmod_ss7_fill_in_nsap(sng_route_t *mtp3_route)
 	while (g_ftdm_sngss7_data.cfg.nsap[i].id != 0) {
 		if ((g_ftdm_sngss7_data.cfg.nsap[i].linkType == mtp3_route->linkType) &&
 			(g_ftdm_sngss7_data.cfg.nsap[i].switchType == mtp3_route->switchType) &&
-			(g_ftdm_sngss7_data.cfg.nsap[i].ssf == mtp3_route->ssf)) {
+			(g_ftdm_sngss7_data.cfg.nsap[i].ssf == mtp3_route->ssf) &&
+			(g_ftdm_sngss7_data.cfg.nsap[i].opr_mode == opr_mode)) {
 
 			/* we have a match so break out of this loop */
 			break;
@@ -2934,6 +3160,7 @@ static int ftmod_ss7_fill_in_nsap(sng_route_t *mtp3_route)
 	g_ftdm_sngss7_data.cfg.nsap[i].linkType		= mtp3_route->linkType;
 	g_ftdm_sngss7_data.cfg.nsap[i].switchType	= mtp3_route->switchType;
 	g_ftdm_sngss7_data.cfg.nsap[i].ssf			= mtp3_route->ssf;
+	g_ftdm_sngss7_data.cfg.nsap[i].opr_mode 	= opr_mode;
 
 	return 0;
 }
@@ -3445,7 +3672,7 @@ move_along:
 }
 
 /******************************************************************************/
-static int ftmod_ss7_fill_in_circuits(sng_span_t *sngSpan)
+static int ftmod_ss7_fill_in_circuits(sng_span_t *sngSpan, ftdm_sngss7_operating_modes_e opr_mode)
 {
 	ftdm_channel_t		*ftdmchan = NULL;
 	ftdm_span_t		*ftdmspan = sngSpan->span;
@@ -3654,7 +3881,7 @@ static int ftmod_ss7_fill_in_circuits(sng_span_t *sngSpan)
 	/**************************************************************************/
 	} /* for (i == 1; i < ftdmspan->chan_count; i++) */
 
-	if(SNG_SS7_OPR_MODE_M2UA_ASP == g_ftdm_operating_mode){
+	if(SNG_SS7_OPR_MODE_M2UA_ASP == opr_mode){
 		g_ftdm_sngss7_data.cfg.g_m2ua_cfg.sched.tmr_sched = ((sngss7_span_data_t *)(ftdmspan->signal_data))->sched; 
 	}
 
@@ -4084,7 +4311,7 @@ int ftmod_ss7_get_circuit_start_range(int procId)
 	int start_range = 0;
 	int offset	= (procId -1) * SNG_CIC_MAP_OFFSET;
 
-	start_range = (offset + (procId * 1000)) + 1;
+	start_range = (offset + 1000) + 1;
 
 	return start_range;
 }
@@ -4101,6 +4328,63 @@ int ftmod_ss7_get_circuit_end_range(int procId)
 }
 
 /******************************************************************************/
+ftdm_sngss7_operating_modes_e ftmod_ss7_get_operating_mode(int span_id)
+{
+    ftdm_sngss7_operating_modes_e opr_mode = SNG_SS7_OPR_MODE_NONE;
+    int idx = 0;
+
+    for (idx = 0; idx < FTDM_MAX_CHANNELS_SPAN; idx++) {
+	    if (g_ftdm_sngss7_span_data.span_data[idx].span_id) {
+		    if (g_ftdm_sngss7_span_data.span_data[idx].span_id == span_id) {
+			    opr_mode = g_ftdm_sngss7_span_data.span_data[idx].opr_mode;
+			    break;
+		    }
+	    }
+    }
+
+    if (opr_mode == SNG_SS7_OPR_MODE_NONE) {
+	    SS7_ERROR("Operating mode is not set for span %d!\n",
+		      span_id);
+    }
+
+    return opr_mode;
+}
+
+/******************************************************************************/
+/* To get if operating mode present in current span configuration list */
+int ftmod_ss7_is_operating_mode_pres(ftdm_sngss7_operating_modes_e opr_mode)
+{
+    int idx = 0;
+
+    for (idx = 0; idx < FTDM_MAX_CHANNELS_SPAN; idx++) {
+	    if (g_ftdm_sngss7_span_data.span_data[idx].span_id) {
+		    if (opr_mode == g_ftdm_sngss7_span_data.span_data[idx].opr_mode) {
+			    return 1;
+		    }
+	    }
+    }
+
+    return 0;
+}
+
+/******************************************************************************/
+/* check is any of the stack is in pending status then please then consider
+ * general configuration failed */
+ftdm_status_t ftmod_ss7_check_gen_config_status()
+{
+    if ((g_ftdm_sngss7_data.gen_config.cm == SNG_GEN_CFG_STATUS_PENDING) ||
+	(g_ftdm_sngss7_data.gen_config.mtp == SNG_GEN_CFG_STATUS_PENDING) ||
+	(g_ftdm_sngss7_data.gen_config.mtp3 == SNG_GEN_CFG_STATUS_PENDING) ||
+	(g_ftdm_sngss7_data.gen_config.isup == SNG_GEN_CFG_STATUS_PENDING) ||
+	(g_ftdm_sngss7_data.gen_config.cc == SNG_GEN_CFG_STATUS_PENDING) ||
+	(g_ftdm_sngss7_data.gen_config.m2ua == SNG_GEN_CFG_STATUS_PENDING) ||
+	(g_ftdm_sngss7_data.gen_config.m3ua == SNG_GEN_CFG_STATUS_PENDING) ||
+	(g_ftdm_sngss7_data.gen_config.relay == SNG_GEN_CFG_STATUS_PENDING)) {
+		return FTDM_FAIL;
+	}
+
+	return FTDM_SUCCESS;
+}
 
 /******************************************************************************/
 /* For Emacs:

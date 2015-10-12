@@ -39,7 +39,7 @@
 
 uint8_t sngss7_is_mtp2api_enable()
 {
-    if ( SNG_SS7_OPR_MODE_MTP2_API == g_ftdm_operating_mode ) {
+    if ( ftmod_ss7_is_operating_mode_pres(SNG_SS7_OPR_MODE_MTP2_API) ) {
 		return 1;
 	}
 	return 0;
@@ -225,10 +225,11 @@ ftdm_status_t ft_to_sngss7_cfg_mtp2_api(ftdm_channel_t *ftdmchan)
 	uint16_t mtp1Id = 0;
 	uint16_t mtp2Id = 0;
 	sngss7_chan_data_t *ss7_info = NULL;
+	ftdm_sngss7_operating_modes_e opr_mode = SNG_SS7_OPR_MODE_NONE;
 
 	/* check if we have done gen_config already */
 	/* TODO: We should perform general configuration on module load */
-	if (!(g_ftdm_sngss7_data.gen_config)) {
+	if (!(g_ftdm_sngss7_data.gen_config.mtp2api)) {
 		if (sng_validate_license(g_ftdm_sngss7_data.cfg.license,
 			g_ftdm_sngss7_data.cfg.signature)) {
 
@@ -287,7 +288,7 @@ ftdm_status_t ft_to_sngss7_cfg_mtp2_api(ftdm_channel_t *ftdmchan)
 		}
 
 		/* update the global gen_config so we don't do it again */
-		g_ftdm_sngss7_data.gen_config = SNG_GEN_CFG_STATUS_DONE;
+		g_ftdm_sngss7_data.gen_config.mtp2api = SNG_GEN_CFG_STATUS_DONE;
 	} /* if (!(g_ftdm_sngss7_data.gen_config)) */
 	
 	for (x = 1; x < MAX_MTP_LINKS; x++) {
@@ -335,7 +336,9 @@ ftdm_status_t ft_to_sngss7_cfg_mtp2_api(ftdm_channel_t *ftdmchan)
 #endif
 
 	if (!(g_ftdm_sngss7_data.cfg.mtp1Link[mtp1Id].flags & SNGSS7_CONFIGURED)) {
-		if (ftmod_ss7_mtp1_psap_config(mtp1Id)) {
+		opr_mode = ftmod_ss7_get_operating_mode(ftdmchan->span_id);
+
+		if (ftmod_ss7_mtp1_psap_config(mtp1Id, opr_mode)) {
 			ftdm_log(FTDM_LOG_CRIT, "MTP1 PSAP %d configuration FAILED!\n", mtp1Id);
 			return FTDM_FAIL;
 		} else {

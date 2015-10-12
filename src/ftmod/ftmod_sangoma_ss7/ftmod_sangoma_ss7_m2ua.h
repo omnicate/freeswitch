@@ -141,16 +141,15 @@ int ftmod_ss7_parse_nif_interfaces(ftdm_conf_node_t *nif_interfaces);
 int ftmod_ss7_parse_m2ua_interfaces(ftdm_conf_node_t *m2ua_interfaces);
 int ftmod_ss7_parse_m2ua_peer_interfaces(ftdm_conf_node_t *m2ua_peer_interfaces);
 int ftmod_ss7_parse_m2ua_clust_interfaces(ftdm_conf_node_t *m2ua_clust_interfaces);
-int ftmod_ss7_parse_sctp_links(ftdm_conf_node_t *node);
 uint32_t iptoul(const char *ip);
 void ftdm_m2ua_handle_tmr_expiry(void *userdata);
 void ftdm_m2ua_start_timer(sng_m2ua_tmr_evt_types_e evt_type , int peer_id);
 
-int ftmod_ss7_m2ua_start(void);
+int ftmod_ss7_m2ua_start(int opr_mode);
 void ftmod_ss7_m2ua_free(void);
 
-ftdm_status_t ftmod_ss7_m2ua_cfg(void);
-ftdm_status_t ftmod_ss7_m2ua_init(void);
+ftdm_status_t ftmod_ss7_m2ua_cfg(int opr_mode);
+ftdm_status_t ftmod_ss7_m2ua_init(int opr_mode);
 ftdm_status_t ftmod_ss7_m2ua_span_stop(int span_id);
 
 int ftmod_sctp_ssta_req(int elemt, int id, SbMgmt* cfm);
