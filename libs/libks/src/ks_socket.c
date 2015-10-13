@@ -142,7 +142,7 @@ KS_DECLARE(ks_status_t) ks_socket_sndbuf(ks_socket_t socket, int bufsize)
 #endif
 	if (!result) status = KS_STATUS_SUCCESS;
 
-	return result;
+	return status;
 }
 
 KS_DECLARE(ks_status_t) ks_socket_rcvbuf(ks_socket_t socket, int bufsize)
@@ -157,7 +157,7 @@ KS_DECLARE(ks_status_t) ks_socket_rcvbuf(ks_socket_t socket, int bufsize)
 #endif
 	if (!result) status = KS_STATUS_SUCCESS;
 
-	return result;
+	return status;
 }
 
 static int ks_socket_reuseaddr(ks_socket_t socket)
