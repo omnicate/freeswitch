@@ -36,10 +36,15 @@
 
 #include "ks.h"
 
+#ifndef WIN32
+#include <poll.h>
+#endif
+
 KS_BEGIN_EXTERN_C
 
 #define KS_SO_NONBLOCK 2999
 
+KS_DECLARE(int) ks_poll(struct pollfd fds[], uint32_t nfds, int timeout);
 KS_DECLARE(ks_status_t) ks_socket_option(ks_socket_t socket, int option_name, ks_bool_t enabled);
 KS_DECLARE(ks_status_t) ks_socket_sndbuf(ks_socket_t socket, int bufsize);
 KS_DECLARE(ks_status_t) ks_socket_rcvbuf(ks_socket_t socket, int bufsize);

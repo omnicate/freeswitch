@@ -315,12 +315,14 @@ KS_DECLARE(ks_status_t) ks_listen_threaded(const char *host, ks_port_t port, ks_
 }
 #endif
 
-/* USE WSAPoll on vista or higher */
-#ifdef KS_USE_WSAPOLL
-KS_DECLARE(int) ks_wait_sock(ks_socket_t sock, uint32_t ms, ks_poll_t flags)
+KS_DECLARE(int) ks_poll(struct pollfd fds[], uint32_t nfds, int timeout)
 {
-}
+#ifdef WIN32
+	return WSAPoll(fds, nfds, timeout);
+#else
+	return poll(fds, nfds, timeout);
 #endif
+}
 
 #ifdef KS_USE_SELECT
 #ifdef WIN32
@@ -413,7 +415,7 @@ KS_DECLARE(int) ks_wait_sock(ks_socket_t sock, uint32_t ms, ks_poll_t flags)
 #endif
 #endif
 
-#ifdef KS_USE_POLL
+#if defined(KS_USE_POLL) || defined(WIN32)
 KS_DECLARE(int) ks_wait_sock(ks_socket_t sock, uint32_t ms, ks_poll_t flags)
 {
 	struct pollfd pfds[2] = { {0} };
@@ -433,7 +435,7 @@ KS_DECLARE(int) ks_wait_sock(ks_socket_t sock, uint32_t ms, ks_poll_t flags)
 		pfds[0].events |= POLLERR;
 	}
 
-	s = poll(pfds, 1, ms);
+	s = ks_poll(pfds, 1, ms);
 
 	if (s < 0) {
 		r = s;
