@@ -98,7 +98,6 @@ KS_BEGIN_EXTERN_C
 #include "ks_time.h"
 #include "ks_socket.h"
 #include "simclist.h"
-#include "table.h"
 
 KS_END_EXTERN_C
 
