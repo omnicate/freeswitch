@@ -104,24 +104,37 @@ KS_DECLARE(ks_status_t) ks_socket_option(ks_socket_t socket, int option_name, ks
 		if (!result) status = KS_STATUS_SUCCESS;
 		break;
 	case KS_SO_NONBLOCK:
+		{
 #ifdef WIN32
-		// TODO result = setsockopt(socket, SOL_SOCKET, option_name, (char *) &opt, sizeof(opt));
+			u_long val = (u_long)!!opt;
+			if (ioctlsocket(socket, FIONBIO, &val) != SOCKET_ERROR) {
+				status = KS_STATUS_SUCCESS;
+			}
 #else
-		result = setsockopt(socket, SOL_SOCKET, option_name, &opt, sizeof(opt));
+			int flags = fcntl(socket, F_GETFL, 0);
+			if (opt) {
+				flags |= O_NONBLOCK;
+			} else {
+				flags &= ~O_NONBLOCK;
+			}
+			if (fcntl(socket, F_SETFL, flags) != -1) {
+				status = KS_STATUS_SUCCESS;
+			}
 #endif
-		if (!result) status = KS_STATUS_SUCCESS;
+		}
+		break;
 	default:
 		break;
 	}
 
-	return result;
+	return status;
 }
 
 KS_DECLARE(ks_status_t) ks_socket_sndbuf(ks_socket_t socket, int bufsize)
 {
 	int result;
 	ks_status_t status = KS_STATUS_FAIL;
-	
+
 #ifdef WIN32
 	result = setsockopt(socket, SOL_SOCKET, SO_SNDBUF, (char *) &bufsize, sizeof(bufsize));
 #else
@@ -136,7 +149,7 @@ KS_DECLARE(ks_status_t) ks_socket_rcvbuf(ks_socket_t socket, int bufsize)
 {
 	int result;
 	ks_status_t status = KS_STATUS_FAIL;
-	
+
 #ifdef WIN32
 	result = setsockopt(socket, SOL_SOCKET, SO_RCVBUF, (char *) &bufsize, sizeof(bufsize));
 #else
