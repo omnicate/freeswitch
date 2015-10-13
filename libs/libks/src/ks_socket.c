@@ -79,6 +79,74 @@
 #include <poll.h>
 #endif
 
+KS_DECLARE(ks_status_t) ks_socket_option(ks_socket_t socket, int option_name, ks_bool_t enabled)
+{
+	int result = -1;
+	ks_status_t status = KS_STATUS_FAIL;
+#ifdef WIN32
+	BOOL opt = TRUE;
+	if (!enabled) opt = FALSE;
+#else
+	int opt = 1;
+	if (!enabled) opt = 0;
+#endif
+
+	switch(option_name) {
+	case SO_REUSEADDR:
+	case TCP_NODELAY:
+	case SO_KEEPALIVE:
+	case SO_LINGER:
+#ifdef WIN32
+		result = setsockopt(socket, SOL_SOCKET, option_name, (char *) &opt, sizeof(opt));
+#else
+		result = setsockopt(socket, SOL_SOCKET, option_name, &opt, sizeof(opt));
+#endif
+		if (!result) status = KS_STATUS_SUCCESS;
+		break;
+	case KS_SO_NONBLOCK:
+#ifdef WIN32
+		// TODO result = setsockopt(socket, SOL_SOCKET, option_name, (char *) &opt, sizeof(opt));
+#else
+		result = setsockopt(socket, SOL_SOCKET, option_name, &opt, sizeof(opt));
+#endif
+		if (!result) status = KS_STATUS_SUCCESS;
+	default:
+		break;
+	}
+
+	return result;
+}
+
+KS_DECLARE(ks_status_t) ks_socket_sndbuf(ks_socket_t socket, int bufsize)
+{
+	int result;
+	ks_status_t status = KS_STATUS_FAIL;
+	
+#ifdef WIN32
+	result = setsockopt(socket, SOL_SOCKET, SO_SNDBUF, (char *) &bufsize, sizeof(bufsize));
+#else
+	result = setsockopt(socket, SOL_SOCKET, SO_SNDBUF, &bufsize, sizeof(bufsize));
+#endif
+	if (!result) status = KS_STATUS_SUCCESS;
+
+	return result;
+}
+
+KS_DECLARE(ks_status_t) ks_socket_rcvbuf(ks_socket_t socket, int bufsize)
+{
+	int result;
+	ks_status_t status = KS_STATUS_FAIL;
+	
+#ifdef WIN32
+	result = setsockopt(socket, SOL_SOCKET, SO_RCVBUF, (char *) &bufsize, sizeof(bufsize));
+#else
+	result = setsockopt(socket, SOL_SOCKET, SO_RCVBUF, &bufsize, sizeof(bufsize));
+#endif
+	if (!result) status = KS_STATUS_SUCCESS;
+
+	return result;
+}
+
 static int ks_socket_reuseaddr(ks_socket_t socket)
 {
 #ifdef WIN32
