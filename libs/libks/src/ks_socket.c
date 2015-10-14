@@ -793,3 +793,115 @@ KS_DECLARE(ks_status_t) ks_find_local_ip(char *buf, int len, int *mask, int fami
 
 	return status;
 }
+
+
+KS_DECLARE(ks_status_t) ks_socket_send(ks_socket_t sock, void *data, ks_size_t *datalen)
+{
+	ks_ssize_t r;
+	ks_status_t status = KS_STATUS_FAIL;
+
+	do {
+		r = send(sock, data, *datalen, 0);
+	} while (r == -1 && ks_errno_is_interupt(ks_errno()));
+
+	if (r > 0) {
+		*datalen = (ks_size_t) r;
+		status = KS_STATUS_SUCCESS;
+	} else if (r == 0) {
+		status = KS_STATUS_DISCONNECTED;
+
+	} else if (ks_errno_is_blocking(ks_errno())) {
+		status = KS_STATUS_BREAK;
+	}
+
+	return status;
+}
+
+KS_DECLARE(ks_status_t) ks_socket_recv(ks_socket_t sock, void *data, ks_size_t *datalen)
+{
+	ks_ssize_t r;
+	ks_status_t status = KS_STATUS_FAIL;
+
+	do {
+		r = recv(sock, data, *datalen, 0);
+	} while (r == -1 && ks_errno_is_interupt(ks_errno()));
+
+	if (r > 0) {
+		*datalen = (ks_size_t) r;
+		status = KS_STATUS_SUCCESS;
+	} else if (r == 0) {
+		status = KS_STATUS_DISCONNECTED;
+	} else if (ks_errno_is_blocking(ks_errno())) {
+		status = KS_STATUS_BREAK;
+	}
+
+	return status;
+}
+
+KS_DECLARE(ks_status_t) ks_socket_sendto(ks_socket_t sock, void *data, ks_size_t *datalen, ks_sockaddr_t *addr)
+{
+	struct sockaddr *sockaddr;
+	socklen_t socksize = 0;
+	ks_status_t status = KS_STATUS_FAIL;
+	ks_ssize_t r;
+
+	ks_assert(addr);
+	ks_assert(addr->family == AF_INET || addr->family == AF_INET6);
+
+	if (addr->family == AF_INET) {
+		sockaddr = (struct sockaddr *) &addr->v.v4;
+		socksize = sizeof(addr->v.v4);
+	} else {
+		sockaddr = (struct sockaddr *) &addr->v.v6;
+		socksize = sizeof(addr->v.v6);
+	}
+	
+	do {
+		r = sendto(sock, data, *datalen, 0, sockaddr, socksize);
+	} while (r == -1 && ks_errno_is_interupt(ks_errno()));
+
+	if (r > 0) {
+		*datalen = (ks_size_t) r;
+		status = KS_STATUS_SUCCESS;
+	} else if (r == 0) {
+		status = KS_STATUS_DISCONNECTED;
+	} else if (ks_errno_is_blocking(ks_errno())) {
+		status = KS_STATUS_BREAK;
+	}
+
+	return status;
+
+}
+
+KS_DECLARE(ks_status_t) ks_socket_recvfrom(ks_socket_t sock, void *data, ks_size_t *datalen, ks_sockaddr_t *addr)
+{
+	struct sockaddr *sockaddr;
+	ks_status_t status = KS_STATUS_FAIL;
+	ks_ssize_t r;
+	socklen_t alen;
+
+	ks_assert(addr);
+	ks_assert(addr->family == AF_INET || addr->family == AF_INET6);
+
+	if (addr->family == AF_INET) {
+		sockaddr = (struct sockaddr *) &addr->v.v4;
+	} else {
+		sockaddr = (struct sockaddr *) &addr->v.v6;
+	}
+
+	do {
+		r = recvfrom(sock, data, *datalen, 0, sockaddr, &alen);
+	} while (r == -1 && ks_errno_is_interupt(ks_errno()));
+	
+	if (r > 0) {
+		*datalen = (ks_size_t) r;
+		status = KS_STATUS_SUCCESS;
+	} else if (r == 0) {
+		status = KS_STATUS_DISCONNECTED;
+	} else if (ks_errno_is_blocking(ks_errno())) {
+		status = KS_STATUS_BREAK;
+	}
+	
+	return status;
+}
+
