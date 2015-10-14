@@ -50,6 +50,16 @@ KS_DECLARE(ks_status_t) ks_socket_sndbuf(ks_socket_t socket, int bufsize);
 KS_DECLARE(ks_status_t) ks_socket_rcvbuf(ks_socket_t socket, int bufsize);
 KS_DECLARE(int) ks_wait_sock(ks_socket_t sock, uint32_t ms, ks_poll_t flags);
 
+KS_DECLARE(ks_socket_t) ks_socket_connect(int type, int protocol, ks_sockaddr_t *addr);
+KS_DECLARE(ks_status_t) ks_addr_bind(ks_socket_t server_sock, ks_sockaddr_t *addr);
+KS_DECLARE(const char *) ks_addr_get_host(ks_sockaddr_t *addr);
+KS_DECLARE(ks_port_t) ks_addr_get_port(ks_sockaddr_t *addr);
+KS_DECLARE(ks_status_t) ks_addr_set(ks_sockaddr_t *addr, const char *host, ks_port_t port, int family);
+KS_DECLARE(ks_status_t) ks_listen(const char *host, ks_port_t port, int family, int backlog, ks_listen_callback_t callback, void *user_data);
+KS_DECLARE(ks_status_t) ks_socket_shutdown(ks_socket_t sock, int how);
+KS_DECLARE(ks_status_t) ks_socket_close(ks_socket_t *sock);
+KS_DECLARE(ks_status_t) ks_find_local_ip(char *buf, int len, int *mask, int family);
+KS_DECLARE(ks_status_t) ks_listen_sock(ks_socket_t server_sock, ks_sockaddr_t *addr, int backlog, ks_listen_callback_t callback, void *user_data);
 KS_END_EXTERN_C
 
 #endif /* defined(_KS_SOCKET_H_) */

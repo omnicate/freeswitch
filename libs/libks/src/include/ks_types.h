@@ -187,10 +187,22 @@ typedef enum {
 	KS_MPCL_GLOBAL_FREE,
 } ks_pool_cleanup_type_t;
 
+typedef union {
+	struct sockaddr_in v4;
+	struct sockaddr_in6 v6;
+} ks_sockaddr_in_t;
+
+typedef struct {
+	int family;
+	ks_sockaddr_in_t v;
+	ks_port_t port;
+	char host[48];
+} ks_sockaddr_t;
+
 typedef void (*ks_pool_cleanup_fn_t) (ks_pool_t *mpool, void *ptr, void *arg, int type, ks_pool_cleanup_action_t action, ks_pool_cleanup_type_t ctype);
 
 typedef void (*ks_logger_t) (const char *file, const char *func, int line, int level, const char *fmt, ...);
-typedef void (*ks_listen_callback_t) (ks_socket_t server_sock, ks_socket_t client_sock, struct sockaddr_in *addr);
+typedef void (*ks_listen_callback_t) (ks_socket_t server_sock, ks_socket_t client_sock, ks_sockaddr_t *addr, void *user_data);
 
 typedef int64_t ks_time_t;
 

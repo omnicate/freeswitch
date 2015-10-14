@@ -78,7 +78,7 @@ KS_BEGIN_EXTERN_C
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
-
+#include <arpa/inet.h>				
 #endif
 	
 #ifdef _MSC_VER
@@ -210,6 +210,33 @@ KS_BEGIN_EXTERN_C
 #define ks_zmalloc(ptr, len) (void)(assert((ptr = calloc(1, (len)))),ptr)
 #define ks_strdup(ptr, s) (void)(assert(((ptr) = strdup((s)))),ptr)
 #endif
+#endif
+
+#ifndef __ATTR_SAL
+	/* used for msvc code analysis */
+	/* http://msdn2.microsoft.com/en-us/library/ms235402.aspx */
+#define _In_
+#define _In_z_
+#define _In_opt_z_
+#define _In_opt_
+#define _Printf_format_string_
+#define _Ret_opt_z_
+#define _Ret_z_
+#define _Out_opt_
+#define _Out_
+#define _Check_return_
+#define _Inout_
+#define _Inout_opt_
+#define _In_bytecount_(x)
+#define _Out_opt_bytecapcount_(x)
+#define _Out_bytecapcount_(x)
+#define _Ret_
+#define _Post_z_
+#define _Out_cap_(x)
+#define _Out_z_cap_(x)
+#define _Out_ptrdiff_cap_(x)
+#define _Out_opt_ptrdiff_cap_(x)
+#define _Post_count_(x)
 #endif
 
 KS_END_EXTERN_C

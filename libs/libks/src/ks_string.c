@@ -249,3 +249,27 @@ KS_DECLARE(unsigned int) ks_separate_string_string(char *buf, const char *delim,
 
 	return count;
 }
+
+KS_DECLARE(char *) ks_copy_string(char *from_str, const char *to_str, ks_size_t from_str_len)
+{
+	char *p, *e;
+
+	if (!from_str)
+		return NULL;
+	if (!to_str) {
+		*from_str = '\0';
+		return from_str;
+	}
+
+	e = from_str + from_str_len - 1;
+
+	for (p = from_str; p < e; ++p, ++to_str) {
+		if (!(*p = *to_str)) {
+			return p;
+		}
+	}
+
+	*p = '\0';
+
+	return p;
+}

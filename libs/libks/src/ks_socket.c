@@ -53,8 +53,6 @@
 
 #ifndef WIN32
 
-#define closesocket(x) shutdown(x, 2); close(x)
-
 #else /* WIN32 */
 
 #pragma warning (disable:6386)
@@ -171,149 +169,212 @@ static int ks_socket_reuseaddr(ks_socket_t socket)
 #endif
 }
 
-struct thread_handler {
-	ks_listen_callback_t callback;
-	ks_socket_t server_sock;
-	ks_socket_t client_sock;
-	struct sockaddr_in addr;
-};
-
-KS_DECLARE(ks_status_t) ks_listen(const char *host, ks_port_t port, ks_listen_callback_t callback)
+KS_DECLARE(ks_status_t) ks_socket_shutdown(ks_socket_t sock, int how)
 {
-	ks_socket_t server_sock = KS_SOCK_INVALID;
-	struct sockaddr_in addr;
-	ks_status_t status = KS_STATUS_SUCCESS;
+	return shutdown(sock, how) ? KS_STATUS_FAIL : KS_STATUS_SUCCESS;
+}
 
-	if ((server_sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) != KS_SOCK_INVALID) {
-		return KS_STATUS_FAIL;
+KS_DECLARE(ks_status_t) ks_socket_close(ks_socket_t *sock)
+{
+	ks_assert(sock);
+
+	if (*sock != KS_SOCK_INVALID) {
+		close(*sock);
+		*sock = KS_SOCK_INVALID;
+		return KS_STATUS_SUCCESS;
 	}
 
+	return KS_STATUS_FAIL;
+}
+
+KS_DECLARE(ks_socket_t) ks_socket_connect(int type, int protocol, ks_sockaddr_t *addr)
+{
+	ks_socket_t sock = KS_SOCK_INVALID;
+
+	ks_assert(addr);
+	ks_assert(addr->family == AF_INET || addr->family == AF_INET6);
+
+	if ((sock = socket(addr->family, type, protocol)) == KS_SOCK_INVALID) {
+		return KS_SOCK_INVALID;
+	}
+
+	if (addr->family == AF_INET) {
+		if (connect(sock, (struct sockaddr *)&addr->v.v4, sizeof(addr->v.v4))) {
+			ks_socket_close(&sock);
+			return KS_SOCK_INVALID;
+		}
+	} else {
+		if (connect(sock, (struct sockaddr *)&addr->v.v6, sizeof(addr->v.v6))) {
+			ks_socket_close(&sock);
+			return KS_SOCK_INVALID;
+		}
+	}
+
+	return sock;
+}
+
+KS_DECLARE(ks_status_t) ks_addr_bind(ks_socket_t server_sock, ks_sockaddr_t *addr)
+{
+	ks_status_t status = KS_STATUS_SUCCESS;
+
+	ks_assert(addr);
+	ks_assert(addr->family == AF_INET || addr->family == AF_INET6);
+
+	if (addr->family == AF_INET) {
+		if (bind(server_sock, (struct sockaddr *) &addr->v.v4, sizeof(addr->v.v4)) < 0) {
+			status = KS_STATUS_FAIL;
+		}
+	} else {
+		if (bind(server_sock, (struct sockaddr *) &addr->v.v6, sizeof(addr->v.v6)) < 0) {
+			status = KS_STATUS_FAIL;
+		}
+	}
+	
+	return status;
+}
+
+KS_DECLARE(const char *) ks_addr_get_host(ks_sockaddr_t *addr)
+{
+	ks_assert(addr);
+	ks_assert(addr->family == AF_INET || addr->family == AF_INET6);
+
+	if (addr->family == AF_INET) {
+		inet_ntop(AF_INET, &addr->v.v4.sin_addr, addr->host, sizeof(addr->host));
+	} else {
+		inet_ntop(AF_INET6, &addr->v.v6.sin6_addr, addr->host, sizeof(addr->host));
+	}
+
+	return (const char *) addr->host;
+}
+
+KS_DECLARE(ks_port_t) ks_addr_get_port(ks_sockaddr_t *addr)
+{
+	ks_assert(addr);
+	ks_assert(addr->family == AF_INET || addr->family == AF_INET6);
+
+	if (addr->family == AF_INET) {
+		addr->port = ntohs(addr->v.v4.sin_port);
+	} else {
+		addr->port = ntohs(addr->v.v6.sin6_port);
+	}
+
+	return addr->port;
+}
+
+KS_DECLARE(ks_status_t) ks_addr_set(ks_sockaddr_t *addr, const char *host, ks_port_t port, int family)
+{
+	ks_status_t status = KS_STATUS_SUCCESS;
+
+	ks_assert(addr);
+
+	if (family != PF_INET && family != PF_INET6) family = PF_INET;
+	if (host && strchr(host, ':')) family = PF_INET6;
+
+	memset(addr, 0, sizeof(*addr));
+
+	if (family == PF_INET) {
+		addr->family = AF_INET;
+		addr->v.v4.sin_family = AF_INET;
+		addr->v.v4.sin_addr.s_addr = host ? inet_addr(host): htonl(INADDR_ANY);
+		addr->v.v4.sin_port = htons(port);
+	} else {
+		addr->family = AF_INET6;
+		addr->v.v6.sin6_family = AF_INET6;
+		addr->v.v6.sin6_port = htons(port);
+		if (host) {
+			inet_pton(AF_INET6, host, &(addr->v.v6.sin6_addr));
+		} else {
+			addr->v.v6.sin6_addr = in6addr_any;
+		}
+	} 
+
+	ks_addr_get_host(addr);
+	ks_addr_get_port(addr);
+
+	return status;
+}
+
+
+KS_DECLARE(ks_status_t) ks_listen_sock(ks_socket_t server_sock, ks_sockaddr_t *addr, int backlog, ks_listen_callback_t callback, void *user_data)
+{
+	ks_status_t status = KS_STATUS_SUCCESS;
+
+
 	ks_socket_reuseaddr(server_sock);
-
-	memset(&addr, 0, sizeof(addr));
-	addr.sin_family = AF_INET;
-	addr.sin_addr.s_addr = htonl(INADDR_ANY);
-	addr.sin_port = htons(port);
-
-	if (bind(server_sock, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
+	
+	if (ks_addr_bind(server_sock, addr) != KS_STATUS_SUCCESS) {
 		status = KS_STATUS_FAIL;
 		goto end;
 	}
 
-	if (listen(server_sock, 10000) < 0) {
+	if (!backlog) backlog = 10000;
+
+	if (listen(server_sock, backlog) < 0) {
 		status = KS_STATUS_FAIL;
 		goto end;
 	}
 
 	for (;;) {
 		ks_socket_t client_sock;
-		struct sockaddr_in echoClntAddr;
+		ks_sockaddr_t remote_addr;
+
 #ifdef WIN32
-		int clntLen;
+		int slen;
 #else
-		unsigned int clntLen;
+		unsigned int slen;
 #endif
 
-		clntLen = sizeof(echoClntAddr);
-
-		if ((client_sock = accept(server_sock, (struct sockaddr *) &echoClntAddr, &clntLen)) == KS_SOCK_INVALID) {
-			status = KS_STATUS_FAIL;
-			goto end;
+		if (addr->family == PF_INET) {
+			slen = sizeof(remote_addr.v.v4);
+			if ((client_sock = accept(server_sock, (struct sockaddr *) &remote_addr.v.v4, &slen)) == KS_SOCK_INVALID) {
+				status = KS_STATUS_FAIL;
+				goto end;
+			}
+			remote_addr.family = AF_INET;
+		} else {
+			slen = sizeof(remote_addr.v.v6);
+			if ((client_sock = accept(server_sock, (struct sockaddr *) &remote_addr.v.v6, &slen)) == KS_SOCK_INVALID) {
+				status = KS_STATUS_FAIL;
+				goto end;
+			}
+			remote_addr.family = AF_INET6;
 		}
 
-		callback(server_sock, client_sock, &echoClntAddr);
+		ks_addr_get_host(&remote_addr);
+		ks_addr_get_port(&remote_addr);
+
+		callback(server_sock, client_sock, &remote_addr, user_data);
 	}
 
   end:
 
 	if (server_sock != KS_SOCK_INVALID) {
-		closesocket(server_sock);
+		ks_socket_shutdown(server_sock, 2);
+		ks_socket_close(&server_sock);
 		server_sock = KS_SOCK_INVALID;
 	}
 
 	return status;
-
 }
 
-#if 0
-static void *client_thread(ks_thread_t *me, void *obj)
-{
-	struct thread_handler *handler = (struct thread_handler *) obj;
-
-	handler->callback(handler->server_sock, handler->client_sock, &handler->addr);
-	free(handler);
-
-	return NULL;
-
-}
-
-KS_DECLARE(ks_status_t) ks_listen_threaded(const char *host, ks_port_t port, ks_listen_callback_t callback, int max)
+KS_DECLARE(ks_status_t) ks_listen(const char *host, ks_port_t port, int family, int backlog, ks_listen_callback_t callback, void *user_data)
 {
 	ks_socket_t server_sock = KS_SOCK_INVALID;
-	struct sockaddr_in addr;
-	ks_status_t status = KS_STATUS_SUCCESS;
-	struct thread_handler *handler = NULL;
+	ks_sockaddr_t addr = { 0 };
 
-	if ((server_sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
+	if (family != PF_INET && family != PF_INET6) family = PF_INET;
+	if (host && strchr(host, ':')) family = PF_INET6;
+
+	if (ks_addr_set(&addr, host, port, family) != KS_STATUS_SUCCESS) {
+		return KS_STATUS_FAIL;
+	}
+	
+	if ((server_sock = socket(family, SOCK_STREAM, IPPROTO_TCP)) == KS_SOCK_INVALID) {
 		return KS_STATUS_FAIL;
 	}
 
-	ks_socket_reuseaddr(server_sock);
-
-	memset(&addr, 0, sizeof(addr));
-	addr.sin_family = AF_INET;
-	addr.sin_addr.s_addr = htonl(INADDR_ANY);
-	addr.sin_port = htons(port);
-
-	if (bind(server_sock, (struct sockaddr *) &addr, sizeof(addr)) < 0) {
-		status = KS_STATUS_FAIL;
-		goto end;
-	}
-
-	if (listen(server_sock, max) < 0) {
-		status = KS_STATUS_FAIL;
-		goto end;
-	}
-
-	for (;;) {
-		int client_sock;
-		struct sockaddr_in echoClntAddr;
-#ifdef WIN32
-		int clntLen;
-#else
-		unsigned int clntLen;
-#endif
-
-		clntLen = sizeof(echoClntAddr);
-
-		if ((client_sock = accept(server_sock, (struct sockaddr *) &echoClntAddr, &clntLen)) == KS_SOCK_INVALID) {
-			status = KS_STATUS_FAIL;
-			goto end;
-		}
-
-		handler = malloc(sizeof(*handler));
-		ks_assert(handler);
-
-		memset(handler, 0, sizeof(*handler));
-		handler->callback = callback;
-		handler->server_sock = server_sock;
-		handler->client_sock = client_sock;
-		handler->addr = echoClntAddr;
-
-		ks_thread_create_detached(client_thread, handler);
-	}
-
-  end:
-
-	if (server_sock != KS_SOCK_INVALID) {
-		closesocket(server_sock);
-		server_sock = KS_SOCK_INVALID;
-	}
-
-	return status;
-
+	return ks_listen_sock(server_sock, &addr, backlog, callback, user_data);
 }
-#endif
 
 KS_DECLARE(int) ks_poll(struct pollfd fds[], uint32_t nfds, int timeout)
 {
@@ -455,3 +516,280 @@ KS_DECLARE(int) ks_wait_sock(ks_socket_t sock, uint32_t ms, ks_poll_t flags)
 
 }
 #endif
+
+
+#ifdef HAVE_GETIFADDRS
+#include <ifaddrs.h>
+static int get_netmask(struct sockaddr_in *me, int *mask)
+{
+	struct ifaddrs *ifaddrs, *i = NULL;
+
+	if (!me || getifaddrs(&ifaddrs) < 0) {
+		return -1;
+	}
+
+	for (i = ifaddrs; i; i = i->ifa_next) {
+		struct sockaddr_in *s = (struct sockaddr_in *) i->ifa_addr;
+		struct sockaddr_in *m = (struct sockaddr_in *) i->ifa_netmask;
+
+		if (s && m && s->sin_family == AF_INET && s->sin_addr.s_addr == me->sin_addr.s_addr) {
+			*mask = m->sin_addr.s_addr;
+			freeifaddrs(ifaddrs);
+			return 0;
+		}
+	}
+
+	freeifaddrs(ifaddrs);
+
+	return -2;
+}
+#elif defined(__linux__)
+
+#include <sys/ioctl.h>
+#include <net/if.h>
+static int get_netmask(struct sockaddr_in *me, int *mask)
+{
+
+	static struct ifreq ifreqs[20] = { {{{0}}} };
+	struct ifconf ifconf;
+	int nifaces, i;
+	int sock;
+	int r = -1;
+
+	memset(&ifconf, 0, sizeof(ifconf));
+	ifconf.ifc_buf = (char *) (ifreqs);
+	ifconf.ifc_len = sizeof(ifreqs);
+
+
+	if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+		goto end;
+	}
+
+	if (ioctl(sock, SIOCGIFCONF, (char *) &ifconf) < 0) {
+		goto end;
+	}
+
+	nifaces = ifconf.ifc_len / sizeof(struct ifreq);
+
+	for (i = 0; i < nifaces; i++) {
+		struct sockaddr_in *sin = NULL;
+		struct in_addr ip;
+
+		ioctl(sock, SIOCGIFADDR, &ifreqs[i]);
+		sin = (struct sockaddr_in *) &ifreqs[i].ifr_addr;
+		ip = sin->sin_addr;
+
+		if (ip.s_addr == me->sin_addr.s_addr) {
+			ioctl(sock, SIOCGIFNETMASK, &ifreqs[i]);
+			sin = (struct sockaddr_in *) &ifreqs[i].ifr_addr;
+			/* mask = sin->sin_addr; */
+			*mask = sin->sin_addr.s_addr;
+			r = 0;
+			break;
+		}
+
+	}
+
+  end:
+
+	close(sock);
+	return r;
+
+}
+
+#elif defined(WIN32)
+
+static int get_netmask(struct sockaddr_in *me, int *mask)
+{
+	SOCKET sock = WSASocket(AF_INET, SOCK_DGRAM, 0, 0, 0, 0);
+	INTERFACE_INFO interfaces[20];
+	unsigned long bytes;
+	int interface_count, x;
+	int r = -1;
+
+	*mask = 0;
+
+	if (sock == SOCKET_ERROR) {
+		return -1;
+	}
+
+	if (WSAIoctl(sock, SIO_GET_INTERFACE_LIST, 0, 0, &interfaces, sizeof(interfaces), &bytes, 0, 0) == SOCKET_ERROR) {
+		r = -1;
+		goto end;
+	}
+
+	interface_count = bytes / sizeof(INTERFACE_INFO);
+
+	for (x = 0; x < interface_count; ++x) {
+		struct sockaddr_in *addr = (struct sockaddr_in *) &(interfaces[x].iiAddress);
+
+		if (addr->sin_addr.s_addr == me->sin_addr.s_addr) {
+			struct sockaddr_in *netmask = (struct sockaddr_in *) &(interfaces[x].iiNetmask);
+			*mask = netmask->sin_addr.s_addr;
+			r = 0;
+			break;
+		}
+	}
+
+  end:
+	closesocket(sock);
+	return r;
+}
+
+#else
+
+static int get_netmask(struct sockaddr_in *me, int *mask)
+{
+	return -1;
+}
+
+#endif
+
+
+KS_DECLARE(ks_status_t) ks_find_local_ip(char *buf, int len, int *mask, int family)
+{
+	ks_status_t status = KS_STATUS_FAIL;
+	char *base;
+
+#ifdef WIN32
+	SOCKET tmp_socket;
+	SOCKADDR_STORAGE l_address;
+	int l_address_len;
+	struct addrinfo *address_info;
+#else
+#ifdef __Darwin__
+	int ilen;
+#else
+	unsigned int ilen;
+#endif
+	int tmp_socket = -1, on = 1;
+	char abuf[25] = "";
+#endif
+
+	if (len < 16) {
+		return status;
+	}
+
+	switch (family) {
+	case AF_INET:
+		ks_copy_string(buf, "127.0.0.1", len);
+		base = "82.45.148.209";
+		break;
+	case AF_INET6:
+		ks_copy_string(buf, "::1", len);
+		base = "2001:503:BA3E::2:30";	/* DNS Root server A */
+		break;
+	default:
+		base = "127.0.0.1";
+		break;
+	}
+
+#ifdef WIN32
+	tmp_socket = socket(family, SOCK_DGRAM, 0);
+
+	getaddrinfo(base, NULL, NULL, &address_info);
+
+	if (!address_info || WSAIoctl(tmp_socket,
+								  SIO_ROUTING_INTERFACE_QUERY,
+								  address_info->ai_addr, (DWORD) address_info->ai_addrlen, &l_address, sizeof(l_address), (LPDWORD) & l_address_len, NULL,
+								  NULL)) {
+
+		closesocket(tmp_socket);
+		if (address_info)
+			freeaddrinfo(address_info);
+		return status;
+	}
+
+
+	closesocket(tmp_socket);
+	freeaddrinfo(address_info);
+
+	if (!getnameinfo((const struct sockaddr *) &l_address, l_address_len, buf, len, NULL, 0, NI_NUMERICHOST)) {
+		status = KS_STATUS_SUCCESS;
+		if (mask) {
+			get_netmask((struct sockaddr_in *) &l_address, mask);
+		}
+	}
+#else
+
+	switch (family) {
+	case AF_INET:
+		{
+			struct sockaddr_in iface_out;
+			struct sockaddr_in remote;
+			memset(&remote, 0, sizeof(struct sockaddr_in));
+
+			remote.sin_family = AF_INET;
+			remote.sin_addr.s_addr = inet_addr(base);
+			remote.sin_port = htons(4242);
+
+			memset(&iface_out, 0, sizeof(iface_out));
+			if ( (tmp_socket = socket(AF_INET, SOCK_DGRAM, 0)) == -1 ) {
+				goto doh;
+			}
+
+			if (setsockopt(tmp_socket, SOL_SOCKET, SO_BROADCAST, &on, sizeof(on)) == -1) {
+				goto doh;
+			}
+
+			if (connect(tmp_socket, (struct sockaddr *) &remote, sizeof(struct sockaddr_in)) == -1) {
+				goto doh;
+			}
+
+			ilen = sizeof(iface_out);
+			if (getsockname(tmp_socket, (struct sockaddr *) &iface_out, &ilen) == -1) {
+				goto doh;
+			}
+
+			if (iface_out.sin_addr.s_addr == 0) {
+				goto doh;
+			}
+
+			getnameinfo((struct sockaddr *) &iface_out, sizeof(iface_out), abuf, sizeof(abuf), NULL, 0, NI_NUMERICHOST);
+			ks_copy_string(buf, abuf, len);
+			
+			if (mask) {
+				get_netmask((struct sockaddr_in *) &iface_out, mask);
+			}
+
+			status = KS_STATUS_SUCCESS;
+		}
+		break;
+	case AF_INET6:
+		{
+			struct sockaddr_in6 iface_out;
+			struct sockaddr_in6 remote;
+			memset(&remote, 0, sizeof(struct sockaddr_in6));
+
+			remote.sin6_family = AF_INET6;
+			inet_pton(AF_INET6, base, &remote.sin6_addr);
+			remote.sin6_port = htons(4242);
+
+			memset(&iface_out, 0, sizeof(iface_out));
+			if ( (tmp_socket = socket(AF_INET6, SOCK_DGRAM, 0)) == -1 ) {
+				goto doh;
+			}
+
+			if (connect(tmp_socket, (struct sockaddr *) &remote, sizeof(remote)) == -1) {
+				goto doh;
+			}
+
+			ilen = sizeof(iface_out);
+			if (getsockname(tmp_socket, (struct sockaddr *) &iface_out, &ilen) == -1) {
+				goto doh;
+			}
+
+			inet_ntop(AF_INET6, (const void *) &iface_out.sin6_addr, buf, len - 1);
+			status = KS_STATUS_SUCCESS;
+		}
+		break;
+	}
+
+  doh:
+	if (tmp_socket > 0) {
+		close(tmp_socket);
+	}
+#endif
+
+	return status;
+}

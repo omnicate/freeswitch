@@ -27,6 +27,11 @@ testhash_SOURCES = testhash.c tap.c
 testhash_CFLAGS = $(AM_CFLAGS)
 testhash_LDADD = $(TEST_LDADD)
 
+check_PROGRAMS += testsock
+testsock_SOURCES = testsock.c tap.c
+testsock_CFLAGS = $(AM_CFLAGS)
+testsock_LDADD = $(TEST_LDADD)
+
 TESTS=$(check_PROGRAMS)
 
 tests: $(check_PROGRAMS)

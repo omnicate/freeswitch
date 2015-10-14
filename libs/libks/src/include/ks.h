@@ -50,11 +50,27 @@ KS_BEGIN_EXTERN_C
 #define BUF_CHUNK 65536 * 50
 #define BUF_START 65536 * 100
 
-#define ks_copy_string(_x, _y, _z) strncpy(_x, _y, _z - 1)
+
+/*!
+  \brief Test for NULL or zero length string
+  \param s the string to test
+  \return true value if the string is NULL or zero length
+*/
+_Check_return_ static inline int _zstr(_In_opt_z_ const char *s)
+{
+	return !s || *s == '\0';
+}
+#ifdef _PREFAST_
+#define zstr(x) (_zstr(x) ? 1 : __analysis_assume(x),0)
+#else
+#define zstr(x) _zstr(x)
+#endif
+#define ks_strlen_zero(x) zstr(x)
+#define ks_strlen_zero_buf(x) zstr_buf(x)
+#define zstr_buf(s) (*(s) == '\0')
+
 #define ks_set_string(_x, _y) ks_copy_string(_x, _y, sizeof(_x))
 #define ks_safe_free(_x) if (_x) free(_x); _x = NULL
-#define ks_strlen_zero(s) (!s || *(s) == '\0')
-#define ks_strlen_zero_buf(s) (*(s) == '\0')
 #define end_of(_s) *(*_s == '\0' ? _s : _s + strlen(_s) - 1)
 #define ks_test_flag(obj, flag) ((obj)->flags & flag)
 #define ks_set_flag(obj, flag) (obj)->flags |= (flag)
@@ -76,6 +92,7 @@ KS_BEGIN_EXTERN_C
 	KS_DECLARE(const char *) ks_stristr(const char *instr, const char *str);
 	KS_DECLARE(int) ks_toupper(int c);
 	KS_DECLARE(int) ks_tolower(int c);
+    KS_DECLARE(char *) ks_copy_string(char *from_str, const char *to_str, ks_size_t from_str_len);
 	KS_DECLARE(int) ks_snprintf(char *buffer, size_t count, const char *fmt, ...);
 	KS_DECLARE(unsigned int) ks_separate_string_string(char *buf, const char *delim, char **array, unsigned int arraylen);
     KS_DECLARE(int) ks_cpu_count(void);
