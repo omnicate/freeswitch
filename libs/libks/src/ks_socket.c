@@ -317,12 +317,7 @@ KS_DECLARE(ks_status_t) ks_listen_sock(ks_socket_t server_sock, ks_sockaddr_t *a
 	for (;;) {
 		ks_socket_t client_sock;
 		ks_sockaddr_t remote_addr;
-
-#ifdef WIN32
-		int slen;
-#else
-		unsigned int slen;
-#endif
+		socklen_t slen = 0;
 
 		if (addr->family == PF_INET) {
 			slen = sizeof(remote_addr.v.v4);
@@ -885,15 +880,19 @@ KS_DECLARE(ks_status_t) ks_socket_recvfrom(ks_socket_t sock, void *data, ks_size
 
 	if (addr->family == AF_INET) {
 		sockaddr = (struct sockaddr *) &addr->v.v4;
+		alen = sizeof(addr->v.v4);
 	} else {
 		sockaddr = (struct sockaddr *) &addr->v.v6;
+		alen = sizeof(addr->v.v6);
 	}
 
 	do {
 		r = recvfrom(sock, data, *datalen, 0, sockaddr, &alen);
 	} while (r == -1 && ks_errno_is_interupt(ks_errno()));
-	
+
 	if (r > 0) {
+		ks_addr_get_host(addr);
+		ks_addr_get_port(addr);
 		*datalen = (ks_size_t) r;
 		status = KS_STATUS_SUCCESS;
 	} else if (r == 0) {

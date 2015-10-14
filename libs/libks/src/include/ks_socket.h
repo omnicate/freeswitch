@@ -80,7 +80,9 @@ static inline int ks_errno_is_interupt(int errcode)
 
 #endif
 
-#define ks_socket_valid(_s) _s != KS_SOCK_INVALID
+static inline int ks_socket_valid(ks_socket_t s) {
+	return s != KS_SOCK_INVALID;
+}
 
 #define KS_SA_INIT {AF_INET};
 

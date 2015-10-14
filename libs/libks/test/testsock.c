@@ -24,7 +24,7 @@ void server_callback(ks_socket_t server_sock, ks_socket_t client_sock, ks_sockad
 	ks_status_t status;
 	ks_size_t bytes;
 
-	printf("TCP SERVER SOCK %d connection from %s:%d\n", server_sock, addr->host, addr->port);
+	printf("TCP SERVER SOCK %d connection from %s:%u\n", server_sock, addr->host, addr->port);
 
 	do {
 		bytes = sizeof(buf);;
@@ -111,7 +111,7 @@ static int test_tcp(char *ip)
 	printf("TCP CLIENT WRITE %d bytes\n", x);
 	
 	x = read(cl_sock, buf, sizeof(buf));
-	printf("TCP CLIENT READ %d bytes\n", x);
+	printf("TCP CLIENT READ %d bytes [%s]\n", x, buf);
 	
  end:
 
@@ -142,12 +142,13 @@ static void *udp_sock_server(ks_thread_t *thread, void *thread_data)
 {
 	struct udp_data *udp_data = (struct udp_data *) thread_data;
 	int family = AF_INET;
-	ks_socket_t sv_sock = KS_SOCK_INVALID;
 	ks_status_t status;
 	ks_sockaddr_t addr, remote_addr = KS_SA_INIT;
 	char buf[8192] = "";
 	ks_size_t bytes;
 
+	udp_data->sv_sock = KS_SOCK_INVALID;
+	
 	if (strchr(udp_data->ip, ':')) {
 		family = AF_INET6;
 	}
@@ -155,22 +156,23 @@ static void *udp_sock_server(ks_thread_t *thread, void *thread_data)
 	ks_addr_set(&addr, udp_data->ip, udp_sv_port, family);
 	remote_addr.family = family;
 
-	if ((sv_sock = socket(family, SOCK_DGRAM, IPPROTO_UDP)) == KS_SOCK_INVALID) {
+	if ((udp_data->sv_sock = socket(family, SOCK_DGRAM, IPPROTO_UDP)) == KS_SOCK_INVALID) {
 		printf("UDP SERVER SOCKET ERROR %s\n", strerror(ks_errno()));
 		goto end;
 	}
 
-	if (ks_addr_bind(sv_sock, &addr) != KS_STATUS_SUCCESS) {
+	ks_socket_option(udp_data->sv_sock, SO_REUSEADDR, KS_TRUE);
+
+	if (ks_addr_bind(udp_data->sv_sock, &addr) != KS_STATUS_SUCCESS) {
 		printf("UDP SERVER BIND ERROR %s\n", strerror(ks_errno()));
 		goto end;
 	}
 
-	udp_data->sv_sock = sv_sock;
 	udp_data->ready = 1;
 
-
-
-	if ((status = ks_socket_recvfrom(sv_sock, buf, &bytes, &remote_addr)) != KS_STATUS_SUCCESS) {
+	printf("UDP SERVER SOCKET %d %s %d\n", udp_data->sv_sock, addr.host, addr.port);
+	bytes = sizeof(buf);
+	if ((status = ks_socket_recvfrom(udp_data->sv_sock, buf, &bytes, &remote_addr)) != KS_STATUS_SUCCESS) {
 		printf("UDP SERVER RECVFROM ERR %s\n", strerror(ks_errno()));
 		goto end;
 	}
@@ -181,8 +183,11 @@ static void *udp_sock_server(ks_thread_t *thread, void *thread_data)
 		goto end;
 	}
 
+	printf("UDP SERVER WAIT 2 seconds to test nonblocking sockets\n");
+	ks_sleep(2000000);
+	printf("UDP SERVER RESPOND TO %d %s %d\n", udp_data->sv_sock, remote_addr.host, remote_addr.port);
 	bytes = strlen(buf);
-	if ((status = ks_socket_sendto(sv_sock, buf, &bytes, &remote_addr)) != KS_STATUS_SUCCESS) {
+	if ((status = ks_socket_sendto(udp_data->sv_sock, buf, &bytes, &remote_addr)) != KS_STATUS_SUCCESS) {
 		printf("UDP SERVER SENDTO ERR %s\n", strerror(ks_errno()));
 		goto end;
 	}
@@ -191,9 +196,10 @@ static void *udp_sock_server(ks_thread_t *thread, void *thread_data)
 
  end:
 
+	udp_data->ready = -1;
 	printf("UDP THREAD DONE\n");
 
-	ks_socket_close(&sv_sock);
+	ks_socket_close(&udp_data->sv_sock);
 
 	return NULL;
 }
@@ -211,7 +217,7 @@ static int test_udp(char *ip)
 	struct udp_data udp_data = { 0 };
 	ks_size_t bytes = 0;
 	ks_status_t status;
-
+	
 	ks_pool_open(&pool);
 
 	if (strchr(ip, ':')) {
@@ -224,6 +230,8 @@ static int test_udp(char *ip)
 		printf("UDP CLIENT SOCKET ERROR %s\n", strerror(ks_errno()));
 		r = 0; goto end;
 	}
+
+	ks_socket_option(cl_sock, SO_REUSEADDR, KS_TRUE);
 
 	if (ks_addr_bind(cl_sock, &addr) != KS_STATUS_SUCCESS) {
 		printf("UDP CLIENT BIND ERROR %s\n", strerror(ks_errno()));
@@ -239,7 +247,6 @@ static int test_udp(char *ip)
 		ks_sleep(10000);
 	}
 
-
 	printf("UDP CLIENT SOCKET %d %s %d -> %s %d\n", cl_sock, addr.host, addr.port, remote_addr.host, remote_addr.port);
 
 	bytes = strlen(MSG);
@@ -249,23 +256,34 @@ static int test_udp(char *ip)
 	}
 	
 	printf("UDP CLIENT WRITE %ld bytes\n", bytes);
-	
-	if ((status = ks_socket_recvfrom(cl_sock, buf, &bytes, &remote_addr)) != KS_STATUS_SUCCESS) {
-		printf("UDP CLIENT RECVFROM ERR %s\n", strerror(ks_errno()));
-		r = 0; goto end;
-	}
+	ks_socket_option(cl_sock, KS_SO_NONBLOCK, KS_TRUE);
+
+	sanity = 300;
+	do {
+		status = ks_socket_recvfrom(cl_sock, buf, &bytes, &remote_addr);
+
+		if (status == KS_STATUS_BREAK && --sanity > 0) {
+			if ((sanity % 50) == 0) printf("UDP CLIENT SLEEP NONBLOCKING\n");
+			ks_sleep(10000);
+		} else if (status != KS_STATUS_SUCCESS) {
+			printf("UDP CLIENT RECVFROM ERR %s\n", strerror(ks_errno()));
+			r = 0; goto end;
+		}
+	} while(status != KS_STATUS_SUCCESS);
 	printf("UDP CLIENT READ %ld bytes\n", bytes);
 	
  end:
 
-	if (ks_socket_valid(udp_data.sv_sock)) {
+	if (thread_p) {
+		ks_thread_join(thread_p);
+	}
+
+	if (udp_data.ready > 0 && udp_data.sv_sock && ks_socket_valid(udp_data.sv_sock)) {
 		ks_socket_shutdown(udp_data.sv_sock, 2);
 		ks_socket_close(&udp_data.sv_sock);
 	}
 
-	if (thread_p) {
-		ks_thread_join(thread_p);
-	}
+
 
 	ks_socket_close(&cl_sock);
 

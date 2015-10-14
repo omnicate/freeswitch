@@ -73,7 +73,7 @@ KS_BEGIN_EXTERN_C
 		KS_POLL_ERROR = (1 << 2)
 	} ks_poll_t;
 
-	typedef int16_t ks_port_t;
+	typedef uint16_t ks_port_t;
 	typedef size_t ks_size_t;
 
 	typedef enum {
