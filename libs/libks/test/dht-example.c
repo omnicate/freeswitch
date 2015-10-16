@@ -88,6 +88,7 @@ callback(void *closure,
         printf("Received %d values.\n", (int)(data_len / 6));
 }
 
+static dht_handle_t *h;
 static unsigned char buf[4096];
 
 int
@@ -297,7 +298,7 @@ main(int argc, char **argv)
     }
 
     /* Init the dht.  This sets the socket into non-blocking mode. */
-    rc = dht_init(s, s6, myid, (unsigned char*)"JC\0\0");
+    rc = dht_init(&h, s, s6, myid, (unsigned char*)"JC\0\0");
     if(rc < 0) {
         perror("dht_init");
         exit(1);
@@ -315,7 +316,7 @@ main(int argc, char **argv)
        a dump) and you already know their ids, it's better to use
        dht_insert_node.  If the ids are incorrect, the DHT will recover. */
     for(i = 0; i < num_bootstrap_nodes; i++) {
-        dht_ping_node((struct sockaddr*)&bootstrap_nodes[i],
+        dht_ping_node(h, (struct sockaddr*)&bootstrap_nodes[i],
                       sizeof(bootstrap_nodes[i]));
         usleep(random() % 100000);
     }
@@ -356,10 +357,10 @@ main(int argc, char **argv)
 
         if(rc > 0) {
             buf[rc] = '\0';
-            rc = dht_periodic(buf, rc, (struct sockaddr*)&from, fromlen,
+            rc = dht_periodic(h, buf, rc, (struct sockaddr*)&from, fromlen,
                               &tosleep, callback, NULL);
         } else {
-            rc = dht_periodic(NULL, 0, NULL, 0, &tosleep, callback, NULL);
+            rc = dht_periodic(h, NULL, 0, NULL, 0, &tosleep, callback, NULL);
         }
         if(rc < 0) {
             if(errno == EINTR) {
@@ -378,15 +379,15 @@ main(int argc, char **argv)
            idea to reannounce every 28 minutes or so. */
         if(searching) {
             if(s >= 0)
-                dht_search(hash, 0, AF_INET, callback, NULL);
+                dht_search(h, hash, 0, AF_INET, callback, NULL);
             if(s6 >= 0)
-                dht_search(hash, 0, AF_INET6, callback, NULL);
+                dht_search(h, hash, 0, AF_INET6, callback, NULL);
             searching = 0;
         }
 
         /* For debugging, or idle curiosity. */
         if(dumping) {
-            dht_dump_tables(stdout);
+            dht_dump_tables(h, stdout);
             dumping = 0;
         }
     }
@@ -396,11 +397,11 @@ main(int argc, char **argv)
         struct sockaddr_in6 sin6[500];
         int num = 500, num6 = 500;
         int i;
-        i = dht_get_nodes(sin, &num, sin6, &num6);
+        i = dht_get_nodes(h, sin, &num, sin6, &num6);
         printf("Found %d (%d + %d) good nodes.\n", i, num, num6);
     }
 
-    dht_uninit();
+    dht_uninit(&h);
     return 0;
     
  usage:
