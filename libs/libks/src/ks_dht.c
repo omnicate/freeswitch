@@ -30,47 +30,6 @@ THE SOFTWARE.
 
 #include "ks.h"
 
-/*
-#define _GNU_SOURCE
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <errno.h>
-#include <string.h>
-#include <stdarg.h>
-
-#if !defined(_WIN32) || defined(__MINGW32__)
-#include <sys/time.h>
-#endif
-
-#ifndef _WIN32
-#include <unistd.h>
-#include <fcntl.h>
-
-#include <arpa/inet.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#else
-#ifndef _WIN32_WINNT
-#define _WIN32_WINNT 0x0501
-#endif
-#ifndef WINVER
-#define WINVER _WIN32_WINNT
-#endif
-#include <ws2tcpip.h>
-#include <windows.h>
-#endif
-
-#include "dht.h"
-*/
-
-#ifndef HAVE_MEMMEM
-#ifdef __GLIBC__
-#define HAVE_MEMMEM
-#endif
-#endif
-
 #ifndef MSG_CONFIRM
 #define MSG_CONFIRM 0
 #endif
@@ -107,11 +66,6 @@ random(void)
 /* Windows Vista and later already provide the implementation. */
 #if _WIN32_WINNT < 0x0600
 extern const char *inet_ntop(int, const void *, char *, socklen_t);
-#endif
-
-#ifdef _MSC_VER
-/* There is no snprintf in MSVCRT. */
-#define snprintf _snprintf
 #endif
 
 #else
@@ -275,28 +229,31 @@ static int send_error(dht_handle_t *h, const struct sockaddr *sa, int salen,
                       unsigned char *tid, int tid_len,
                       int code, const char *message);
 
-#define ERROR 0
-#define REPLY 1
-#define PING 2
-#define FIND_NODE 3
-#define GET_PEERS 4
-#define ANNOUNCE_PEER 5
+typedef enum {
+	DHT_MSG_INVALID = 0,
+	DHT_MSG_ERROR = 1,
+	DHT_MSG_REPLY = 2,
+	DHT_MSG_PING = 3,
+	DHT_MSG_FIND_NODE = 4,
+	DHT_MSG_GET_PEERS = 5,
+	DHT_MSG_ANNOUNCE_PEER = 6
+} dht_msg_type_t;
 
 #define WANT4 1
 #define WANT6 2
 
-static int parse_message(const unsigned char *buf, int buflen,
-                         unsigned char *tid_return, int *tid_len,
-                         unsigned char *id_return,
-                         unsigned char *info_hash_return,
-                         unsigned char *target_return,
-                         unsigned short *port_return,
-                         unsigned char *token_return, int *token_len,
-                         unsigned char *nodes_return, int *nodes_len,
-                         unsigned char *nodes6_return, int *nodes6_len,
-                         unsigned char *values_return, int *values_len,
-                         unsigned char *values6_return, int *values6_len,
-                         int *want_return);
+static dht_msg_type_t parse_message(const unsigned char *buf, int buflen,
+									unsigned char *tid_return, int *tid_len,
+									unsigned char *id_return,
+									unsigned char *info_hash_return,
+									unsigned char *target_return,
+									unsigned short *port_return,
+									unsigned char *token_return, int *token_len,
+									unsigned char *nodes_return, int *nodes_len,
+									unsigned char *nodes6_return, int *nodes6_len,
+									unsigned char *values_return, int *values_len,
+									unsigned char *values6_return, int *values6_len,
+									int *want_return);
 
 static const unsigned char zeroes[20] = {0};
 static const unsigned char v4prefix[16] = {
@@ -312,25 +269,25 @@ static const unsigned char v4prefix[16] = {
 #endif
 
 struct dht_handle_s {
-	int dht_socket;// = -1;
-	int dht_socket6;// = -1;
+	int dht_socket;
+	int dht_socket6;
 
 	time_t search_time;
 	time_t confirm_nodes_time;
 	time_t rotate_secrets_time;
 
 	unsigned char myid[20];
-	int have_v;// = 0;
+	int have_v;
 	unsigned char my_v[9];
 	unsigned char secret[8];
 	unsigned char oldsecret[8];
 
-	struct bucket *buckets;// = NULL;
-	struct bucket *buckets6;// = NULL;
+	struct bucket *buckets;
+	struct bucket *buckets6;
 	struct storage *storage;
 	int numstorage;
 
-	struct search *searches;// = NULL;
+	struct search *searches;
 	int numsearches;
 	unsigned short search_id;
 
@@ -350,8 +307,7 @@ FILE *dht_debug = NULL;
 #ifdef __GNUC__
     __attribute__ ((format (printf, 1, 2)))
 #endif
-static void
-debugf(const char *format, ...)
+static void debugf(const char *format, ...)
 {
     va_list args;
     va_start(args, format);
@@ -362,8 +318,7 @@ debugf(const char *format, ...)
         fflush(dht_debug);
 }
 
-static void
-debug_printable(const unsigned char *buf, int buflen)
+static void debug_printable(const unsigned char *buf, int buflen)
 {
     int i;
     if(dht_debug) {
@@ -372,16 +327,14 @@ debug_printable(const unsigned char *buf, int buflen)
     }
 }
 
-static void
-print_hex(FILE *f, const unsigned char *buf, int buflen)
+static void print_hex(FILE *f, const unsigned char *buf, int buflen)
 {
     int i;
     for(i = 0; i < buflen; i++)
         fprintf(f, "%02x", buf[i]);
 }
 
-static int
-is_martian(const struct sockaddr *sa)
+static int is_martian(const struct sockaddr *sa)
 {
     switch(sa->sa_family) {
     case AF_INET: {
@@ -411,16 +364,14 @@ is_martian(const struct sockaddr *sa)
 /* Forget about the ``XOR-metric''.  An id is just a path from the
    root of the tree, so bits are numbered from the start. */
 
-static int
-id_cmp(const unsigned char *restrict id1, const unsigned char *restrict id2)
+static int id_cmp(const unsigned char *restrict id1, const unsigned char *restrict id2)
 {
     /* Memcmp is guaranteed to perform an unsigned comparison. */
     return memcmp(id1, id2, 20);
 }
 
 /* Find the lowest 1 bit in an id. */
-static int
-lowbit(const unsigned char *id)
+static int lowbit(const unsigned char *id)
 {
     int i, j;
     for(i = 19; i >= 0; i--)
@@ -438,8 +389,7 @@ lowbit(const unsigned char *id)
 }
 
 /* Find how many bits two ids have in common. */
-static int
-common_bits(const unsigned char *id1, const unsigned char *id2)
+static int common_bits(const unsigned char *id1, const unsigned char *id2)
 {
     int i, j;
     unsigned char xor;
@@ -463,9 +413,7 @@ common_bits(const unsigned char *id1, const unsigned char *id2)
 }
 
 /* Determine whether id1 or id2 is closer to ref */
-static int
-xorcmp(const unsigned char *id1, const unsigned char *id2,
-       const unsigned char *ref)
+static int xorcmp(const unsigned char *id1, const unsigned char *id2, const unsigned char *ref)
 {
     int i;
     for(i = 0; i < 20; i++) {
@@ -484,15 +432,13 @@ xorcmp(const unsigned char *id1, const unsigned char *id2,
 
 /* We keep buckets in a sorted linked list.  A bucket b ranges from
    b->first inclusive up to b->next->first exclusive. */
-static int
-in_bucket(const unsigned char *id, struct bucket *b)
+static int in_bucket(const unsigned char *id, struct bucket *b)
 {
     return id_cmp(b->first, id) <= 0 &&
         (b->next == NULL || id_cmp(id, b->next->first) < 0);
 }
 
-static struct bucket *
-find_bucket(dht_handle_t *h, unsigned const char *id, int af)
+static struct bucket *find_bucket(dht_handle_t *h, unsigned const char *id, int af)
 {
     struct bucket *b = af == AF_INET ? h->buckets : h->buckets6;
 
@@ -508,8 +454,7 @@ find_bucket(dht_handle_t *h, unsigned const char *id, int af)
     }
 }
 
-static struct bucket *
-previous_bucket(dht_handle_t *h, struct bucket *b)
+static struct bucket *previous_bucket(dht_handle_t *h, struct bucket *b)
 {
     struct bucket *p = b->af == AF_INET ? h->buckets : h->buckets6;
 
@@ -526,8 +471,7 @@ previous_bucket(dht_handle_t *h, struct bucket *b)
 }
 
 /* Every bucket contains an unordered list of nodes. */
-static struct node *
-find_node(dht_handle_t *h, const unsigned char *id, int af)
+static struct node *find_node(dht_handle_t *h, const unsigned char *id, int af)
 {
     struct bucket *b = find_bucket(h, id, af);
     struct node *n;
@@ -545,8 +489,7 @@ find_node(dht_handle_t *h, const unsigned char *id, int af)
 }
 
 /* Return a random node in a bucket. */
-static struct node *
-random_node(struct bucket *b)
+static struct node *random_node(struct bucket *b)
 {
     struct node *n;
     int nn;
@@ -564,8 +507,7 @@ random_node(struct bucket *b)
 }
 
 /* Return the middle id of a bucket. */
-static int
-bucket_middle(struct bucket *b, unsigned char *id_return)
+static int bucket_middle(struct bucket *b, unsigned char *id_return)
 {
     int bit1 = lowbit(b->first);
     int bit2 = b->next ? lowbit(b->next->first) : -1;
@@ -580,8 +522,7 @@ bucket_middle(struct bucket *b, unsigned char *id_return)
 }
 
 /* Return a random id within a bucket. */
-static int
-bucket_random(struct bucket *b, unsigned char *id_return)
+static int bucket_random(struct bucket *b, unsigned char *id_return)
 {
     int bit1 = lowbit(b->first);
     int bit2 = b->next ? lowbit(b->next->first) : -1;
@@ -602,8 +543,7 @@ bucket_random(struct bucket *b, unsigned char *id_return)
 }
 
 /* Insert a new node into a bucket. */
-static struct node *
-insert_node(dht_handle_t *h, struct node *node)
+static struct node *insert_node(dht_handle_t *h, struct node *node)
 {
     struct bucket *b = find_bucket(h, node->id, node->ss.ss_family);
 
@@ -617,8 +557,7 @@ insert_node(dht_handle_t *h, struct node *node)
 }
 
 /* This is our definition of a known-good node. */
-static int
-node_good(dht_handle_t *h, struct node *node)
+static int node_good(dht_handle_t *h, struct node *node)
 {
     return
         node->pinged <= 2 &&
@@ -630,16 +569,14 @@ node_good(dht_handle_t *h, struct node *node)
    fying the kind of request, and the remaining two a sequence number in
    host order. */
 
-static void
-make_tid(unsigned char *tid_return, const char *prefix, unsigned short seqno)
+static void make_tid(unsigned char *tid_return, const char *prefix, unsigned short seqno)
 {
     tid_return[0] = prefix[0] & 0xFF;
     tid_return[1] = prefix[1] & 0xFF;
     memcpy(tid_return + 2, &seqno, 2);
 }
 
-static int
-tid_match(const unsigned char *tid, const char *prefix,
+static int tid_match(const unsigned char *tid, const char *prefix,
           unsigned short *seqno_return)
 {
     if(tid[0] == (prefix[0] & 0xFF) && tid[1] == (prefix[1] & 0xFF)) {
@@ -651,8 +588,7 @@ tid_match(const unsigned char *tid, const char *prefix,
 }
 
 /* Every bucket caches the address of a likely node.  Ping it. */
-static int
-send_cached_ping(dht_handle_t *h, struct bucket *b)
+static int send_cached_ping(dht_handle_t *h, struct bucket *b)
 {
     unsigned char tid[4];
     int rc;
@@ -670,8 +606,7 @@ send_cached_ping(dht_handle_t *h, struct bucket *b)
 
 /* Called whenever we send a request to a node, increases the ping count
    and, if that reaches 3, sends a ping to a new candidate. */
-static void
-pinged(dht_handle_t *h, struct node *n, struct bucket *b)
+static void pinged(dht_handle_t *h, struct node *n, struct bucket *b)
 {
     n->pinged++;
     n->pinged_time = h->now.tv_sec;
@@ -681,8 +616,7 @@ pinged(dht_handle_t *h, struct node *n, struct bucket *b)
 
 /* The internal blacklist is an LRU cache of nodes that have sent
    incorrect messages. */
-static void
-blacklist_node(dht_handle_t *h, const unsigned char *id, const struct sockaddr *sa, int salen)
+static void blacklist_node(dht_handle_t *h, const unsigned char *id, const struct sockaddr *sa, int salen)
 {
     int i;
 
@@ -711,8 +645,7 @@ blacklist_node(dht_handle_t *h, const unsigned char *id, const struct sockaddr *
     h->next_blacklisted = (h->next_blacklisted + 1) % DHT_MAX_BLACKLISTED;
 }
 
-static int
-node_blacklisted(dht_handle_t *h, const struct sockaddr *sa, int salen)
+static int node_blacklisted(dht_handle_t *h, const struct sockaddr *sa, int salen)
 {
     int i;
 
@@ -731,8 +664,7 @@ node_blacklisted(dht_handle_t *h, const struct sockaddr *sa, int salen)
 }
 
 /* Split a bucket into two equal parts. */
-static struct bucket *
-split_bucket(dht_handle_t *h, struct bucket *b)
+static struct bucket *split_bucket(dht_handle_t *h, struct bucket *b)
 {
     struct bucket *new;
     struct node *nodes;
@@ -770,10 +702,7 @@ split_bucket(dht_handle_t *h, struct bucket *b)
 
 /* We just learnt about a node, not necessarily a new one.  Confirm is 1 if
    the node sent a message, 2 if it sent us a reply. */
-static struct node *
-new_node(dht_handle_t *h, const unsigned char *id,
-		 const struct sockaddr *sa, int salen,
-         int confirm)
+static struct node *new_node(dht_handle_t *h, const unsigned char *id, const struct sockaddr *sa, int salen, int confirm)
 {
     struct bucket *b = find_bucket(h, id, sa->sa_family);
     struct node *n;
@@ -906,8 +835,7 @@ new_node(dht_handle_t *h, const unsigned char *id,
 /* Called periodically to purge known-bad nodes.  Note that we're very
    conservative here: broken nodes in the table don't do much harm, we'll
    recover as soon as we find better ones. */
-static int
-expire_buckets(dht_handle_t *h, struct bucket *b)
+static int expire_buckets(dht_handle_t *h, struct bucket *b)
 {
     while(b) {
         struct node *n, *p;
@@ -947,8 +875,7 @@ expire_buckets(dht_handle_t *h, struct bucket *b)
    a unique transaction id, a short (and hence small enough to fit in the
    transaction id of the protocol packets). */
 
-static struct search *
-find_search(dht_handle_t *h, unsigned short tid, int af)
+static struct search *find_search(dht_handle_t *h, unsigned short tid, int af)
 {
     struct search *sr = h->searches;
     while(sr) {
@@ -963,8 +890,7 @@ find_search(dht_handle_t *h, unsigned short tid, int af)
    target.  We just got a new candidate, insert it at the right spot or
    discard it. */
 
-static int
-insert_search_node(dht_handle_t *h, unsigned char *id,
+static int insert_search_node(dht_handle_t *h, unsigned char *id,
                    const struct sockaddr *sa, int salen,
                    struct search *sr, int replied,
                    unsigned char *token, int token_len)
@@ -1023,8 +949,7 @@ found:
     return 1;
 }
 
-static void
-flush_search_node(struct search_node *n, struct search *sr)
+static void flush_search_node(struct search_node *n, struct search *sr)
 {
     int i = n - sr->nodes, j;
     for(j = i; j < sr->numnodes - 1; j++)
@@ -1032,8 +957,7 @@ flush_search_node(struct search_node *n, struct search *sr)
     sr->numnodes--;
 }
 
-static void
-expire_searches(dht_handle_t *h)
+static void expire_searches(dht_handle_t *h)
 {
     struct search *sr = h->searches, *previous = NULL;
 
@@ -1054,8 +978,7 @@ expire_searches(dht_handle_t *h)
 }
 
 /* This must always return 0 or 1, never -1, not even on failure (see below). */
-static int
-search_send_get_peers(dht_handle_t *h, struct search *sr, struct search_node *n)
+static int search_send_get_peers(dht_handle_t *h, struct search *sr, struct search_node *n)
 {
     struct node *node;
     unsigned char tid[4];
@@ -1088,8 +1011,7 @@ search_send_get_peers(dht_handle_t *h, struct search *sr, struct search_node *n)
 
 /* When a search is in progress, we periodically call search_step to send
    further requests. */
-static void
-search_step(dht_handle_t *h, struct search *sr, dht_callback *callback, void *closure)
+static void search_step(dht_handle_t *h, struct search *sr, dht_callback *callback, void *closure)
 {
     int i, j;
     int all_done = 1;
@@ -1165,13 +1087,12 @@ search_step(dht_handle_t *h, struct search *sr, dht_callback *callback, void *cl
     if(callback)
         (*callback)(closure,
                     sr->af == AF_INET ?
-                    DHT_EVENT_SEARCH_DONE : DHT_EVENT_SEARCH_DONE6,
+                    KS_DHT_EVENT_SEARCH_DONE : KS_DHT_EVENT_SEARCH_DONE6,
                     sr->id, NULL, 0);
     sr->step_time = h->now.tv_sec;
 }
 
-static struct search *
-new_search(dht_handle_t *h)
+static struct search *new_search(dht_handle_t *h)
 {
     struct search *sr, *oldest = NULL;
 
@@ -1204,8 +1125,7 @@ new_search(dht_handle_t *h)
 }
 
 /* Insert the contents of a bucket into a search structure. */
-static void
-insert_search_bucket(dht_handle_t *h, struct bucket *b, struct search *sr)
+static void insert_search_bucket(dht_handle_t *h, struct bucket *b, struct search *sr)
 {
     struct node *n;
     n = b->nodes;
@@ -1218,8 +1138,7 @@ insert_search_bucket(dht_handle_t *h, struct bucket *b, struct search *sr)
 
 /* Start a search.  If port is non-zero, perform an announce when the
    search is complete. */
-int
-dht_search(dht_handle_t *h, const unsigned char *id, int port, int af,
+int dht_search(dht_handle_t *h, const unsigned char *id, int port, int af,
            dht_callback *callback, void *closure)
 {
     struct search *sr;
@@ -1249,12 +1168,12 @@ dht_search(dht_handle_t *h, const unsigned char *id, int port, int af,
                 if(st->peers[i].len == 4) {
                     memcpy(buf, st->peers[i].ip, 4);
                     memcpy(buf + 4, &swapped, 2);
-                    (*callback)(closure, DHT_EVENT_VALUES, id,
+                    (*callback)(closure, KS_DHT_EVENT_VALUES, id,
                                 (void*)buf, 6);
                 } else if(st->peers[i].len == 16) {
                     memcpy(buf, st->peers[i].ip, 16);
                     memcpy(buf + 16, &swapped, 2);
-                    (*callback)(closure, DHT_EVENT_VALUES6, id,
+                    (*callback)(closure, KS_DHT_EVENT_VALUES6, id,
                                 (void*)buf, 18);
                 }
             }
@@ -1323,8 +1242,7 @@ dht_search(dht_handle_t *h, const unsigned char *id, int port, int af,
 /* A struct storage stores all the stored peer addresses for a given info
    hash. */
 
-static struct storage *
-find_storage(dht_handle_t *h, const unsigned char *id)
+static struct storage *find_storage(dht_handle_t *h, const unsigned char *id)
 {
     struct storage *st = h->storage;
 
@@ -1336,8 +1254,7 @@ find_storage(dht_handle_t *h, const unsigned char *id)
     return st;
 }
 
-static int
-storage_store(dht_handle_t *h, const unsigned char *id,
+static int storage_store(dht_handle_t *h, const unsigned char *id,
               const struct sockaddr *sa, unsigned short port)
 {
     int i, len;
@@ -1404,8 +1321,7 @@ storage_store(dht_handle_t *h, const unsigned char *id,
     }
 }
 
-static int
-expire_storage(dht_handle_t *h)
+static int expire_storage(dht_handle_t *h)
 {
     struct storage *st = h->storage, *previous = NULL;
     while(st) {
@@ -1444,8 +1360,7 @@ expire_storage(dht_handle_t *h)
     return 1;
 }
 
-static int
-rotate_secrets(dht_handle_t *h)
+static int rotate_secrets(dht_handle_t *h)
 {
     int rc;
 
@@ -1464,8 +1379,7 @@ rotate_secrets(dht_handle_t *h)
 #define TOKEN_SIZE 8
 #endif
 
-static void
-make_token(dht_handle_t *h, const struct sockaddr *sa, int old, unsigned char *token_return)
+static void make_token(dht_handle_t *h, const struct sockaddr *sa, int old, unsigned char *token_return)
 {
     void *ip;
     int iplen;
@@ -1489,9 +1403,7 @@ make_token(dht_handle_t *h, const struct sockaddr *sa, int old, unsigned char *t
              old ? h->oldsecret : h->secret, sizeof(h->secret),
              ip, iplen, (unsigned char*)&port, 2);
 }
-static int
-token_match(dht_handle_t *h, const unsigned char *token, int token_len,
-            const struct sockaddr *sa)
+static int token_match(dht_handle_t *h, const unsigned char *token, int token_len, const struct sockaddr *sa)
 {
     unsigned char t[TOKEN_SIZE];
     if(token_len != TOKEN_SIZE)
@@ -1505,9 +1417,7 @@ token_match(dht_handle_t *h, const unsigned char *token, int token_len,
     return 0;
 }
 
-int
-dht_nodes(dht_handle_t *h, int af, int *good_return, int *dubious_return, int *cached_return,
-          int *incoming_return)
+int dht_nodes(dht_handle_t *h, int af, int *good_return, int *dubious_return, int *cached_return, int *incoming_return)
 {
     int good = 0, dubious = 0, cached = 0, incoming = 0;
     struct bucket *b = af == AF_INET ? h->buckets : h->buckets6;
@@ -1539,8 +1449,7 @@ dht_nodes(dht_handle_t *h, int af, int *good_return, int *dubious_return, int *c
     return good + dubious;
 }
 
-static void
-dump_bucket(dht_handle_t *h, FILE *f, struct bucket *b)
+static void dump_bucket(dht_handle_t *h, FILE *f, struct bucket *b)
 {
     struct node *n = b->nodes;
     fprintf(f, "Bucket ");
@@ -1563,7 +1472,7 @@ dump_bucket(dht_handle_t *h, FILE *f, struct bucket *b)
             inet_ntop(AF_INET6, &sin6->sin6_addr, buf, 512);
             port = ntohs(sin6->sin6_port);
         } else {
-            snprintf(buf, 512, "unknown(%d)", n->ss.ss_family);
+            ks_snprintf(buf, 512, "unknown(%d)", n->ss.ss_family);
             port = 0;
         }
 
@@ -1587,8 +1496,7 @@ dump_bucket(dht_handle_t *h, FILE *f, struct bucket *b)
 
 }
 
-void
-dht_dump_tables(dht_handle_t *h, FILE *f)
+void dht_dump_tables(dht_handle_t *h, FILE *f)
 {
     int i;
     struct bucket *b;
@@ -1661,8 +1569,7 @@ dht_dump_tables(dht_handle_t *h, FILE *f)
     fflush(f);
 }
 
-int
-dht_init(dht_handle_t **handle, int s, int s6, const unsigned char *id, const unsigned char *v)
+int dht_init(dht_handle_t **handle, int s, int s6, const unsigned char *id, const unsigned char *v)
 {
     int rc;
 	dht_handle_t *h;
@@ -1673,6 +1580,10 @@ dht_init(dht_handle_t **handle, int s, int s6, const unsigned char *id, const un
 
     h->storage = NULL;
     h->numstorage = 0;
+
+	h->buckets = NULL;
+	h->buckets6 = NULL;
+
 
     if(s >= 0) {
         h->buckets = calloc(sizeof(struct bucket), 1);
@@ -1740,8 +1651,7 @@ dht_init(dht_handle_t **handle, int s, int s6, const unsigned char *id, const un
     return -1;
 }
 
-int
-dht_uninit(dht_handle_t **handle)
+int dht_uninit(dht_handle_t **handle)
 {
 	dht_handle_t *h = *handle;
 	*handle = NULL;
@@ -1795,8 +1705,7 @@ dht_uninit(dht_handle_t **handle)
 
 /* Rate control for requests we receive. */
 
-static int
-token_bucket(dht_handle_t *h)
+static int token_bucket(dht_handle_t *h)
 {
     if(h->token_bucket_tokens == 0) {
         h->token_bucket_tokens = MIN(MAX_TOKEN_BUCKET_TOKENS,
@@ -1811,8 +1720,7 @@ token_bucket(dht_handle_t *h)
     return 1;
 }
 
-static int
-neighbourhood_maintenance(dht_handle_t *h, int af)
+static int neighbourhood_maintenance(dht_handle_t *h, int af)
 {
     unsigned char id[20];
     struct bucket *b = find_bucket(h, h->myid, af);
@@ -1854,8 +1762,7 @@ neighbourhood_maintenance(dht_handle_t *h, int af)
     return 0;
 }
 
-static int
-bucket_maintenance(dht_handle_t *h, int af)
+static int bucket_maintenance(dht_handle_t *h, int af)
 {
     struct bucket *b;
 
@@ -1928,8 +1835,7 @@ bucket_maintenance(dht_handle_t *h, int af)
     return 0;
 }
 
-int
-dht_periodic(dht_handle_t *h, const void *buf, size_t buflen,
+int dht_periodic(dht_handle_t *h, const void *buf, size_t buflen,
              const struct sockaddr *from, int fromlen,
              time_t *tosleep,
              dht_callback *callback, void *closure)
@@ -1937,7 +1843,7 @@ dht_periodic(dht_handle_t *h, const void *buf, size_t buflen,
     dht_gettimeofday(&h->now, NULL);
 
     if(buflen > 0) {
-        int message;
+        dht_msg_type_t message;
         unsigned char tid[16], id[20], info_hash[20], target[20];
         unsigned char nodes[26*16], nodes6[38*16], token[128];
         int tid_len = 16, token_len = 128;
@@ -1968,28 +1874,29 @@ dht_periodic(dht_handle_t *h, const void *buf, size_t buflen,
                                 values, &values_len, values6, &values6_len,
                                 &want);
 
-        if(message < 0 || message == ERROR || id_cmp(id, zeroes) == 0) {
-            debugf("Unparseable message: ");
-            debug_printable(buf, buflen);
-            debugf("\n");
-            goto dontread;
-        }
-
-        if(id_cmp(id, h->myid) == 0) {
+        if (id_cmp(id, zeroes) == 0) {
+			message = DHT_MSG_INVALID;
+        } else if (id_cmp(id, h->myid) == 0) {
             debugf("Received message from self.\n");
             goto dontread;
         }
 
-        if(message > REPLY) {
+        if (message > DHT_MSG_REPLY) {
             /* Rate limit requests. */
-            if(!token_bucket(h)) {
+            if (!token_bucket(h)) {
                 debugf("Dropping request due to rate limiting.\n");
                 goto dontread;
             }
         }
 
         switch(message) {
-        case REPLY:
+		case DHT_MSG_INVALID:
+		case DHT_MSG_ERROR:
+            debugf("Unparseable message: ");
+            debug_printable(buf, buflen);
+            debugf("\n");
+            goto dontread;
+        case DHT_MSG_REPLY:
             if(tid_len != 4) {
                 debugf("Broken node truncates transaction ids: ");
                 debug_printable(buf, buflen);
@@ -2070,11 +1977,11 @@ dht_periodic(dht_handle_t *h, const void *buf, size_t buflen,
                                values_len / 6, values6_len / 18);
                         if(callback) {
                             if(values_len > 0)
-                                (*callback)(closure, DHT_EVENT_VALUES, sr->id,
+                                (*callback)(closure, KS_DHT_EVENT_VALUES, sr->id,
                                             (void*)values, values_len);
 
                             if(values6_len > 0)
-                                (*callback)(closure, DHT_EVENT_VALUES6, sr->id,
+                                (*callback)(closure, KS_DHT_EVENT_VALUES6, sr->id,
                                             (void*)values6, values6_len);
                         }
                     }
@@ -2106,13 +2013,13 @@ dht_periodic(dht_handle_t *h, const void *buf, size_t buflen,
                 debugf("\n");
             }
             break;
-        case PING:
+        case DHT_MSG_PING:
             debugf("Ping (%d)!\n", tid_len);
             new_node(h, id, from, fromlen, 1);
             debugf("Sending pong.\n");
             send_pong(h, from, fromlen, tid, tid_len);
             break;
-        case FIND_NODE:
+        case DHT_MSG_FIND_NODE:
             debugf("Find node!\n");
             new_node(h, id, from, fromlen, 1);
             debugf("Sending closest nodes (%d).\n", want);
@@ -2120,7 +2027,7 @@ dht_periodic(dht_handle_t *h, const void *buf, size_t buflen,
                                tid, tid_len, target, want,
                                0, NULL, NULL, 0);
             break;
-        case GET_PEERS:
+        case DHT_MSG_GET_PEERS:
             debugf("Get_peers!\n");
             new_node(h, id, from, fromlen, 1);
             if(id_cmp(info_hash, zeroes) == 0) {
@@ -2148,7 +2055,7 @@ dht_periodic(dht_handle_t *h, const void *buf, size_t buflen,
                 }
             }
             break;
-        case ANNOUNCE_PEER:
+        case DHT_MSG_ANNOUNCE_PEER:
             debugf("Announce peer!\n");
             new_node(h, id, from, fromlen, 1);
             if(id_cmp(info_hash, zeroes) == 0) {
@@ -2250,8 +2157,7 @@ dht_periodic(dht_handle_t *h, const void *buf, size_t buflen,
     return 1;
 }
 
-int
-dht_get_nodes(dht_handle_t *h, struct sockaddr_in *sin, int *num,
+int dht_get_nodes(dht_handle_t *h, struct sockaddr_in *sin, int *num,
               struct sockaddr_in6 *sin6, int *num6)
 {
     int i, j;
@@ -2329,8 +2235,7 @@ dht_get_nodes(dht_handle_t *h, struct sockaddr_in *sin, int *num,
     return i + j;
 }
 
-int
-dht_insert_node(dht_handle_t *h, const unsigned char *id, struct sockaddr *sa, int salen)
+int dht_insert_node(dht_handle_t *h, const unsigned char *id, struct sockaddr *sa, int salen)
 {
     struct node *n;
 
@@ -2343,8 +2248,7 @@ dht_insert_node(dht_handle_t *h, const unsigned char *id, struct sockaddr *sa, i
     return !!n;
 }
 
-int
-dht_ping_node(dht_handle_t *h, struct sockaddr *sa, int salen)
+int dht_ping_node(dht_handle_t *h, struct sockaddr *sa, int salen)
 {
     unsigned char tid[4];
 
@@ -2373,9 +2277,7 @@ dht_ping_node(dht_handle_t *h, struct sockaddr *sa, int salen)
         COPY(buf, offset, h->my_v, sizeof(h->my_v), size);    \
     }
 
-static int
-dht_send(dht_handle_t *h, const void *buf, size_t len, int flags,
-         const struct sockaddr *sa, int salen)
+static int dht_send(dht_handle_t *h, const void *buf, size_t len, int flags, const struct sockaddr *sa, int salen)
 {
     int s;
 
@@ -2403,19 +2305,17 @@ dht_send(dht_handle_t *h, const void *buf, size_t len, int flags,
     return sendto(s, buf, len, flags, sa, salen);
 }
 
-int
-send_ping(dht_handle_t *h, const struct sockaddr *sa, int salen,
-          const unsigned char *tid, int tid_len)
+int send_ping(dht_handle_t *h, const struct sockaddr *sa, int salen, const unsigned char *tid, int tid_len)
 {
     char buf[512];
     int i = 0, rc;
-    rc = snprintf(buf + i, 512 - i, "d1:ad2:id20:"); INC(i, rc, 512);
+    rc = ks_snprintf(buf + i, 512 - i, "d1:ad2:id20:"); INC(i, rc, 512);
     COPY(buf, i, h->myid, 20, 512);
-    rc = snprintf(buf + i, 512 - i, "e1:q4:ping1:t%d:", tid_len);
+    rc = ks_snprintf(buf + i, 512 - i, "e1:q4:ping1:t%d:", tid_len);
     INC(i, rc, 512);
     COPY(buf, i, tid, tid_len, 512);
     ADD_V(buf, i, 512);
-    rc = snprintf(buf + i, 512 - i, "1:y1:qe"); INC(i, rc, 512);
+    rc = ks_snprintf(buf + i, 512 - i, "1:y1:qe"); INC(i, rc, 512);
     return dht_send(h, buf, i, 0, sa, salen);
 
  fail:
@@ -2423,18 +2323,16 @@ send_ping(dht_handle_t *h, const struct sockaddr *sa, int salen,
     return -1;
 }
 
-int
-send_pong(dht_handle_t *h, const struct sockaddr *sa, int salen,
-          const unsigned char *tid, int tid_len)
+int send_pong(dht_handle_t *h, const struct sockaddr *sa, int salen, const unsigned char *tid, int tid_len)
 {
     char buf[512];
     int i = 0, rc;
-    rc = snprintf(buf + i, 512 - i, "d1:rd2:id20:"); INC(i, rc, 512);
+    rc = ks_snprintf(buf + i, 512 - i, "d1:rd2:id20:"); INC(i, rc, 512);
     COPY(buf, i, h->myid, 20, 512);
-    rc = snprintf(buf + i, 512 - i, "e1:t%d:", tid_len); INC(i, rc, 512);
+    rc = ks_snprintf(buf + i, 512 - i, "e1:t%d:", tid_len); INC(i, rc, 512);
     COPY(buf, i, tid, tid_len, 512);
     ADD_V(buf, i, 512);
-    rc = snprintf(buf + i, 512 - i, "1:y1:re"); INC(i, rc, 512);
+    rc = ks_snprintf(buf + i, 512 - i, "1:y1:re"); INC(i, rc, 512);
     return dht_send(h, buf, i, 0, sa, salen);
 
  fail:
@@ -2442,28 +2340,27 @@ send_pong(dht_handle_t *h, const struct sockaddr *sa, int salen,
     return -1;
 }
 
-int
-send_find_node(dht_handle_t *h, const struct sockaddr *sa, int salen,
+int send_find_node(dht_handle_t *h, const struct sockaddr *sa, int salen,
                const unsigned char *tid, int tid_len,
                const unsigned char *target, int want, int confirm)
 {
     char buf[512];
     int i = 0, rc;
-    rc = snprintf(buf + i, 512 - i, "d1:ad2:id20:"); INC(i, rc, 512);
+    rc = ks_snprintf(buf + i, 512 - i, "d1:ad2:id20:"); INC(i, rc, 512);
     COPY(buf, i, h->myid, 20, 512);
-    rc = snprintf(buf + i, 512 - i, "6:target20:"); INC(i, rc, 512);
+    rc = ks_snprintf(buf + i, 512 - i, "6:target20:"); INC(i, rc, 512);
     COPY(buf, i, target, 20, 512);
     if(want > 0) {
-        rc = snprintf(buf + i, 512 - i, "4:wantl%s%se",
+        rc = ks_snprintf(buf + i, 512 - i, "4:wantl%s%se",
                       (want & WANT4) ? "2:n4" : "",
                       (want & WANT6) ? "2:n6" : "");
         INC(i, rc, 512);
     }
-    rc = snprintf(buf + i, 512 - i, "e1:q9:find_node1:t%d:", tid_len);
+    rc = ks_snprintf(buf + i, 512 - i, "e1:q9:find_node1:t%d:", tid_len);
     INC(i, rc, 512);
     COPY(buf, i, tid, tid_len, 512);
     ADD_V(buf, i, 512);
-    rc = snprintf(buf + i, 512 - i, "1:y1:qe"); INC(i, rc, 512);
+    rc = ks_snprintf(buf + i, 512 - i, "1:y1:qe"); INC(i, rc, 512);
     return dht_send(h, buf, i, confirm ? MSG_CONFIRM : 0, sa, salen);
 
  fail:
@@ -2471,8 +2368,7 @@ send_find_node(dht_handle_t *h, const struct sockaddr *sa, int salen,
     return -1;
 }
 
-int
-send_nodes_peers(dht_handle_t *h, const struct sockaddr *sa, int salen,
+int send_nodes_peers(dht_handle_t *h, const struct sockaddr *sa, int salen,
                  const unsigned char *tid, int tid_len,
                  const unsigned char *nodes, int nodes_len,
                  const unsigned char *nodes6, int nodes6_len,
@@ -2482,20 +2378,20 @@ send_nodes_peers(dht_handle_t *h, const struct sockaddr *sa, int salen,
     char buf[2048];
     int i = 0, rc, j0, j, k, len;
 
-    rc = snprintf(buf + i, 2048 - i, "d1:rd2:id20:"); INC(i, rc, 2048);
+    rc = ks_snprintf(buf + i, 2048 - i, "d1:rd2:id20:"); INC(i, rc, 2048);
     COPY(buf, i, h->myid, 20, 2048);
     if(nodes_len > 0) {
-        rc = snprintf(buf + i, 2048 - i, "5:nodes%d:", nodes_len);
+        rc = ks_snprintf(buf + i, 2048 - i, "5:nodes%d:", nodes_len);
         INC(i, rc, 2048);
         COPY(buf, i, nodes, nodes_len, 2048);
     }
     if(nodes6_len > 0) {
-         rc = snprintf(buf + i, 2048 - i, "6:nodes6%d:", nodes6_len);
+         rc = ks_snprintf(buf + i, 2048 - i, "6:nodes6%d:", nodes6_len);
          INC(i, rc, 2048);
          COPY(buf, i, nodes6, nodes6_len, 2048);
     }
     if(token_len > 0) {
-        rc = snprintf(buf + i, 2048 - i, "5:token%d:", token_len);
+        rc = ks_snprintf(buf + i, 2048 - i, "5:token%d:", token_len);
         INC(i, rc, 2048);
         COPY(buf, i, token, token_len, 2048);
     }
@@ -2510,12 +2406,12 @@ send_nodes_peers(dht_handle_t *h, const struct sockaddr *sa, int salen,
         j = j0;
         k = 0;
 
-        rc = snprintf(buf + i, 2048 - i, "6:valuesl"); INC(i, rc, 2048);
+        rc = ks_snprintf(buf + i, 2048 - i, "6:valuesl"); INC(i, rc, 2048);
         do {
             if(st->peers[j].len == len) {
                 unsigned short swapped;
                 swapped = htons(st->peers[j].port);
-                rc = snprintf(buf + i, 2048 - i, "%d:", len + 2);
+                rc = ks_snprintf(buf + i, 2048 - i, "%d:", len + 2);
                 INC(i, rc, 2048);
                 COPY(buf, i, st->peers[j].ip, len, 2048);
                 COPY(buf, i, &swapped, 2, 2048);
@@ -2523,13 +2419,13 @@ send_nodes_peers(dht_handle_t *h, const struct sockaddr *sa, int salen,
             }
             j = (j + 1) % st->numpeers;
         } while(j != j0 && k < 50);
-        rc = snprintf(buf + i, 2048 - i, "e"); INC(i, rc, 2048);
+        rc = ks_snprintf(buf + i, 2048 - i, "e"); INC(i, rc, 2048);
     }
 
-    rc = snprintf(buf + i, 2048 - i, "e1:t%d:", tid_len); INC(i, rc, 2048);
+    rc = ks_snprintf(buf + i, 2048 - i, "e1:t%d:", tid_len); INC(i, rc, 2048);
     COPY(buf, i, tid, tid_len, 2048);
     ADD_V(buf, i, 2048);
-    rc = snprintf(buf + i, 2048 - i, "1:y1:re"); INC(i, rc, 2048);
+    rc = ks_snprintf(buf + i, 2048 - i, "1:y1:re"); INC(i, rc, 2048);
 
     return dht_send(h, buf, i, 0, sa, salen);
 
@@ -2538,8 +2434,7 @@ send_nodes_peers(dht_handle_t *h, const struct sockaddr *sa, int salen,
     return -1;
 }
 
-static int
-insert_closest_node(unsigned char *nodes, int numnodes,
+static int insert_closest_node(unsigned char *nodes, int numnodes,
                     const unsigned char *id, struct node *n)
 {
     int i, size;
@@ -2585,9 +2480,7 @@ insert_closest_node(unsigned char *nodes, int numnodes,
     return numnodes;
 }
 
-static int
-buffer_closest_nodes(dht_handle_t *h, unsigned char *nodes, int numnodes,
-                     const unsigned char *id, struct bucket *b)
+static int buffer_closest_nodes(dht_handle_t *h, unsigned char *nodes, int numnodes, const unsigned char *id, struct bucket *b)
 {
     struct node *n = b->nodes;
     while(n) {
@@ -2598,12 +2491,11 @@ buffer_closest_nodes(dht_handle_t *h, unsigned char *nodes, int numnodes,
     return numnodes;
 }
 
-int
-send_closest_nodes(dht_handle_t *h, const struct sockaddr *sa, int salen,
-                   const unsigned char *tid, int tid_len,
-                   const unsigned char *id, int want,
-                   int af, struct storage *st,
-                   const unsigned char *token, int token_len)
+int send_closest_nodes(dht_handle_t *h, const struct sockaddr *sa, int salen,
+					   const unsigned char *tid, int tid_len,
+					   const unsigned char *id, int want,
+					   int af, struct storage *st,
+					   const unsigned char *token, int token_len)
 {
     unsigned char nodes[8 * 26];
     unsigned char nodes6[8 * 38];
@@ -2645,29 +2537,28 @@ send_closest_nodes(dht_handle_t *h, const struct sockaddr *sa, int salen,
                             af, st, token, token_len);
 }
 
-int
-send_get_peers(dht_handle_t *h, const struct sockaddr *sa, int salen,
-               unsigned char *tid, int tid_len, unsigned char *infohash,
-               int want, int confirm)
+int send_get_peers(dht_handle_t *h, const struct sockaddr *sa, int salen,
+				   unsigned char *tid, int tid_len, unsigned char *infohash,
+				   int want, int confirm)
 {
     char buf[512];
     int i = 0, rc;
 
-    rc = snprintf(buf + i, 512 - i, "d1:ad2:id20:"); INC(i, rc, 512);
+    rc = ks_snprintf(buf + i, 512 - i, "d1:ad2:id20:"); INC(i, rc, 512);
     COPY(buf, i, h->myid, 20, 512);
-    rc = snprintf(buf + i, 512 - i, "9:info_hash20:"); INC(i, rc, 512);
+    rc = ks_snprintf(buf + i, 512 - i, "9:info_hash20:"); INC(i, rc, 512);
     COPY(buf, i, infohash, 20, 512);
     if(want > 0) {
-        rc = snprintf(buf + i, 512 - i, "4:wantl%s%se",
+        rc = ks_snprintf(buf + i, 512 - i, "4:wantl%s%se",
                       (want & WANT4) ? "2:n4" : "",
                       (want & WANT6) ? "2:n6" : "");
         INC(i, rc, 512);
     }
-    rc = snprintf(buf + i, 512 - i, "e1:q9:get_peers1:t%d:", tid_len);
+    rc = ks_snprintf(buf + i, 512 - i, "e1:q9:get_peers1:t%d:", tid_len);
     INC(i, rc, 512);
     COPY(buf, i, tid, tid_len, 512);
     ADD_V(buf, i, 512);
-    rc = snprintf(buf + i, 512 - i, "1:y1:qe"); INC(i, rc, 512);
+    rc = ks_snprintf(buf + i, 512 - i, "1:y1:qe"); INC(i, rc, 512);
     return dht_send(h, buf, i, confirm ? MSG_CONFIRM : 0, sa, salen);
 
  fail:
@@ -2675,28 +2566,27 @@ send_get_peers(dht_handle_t *h, const struct sockaddr *sa, int salen,
     return -1;
 }
 
-int
-send_announce_peer(dht_handle_t *h, const struct sockaddr *sa, int salen,
-                   unsigned char *tid, int tid_len,
-                   unsigned char *infohash, unsigned short port,
-                   unsigned char *token, int token_len, int confirm)
+int send_announce_peer(dht_handle_t *h, const struct sockaddr *sa, int salen,
+					   unsigned char *tid, int tid_len,
+					   unsigned char *infohash, unsigned short port,
+					   unsigned char *token, int token_len, int confirm)
 {
     char buf[512];
     int i = 0, rc;
 
-    rc = snprintf(buf + i, 512 - i, "d1:ad2:id20:"); INC(i, rc, 512);
+    rc = ks_snprintf(buf + i, 512 - i, "d1:ad2:id20:"); INC(i, rc, 512);
     COPY(buf, i, h->myid, 20, 512);
-    rc = snprintf(buf + i, 512 - i, "9:info_hash20:"); INC(i, rc, 512);
+    rc = ks_snprintf(buf + i, 512 - i, "9:info_hash20:"); INC(i, rc, 512);
     COPY(buf, i, infohash, 20, 512);
-    rc = snprintf(buf + i, 512 - i, "4:porti%ue5:token%d:", (unsigned)port,
+    rc = ks_snprintf(buf + i, 512 - i, "4:porti%ue5:token%d:", (unsigned)port,
                   token_len);
     INC(i, rc, 512);
     COPY(buf, i, token, token_len, 512);
-    rc = snprintf(buf + i, 512 - i, "e1:q13:announce_peer1:t%d:", tid_len);
+    rc = ks_snprintf(buf + i, 512 - i, "e1:q13:announce_peer1:t%d:", tid_len);
     INC(i, rc, 512);
     COPY(buf, i, tid, tid_len, 512);
     ADD_V(buf, i, 512);
-    rc = snprintf(buf + i, 512 - i, "1:y1:qe"); INC(i, rc, 512);
+    rc = ks_snprintf(buf + i, 512 - i, "1:y1:qe"); INC(i, rc, 512);
 
     return dht_send(h, buf, i, confirm ? 0 : MSG_CONFIRM, sa, salen);
 
@@ -2705,20 +2595,18 @@ send_announce_peer(dht_handle_t *h, const struct sockaddr *sa, int salen,
     return -1;
 }
 
-static int
-send_peer_announced(dht_handle_t *h, const struct sockaddr *sa, int salen,
-                    unsigned char *tid, int tid_len)
+static int send_peer_announced(dht_handle_t *h, const struct sockaddr *sa, int salen, unsigned char *tid, int tid_len)
 {
     char buf[512];
     int i = 0, rc;
 
-    rc = snprintf(buf + i, 512 - i, "d1:rd2:id20:"); INC(i, rc, 512);
+    rc = ks_snprintf(buf + i, 512 - i, "d1:rd2:id20:"); INC(i, rc, 512);
     COPY(buf, i, h->myid, 20, 512);
-    rc = snprintf(buf + i, 512 - i, "e1:t%d:", tid_len);
+    rc = ks_snprintf(buf + i, 512 - i, "e1:t%d:", tid_len);
     INC(i, rc, 512);
     COPY(buf, i, tid, tid_len, 512);
     ADD_V(buf, i, 512);
-    rc = snprintf(buf + i, 512 - i, "1:y1:re"); INC(i, rc, 512);
+    rc = ks_snprintf(buf + i, 512 - i, "1:y1:re"); INC(i, rc, 512);
     return dht_send(h, buf, i, 0, sa, salen);
 
  fail:
@@ -2726,22 +2614,21 @@ send_peer_announced(dht_handle_t *h, const struct sockaddr *sa, int salen,
     return -1;
 }
 
-static int
-send_error(dht_handle_t *h, const struct sockaddr *sa, int salen,
-           unsigned char *tid, int tid_len,
-           int code, const char *message)
+static int send_error(dht_handle_t *h, const struct sockaddr *sa, int salen,
+					  unsigned char *tid, int tid_len,
+					  int code, const char *message)
 {
     char buf[512];
     int i = 0, rc, message_len;
 
     message_len = strlen(message);
-    rc = snprintf(buf + i, 512 - i, "d1:eli%de%d:", code, message_len);
+    rc = ks_snprintf(buf + i, 512 - i, "d1:eli%de%d:", code, message_len);
     INC(i, rc, 512);
     COPY(buf, i, message, message_len, 512);
-    rc = snprintf(buf + i, 512 - i, "e1:t%d:", tid_len); INC(i, rc, 512);
+    rc = ks_snprintf(buf + i, 512 - i, "e1:t%d:", tid_len); INC(i, rc, 512);
     COPY(buf, i, tid, tid_len, 512);
     ADD_V(buf, i, 512);
-    rc = snprintf(buf + i, 512 - i, "1:y1:ee"); INC(i, rc, 512);
+    rc = ks_snprintf(buf + i, 512 - i, "1:y1:ee"); INC(i, rc, 512);
     return dht_send(h, buf, i, 0, sa, salen);
 
  fail:
@@ -2756,18 +2643,14 @@ send_error(dht_handle_t *h, const struct sockaddr *sa, int salen,
 
 #ifdef HAVE_MEMMEM
 
-static void *
-dht_memmem(const void *haystack, size_t haystacklen,
-           const void *needle, size_t needlelen)
+static void *dht_memmem(const void *haystack, size_t haystacklen, const void *needle, size_t needlelen)
 {
     return memmem(haystack, haystacklen, needle, needlelen);
 }
 
 #else
 
-static void *
-dht_memmem(const void *haystack, size_t haystacklen,
-           const void *needle, size_t needlelen)
+static void *dht_memmem(const void *haystack, size_t haystacklen, const void *needle, size_t needlelen)
 {
     const char *h = haystack;
     const char *n = needle;
@@ -2786,28 +2669,26 @@ dht_memmem(const void *haystack, size_t haystacklen,
 
 #endif
 
-static int
-parse_message(const unsigned char *buf, int buflen,
-              unsigned char *tid_return, int *tid_len,
-              unsigned char *id_return, unsigned char *info_hash_return,
-              unsigned char *target_return, unsigned short *port_return,
-              unsigned char *token_return, int *token_len,
-              unsigned char *nodes_return, int *nodes_len,
-              unsigned char *nodes6_return, int *nodes6_len,
-              unsigned char *values_return, int *values_len,
-              unsigned char *values6_return, int *values6_len,
-              int *want_return)
+static dht_msg_type_t parse_message(const unsigned char *buf, int buflen,
+									unsigned char *tid_return, int *tid_len,
+									unsigned char *id_return, unsigned char *info_hash_return,
+									unsigned char *target_return, unsigned short *port_return,
+									unsigned char *token_return, int *token_len,
+									unsigned char *nodes_return, int *nodes_len,
+									unsigned char *nodes6_return, int *nodes6_len,
+									unsigned char *values_return, int *values_len,
+									unsigned char *values6_return, int *values6_len,
+									int *want_return)
 {
     const unsigned char *p;
 
     /* This code will happily crash if the buffer is not NUL-terminated. */
     if(buf[buflen] != '\0') {
         debugf("Eek!  parse_message with unterminated buffer.\n");
-        return -1;
+        return DHT_MSG_INVALID;
     }
 
-#define CHECK(ptr, len)                                                 \
-    if(((unsigned char*)ptr) + (len) > (buf) + (buflen)) goto overflow;
+#define CHECK(ptr, len) if (((unsigned char*)ptr) + (len) > (buf) + (buflen)) goto overflow;
 
     if(tid_return) {
         p = dht_memmem(buf, buflen, "1:t", 3);
@@ -2980,22 +2861,22 @@ parse_message(const unsigned char *buf, int buflen,
 #undef CHECK
 
     if(dht_memmem(buf, buflen, "1:y1:r", 6))
-        return REPLY;
+        return DHT_MSG_REPLY;
     if(dht_memmem(buf, buflen, "1:y1:e", 6))
-        return ERROR;
+        return DHT_MSG_ERROR;
     if(!dht_memmem(buf, buflen, "1:y1:q", 6))
-        return -1;
+        return DHT_MSG_INVALID;
     if(dht_memmem(buf, buflen, "1:q4:ping", 9))
-        return PING;
+        return DHT_MSG_PING;
     if(dht_memmem(buf, buflen, "1:q9:find_node", 14))
-       return FIND_NODE;
+       return DHT_MSG_FIND_NODE;
     if(dht_memmem(buf, buflen, "1:q9:get_peers", 14))
-        return GET_PEERS;
+        return DHT_MSG_GET_PEERS;
     if(dht_memmem(buf, buflen, "1:q13:announce_peer", 19))
-       return ANNOUNCE_PEER;
-    return -1;
+       return DHT_MSG_ANNOUNCE_PEER;
+    return DHT_MSG_INVALID;
 
  overflow:
     debugf("Truncated message.\n");
-    return -1;
+    return DHT_MSG_INVALID;
 }

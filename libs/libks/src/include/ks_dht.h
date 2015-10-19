@@ -27,44 +27,34 @@ THE SOFTWARE.
 
 KS_BEGIN_EXTERN_C
 
-typedef void
-dht_callback(void *closure, int event,
-             const unsigned char *info_hash,
-             const void *data, size_t data_len);
+typedef enum {
+	KS_DHT_EVENT_NONE = 0,
+	KS_DHT_EVENT_VALUES = 1,
+	KS_DHT_EVENT_VALUES6 = 2,
+	KS_DHT_EVENT_SEARCH_DONE = 3,
+	KS_DHT_EVENT_SEARCH_DONE6 = 4
+} ks_dht_event_t;
 
-#define DHT_EVENT_NONE 0
-#define DHT_EVENT_VALUES 1
-#define DHT_EVENT_VALUES6 2
-#define DHT_EVENT_SEARCH_DONE 3
-#define DHT_EVENT_SEARCH_DONE6 4
+typedef void dht_callback(void *closure, ks_dht_event_t event, const unsigned char *info_hash, const void *data, size_t data_len);
 
 extern FILE *dht_debug;
 typedef struct dht_handle_s dht_handle_t;
 
+int dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, const struct sockaddr *from, int fromlen,
+				 time_t *tosleep, dht_callback *callback, void *closure);
 int dht_init(dht_handle_t **h, int s, int s6, const unsigned char *id, const unsigned char *v);
 int dht_insert_node(dht_handle_t *h, const unsigned char *id, struct sockaddr *sa, int salen);
 int dht_ping_node(dht_handle_t *h, struct sockaddr *sa, int salen);
-int dht_periodic(dht_handle_t *h, const void *buf, size_t buflen,
-                 const struct sockaddr *from, int fromlen,
-                 time_t *tosleep, dht_callback *callback, void *closure);
-int dht_search(dht_handle_t *h, const unsigned char *id, int port, int af,
-               dht_callback *callback, void *closure);
-int dht_nodes(dht_handle_t *h, int af,
-              int *good_return, int *dubious_return, int *cached_return,
-              int *incoming_return);
+int dht_search(dht_handle_t *h, const unsigned char *id, int port, int af, dht_callback *callback, void *closure);
+int dht_nodes(dht_handle_t *h, int af, int *good_return, int *dubious_return, int *cached_return, int *incoming_return);
 void dht_dump_tables(dht_handle_t *h, FILE *f);
-int dht_get_nodes(dht_handle_t *h, struct sockaddr_in *sin, int *num,
-                  struct sockaddr_in6 *sin6, int *num6);
+int dht_get_nodes(dht_handle_t *h, struct sockaddr_in *sin, int *num, struct sockaddr_in6 *sin6, int *num6);
 int dht_uninit(dht_handle_t **h);
 
 /* This must be provided by the user. */
 int dht_blacklisted(const struct sockaddr *sa, int salen);
-void dht_hash(void *hash_return, int hash_size,
-              const void *v1, int len1,
-              const void *v2, int len2,
-              const void *v3, int len3);
+void dht_hash(void *hash_return, int hash_size, const void *v1, int len1, const void *v2, int len2, const void *v3, int len3);
 int dht_random_bytes(void *buf, size_t size);
-
 
 KS_END_EXTERN_C
 

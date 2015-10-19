@@ -88,7 +88,7 @@ AC_CHECK_DECL([SCHED_RR],
 	[#ifdef HAVE_SCHED_H
 	 #include <sched.h>
 	 #endif])
-AC_CHECK_FUNCS([sched_setscheduler])
+AC_CHECK_FUNCS([sched_setscheduler memmem])
 
 if test "x${ac_cv_func_sched_setscheduler}" = "xyes" -a \
         "x${ac_cv_have_decl_SCHED_RR}" = "xyes"
