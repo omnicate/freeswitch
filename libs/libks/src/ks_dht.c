@@ -301,28 +301,13 @@ struct dht_handle_s {
 	int token_bucket_tokens;
 };
 
-FILE *dht_debug = NULL;
-
-#ifdef __GNUC__
-    __attribute__ ((format (printf, 1, 2)))
-#endif
-static void debugf(const char *format, ...)
-{
-    va_list args;
-    va_start(args, format);
-    if (dht_debug) vfprintf(dht_debug, format, args);
-    va_end(args);
-    if (dht_debug) fflush(dht_debug);
-}
-
-static void debug_printable(const unsigned char *buf, int buflen)
+static unsigned char *debug_printable(const unsigned char *buf, unsigned char *out, int buflen)
 {
     int i;
-    if (dht_debug) {
-        for (i = 0; i < buflen; i++) {
-            putc(buf[i] >= 32 && buf[i] <= 126 ? buf[i] : '.', dht_debug);
-		}
-    }
+	for (i = 0; i < buflen; i++) {
+		out[i] = (buf[i] >= 32 && buf[i] <= 126) ? buf[i] : '.';
+	}
+	return out;
 }
 
 static void print_hex(FILE *f, const unsigned char *buf, int buflen)
@@ -615,7 +600,7 @@ static int send_cached_ping(dht_handle_t *h, struct bucket *b)
         return 0;
 	}
 
-    debugf("Sending ping to cached node.\n");
+    ks_log(KS_LOG_DEBUG, "Sending ping to cached node.\n");
     make_tid(tid, "pn", 0);
     rc = send_ping(h, (struct sockaddr*)&b->cached, b->cachedlen, tid, 4);
     b->cached.ss_family = 0;
@@ -640,7 +625,7 @@ static void blacklist_node(dht_handle_t *h, const unsigned char *id, const struc
 {
     int i;
 
-    debugf("Blacklisting broken node.\n");
+    ks_log(KS_LOG_DEBUG, "Blacklisting broken node.\n");
 
     if (id) {
         struct node *n;
@@ -809,7 +794,7 @@ static struct node *new_node(dht_handle_t *h, const unsigned char *id, const str
                 dubious = 1;
                 if (n->pinged_time < h->now.tv_sec - 15) {
                     unsigned char tid[4];
-                    debugf("Sending ping to dubious node.\n");
+                    ks_log(KS_LOG_DEBUG, "Sending ping to dubious node.\n");
                     make_tid(tid, "pn", 0);
                     send_ping(h, (struct sockaddr*)&n->ss, n->sslen, tid, 4);
                     n->pinged++;
@@ -835,7 +820,7 @@ static struct node *new_node(dht_handle_t *h, const unsigned char *id, const str
         }
 
         if (split) {
-            debugf("Splitting.\n");
+            ks_log(KS_LOG_DEBUG, "Splitting.\n");
             b = split_bucket(h, b);
             return new_node(h, id, sa, salen, confirm);
         }
@@ -934,7 +919,7 @@ static int insert_search_node(dht_handle_t *h, unsigned char *id,
     int i, j;
 
     if (sa->sa_family != sr->af) {
-        debugf("Attempted to insert node in the wrong family.\n");
+        ks_log(KS_LOG_DEBUG, "Attempted to insert node in the wrong family.\n");
         return 0;
     }
 
@@ -977,7 +962,7 @@ found:
     }
     if (token) {
         if (token_len >= 40) {
-            debugf("Eek!  Overlong token.\n");
+            ks_log(KS_LOG_DEBUG, "Eek!  Overlong token.\n");
         } else {
             memcpy(n->token, token, token_len);
             n->token_len = token_len;
@@ -1036,7 +1021,7 @@ static int search_send_get_peers(dht_handle_t *h, struct search *sr, struct sear
         return 0;
 	}
 
-    debugf("Sending get_peers.\n");
+    ks_log(KS_LOG_DEBUG, "Sending get_peers.\n");
     make_tid(tid, "gp", sr->tid);
     send_get_peers(h, (struct sockaddr*)&n->ss, n->sslen, tid, 4, sr->id, -1, n->reply_time >= h->now.tv_sec - 15);
     n->pinged++;
@@ -1091,7 +1076,7 @@ static void search_step(dht_handle_t *h, struct search *sr, dht_callback *callba
 			}
 			if (!n->acked) {
 				all_acked = 0;
-				debugf("Sending announce_peer.\n");
+				ks_log(KS_LOG_DEBUG, "Sending announce_peer.\n");
 				make_tid(tid, "ap", sr->tid);
 				send_announce_peer(h, (struct sockaddr*)&n->ss,
 								   sizeof(struct sockaddr_storage),
@@ -1202,7 +1187,7 @@ int dht_search(dht_handle_t *h, const unsigned char *id, int port, int af, dht_c
             unsigned char buf[18];
             int i;
 
-            debugf("Found local data (%d peers).\n", st->numpeers);
+            ks_log(KS_LOG_DEBUG, "Found local data (%d peers).\n", st->numpeers);
 
             for (i = 0; i < st->numpeers; i++) {
                 swapped = htons(st->peers[i].port);
@@ -1397,7 +1382,7 @@ static int expire_storage(dht_handle_t *h)
 
             h->numstorage--;
             if (h->numstorage < 0) {
-                debugf("Eek... numstorage became negative.\n");
+                ks_log(KS_LOG_DEBUG, "Eek... numstorage became negative.\n");
                 h->numstorage = 0;
             }
         } else {
@@ -1827,7 +1812,7 @@ static int neighbourhood_maintenance(dht_handle_t *h, int af)
         n = random_node(q);
         if (n) {
             unsigned char tid[4];
-            debugf("Sending find_node for%s neighborhood maintenance.\n", af == AF_INET6 ? " IPv6" : "");
+            ks_log(KS_LOG_DEBUG, "Sending find_node for%s neighborhood maintenance.\n", af == AF_INET6 ? " IPv6" : "");
             make_tid(tid, "fn", 0);
             send_find_node(h, (struct sockaddr*)&n->ss, n->sslen, tid, 4, id, want, n->reply_time >= h->now.tv_sec - 15);
             pinged(h, n, q);
@@ -1895,7 +1880,7 @@ static int bucket_maintenance(dht_handle_t *h, int af)
 						}
                     }
 
-                    debugf("Sending find_node for%s bucket maintenance.\n", af == AF_INET6 ? " IPv6" : "");
+                    ks_log(KS_LOG_DEBUG, "Sending find_node for%s bucket maintenance.\n", af == AF_INET6 ? " IPv6" : "");
                     make_tid(tid, "fn", 0);
                     send_find_node(h, (struct sockaddr*)&n->ss, n->sslen, tid, 4, id, want, n->reply_time >= h->now.tv_sec - 15);
                     pinged(h, n, q);
@@ -1912,6 +1897,7 @@ static int bucket_maintenance(dht_handle_t *h, int af)
 int dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, const struct sockaddr *from, int fromlen,
              time_t *tosleep, dht_callback *callback, void *closure)
 {
+	unsigned char *logmsg = NULL;
     dht_gettimeofday(&h->now, NULL);
 
     if (buflen > 0) {
@@ -1931,12 +1917,12 @@ int dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, const struct s
 		}
 
         if (node_blacklisted(h, from, fromlen)) {
-            debugf("Received packet from blacklisted node.\n");
+            ks_log(KS_LOG_DEBUG, "Received packet from blacklisted node.\n");
             goto dontread;
         }
 
         if (((char*)buf)[buflen] != '\0') {
-            debugf("Unterminated message.\n");
+            ks_log(KS_LOG_DEBUG, "Unterminated message.\n");
             errno = EINVAL;
             return -1;
         }
@@ -1950,30 +1936,28 @@ int dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, const struct s
         if (id_cmp(id, zeroes) == 0) {
 			message = DHT_MSG_INVALID;
         } else if (id_cmp(id, h->myid) == 0) {
-            debugf("Received message from self.\n");
+            ks_log(KS_LOG_DEBUG, "Received message from self.\n");
             goto dontread;
         }
 
         if (message > DHT_MSG_REPLY) {
             /* Rate limit requests. */
             if (!token_bucket(h)) {
-                debugf("Dropping request due to rate limiting.\n");
+                ks_log(KS_LOG_DEBUG, "Dropping request due to rate limiting.\n");
                 goto dontread;
             }
         }
 
+		logmsg = calloc(1, buflen);
+
         switch(message) {
 		case DHT_MSG_INVALID:
 		case DHT_MSG_ERROR:
-            debugf("Unparseable message: ");
-            debug_printable(buf, buflen);
-            debugf("\n");
+            ks_log(KS_LOG_DEBUG, "Unparseable message: %s\n", debug_printable(buf, logmsg, buflen));
             goto dontread;
         case DHT_MSG_REPLY:
             if (tid_len != 4) {
-                debugf("Broken node truncates transaction ids: ");
-                debug_printable(buf, buflen);
-                debugf("\n");
+                ks_log(KS_LOG_DEBUG, "Broken node truncates transaction ids: %s\n", debug_printable(buf, logmsg, buflen));
                 /* This is really annoying, as it means that we will
                    time-out all our searches that go through this node.
                    Kill it. */
@@ -1981,7 +1965,7 @@ int dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, const struct s
                 goto dontread;
             }
             if (tid_match(tid, "pn", NULL)) {
-                debugf("Pong!\n");
+                ks_log(KS_LOG_DEBUG, "Pong!\n");
                 new_node(h, id, from, fromlen, 2);
             } else if (tid_match(tid, "fn", NULL) || tid_match(tid, "gp", NULL)) {
                 int gp = 0;
@@ -1990,12 +1974,12 @@ int dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, const struct s
                     gp = 1;
                     sr = find_search(h, ttid, from->sa_family);
                 }
-                debugf("Nodes found (%d+%d)%s!\n", nodes_len/26, nodes6_len/38, gp ? " for get_peers" : "");
+                ks_log(KS_LOG_DEBUG, "Nodes found (%d+%d)%s!\n", nodes_len/26, nodes6_len/38, gp ? " for get_peers" : "");
                 if (nodes_len % 26 != 0 || nodes6_len % 38 != 0) {
-                    debugf("Unexpected length for node info!\n");
+                    ks_log(KS_LOG_DEBUG, "Unexpected length for node info!\n");
                     blacklist_node(h, id, from, fromlen);
                 } else if (gp && sr == NULL) {
-                    debugf("Unknown search!\n");
+                    ks_log(KS_LOG_DEBUG, "Unknown search!\n");
                     new_node(h, id, from, fromlen, 1);
                 } else {
                     int i;
@@ -2038,7 +2022,7 @@ int dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, const struct s
                 if (sr) {
                     insert_search_node(h, id, from, fromlen, sr, 1, token, token_len);
                     if (values_len > 0 || values6_len > 0) {
-                        debugf("Got values (%d+%d)!\n", values_len / 6, values6_len / 18);
+                        ks_log(KS_LOG_DEBUG, "Got values (%d+%d)!\n", values_len / 6, values6_len / 18);
                         if (callback) {
                             if (values_len > 0) {
                                 (*callback)(closure, KS_DHT_EVENT_VALUES, sr->id, (void*)values, values_len);
@@ -2051,10 +2035,10 @@ int dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, const struct s
                 }
             } else if (tid_match(tid, "ap", &ttid)) {
                 struct search *sr;
-                debugf("Got reply to announce_peer.\n");
+                ks_log(KS_LOG_DEBUG, "Got reply to announce_peer.\n");
                 sr = find_search(h, ttid, from->sa_family);
                 if (!sr) {
-                    debugf("Unknown search!\n");
+                    ks_log(KS_LOG_DEBUG, "Unknown search!\n");
                     new_node(h, id, from, fromlen, 1);
                 } else {
                     int i;
@@ -2072,28 +2056,26 @@ int dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, const struct s
                     search_send_get_peers(h, sr, NULL);
                 }
             } else {
-                debugf("Unexpected reply: ");
-                debug_printable(buf, buflen);
-                debugf("\n");
+                ks_log(KS_LOG_DEBUG, "Unexpected reply: %s\n", debug_printable(buf, logmsg, buflen));
             }
             break;
         case DHT_MSG_PING:
-            debugf("Ping (%d)!\n", tid_len);
+            ks_log(KS_LOG_DEBUG, "Ping (%d)!\n", tid_len);
             new_node(h, id, from, fromlen, 1);
-            debugf("Sending pong.\n");
+            ks_log(KS_LOG_DEBUG, "Sending pong.\n");
             send_pong(h, from, fromlen, tid, tid_len);
             break;
         case DHT_MSG_FIND_NODE:
-            debugf("Find node!\n");
+            ks_log(KS_LOG_DEBUG, "Find node!\n");
             new_node(h, id, from, fromlen, 1);
-            debugf("Sending closest nodes (%d).\n", want);
+            ks_log(KS_LOG_DEBUG, "Sending closest nodes (%d).\n", want);
             send_closest_nodes(h, from, fromlen, tid, tid_len, target, want, 0, NULL, NULL, 0);
             break;
         case DHT_MSG_GET_PEERS:
-            debugf("Get_peers!\n");
+            ks_log(KS_LOG_DEBUG, "Get_peers!\n");
             new_node(h, id, from, fromlen, 1);
             if (id_cmp(info_hash, zeroes) == 0) {
-                debugf("Eek!  Got get_peers with no info_hash.\n");
+                ks_log(KS_LOG_DEBUG, "Eek!  Got get_peers with no info_hash.\n");
                 send_error(h, from, fromlen, tid, tid_len, 203, "Get_peers with no info_hash");
                 break;
             } else {
@@ -2101,35 +2083,35 @@ int dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, const struct s
                 unsigned char token[TOKEN_SIZE];
                 make_token(h, from, 0, token);
                 if (st && st->numpeers > 0) {
-                     debugf("Sending found%s peers.\n", from->sa_family == AF_INET6 ? " IPv6" : "");
+                     ks_log(KS_LOG_DEBUG, "Sending found%s peers.\n", from->sa_family == AF_INET6 ? " IPv6" : "");
                      send_closest_nodes(h, from, fromlen, tid, tid_len, info_hash, want, from->sa_family, st, token, TOKEN_SIZE);
                 } else {
-                    debugf("Sending nodes for get_peers.\n");
+                    ks_log(KS_LOG_DEBUG, "Sending nodes for get_peers.\n");
                     send_closest_nodes(h, from, fromlen, tid, tid_len, info_hash, want, 0, NULL, token, TOKEN_SIZE);
                 }
             }
             break;
         case DHT_MSG_ANNOUNCE_PEER:
-            debugf("Announce peer!\n");
+            ks_log(KS_LOG_DEBUG, "Announce peer!\n");
             new_node(h, id, from, fromlen, 1);
             if (id_cmp(info_hash, zeroes) == 0) {
-                debugf("Announce_peer with no info_hash.\n");
+                ks_log(KS_LOG_DEBUG, "Announce_peer with no info_hash.\n");
                 send_error(h, from, fromlen, tid, tid_len, 203, "Announce_peer with no info_hash");
                 break;
             }
             if (!token_match(h, token, token_len, from)) {
-                debugf("Incorrect token for announce_peer.\n");
+                ks_log(KS_LOG_DEBUG, "Incorrect token for announce_peer.\n");
                 send_error(h, from, fromlen, tid, tid_len, 203, "Announce_peer with wrong token");
                 break;
             }
             if (port == 0) {
-                debugf("Announce_peer with forbidden port %d.\n", port);
+                ks_log(KS_LOG_DEBUG, "Announce_peer with forbidden port %d.\n", port);
                 send_error(h, from, fromlen, tid, tid_len, 203, "Announce_peer with forbidden port number");
                 break;
             }
             storage_store(h, info_hash, from, port);
             /* Note that if storage_store failed, we lie to the requestor. This is to prevent them from backtracking, and hence polluting the DHT. */
-            debugf("Sending peer announced.\n");
+            ks_log(KS_LOG_DEBUG, "Sending peer announced.\n");
             send_peer_announced(h, from, fromlen, tid, tid_len);
         }
     }
@@ -2207,6 +2189,7 @@ int dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, const struct s
             *tosleep = h->search_time - h->now.tv_sec;
 		}
     }
+	free(logmsg);
 
     return 1;
 }
@@ -2308,7 +2291,7 @@ int dht_ping_node(dht_handle_t *h, struct sockaddr *sa, int salen)
 {
     unsigned char tid[4];
 
-    debugf("Sending ping.\n");
+    ks_log(KS_LOG_DEBUG, "Sending ping.\n");
     make_tid(tid, "pn", 0);
     return send_ping(h, sa, salen, tid, 4);
 }
@@ -2342,7 +2325,7 @@ static int dht_send(dht_handle_t *h, const void *buf, size_t len, int flags, con
 	}
 
     if (node_blacklisted(h, sa, salen)) {
-        debugf("Attempting to send to blacklisted node.\n");
+        ks_log(KS_LOG_DEBUG, "Attempting to send to blacklisted node.\n");
         errno = EPERM;
         return -1;
     }
@@ -2594,7 +2577,7 @@ int send_closest_nodes(dht_handle_t *h, const struct sockaddr *sa, int salen,
 			}
         }
     }
-    debugf("  (%d+%d nodes.)\n", numnodes, numnodes6);
+    ks_log(KS_LOG_DEBUG, "  (%d+%d nodes.)\n", numnodes, numnodes6);
 
     return send_nodes_peers(h, sa, salen, tid, tid_len,
                             nodes, numnodes * 26,
@@ -2751,7 +2734,7 @@ static dht_msg_type_t parse_message(const unsigned char *buf, int buflen,
 
     /* This code will happily crash if the buffer is not NUL-terminated. */
     if (buf[buflen] != '\0') {
-        debugf("Eek!  parse_message with unterminated buffer.\n");
+        ks_log(KS_LOG_DEBUG, "Eek!  parse_message with unterminated buffer.\n");
         return DHT_MSG_INVALID;
     }
 
@@ -2892,14 +2875,14 @@ static dht_msg_type_t parse_message(const unsigned char *buf, int buflen,
                         memcpy((char*)values6_return + j6, q + 1, l);
                         j6 += l;
                     } else {
-                        debugf("Received weird value -- %d bytes.\n", (int)l);
+                        ks_log(KS_LOG_DEBUG, "Received weird value -- %d bytes.\n", (int)l);
                     }
                 } else {
                     break;
                 }
             }
             if (i >= buflen || buf[i] != 'e') {
-                debugf("eek... unexpected end for values.\n");
+                ks_log(KS_LOG_DEBUG, "eek... unexpected end for values.\n");
 			}
             if (values_len) {
                 *values_len = j;
@@ -2929,12 +2912,12 @@ static dht_msg_type_t parse_message(const unsigned char *buf, int buflen,
 				} else if (buf[i] == '2' && memcmp(buf + i + 2, "n6", 2) == 0) {
                     *want_return |= WANT6;
                 } else {
-                    debugf("eek... unexpected want flag (%c)\n", buf[i]);
+                    ks_log(KS_LOG_DEBUG, "eek... unexpected want flag (%c)\n", buf[i]);
 				}
                 i += 2 + buf[i] - '0';
             }
             if (i >= buflen || buf[i] != 'e') {
-                debugf("eek... unexpected end for want.\n");
+                ks_log(KS_LOG_DEBUG, "eek... unexpected end for want.\n");
 			}
         } else {
             *want_return = -1;
@@ -2974,7 +2957,7 @@ static dht_msg_type_t parse_message(const unsigned char *buf, int buflen,
     return DHT_MSG_INVALID;
 
  overflow:
-    debugf("Truncated message.\n");
+    ks_log(KS_LOG_DEBUG, "Truncated message.\n");
     return DHT_MSG_INVALID;
 }
 

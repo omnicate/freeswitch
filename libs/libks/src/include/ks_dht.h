@@ -37,7 +37,6 @@ typedef enum {
 
 typedef void dht_callback(void *closure, ks_dht_event_t event, const unsigned char *info_hash, const void *data, size_t data_len);
 
-extern FILE *dht_debug;
 typedef struct dht_handle_s dht_handle_t;
 
 int dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, const struct sockaddr *from, int fromlen,
