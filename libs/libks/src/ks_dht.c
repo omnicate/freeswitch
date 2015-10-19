@@ -1082,7 +1082,7 @@ static void search_step(dht_handle_t *h, struct search *sr, dht_callback *callba
 								   sizeof(struct sockaddr_storage),
 								   tid, 4, sr->id, sr->port,
 								   n->token, n->token_len,
-								   n->reply_time >= h->now.tv_sec - 15);
+								   n->reply_time < h->now.tv_sec - 15);
 				n->pinged++;
 				n->request_time = h->now.tv_sec;
 				node = find_node(h, n->id, n->ss.ss_family);
@@ -2633,7 +2633,7 @@ int send_announce_peer(dht_handle_t *h, const struct sockaddr *sa, int salen,
     ADD_V(buf, i, 512);
     rc = ks_snprintf(buf + i, 512 - i, "1:y1:qe"); INC(i, rc, 512);
 
-    return dht_send(h, buf, i, confirm ? 0 : MSG_CONFIRM, sa, salen);
+    return dht_send(h, buf, i, confirm ? MSG_CONFIRM : 0, sa, salen);
 
  fail:
     errno = ENOSPC;
