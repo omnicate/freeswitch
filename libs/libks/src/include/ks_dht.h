@@ -20,6 +20,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
 
+#ifndef _KS_DHT_H
+#define _KS_DHT_H
+
+#include "ks.h"
+
+KS_BEGIN_EXTERN_C
+
 typedef void
 dht_callback(void *closure, int event,
              const unsigned char *info_hash,
@@ -57,3 +64,19 @@ void dht_hash(void *hash_return, int hash_size,
               const void *v2, int len2,
               const void *v3, int len3);
 int dht_random_bytes(void *buf, size_t size);
+
+
+KS_END_EXTERN_C
+
+#endif /* _KS_DHT_H */
+
+/* For Emacs:
+ * Local Variables:
+ * mode:c
+ * indent-tabs-mode:t
+ * tab-width:4
+ * c-basic-offset:4
+ * End:
+ * For VIM:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
+ */

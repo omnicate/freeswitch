@@ -28,7 +28,9 @@ THE SOFTWARE.
    gratuitious changes to the coding style.  And please send back any
    improvements to the author. */
 
-/* For memmem. */
+#include "ks.h"
+
+/*
 #define _GNU_SOURCE
 
 #include <stdio.h>
@@ -51,7 +53,7 @@ THE SOFTWARE.
 #include <netinet/in.h>
 #else
 #ifndef _WIN32_WINNT
-#define _WIN32_WINNT 0x0501 /* Windows XP */
+#define _WIN32_WINNT 0x0501
 #endif
 #ifndef WINVER
 #define WINVER _WIN32_WINNT
@@ -61,6 +63,7 @@ THE SOFTWARE.
 #endif
 
 #include "dht.h"
+*/
 
 #ifndef HAVE_MEMMEM
 #ifdef __GLIBC__
@@ -296,11 +299,6 @@ static int parse_message(const unsigned char *buf, int buflen,
                          int *want_return);
 
 static const unsigned char zeroes[20] = {0};
-static const unsigned char ones[20] = {
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0xFF, 0xFF, 0xFF
-};
 static const unsigned char v4prefix[16] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xFF, 0xFF, 0, 0, 0, 0
 };

@@ -115,6 +115,7 @@ _Check_return_ static inline int _zstr(_In_opt_z_ const char *s)
 #include "ks_time.h"
 #include "ks_socket.h"
 #include "ks_dso.h"
+#include "ks_dht.h"
 #include "simclist.h"
 
 KS_END_EXTERN_C
