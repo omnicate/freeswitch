@@ -48,6 +48,10 @@ KS_BEGIN_EXTERN_C
 #define __WINDOWS__
 #endif
 
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 #if UINTPTR_MAX == 0xffffffffffffffff
 #define KS_64BIT 1
 #endif
