@@ -1906,10 +1906,10 @@ int dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, const struct s
         unsigned char nodes[26*16], nodes6[38*16], token[128];
         int tid_len = 16, token_len = 128;
         int nodes_len = 26*16, nodes6_len = 38*16;
-        unsigned short port;
+        unsigned short port = 0;
         unsigned char values[2048], values6[2048];
         int values_len = 2048, values6_len = 2048;
-        int want;
+        int want = 0;
         unsigned short ttid;
 
         if (is_martian(from)) {
