@@ -129,6 +129,45 @@ KS_DECLARE(ks_time_t) ks_time_now(void)
 	return now;
 }
 
+KS_DECLARE(ks_time_t) ks_time_now_sec(void)
+{
+	ks_time_t now;
+	
+	if (!timer_init) {
+		win32_init_timers();
+	}
+
+	if (win32_use_qpc) {
+		/* Use QueryPerformanceCounter */
+		uint64_t count = 0;
+		QueryPerformanceCounter((LARGE_INTEGER*)&count);
+		now = (count / win32_qpc_freq);
+	} else {
+		/* Use good old timeGetTime() */
+		DWORD tick_now;
+		DWORD tick_diff;
+		
+		tick_now = timeGetTime();
+		if (win32_tick_time_since_start != -1) {
+			EnterCriticalSection(&timer_section);
+			/* just add diff (to make it work more than 50 days). */
+			tick_diff = tick_now - win32_last_get_time_tick;
+			win32_tick_time_since_start += tick_diff;
+			
+			win32_last_get_time_tick = tick_now;
+			now = (win32_tick_time_since_start / 1000);
+				LeaveCriticalSection(&timer_section);
+		} else {
+			/* If someone is calling us before timer is initialized,
+			 * return the current tick
+			 */
+			now = (tick_now / 1000);
+		}
+	}
+
+	return now;
+}
+
 KS_DECLARE(void) ks_sleep(ks_time_t microsec)
 {
 
@@ -156,6 +195,23 @@ KS_DECLARE(ks_time_t) ks_time_now(void)
 	struct timeval tv;
 	gettimeofday(&tv, NULL);
 	now = tv.tv_sec * 1000000 + tv.tv_usec;
+#endif
+
+	return now;
+}
+
+KS_DECLARE(ks_time_t) ks_time_now_sec(void)
+{
+	ks_time_t now;
+
+#if (defined(HAVE_CLOCK_GETTIME) && defined(CLOCK_REALTIME))
+	struct timespec ts;
+	clock_gettime(CLOCK_REALTIME, &ts);
+	now = (int64_t)ts.tv_sec;
+#else 
+	struct timeval tv;
+	gettimeofday(&tv, NULL);
+	now = tv.tv_sec;
 #endif
 
 	return now;
