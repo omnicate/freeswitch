@@ -561,7 +561,8 @@ switch_call_cause_t ooh323_outgoing_channel(switch_core_session_t *session, swit
 		switch_channel_set_caller_profile(channel, caller_profile);
 		tech_pvt->caller_profile = caller_profile;
 		switch_channel_set_flag(channel, CF_AUDIO_PAUSE);
-		switch_channel_set_flag(channel, CF_VIDEO_PAUSE);
+		switch_channel_set_flag(channel, CF_VIDEO_PAUSE_READ);
+		switch_channel_set_flag(channel, CF_VIDEO_PAUSE_WRITE);
 		switch_channel_set_flag(channel, CF_VIDEO_POSSIBLE);
 		switch_channel_set_state(channel, CS_INIT);
 	} else {

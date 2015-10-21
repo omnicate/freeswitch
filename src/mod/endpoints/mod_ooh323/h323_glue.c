@@ -273,7 +273,8 @@ static int startVideoTransmitChannel (ooCallData *call, ooLogicalChannel *pChann
 			if (switch_core_media_activate_rtp(session) != SWITCH_STATUS_SUCCESS) {
 				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Error activate RTP\n");
 			} else {
-				switch_channel_clear_flag(switch_core_session_get_channel(session), CF_VIDEO_PAUSE);
+				switch_channel_clear_flag(switch_core_session_get_channel(session), CF_VIDEO_PAUSE_READ);
+				switch_channel_clear_flag(switch_core_session_get_channel(session), CF_VIDEO_PAUSE_WRITE);
 			}
 		} else {
 			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "SDP not match: %d\n", match);
@@ -541,7 +542,8 @@ static int onIncomingCall (ooCallData* call)
 
 	/* prevent core io read from us before we are ready */
 	switch_channel_set_flag(channel, CF_AUDIO_PAUSE);
-	switch_channel_set_flag(channel, CF_VIDEO_PAUSE);
+	switch_channel_set_flag(channel, CF_VIDEO_PAUSE_READ);
+	switch_channel_set_flag(channel, CF_VIDEO_PAUSE_WRITE);
 
 	/* ready to go */
 	switch_channel_set_state(channel, CS_INIT);
@@ -769,7 +771,7 @@ static int onReceivedVideoFastUpdate(ooCallData *call, int channelNo)
 	switch_core_session_get_partner(session, &nsession);
 
 	if (nsession) {
-		switch_core_session_refresh_video(nsession);
+		switch_core_session_request_video_refresh(nsession);
 		switch_core_session_rwunlock(nsession);
 	}
 
@@ -1363,6 +1365,7 @@ switch_status_t prepare_codec(ooh323_private_t *tech_pvt)
 	if (switch_core_codec_init(&tech_pvt->read_codec,
 								"PCMU",
 								NULL,
+								NULL,
 								rate,
 								ptime,
 								1,
@@ -1374,6 +1377,7 @@ switch_status_t prepare_codec(ooh323_private_t *tech_pvt)
 
 	if (switch_core_codec_init(&tech_pvt->write_codec,
 								"PCMU",
+								NULL,
 								NULL,
 								rate,
 								ptime,
@@ -1400,6 +1404,7 @@ switch_status_t prepare_codec(ooh323_private_t *tech_pvt)
 	if (switch_core_codec_init(&tech_pvt->read_video_codec,
 								"H263",
 								NULL,
+								NULL,
 								90000,
 								0,
 								1,
@@ -1411,6 +1416,7 @@ switch_status_t prepare_codec(ooh323_private_t *tech_pvt)
 
 	if (switch_core_codec_init(&tech_pvt->write_video_codec,
 								"H263",
+								NULL,
 								NULL,
 								90000,
 								0,
