@@ -78,24 +78,28 @@ _Check_return_ static inline int _zstr(_In_opt_z_ const char *s)
 #define ks_recv(_h) ks_recv_event(_h, 0, NULL)
 #define ks_recv_timed(_h, _ms) ks_recv_event_timed(_h, _ms, 0, NULL)
 
-	KS_DECLARE(int) ks_vasprintf(char **ret, const char *fmt, va_list ap);
+KS_DECLARE(ks_status_t) ks_init(void);
+KS_DECLARE(ks_status_t) ks_shutdown(void);
+KS_DECLARE(ks_pool_t *) ks_global_pool(void);
+KS_DECLARE(ks_status_t) ks_global_set_cleanup(ks_pool_cleanup_fn_t fn, void *arg);
+KS_DECLARE(int) ks_vasprintf(char **ret, const char *fmt, va_list ap);
 
-	KS_DECLARE_DATA extern ks_logger_t ks_log;
+KS_DECLARE_DATA extern ks_logger_t ks_log;
 
 /*! Sets the logger for libks. Default is the null_logger */
-	KS_DECLARE(void) ks_global_set_logger(ks_logger_t logger);
+KS_DECLARE(void) ks_global_set_logger(ks_logger_t logger);
 /*! Sets the default log level for libks */
-	KS_DECLARE(void) ks_global_set_default_logger(int level);
+KS_DECLARE(void) ks_global_set_default_logger(int level);
 
-	KS_DECLARE(size_t) ks_url_encode(const char *url, char *buf, size_t len);
-	KS_DECLARE(char *) ks_url_decode(char *s);
-	KS_DECLARE(const char *) ks_stristr(const char *instr, const char *str);
-	KS_DECLARE(int) ks_toupper(int c);
-	KS_DECLARE(int) ks_tolower(int c);
-    KS_DECLARE(char *) ks_copy_string(char *from_str, const char *to_str, ks_size_t from_str_len);
-	KS_DECLARE(int) ks_snprintf(char *buffer, size_t count, const char *fmt, ...);
-	KS_DECLARE(unsigned int) ks_separate_string_string(char *buf, const char *delim, char **array, unsigned int arraylen);
-    KS_DECLARE(int) ks_cpu_count(void);
+KS_DECLARE(size_t) ks_url_encode(const char *url, char *buf, size_t len);
+KS_DECLARE(char *) ks_url_decode(char *s);
+KS_DECLARE(const char *) ks_stristr(const char *instr, const char *str);
+KS_DECLARE(int) ks_toupper(int c);
+KS_DECLARE(int) ks_tolower(int c);
+KS_DECLARE(char *) ks_copy_string(char *from_str, const char *to_str, ks_size_t from_str_len);
+KS_DECLARE(int) ks_snprintf(char *buffer, size_t count, const char *fmt, ...);
+KS_DECLARE(unsigned int) ks_separate_string_string(char *buf, const char *delim, char **array, unsigned int arraylen);
+KS_DECLARE(int) ks_cpu_count(void);
 	static __inline__ int ks_safe_strcasecmp(const char *s1, const char *s2) {
 		if (!(s1 && s2)) {
 			return 1;

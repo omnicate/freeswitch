@@ -33,6 +33,43 @@
 
 #include <ks.h>
 
+static ks_pool_t *pool = NULL;
+
+KS_DECLARE(ks_status_t) ks_global_set_cleanup(ks_pool_cleanup_fn_t fn, void *arg)
+{
+	return ks_pool_set_cleanup(ks_global_pool(), NULL, arg, 0, fn);
+}
+	
+KS_DECLARE(ks_status_t) ks_init(void)
+{
+	ks_global_pool();
+	return KS_STATUS_SUCCESS;
+}
+
+KS_DECLARE(ks_status_t) ks_shutdown(void)
+{
+	ks_status_t status = KS_STATUS_SUCCESS;
+	if (!pool) {
+		status = ks_pool_close(&pool);
+	}
+	
+	return status;
+}
+
+KS_DECLARE(ks_pool_t *) ks_global_pool(void)
+{
+
+	ks_status_t status;
+
+	if (!pool) {
+		if ((status = ks_pool_open(&pool)) != KS_STATUS_SUCCESS) {
+			abort();
+		}
+	}
+
+	return pool;
+}
+
 KS_ENUM_NAMES(STATUS_NAMES, STATUS_STRINGS)
 KS_STR2ENUM(ks_str2ks_status, ks_status2str, ks_status_t, STATUS_NAMES, KS_STATUS_COUNT)
 
