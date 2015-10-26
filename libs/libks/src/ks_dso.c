@@ -33,20 +33,31 @@ KS_DECLARE(ks_status_t) ks_dso_destroy(ks_dso_lib_t *lib) {
 
 KS_DECLARE(ks_dso_lib_t) ks_dso_open(const char *path, char **err) {
     HINSTANCE lib;
-	
-	lib = LoadLibraryEx(path, NULL, 0);
+#ifdef UNICODE
+	size_t len = strlen(path) + 1;
+	wchar_t *wpath = malloc(len);
+
+	size_t converted;
+	mbstowcs_s(&converted, wpath, len, path, _TRUNCATE);
+#else
+	char * wpath = path;
+#endif
+	lib = LoadLibraryEx(wpath, NULL, 0);
 
 	if (!lib) {
-		LoadLibraryEx(path, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
+		LoadLibraryEx(wpath, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
 	}
 
 	if (!lib) {
 		DWORD error = GetLastError();
 		char tmp[80];
-		sprintf(tmp, "dll open error [%ul]\n", error);
+		sprintf(tmp, "dll open error [%lu]\n", error);
 		*err = strdup(tmp);
 	}
 
+#ifdef UNICODE
+	free(wpath);
+#endif
 	return lib;
 }
 
@@ -55,7 +66,7 @@ KS_DECLARE(void*) ks_dso_func_sym(ks_dso_lib_t lib, const char *sym, char **err)
 	if (!func) {
 		DWORD error = GetLastError();
 		char tmp[80];
-		sprintf(tmp, "dll sym error [%ul]\n", error);
+		sprintf(tmp, "dll sym error [%lu]\n", error);
 		*err = strdup(tmp);
 	}
 	return (void *)(intptr_t)func; // this should really be addr - ks_dso_func_data

@@ -44,7 +44,7 @@
 
 #ifdef _MSC_VER
 #define FD_SETSIZE 8192
-#define KS_USE_SELECT
+//#define KS_USE_SELECT
 #else
 #define KS_USE_POLL
 #endif
@@ -52,7 +52,7 @@
 #include <ks.h>
 
 #ifndef WIN32
-
+#define closesocket(s) close(s)
 #else /* WIN32 */
 
 #pragma warning (disable:6386)
@@ -179,7 +179,7 @@ KS_DECLARE(ks_status_t) ks_socket_close(ks_socket_t *sock)
 	ks_assert(sock);
 
 	if (*sock != KS_SOCK_INVALID) {
-		close(*sock);
+		closesocket(*sock);
 		*sock = KS_SOCK_INVALID;
 		return KS_STATUS_SUCCESS;
 	}
@@ -796,7 +796,11 @@ KS_DECLARE(ks_status_t) ks_socket_send(ks_socket_t sock, void *data, ks_size_t *
 	ks_status_t status = KS_STATUS_FAIL;
 
 	do {
+#ifdef WIN32
+		r = send(sock, data, (int)*datalen, 0);
+#else
 		r = send(sock, data, *datalen, 0);
+#endif
 	} while (r == -1 && ks_errno_is_interupt(ks_errno()));
 
 	if (r > 0) {
@@ -818,7 +822,11 @@ KS_DECLARE(ks_status_t) ks_socket_recv(ks_socket_t sock, void *data, ks_size_t *
 	ks_status_t status = KS_STATUS_FAIL;
 
 	do {
+#ifdef WIN32
+		r = recv(sock, data, (int)*datalen, 0);
+#else
 		r = recv(sock, data, *datalen, 0);
+#endif
 	} while (r == -1 && ks_errno_is_interupt(ks_errno()));
 
 	if (r > 0) {
@@ -852,7 +860,11 @@ KS_DECLARE(ks_status_t) ks_socket_sendto(ks_socket_t sock, void *data, ks_size_t
 	}
 	
 	do {
+#ifdef WIN32
+		r = sendto(sock, data, (int)*datalen, 0, sockaddr, socksize);
+#else
 		r = sendto(sock, data, *datalen, 0, sockaddr, socksize);
+#endif
 	} while (r == -1 && ks_errno_is_interupt(ks_errno()));
 
 	if (r > 0) {
@@ -887,7 +899,11 @@ KS_DECLARE(ks_status_t) ks_socket_recvfrom(ks_socket_t sock, void *data, ks_size
 	}
 
 	do {
+#ifdef WIN32
+		r = recvfrom(sock, data, (int)*datalen, 0, sockaddr, &alen);
+#else
 		r = recvfrom(sock, data, *datalen, 0, sockaddr, &alen);
+#endif
 	} while (r == -1 && ks_errno_is_interupt(ks_errno()));
 
 	if (r > 0) {

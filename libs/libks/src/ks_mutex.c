@@ -383,7 +383,7 @@ KS_DECLARE(ks_status_t) ks_cond_wait(ks_cond_t *cond)
 KS_DECLARE(ks_status_t) ks_cond_timedwait(ks_cond_t *cond, ks_time_t ms)
 {
 #ifdef WIN32
-	if(!SleepConditionVariableCS(&cond->cond, &cond->mutex->mutex, ms)) {
+	if(!SleepConditionVariableCS(&cond->cond, &cond->mutex->mutex, (DWORD)ms)) {
 		if (GetLastError() == ERROR_TIMEOUT) {
 			return KS_STATUS_TIMEOUT;
 		} else {
@@ -412,13 +412,13 @@ KS_DECLARE(ks_status_t) ks_cond_destroy(ks_cond_t **cond)
 {
 	ks_cond_t *condp = *cond;
 
-	*cond = NULL;
-
 	if (!condp) {
 		return KS_STATUS_FAIL;
 	}
 
-	return ks_pool_safe_free(condp->pool, cond);
+	*cond = NULL;
+
+	return ks_pool_free(condp->pool, condp);
 }
 
 
@@ -436,7 +436,9 @@ struct ks_rwl {
 
 static void ks_rwl_cleanup(ks_pool_t *mpool, void *ptr, void *arg, int type, ks_pool_cleanup_action_t action, ks_pool_cleanup_type_t ctype)
 {
+#ifndef WIN32
 	ks_rwl_t *rwlock = (ks_rwl_t *) ptr;
+#endif
 
 	switch(action) {
 	case KS_MPCL_ANNOUNCE:
@@ -474,9 +476,6 @@ KS_DECLARE(ks_status_t) ks_rwl_create(ks_rwl_t **rwlock, ks_pool_t *pool)
 	}
 
 	InitializeSRWLock(&check->rwlock);
-	if (!check->rwlock) {
-		goto done;
-	}
 #else
 	if ((pthread_rwlock_init(&check->rwlock, NULL))) {
 		goto done;
@@ -493,7 +492,7 @@ KS_DECLARE(ks_status_t) ks_rwl_create(ks_rwl_t **rwlock, ks_pool_t *pool)
 KS_DECLARE(ks_status_t) ks_rwl_read_lock(ks_rwl_t *rwlock)
 {
 #ifdef WIN32
-	int count = (intptr_t)ks_hash_remove(rwlock->read_lock_list, (void *)(void *)(intptr_t)ks_thread_self());
+	int count = (int)(intptr_t)ks_hash_remove(rwlock->read_lock_list, (void *)(intptr_t)ks_thread_self());
 
 	if (count) {
 		ks_hash_insert(rwlock->read_lock_list, (void *)(intptr_t)ks_thread_self(), (void *)(intptr_t)++count);
@@ -536,7 +535,7 @@ KS_DECLARE(ks_status_t) ks_rwl_write_lock(ks_rwl_t *rwlock)
 KS_DECLARE(ks_status_t) ks_rwl_try_read_lock(ks_rwl_t *rwlock)
 {
 #ifdef WIN32
-	int count = (intptr_t)ks_hash_remove(rwlock->read_lock_list, (void *)(intptr_t)ks_thread_self());
+	int count = (int)(intptr_t)ks_hash_remove(rwlock->read_lock_list, (void *)(intptr_t)ks_thread_self());
 
 	if (count) {
 		ks_hash_insert(rwlock->read_lock_list, (void *)(intptr_t)ks_thread_self(), (void *)(intptr_t)++count);
@@ -586,7 +585,7 @@ KS_DECLARE(ks_status_t) ks_rwl_try_write_lock(ks_rwl_t *rwlock)
 KS_DECLARE(ks_status_t) ks_rwl_read_unlock(ks_rwl_t *rwlock)
 {
 #ifdef WIN32
-	int count = (intptr_t)ks_hash_remove(rwlock->read_lock_list, (void *)(intptr_t)ks_thread_self());
+	int count = (int)(intptr_t)ks_hash_remove(rwlock->read_lock_list, (void *)(intptr_t)ks_thread_self());
 
 	if (count > 1) {
 		ks_hash_insert(rwlock->read_lock_list, (void *)(intptr_t)ks_thread_self(), (void *)(intptr_t)--count);
@@ -625,13 +624,14 @@ KS_DECLARE(ks_status_t) ks_rwl_destroy(ks_rwl_t **rwlock)
 {
 	ks_rwl_t *rwlockp = *rwlock;
 
-	*rwlock = NULL;
 
 	if (!rwlockp) {
 		return KS_STATUS_FAIL;
 	}
 
-	return ks_pool_safe_free(rwlockp->pool, rwlockp);
+	*rwlock = NULL;
+
+	return ks_pool_free(rwlockp->pool, rwlockp);
 }
 
 

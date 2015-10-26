@@ -452,7 +452,7 @@ KS_DECLARE(const char *) ks_pool_strerror(const ks_status_t error);
 
 KS_DECLARE(ks_status_t) ks_pool_set_cleanup(ks_pool_t *mp_p, void *ptr, void *arg, int type, ks_pool_cleanup_fn_t fn);
 
-#define ks_pool_safe_free(_p, _a) ks_pool_free(_p, _a); _a = NULL
+#define ks_pool_safe_free(_p, _a) ks_pool_free(_p, _a); (_a) = NULL
 
 /*<<<<<<<<<<   This is end of the auto-generated output from fillproto. */
 

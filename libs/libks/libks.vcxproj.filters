@@ -42,12 +42,6 @@
     <ClCompile Include="src\simclist.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="src\table.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="src\table_util.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="src\win\mman.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -55,6 +49,21 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="src\ks_thread.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ks_dso.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ks_hash.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ks_printf.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ks_q.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\ks_time.c">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

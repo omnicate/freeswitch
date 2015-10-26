@@ -230,7 +230,7 @@ KS_DECLARE(ks_status_t) ks_hash_read_lock(ks_hash_t *h);
 KS_DECLARE(ks_status_t) ks_hash_read_unlock(ks_hash_t *h);
 
 
-static inline uint32_t ks_hash_default_int64(void *ky)
+static __inline uint32_t ks_hash_default_int64(void *ky)
 {
 	int64_t key = *((int64_t *)ky);
 	key = (~key) + (key << 18);
@@ -242,12 +242,12 @@ static inline uint32_t ks_hash_default_int64(void *ky)
 	return (uint32_t) key;
 }
 
-static inline int ks_hash_equalkeys_int64(void *k1, void *k2)
+static __inline int ks_hash_equalkeys_int64(void *k1, void *k2)
 {
     return *(uint64_t *)k1 == *(uint64_t *)k2;
 }
 
-static inline uint32_t ks_hash_default_int(void *ky) {
+static __inline uint32_t ks_hash_default_int(void *ky) {
 	uint32_t x = *((uint32_t *)ky);
 	x = ((x >> 16) ^ x) * 0x45d9f3b;
 	x = ((x >> 16) ^ x) * 0x45d9f3b;
@@ -255,7 +255,7 @@ static inline uint32_t ks_hash_default_int(void *ky) {
 	return x;
 }
 
-static inline int ks_hash_equalkeys_int(void *k1, void *k2)
+static __inline int ks_hash_equalkeys_int(void *k1, void *k2)
 {
     return *(uint32_t *)k1 == *(uint32_t *)k2;
 }
@@ -263,7 +263,7 @@ static inline int ks_hash_equalkeys_int(void *k1, void *k2)
 }
 #endif
 
-static inline uint32_t ks_hash_default_ptr(void *ky)
+static __inline uint32_t ks_hash_default_ptr(void *ky)
 {
 #ifdef KS_64BIT
 	return ks_hash_default_int64(ky);
@@ -271,7 +271,7 @@ static inline uint32_t ks_hash_default_ptr(void *ky)
 	return ks_hash_default_int(ky);
 }
 
-static inline int ks_hash_equalkeys_ptr(void *k1, void *k2)
+static __inline int ks_hash_equalkeys_ptr(void *k1, void *k2)
 {
 #ifdef KS_64BIT
 	return ks_hash_equalkeys_int64(k1, k2);
@@ -280,17 +280,17 @@ static inline int ks_hash_equalkeys_ptr(void *k1, void *k2)
 }
 
 
-static inline int ks_hash_equalkeys(void *k1, void *k2)
+static __inline int ks_hash_equalkeys(void *k1, void *k2)
 {
     return strcmp((char *) k1, (char *) k2) ? 0 : 1;
 }
 
-static inline int ks_hash_equalkeys_ci(void *k1, void *k2)
+static __inline int ks_hash_equalkeys_ci(void *k1, void *k2)
 {
     return strcasecmp((char *) k1, (char *) k2) ? 0 : 1;
 }
 
-static inline uint32_t ks_hash_default(void *ky)
+static __inline uint32_t ks_hash_default(void *ky)
 {
 	unsigned char *str = (unsigned char *) ky;
 	uint32_t hash = 0;
@@ -304,7 +304,7 @@ static inline uint32_t ks_hash_default(void *ky)
     return hash;
 }
 
-static inline uint32_t ks_hash_default_ci(void *ky)
+static __inline uint32_t ks_hash_default_ci(void *ky)
 {
 	unsigned char *str = (unsigned char *) ky;
 	uint32_t hash = 0;

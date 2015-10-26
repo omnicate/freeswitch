@@ -70,7 +70,12 @@ KS_BEGIN_EXTERN_C
 #include <float.h>
 #include <limits.h>
 #include <sys/types.h>
-#ifndef __WINDOWS__
+
+#ifdef __WINDOWS__
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <windows.h>
+#else
 #include <sys/time.h>
 #include <sys/select.h>
 #include <netinet/tcp.h>
@@ -87,8 +92,11 @@ KS_BEGIN_EXTERN_C
 	
 #ifdef _MSC_VER
 
-#include <io.h>
-
+/*#include <io.h>
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <Synchapi.h>
+*/
 #ifndef open
 #define open _open
 #endif
@@ -147,8 +155,6 @@ KS_BEGIN_EXTERN_C
 #endif
 
 #ifdef __WINDOWS__
-#include <winsock2.h>
-#include <windows.h>
 	typedef SOCKET ks_socket_t;
 	typedef unsigned __int64 uint64_t;
 	typedef unsigned __int32 uint32_t;
@@ -160,6 +166,7 @@ KS_BEGIN_EXTERN_C
 	typedef __int8 int8_t;
 	typedef intptr_t ks_ssize_t;
 	typedef int ks_filehandle_t;
+
 #define KS_SOCK_INVALID INVALID_SOCKET
 #define strerror_r(num, buf, size) strerror_s(buf, size, num)
 #else

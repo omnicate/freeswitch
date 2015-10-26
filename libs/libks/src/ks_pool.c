@@ -2054,13 +2054,13 @@ KS_DECLARE(const char *) ks_pool_strerror(const ks_status_t error)
 KS_DECLARE(char *) ks_pstrdup(ks_pool_t *pool, const char *str)
 {
     char *result;
-    size_t len;
+    unsigned long len;
 
     if (!str) {
         return NULL;
     }
 
-    len = strlen(str) + 1;
+    len = (unsigned long)strlen(str) + 1;
     result = ks_pool_alloc(pool, len);
     memcpy(result, str, len);
 
@@ -2082,7 +2082,7 @@ KS_DECLARE(char *) ks_pstrndup(ks_pool_t *pool, const char *str, size_t len)
         len = end - str;
 	}
 
-    result = ks_pool_alloc(pool, len + 1);
+    result = ks_pool_alloc(pool, (unsigned long)(len + 1));
     memcpy(result, str, len);
     result[len] = '\0';
 
@@ -2097,7 +2097,7 @@ KS_DECLARE(char *) ks_pstrmemdup(ks_pool_t *pool, const char *str, size_t len)
         return NULL;
     }
 
-    result = ks_pool_alloc(pool, len + 1);
+    result = ks_pool_alloc(pool, (unsigned long)(len + 1));
     memcpy(result, str, len);
     result[len] = '\0';
 
@@ -2112,7 +2112,7 @@ KS_DECLARE(void *) ks_pmemdup(ks_pool_t *pool, const void *buf, size_t len)
 		return NULL;
 	}
 
-    result = ks_pool_alloc(pool, len);
+    result = ks_pool_alloc(pool, (unsigned long)len);
     memcpy(result, buf, len);
 
     return result;
@@ -2139,7 +2139,7 @@ KS_DECLARE(char *) ks_pstrcat(ks_pool_t *pool, ...)
 
     va_end(ap);
 
-    result = (char *) ks_pool_alloc(pool, len + 1);
+    result = (char *) ks_pool_alloc(pool, (unsigned long)(len + 1));
     endp = result;
 
     va_start(ap, pool);

@@ -100,7 +100,7 @@ atoi(expr))) ? 1 : 0
 !strcasecmp(expr, "disallow") ||\
 !atoi(expr))) ? 1 : 0
 
-	typedef struct ks_config ks_config_t;
+typedef struct ks_config ks_config_t;
 
 /*! \brief A simple file handle representing an open configuration file **/
 	struct ks_config {

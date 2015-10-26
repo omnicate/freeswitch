@@ -609,7 +609,7 @@ KS_DECLARE(void) ks_hash_this_val(ks_hash_iterator_t *i, void *val)
 	}
 }
 
-KS_DECLARE(void) ks_hash_this(ks_hash_iterator_t *i, const void **key, ssize_t *klen, void **val)
+KS_DECLARE(void) ks_hash_this(ks_hash_iterator_t *i, const void **key, ks_ssize_t *klen, void **val)
 {
 	if (i->e) {
 		if (key) {

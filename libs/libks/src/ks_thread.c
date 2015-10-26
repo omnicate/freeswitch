@@ -165,10 +165,8 @@ KS_DECLARE(uint8_t) ks_thread_priority(ks_thread_t *thread) {
 		priority = 99;
 	} else if (pri >= THREAD_PRIORITY_ABOVE_NORMAL) {
 		priority = 50;
-	} else if (pri >= HREAD_PRIORITY_NORMAL) {
-		priority = 10;
 	} else {
-		priority = 1;
+		priority = 10;
 	}
 #else
 	int policy;

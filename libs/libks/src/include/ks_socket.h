@@ -46,17 +46,17 @@ KS_BEGIN_EXTERN_C
 
 #ifdef WIN32
 
-static inline int ks_errno(void)
+static __inline int ks_errno(void)
 {
 	return WSAGetLastError();
 }
 
-static inline int ks_errno_is_blocking(int errcode)
+static __inline int ks_errno_is_blocking(int errcode)
 {
-	return errcode == WSAEWOULDBLOCK || errcode == WSAEINPROGRESS || rrcode == 35 || errcode == 730035;
+	return errcode == WSAEWOULDBLOCK || errcode == WSAEINPROGRESS || errcode == 35 || errcode == 730035;
 }
 
-static inline int ks_errno_is_interupt(int errcode)
+static __inline int ks_errno_is_interupt(int errcode)
 {
 	return 0;
 }
@@ -80,7 +80,7 @@ static inline int ks_errno_is_interupt(int errcode)
 
 #endif
 
-static inline int ks_socket_valid(ks_socket_t s) {
+static __inline int ks_socket_valid(ks_socket_t s) {
 	return s != KS_SOCK_INVALID;
 }
 
@@ -91,7 +91,8 @@ KS_DECLARE(ks_status_t) ks_socket_recv(ks_socket_t sock, void *data, ks_size_t *
 KS_DECLARE(ks_status_t) ks_socket_sendto(ks_socket_t sock, void *data, ks_size_t *datalen, ks_sockaddr_t *addr);
 KS_DECLARE(ks_status_t) ks_socket_recvfrom(ks_socket_t sock, void *data, ks_size_t *datalen, ks_sockaddr_t *addr);
 
-KS_DECLARE(int) ks_poll(struct pollfd fds[], uint32_t nfds, int timeout);
+typedef struct pollfd *ks_ppollfd_t;
+KS_DECLARE(int) ks_poll(ks_ppollfd_t fds, uint32_t nfds, int timeout);
 KS_DECLARE(ks_status_t) ks_socket_option(ks_socket_t socket, int option_name, ks_bool_t enabled);
 KS_DECLARE(ks_status_t) ks_socket_sndbuf(ks_socket_t socket, int bufsize);
 KS_DECLARE(ks_status_t) ks_socket_rcvbuf(ks_socket_t socket, int bufsize);
