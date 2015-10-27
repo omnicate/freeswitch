@@ -650,7 +650,7 @@ KS_DECLARE(ks_status_t) ks_find_local_ip(char *buf, int len, int *mask, int fami
 	SOCKET tmp_socket;
 	SOCKADDR_STORAGE l_address;
 	int l_address_len;
-	struct addrinfo *address_info;
+	struct addrinfo *address_info = NULL;
 #else
 #ifdef __Darwin__
 	int ilen;

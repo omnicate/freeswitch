@@ -44,7 +44,7 @@ static int timer_init;
 static inline void win32_init_timers(void)
 {
 	OSVERSIONINFOEX version_info; /* Used to fetch current OS version from Windows */
-
+	InitializeCriticalSection(&timer_section);
 	EnterCriticalSection(&timer_section);
 
 	ZeroMemory(&version_info, sizeof(OSVERSIONINFOEX));
