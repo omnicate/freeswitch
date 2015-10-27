@@ -24,7 +24,7 @@ static int cpu_count = 0;
 static void *thread_priority(ks_thread_t *thread, void *data)
 {
 	while (thread->running) {
-		sleep(1);
+		ks_sleep(1000000);
 	}
 
 	return NULL;
@@ -146,7 +146,7 @@ static void *thread_test_function_cleanup(ks_thread_t *thread, void *data)
 	int d = (int)(intptr_t)data;
 
 	while (thread->running) {
-		sleep(1);
+		ks_sleep(1000000);
 	}
 
 	if ( d == 1 ) {
@@ -241,7 +241,7 @@ static void check_thread_priority(void)
 
 	status = ks_thread_create_ex(&thread_p, thread_priority, d, KS_THREAD_FLAG_DETATCHED, KS_THREAD_DEFAULT_STACK, KS_PRI_IMPORTANT, pool);
 	ok( status == KS_STATUS_SUCCESS );
-	sleep(1);
+	ks_sleep(1000000);
 	ok( ks_thread_priority(thread_p) == KS_PRI_IMPORTANT );
 
 	ks_pool_free(pool, thread_p);
@@ -336,7 +336,7 @@ int main(int argc, char **argv)
 	join_threads();
 	check_atatched();
 	create_threads_detatched();
-	while (threadscount != cpu_count) sleep(1);
+	while (threadscount != cpu_count) ks_sleep(1000000);
 	check_detached();
 	create_threads_cleanup();
 	check_pool_close();
