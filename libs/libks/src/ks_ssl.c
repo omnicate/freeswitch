@@ -33,121 +33,78 @@
 
 #include <ks.h>
 
-static ks_pool_t *pool = NULL;
+static ks_mutex_t **ssl_mutexes;
+static ks_pool_t *ssl_pool = NULL;
+static int ssl_count = 0;
+static int is_init = 0;
 
-KS_DECLARE(ks_status_t) ks_global_set_cleanup(ks_pool_cleanup_fn_t fn, void *arg)
+static inline void ks_ssl_lock_callback(int mode, int type, char *file, int line)
 {
-	return ks_pool_set_cleanup(ks_global_pool(), NULL, arg, 0, fn);
+	if (mode & CRYPTO_LOCK) {
+		ks_mutex_lock(ssl_mutexes[type]);
+	}
+	else {
+		ks_mutex_unlock(ssl_mutexes[type]);
+	}
 }
+
+static inline unsigned long ks_ssl_thread_id(void)
+{
+	return (unsigned long) ks_thread_self();
+}
+
+KS_DECLARE(void) ks_ssl_init_ssl_locks(void)
+{
+
+	int i, num;
 	
-KS_DECLARE(ks_status_t) ks_init(void)
-{
+	if (is_init) return;
 
-	ks_ssl_init_ssl_locks();
-	ks_global_pool();
-	return KS_STATUS_SUCCESS;
-}
+	is_init = 1;
 
-KS_DECLARE(ks_status_t) ks_shutdown(void)
-{
-	ks_status_t status = KS_STATUS_SUCCESS;
+	SSL_library_init();
 
-	ks_ssl_destroy_ssl_locks();
+	if (ssl_count == 0) {
+		num = CRYPTO_num_locks();
+		
+		ssl_mutexes = OPENSSL_malloc(CRYPTO_num_locks() * sizeof(ks_mutex_t*));
+		ks_assert(ssl_mutexes != NULL);
 
-	if (pool) {
-		status = ks_pool_close(&pool);
-	}
-	
-	return status;
-}
+		ks_pool_open(&ssl_pool);
 
-KS_DECLARE(ks_pool_t *) ks_global_pool(void)
-{
-
-	ks_status_t status;
-
-	if (!pool) {
-		if ((status = ks_pool_open(&pool)) != KS_STATUS_SUCCESS) {
-			abort();
+		for (i = 0; i < num; i++) {
+			ks_mutex_create(&(ssl_mutexes[i]), KS_MUTEX_FLAG_DEFAULT, ssl_pool);
+			ks_assert(ssl_mutexes[i] != NULL);
 		}
+
+		CRYPTO_set_id_callback(ks_ssl_thread_id);
+		CRYPTO_set_locking_callback((void (*)(int, int, const char*, int))ks_ssl_lock_callback);
 	}
 
-	return pool;
+	ssl_count++;
 }
 
-KS_ENUM_NAMES(STATUS_NAMES, STATUS_STRINGS)
-KS_STR2ENUM(ks_str2ks_status, ks_status2str, ks_status_t, STATUS_NAMES, KS_STATUS_COUNT)
-
-KS_DECLARE(size_t) ks_url_encode(const char *url, char *buf, size_t len)
+KS_DECLARE(void) ks_ssl_destroy_ssl_locks(void)
 {
-	const char *p;
-	size_t x = 0;
-	const char urlunsafe[] = "\r\n \"#%&+:;<=>?@[\\]^`{|}";
-	const char hex[] = "0123456789ABCDEF";
+	int i;
 
-	if (!buf) {
-		return 0;
-	}
+	if (!is_init) return;
 
-	if (!url) {
-		return 0;
-	}
+	is_init = 0;
 
-	len--;
-
-	for (p = url; *p; p++) {
-		if (x >= len) {
-			break;
-		}
-		if (*p < ' ' || *p > '~' || strchr(urlunsafe, *p)) {
-			if ((x + 3) >= len) {
-				break;
+	if (ssl_count == 1) {
+		CRYPTO_set_locking_callback(NULL);
+		for (i = 0; i < CRYPTO_num_locks(); i++) {
+			if (ssl_mutexes[i]) {
+				ks_mutex_destroy(&ssl_mutexes[i]);
 			}
-			buf[x++] = '%';
-			buf[x++] = hex[*p >> 4];
-			buf[x++] = hex[*p & 0x0f];
-		} else {
-			buf[x++] = *p;
 		}
-	}
-	buf[x] = '\0';
 
-	return x;
+		OPENSSL_free(ssl_mutexes);
+		ssl_count--;
+	}
 }
 
-KS_DECLARE(char *) ks_url_decode(char *s)
-{
-	char *o;
-	unsigned int tmp;
-
-	for (o = s; *s; s++, o++) {
-		if (*s == '%' && strlen(s) > 2 && sscanf(s + 1, "%2x", &tmp) == 1) {
-			*o = (char) tmp;
-			s += 2;
-		} else {
-			*o = *s;
-		}
-	}
-	*o = '\0';
-	return s;
-}
-
-KS_DECLARE(int) ks_cpu_count(void)
-{
-	int cpu_count;
-
-#ifndef WIN32
-	cpu_count = sysconf (_SC_NPROCESSORS_ONLN);
-#else
-	{
-		SYSTEM_INFO sysinfo;
-		GetSystemInfo( &sysinfo );
-		cpu_count = sysinfo.dwNumberOfProcessors;
-	}
-#endif
-	
-	return cpu_count;
-}
 
 /* For Emacs:
  * Local Variables:

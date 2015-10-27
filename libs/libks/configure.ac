@@ -195,6 +195,17 @@ AC_DEFINE(HAVE_PTHREAD_SETSCHEDPARAM, 1, [Define if you have pthread_setschedpar
 AM_CFLAGS="${AM_CFLAGS} -DHAVE_PTHREAD_SETSCHEDPARAM=1"
 ])
 
+
+SAC_OPENSSL
+
+if test x$HAVE_OPENSSL = x1; then
+   	openssl_CFLAGS="$openssl_CFLAGS -DHAVE_OPENSSL";
+	AM_CFLAGS="${AM_CFLAGS} -DHAVE_OPENSSL"
+else
+	AC_MSG_ERROR([OpenSSL and associated developement headers required])
+fi
+
+
 #  Enable clang address sanitizer bit build
 AC_ARG_ENABLE(address_sanitizer,
   [AC_HELP_STRING([--enable-address-sanitizer],[build with address sanitizer])],

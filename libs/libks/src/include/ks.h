@@ -120,7 +120,9 @@ KS_DECLARE(int) ks_cpu_count(void);
 #include "ks_socket.h"
 #include "ks_dso.h"
 #include "ks_dht.h"
+#include "kws.h"
 #include "simclist.h"
+#include "ks_ssl.h"
 
 KS_END_EXTERN_C
 

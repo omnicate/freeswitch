@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007-2015, Anthony Minessale II
+ * Copyright (c) 2007-2014, Anthony Minessale II
  * All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
@@ -31,26 +31,69 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef _KS_TIME_H_
-#define _KS_TIME_H_
+#ifndef _KWS_H
+#define _KWS_H
 
-#include "ks.h"
+#define WEBSOCKET_GUID "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+#define B64BUFFLEN 1024
+
+#include <openssl/ssl.h>
 
 KS_BEGIN_EXTERN_C
 
-#define KS_USEC_PER_SEC 1000000
-#define ks_time_sec(time) ((time) / KS_USEC_PER_SEC)
-#define ks_time_usec(time) ((time) % KS_USEC_PER_SEC)
-#define ks_time_nsec(time) (((time) % KS_USEC_PER_SEC) * 1000)
-#define ks_sleep_ms(_t) ks_sleep(_t * 1000)
+typedef enum {
+	WS_NONE = 0,
+	WS_NORMAL = 1000,
+	WS_PROTO_ERR = 1002,
+	WS_DATA_TOO_BIG = 1009
+} kws_cause_t;
 
-KS_DECLARE(ks_time_t) ks_time_now(void);
-KS_DECLARE(ks_time_t) ks_time_now_sec(void);
-KS_DECLARE(void) ks_sleep(ks_time_t microsec);
+typedef enum {
+	WSOC_CONTINUATION = 0x0,
+	WSOC_TEXT = 0x1,
+	WSOC_BINARY = 0x2,
+	WSOC_CLOSE = 0x8,
+	WSOC_PING = 0x9,
+	WSOC_PONG = 0xA
+} kws_opcode_t;
+
+typedef enum {
+	KWS_CLIENT,
+	KWS_SERVER
+} kws_type_t;
+
+typedef enum {
+	KWS_CLOSE_SOCK,
+	KWS_BLOCK,
+	KWS_STAY_OPEN
+} kws_flag_t;
+
+struct kws_s;
+typedef struct kws_s kws_t;
+
+
+KS_DECLARE(ks_ssize_t) kws_read_frame(kws_t *kws, kws_opcode_t *oc, uint8_t **data); 
+KS_DECLARE(ks_ssize_t) kws_write_frame(kws_t *kws, kws_opcode_t oc, void *data, ks_size_t bytes);
+KS_DECLARE(ks_ssize_t) kws_raw_read(kws_t *kws, void *data, ks_size_t bytes, int block);
+KS_DECLARE(ks_ssize_t) kws_raw_write(kws_t *kws, void *data, ks_size_t bytes);
+KS_DECLARE(ks_status_t) kws_init(kws_t **kwsP, ks_socket_t sock, SSL_CTX *ssl_ctx, const char *client_data, kws_flag_t flags, ks_pool_t *pool);
+KS_DECLARE(ks_ssize_t) kws_close(kws_t *kws, int16_t reason);
+KS_DECLARE(void) kws_destroy(kws_t **kwsP);
+KS_DECLARE(ks_status_t) kws_get_buffer(kws_t *kws, char **bufP, ks_size_t *buflen);
+
+
+
+#ifndef _MSC_VER
+static inline uint64_t get_unaligned_uint64(const void *p)
+{   
+    const struct { uint64_t d; } __attribute__((packed)) *pp = p;
+    return pp->d;
+}
+#endif
 
 KS_END_EXTERN_C
 
-#endif							/* defined(_KS_TIME_H_) */
+#endif /* defined(_KWS_H_) */
 
 /* For Emacs:
  * Local Variables:
