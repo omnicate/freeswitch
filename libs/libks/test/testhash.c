@@ -56,7 +56,7 @@ static void *test2_thread(ks_thread_t *thread, void *data)
 			
 			ks_hash_this(itt, &key, NULL, &val);
 			
-			printf("%p ITT %s=%s\n", (void *)pthread_self(), (char *)key, (char *)val);
+			printf("%p ITT %s=%s\n", (void *)(intptr_t)ks_thread_self(), (char *)key, (char *)val);
 		}
 		ks_sleep(100000);
 	}
@@ -123,7 +123,7 @@ int test2(void)
 int main(int argc, char **argv)
 {
 
-	srand(time(NULL) - getpid());
+	srand((unsigned)(time(NULL) - (unsigned)(intptr_t)ks_thread_self()));
 
 	plan(2);
 

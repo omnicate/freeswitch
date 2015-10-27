@@ -91,9 +91,10 @@ KS_BEGIN_EXTERN_C
 #endif
 	
 #ifdef _MSC_VER
+#pragma comment(lib, "Ws2_32.lib")
 
-/*#include <io.h>
-#include <winsock2.h>
+#include <io.h>
+/*#include <winsock2.h>
 #include <ws2tcpip.h>
 #include <Synchapi.h>
 */
@@ -103,6 +104,14 @@ KS_BEGIN_EXTERN_C
 
 #ifndef close
 #define close _close
+#endif
+
+#ifndef read
+#define read _read
+#endif
+
+#ifndef write
+#define write _write
 #endif
 
 #ifndef __inline__

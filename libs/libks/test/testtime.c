@@ -15,7 +15,7 @@ int main(int argc, char **argv)
 
 	now = ks_time_now();
 
-	diff = (now - then) / 1000;
+	diff = (int)((now - then) / 1000);
 	printf("DIFF %ums\n", diff);
 	
 
@@ -29,7 +29,7 @@ int main(int argc, char **argv)
 
 	now = ks_time_now();
 
-	diff = (now - then) / 1000;
+	diff = (int)((now - then) / 1000);
 	printf("DIFF %ums\n", diff);
 
 #if defined(__APPLE__)

@@ -8,7 +8,7 @@ static int tcp_port = 8090;
 static int udp_cl_port = 9090;
 static int udp_sv_port = 9091;
 
-static char MSG[] = "TESTING................................................................................/TESTING";
+static char __MSG[] = "TESTING................................................................................/TESTING";
 
 struct tcp_data {
 	ks_socket_t sock;
@@ -24,7 +24,7 @@ void server_callback(ks_socket_t server_sock, ks_socket_t client_sock, ks_sockad
 	ks_status_t status;
 	ks_size_t bytes;
 
-	printf("TCP SERVER SOCK %d connection from %s:%u\n", server_sock, addr->host, addr->port);
+	printf("TCP SERVER SOCK %d connection from %s:%u\n", (int)server_sock, addr->host, addr->port);
 
 	do {
 		bytes = sizeof(buf);;
@@ -33,12 +33,12 @@ void server_callback(ks_socket_t server_sock, ks_socket_t client_sock, ks_sockad
 			printf("TCP SERVER BAIL %s\n", strerror(ks_errno()));
 			break;
 		}
-		printf("TCP SERVER READ %ld bytes [%s]\n", bytes, buf);
-	} while(zstr_buf(buf) || strcmp(buf, MSG));
+		printf("TCP SERVER READ %ld bytes [%s]\n", (long)bytes, buf);
+	} while(zstr_buf(buf) || strcmp(buf, __MSG));
 
 	bytes = strlen(buf);
 	status = ks_socket_send(client_sock, buf, &bytes);
-	printf("TCP SERVER WRITE %ld bytes\n", bytes);
+	printf("TCP SERVER WRITE %ld bytes\n", (long)bytes);
 
 	ks_socket_close(&client_sock);
 
@@ -105,12 +105,12 @@ static int test_tcp(char *ip)
 	
 	int x;
 
-	printf("TCP CLIENT SOCKET %d %s %d\n", cl_sock, addr.host, addr.port);
+	printf("TCP CLIENT SOCKET %d %s %d\n", (int)cl_sock, addr.host, addr.port);
 
-	x = write(cl_sock, MSG, strlen(MSG));
+	x = write((int)cl_sock, __MSG, (unsigned)strlen(__MSG));
 	printf("TCP CLIENT WRITE %d bytes\n", x);
 	
-	x = read(cl_sock, buf, sizeof(buf));
+	x = read((int)cl_sock, buf, sizeof(buf));
 	printf("TCP CLIENT READ %d bytes [%s]\n", x, buf);
 	
  end:
@@ -170,28 +170,28 @@ static void *udp_sock_server(ks_thread_t *thread, void *thread_data)
 
 	udp_data->ready = 1;
 
-	printf("UDP SERVER SOCKET %d %s %d\n", udp_data->sv_sock, addr.host, addr.port);
+	printf("UDP SERVER SOCKET %d %s %d\n", (int)(udp_data->sv_sock), addr.host, addr.port);
 	bytes = sizeof(buf);
 	if ((status = ks_socket_recvfrom(udp_data->sv_sock, buf, &bytes, &remote_addr)) != KS_STATUS_SUCCESS) {
 		printf("UDP SERVER RECVFROM ERR %s\n", strerror(ks_errno()));
 		goto end;
 	}
-	printf("UDP SERVER READ %ld bytes [%s]\n", bytes, buf);
+	printf("UDP SERVER READ %ld bytes [%s]\n", (long)bytes, buf);
 
-	if (strcmp(buf, MSG)) {
+	if (strcmp(buf, __MSG)) {
 		printf("INVALID MESSAGE\n");
 		goto end;
 	}
 
 	printf("UDP SERVER WAIT 2 seconds to test nonblocking sockets\n");
 	ks_sleep(2000000);
-	printf("UDP SERVER RESPOND TO %d %s %d\n", udp_data->sv_sock, remote_addr.host, remote_addr.port);
+	printf("UDP SERVER RESPOND TO %d %s %d\n", (int)(udp_data->sv_sock), remote_addr.host, remote_addr.port);
 	bytes = strlen(buf);
 	if ((status = ks_socket_sendto(udp_data->sv_sock, buf, &bytes, &remote_addr)) != KS_STATUS_SUCCESS) {
 		printf("UDP SERVER SENDTO ERR %s\n", strerror(ks_errno()));
 		goto end;
 	}
-	printf("UDP SERVER WRITE %ld bytes [%s]\n", bytes, buf);
+	printf("UDP SERVER WRITE %ld bytes [%s]\n", (long)bytes, buf);
 
 
  end:
@@ -247,15 +247,15 @@ static int test_udp(char *ip)
 		ks_sleep(10000);
 	}
 
-	printf("UDP CLIENT SOCKET %d %s %d -> %s %d\n", cl_sock, addr.host, addr.port, remote_addr.host, remote_addr.port);
+	printf("UDP CLIENT SOCKET %d %s %d -> %s %d\n", (int)cl_sock, addr.host, addr.port, remote_addr.host, remote_addr.port);
 
-	bytes = strlen(MSG);
-	if ((status = ks_socket_sendto(cl_sock, MSG, &bytes, &remote_addr)) != KS_STATUS_SUCCESS) {
+	bytes = strlen(__MSG);
+	if ((status = ks_socket_sendto(cl_sock, __MSG, &bytes, &remote_addr)) != KS_STATUS_SUCCESS) {
 		printf("UDP CLIENT SENDTO ERR %s\n", strerror(ks_errno()));
 		r = 0; goto end;
 	}
 	
-	printf("UDP CLIENT WRITE %ld bytes\n", bytes);
+	printf("UDP CLIENT WRITE %ld bytes\n", (long)bytes);
 	ks_socket_option(cl_sock, KS_SO_NONBLOCK, KS_TRUE);
 
 	sanity = 300;
@@ -270,7 +270,7 @@ static int test_udp(char *ip)
 			r = 0; goto end;
 		}
 	} while(status != KS_STATUS_SUCCESS);
-	printf("UDP CLIENT READ %ld bytes\n", bytes);
+	printf("UDP CLIENT READ %ld bytes\n", (long)bytes);
 	
  end:
 

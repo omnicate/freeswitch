@@ -107,14 +107,14 @@ static void *test2_thread(ks_thread_t *thread, void *data)
 	return (void *) (intptr_t)popped;
 }
 
-int qtest2(int ttl, int try, int loops)
+ks_size_t qtest2(int ttl, int try, int loops)
 {
 	ks_thread_t *threads[MAX];
 	ks_q_t *q;
 	ks_pool_t *pool;
 	int i;
 	struct test2_data t2 = { 0 };
-	int r;
+	ks_size_t r;
 	int dropped = 0;
 	int qlen = loops / 2;
 	int total_popped = 0;
@@ -193,7 +193,7 @@ int main(int argc, char **argv)
 	int runs = 1;
 	int i;
 
-	srand(time(NULL) - getpid());
+	srand((unsigned)(time(NULL) - (unsigned)(intptr_t)ks_thread_self()));
 
 	plan(4 * runs);
 
