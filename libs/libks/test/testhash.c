@@ -123,6 +123,7 @@ int test2(void)
 int main(int argc, char **argv)
 {
 
+	ks_init();
 	srand((unsigned)(time(NULL) - (unsigned)(intptr_t)ks_thread_self()));
 
 	plan(2);
@@ -131,6 +132,7 @@ int main(int argc, char **argv)
 	ok(test2());
 
 	done_testing();
+	ks_shutdown();
 
 	exit(0);
 }

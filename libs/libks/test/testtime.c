@@ -7,6 +7,8 @@ int main(int argc, char **argv)
 	int diff;
 	int i;
 
+	ks_init();
+
 	plan(2);
 
 	then = ks_time_now();
@@ -39,6 +41,6 @@ int main(int argc, char **argv)
 	ok( diff > 1950 && diff < 2050 );
 #endif
 	done_testing();
-
+	ks_shutdown();
 	exit(0);
 }

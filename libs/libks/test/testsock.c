@@ -296,6 +296,9 @@ static int test_udp(char *ip)
 int main(void)
 {
 	int have_v4 = 0, have_v6 = 0;
+
+	ks_init();
+
 	ks_find_local_ip(v4, sizeof(v4), &mask, AF_INET);
 	ks_find_local_ip(v6, sizeof(v6), NULL, AF_INET6);
 	
@@ -318,6 +321,7 @@ int main(void)
 		ok(test_udp(v6));
 	}
 
+	ks_shutdown();
 
 	return 0;
 }

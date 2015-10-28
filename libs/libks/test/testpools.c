@@ -46,6 +46,8 @@ int main(int argc, char **argv)
 	ks_status_t status;
 	struct foo *foo;
 
+	ks_init();
+
 	if (argc > 1) {
 		int tmp = atoi(argv[1]);
 
@@ -191,6 +193,8 @@ int main(int argc, char **argv)
 		fprintf(stderr, "CLOSE ERR: [%s]\n", ks_pool_strerror(err));
 		exit(255);
 	}
-	
+
+	ks_shutdown();
+
 	exit(0);
 }

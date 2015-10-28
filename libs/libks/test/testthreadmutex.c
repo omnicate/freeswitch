@@ -318,7 +318,7 @@ static void test_non_recursive_mutex(void)
 
 int main(int argc, char **argv)
 {
-
+	ks_init();
 	cpu_count = ks_cpu_count() * 4;
 
 	plan(21 + cpu_count * 6);
@@ -345,5 +345,6 @@ int main(int argc, char **argv)
 	check_cond();
 	
 	done_testing();
+	ks_shutdown();
 	exit(0);
 }

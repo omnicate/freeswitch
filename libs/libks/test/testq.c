@@ -193,6 +193,8 @@ int main(int argc, char **argv)
 	int runs = 1;
 	int i;
 
+	ks_init();
+
 	srand((unsigned)(time(NULL) - (unsigned)(intptr_t)ks_thread_self()));
 
 	plan(4 * runs);
@@ -211,6 +213,7 @@ int main(int argc, char **argv)
 	printf("TTL %d RUNS %d\n", ttl, runs);
 
 	done_testing();
+	ks_shutdown();
 
 	exit(0);
 }
