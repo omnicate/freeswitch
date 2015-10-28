@@ -4,7 +4,7 @@
 static char v4[48] = "";
 static char v6[48] = "";
 static int mask = 0;
-static int tcp_port = 8081;
+static int tcp_port = 8090;
 
 
 static char __MSG[] = "TESTING................................................................................/TESTING";
@@ -14,32 +14,44 @@ struct tcp_data {
 	ks_sockaddr_t addr;
 	int ready;
 	char *ip;
+	ks_pool_t *pool;
 };
 
 void server_callback(ks_socket_t server_sock, ks_socket_t client_sock, ks_sockaddr_t *addr, void *user_data)
 {
-	//struct tcp_data *tcp_data = (struct tcp_data *) user_data;
-	char buf[8192] = "";
-	ks_status_t status;
+	struct tcp_data *tcp_data = (struct tcp_data *) user_data;
 	ks_size_t bytes;
+	kws_t *kws = NULL;
+	kws_opcode_t oc;
+	uint8_t *data;
 
 	printf("WS SERVER SOCK %d connection from %s:%u\n", (int)server_sock, addr->host, addr->port);
-
+	
+	if (kws_init(&kws, client_sock, NULL, NULL, KWS_BLOCK, tcp_data->pool) != KS_STATUS_SUCCESS) {
+		printf("WS SERVER CREATE FAIL\n");
+		goto end;
+	}
+	
 	do {
-		bytes = sizeof(buf);;
-		status = ks_socket_recv(client_sock, buf, &bytes);
-		if (status != KS_STATUS_SUCCESS) {
+
+		bytes = kws_read_frame(kws, &oc, &data);
+
+		if (bytes <= 0) {
 			printf("WS SERVER BAIL %s\n", strerror(ks_errno()));
 			break;
 		}
-		printf("WS SERVER READ %ld bytes [%s]\n", (long)bytes, buf);
-	} while(zstr_buf(buf) || strcmp(buf, __MSG));
+		printf("WS SERVER READ %ld bytes [%s]\n", (long)bytes, (char *)data);
+	} while(zstr_buf((char *)data) || strcmp((char *)data, __MSG));
 
-	bytes = strlen(buf);
-	status = ks_socket_send(client_sock, buf, &bytes);
+	bytes = kws_write_frame(kws, WSOC_TEXT, (char *)data, strlen((char *)data));
+	
 	printf("WS SERVER WRITE %ld bytes\n", (long)bytes);
 
+ end:
+
 	ks_socket_close(&client_sock);
+
+	kws_destroy(&kws);
 
 	printf("WS SERVER COMPLETE\n");
 }
@@ -66,12 +78,13 @@ static int test_ws(char *ip, int ssl)
 	ks_sockaddr_t addr;
 	int family = AF_INET;
 	ks_socket_t cl_sock = KS_SOCK_INVALID;
-	char buf[8192] = "";
 	struct tcp_data tcp_data = { 0 };
 	int r = 1, sanity = 100;
 	kws_t *kws = NULL;
 
 	ks_pool_open(&pool);
+
+	tcp_data.pool = pool;
 
 	if (strchr(ip, ':')) {
 		family = AF_INET6;
@@ -103,31 +116,25 @@ static int test_ws(char *ip, int ssl)
 	ks_addr_set(&addr, ip, tcp_port, family);
 	cl_sock = ks_socket_connect(SOCK_STREAM, IPPROTO_TCP, &addr);
 	
-	int x;
-
 	printf("WS CLIENT SOCKET %d %s %d\n", (int)cl_sock, addr.host, addr.port);
 
-	kws_init(&kws, cl_sock, NULL, "/verto:tatooine.freeswitch.org:verto", KWS_BLOCK, pool);
+	if (kws_init(&kws, cl_sock, NULL, "/verto:tatooine.freeswitch.org:verto", KWS_BLOCK, pool) != KS_STATUS_SUCCESS) {
+		printf("WS CLIENT CREATE FAIL\n");
+		goto end;
+	}
 
-	char json_text[] = "{lame: 12}";
-	kws_write_frame(kws, WSOC_TEXT, json_text, strlen(json_text));
+	kws_write_frame(kws, WSOC_TEXT, __MSG, strlen(__MSG));
 
 	kws_opcode_t oc;
 	uint8_t *data;
 	ks_ssize_t bytes;
 
 	bytes = kws_read_frame(kws, &oc, &data);
-	printf("WTF [%ld][%s]\n", bytes, data);
-
-	sleep(10);
-
-	x = write((int)cl_sock, __MSG, (unsigned)strlen(__MSG));
-	printf("WS CLIENT WRITE %d bytes\n", x);
-	
-	x = read((int)cl_sock, buf, sizeof(buf));
-	printf("WS CLIENT READ %d bytes [%s]\n", x, buf);
+	printf("WS CLIENT READ %ld bytes [%s]\n", bytes, (char *)data);
 	
  end:
+
+	kws_destroy(&kws);
 
 	if (tcp_data.sock != KS_SOCK_INVALID) {
 		ks_socket_shutdown(tcp_data.sock, 2);

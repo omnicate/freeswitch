@@ -1108,7 +1108,7 @@ KS_DECLARE(ks_ssize_t) kws_write_frame(kws_t *kws, kws_opcode_t oc, void *data, 
 		hlen += 8;
 		
 		u64 = (uint64_t *) &hdr[2];
-		*u64 = htonl(bytes);
+		*u64 = hton64(bytes);
 	}
 
 	if (kws->write_buffer_len < (hlen + bytes + 1)) {
