@@ -106,6 +106,138 @@ KS_DECLARE(void) ks_ssl_destroy_ssl_locks(void)
 }
 
 
+
+static int mkcert(X509 **x509p, EVP_PKEY **pkeyp, int bits, int serial, int days);
+
+KS_DECLARE(int) ks_gen_cert(const char *dir, const char *file)
+{
+	//BIO *bio_err;
+	X509 *x509 = NULL;
+	EVP_PKEY *pkey = NULL;
+	char *rsa = NULL, *pvt = NULL;
+	FILE *fp;
+	char *pem = NULL;
+
+	if (ks_stristr(".pem", file)) {
+		pem = ks_mprintf("%s%s%s", dir, KS_PATH_SEPARATOR, file);
+	} else {
+		pvt = ks_mprintf("%s%s%s.key", dir, KS_PATH_SEPARATOR, file);
+		rsa = ks_mprintf("%s%s%s.crt", dir, KS_PATH_SEPARATOR, file);
+	}
+
+	CRYPTO_mem_ctrl(CRYPTO_MEM_CHECK_ON);
+		
+	//bio_err=BIO_new_fp(stderr, BIO_NOCLOSE);
+		
+	mkcert(&x509, &pkey, 1024, 0, 36500);
+
+	//RSA_print_fp(stdout, pkey->pkey.rsa, 0);
+	//X509_print_fp(stdout, x509);
+
+	if (pem) {
+		if ((fp = fopen(pem, "w"))) {
+			PEM_write_PrivateKey(fp, pkey, NULL, NULL, 0, NULL, NULL);
+			PEM_write_X509(fp, x509);
+			fclose(fp);
+		}
+
+	} else {
+		if (pvt && (fp = fopen(pvt, "w"))) {
+			PEM_write_PrivateKey(fp, pkey, NULL, NULL, 0, NULL, NULL);
+			fclose(fp);
+		}
+		
+		if (rsa && (fp = fopen(rsa, "w"))) {
+			PEM_write_X509(fp, x509);
+			fclose(fp);
+		}
+	}
+
+	X509_free(x509);
+	EVP_PKEY_free(pkey);
+
+#ifndef OPENSSL_NO_ENGINE
+	ENGINE_cleanup();
+#endif
+	CRYPTO_cleanup_all_ex_data();
+
+	//CRYPTO_mem_leaks(bio_err);
+	//BIO_free(bio_err);
+
+
+	ks_safe_free(pvt);
+	ks_safe_free(rsa);
+	ks_safe_free(pem);
+
+	return(0);
+}
+
+static int mkcert(X509 **x509p, EVP_PKEY **pkeyp, int bits, int serial, int days)
+{
+	X509 *x;
+	EVP_PKEY *pk;
+	RSA *rsa;
+	X509_NAME *name=NULL;
+	
+	ks_assert(pkeyp);
+	ks_assert(x509p);
+
+	if (*pkeyp == NULL) {
+		if ((pk = EVP_PKEY_new()) == NULL) {
+			abort(); 
+		}
+	} else {
+		pk = *pkeyp;
+	}
+
+	if (*x509p == NULL) {
+		if ((x = X509_new()) == NULL) {
+			goto err;
+		}
+	} else {
+		x = *x509p;
+	}
+
+	rsa = RSA_generate_key(bits, RSA_F4, NULL, NULL);
+
+	if (!EVP_PKEY_assign_RSA(pk, rsa)) {
+		abort();
+		goto err;
+	}
+
+	rsa = NULL;
+
+	X509_set_version(x, 0);
+	ASN1_INTEGER_set(X509_get_serialNumber(x), serial);
+	X509_gmtime_adj(X509_get_notBefore(x), -(long)60*60*24*7);
+	X509_gmtime_adj(X509_get_notAfter(x), (long)60*60*24*days);
+	X509_set_pubkey(x, pk);
+
+	name = X509_get_subject_name(x);
+
+	/* This function creates and adds the entry, working out the
+	 * correct string type and performing checks on its length.
+	 * Normally we'd check the return value for errors...
+	 */
+	X509_NAME_add_entry_by_txt(name, "C", MBSTRING_ASC, (unsigned char *)"US", -1, -1, 0);
+	X509_NAME_add_entry_by_txt(name, "CN", MBSTRING_ASC, (unsigned char *)"FreeSWITCH-libKS", -1, -1, 0);
+							   
+
+	/* Its self signed so set the issuer name to be the same as the
+ 	 * subject.
+	 */
+	X509_set_issuer_name(x, name);
+
+	if (!X509_sign(x, pk, EVP_sha1()))
+		goto err;
+
+	*x509p = x;
+	*pkeyp = pk;
+	return(1);
+ err:
+	return(0);
+}
+
 /* For Emacs:
  * Local Variables:
  * mode:c

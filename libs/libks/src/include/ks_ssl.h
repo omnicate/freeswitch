@@ -3,10 +3,14 @@
 
 #include "ks.h"
 
+#include <openssl/ssl.h>
+#include <openssl/engine.h>
+
 KS_BEGIN_EXTERN_C
 
 KS_DECLARE(void) ks_ssl_init_ssl_locks(void);
 KS_DECLARE(void) ks_ssl_destroy_ssl_locks(void);
+KS_DECLARE(int) ks_gen_cert(const char *dir, const char *file);
 
 KS_END_EXTERN_C
 
