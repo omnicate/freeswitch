@@ -82,7 +82,7 @@ AC_CHECK_FUNCS([usleep])
 #
 # sched_setcheduler + round-robin scheduler prerequisites
 #
-AC_CHECK_HEADERS([sched.h])
+AC_CHECK_HEADERS([sched.h byteswap.h sys/endian.h])
 AC_CHECK_DECL([SCHED_RR],
 	[AC_DEFINE([HAVE_SCHED_RR],[1],[SCHED_RR constant for sched_setscheduler])],,
 	[#ifdef HAVE_SCHED_H
@@ -195,6 +195,28 @@ AC_DEFINE(HAVE_PTHREAD_SETSCHEDPARAM, 1, [Define if you have pthread_setschedpar
 AM_CFLAGS="${AM_CFLAGS} -DHAVE_PTHREAD_SETSCHEDPARAM=1"
 ])
 
+AC_C_BIGENDIAN(AC_DEFINE([__BYTE_ORDER],__BIG_ENDIAN,[Big Endian]),AC_DEFINE([__BYTE_ORDER],__LITTLE_ENDIAN,[Little Endian]))
+AC_DEFINE([__LITTLE_ENDIAN],1234,[for the places where it is not defined])
+AC_DEFINE([__BIG_ENDIAN],4321,[for the places where it is not defined])
+
+path_remove () {
+  echo "$1" | tr ':' '\n' | grep -Fxv "$2" | tr '\n' ':' | sed 's/:$//'
+}
+path_push_unique () {
+  x="$(eval echo \$$1)"
+  x="$(path_remove "$x" "$2")"
+  if test -z "$x"; then
+    eval export $1="$2"
+  else
+    eval export $1="$2:$x"
+  fi
+}
+
+case $host in
+   *-darwin*)
+        path_push_unique PKG_CONFIG_PATH /usr/local/opt/openssl/lib/pkgconfig
+       ;;
+esac
 
 SAC_OPENSSL
 

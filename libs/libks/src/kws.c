@@ -792,17 +792,40 @@ KS_DECLARE(ks_ssize_t) kws_close(kws_t *kws, int16_t reason)
 	
 }
 
+#ifndef WIN32
+#if defined(HAVE_BYTESWAP_H)
+#include <byteswap.h>
+#elif defined(HAVE_SYS_ENDIAN_H)
+#include <sys/endian.h>
+#elif defined (__APPLE__)
+#include <libkern/OSByteOrder.h>
+#define bswap_16 OSSwapInt16
+#define bswap_32 OSSwapInt32
+#define bswap_64 OSSwapInt64
+#elif defined (__UCLIBC__)
+#else
+#define bswap_16(value) ((((value) & 0xff) << 8) | ((value) >> 8))
+#define bswap_32(value) (((uint32_t)bswap_16((uint16_t)((value) & 0xffff)) << 16) | (uint32_t)bswap_16((uint16_t)((value) >> 16)))
+#define bswap_64(value) (((uint64_t)bswap_32((uint32_t)((value) & 0xffffffff)) << 32) | (uint64_t)bswap_32((uint32_t)((value) >> 32)))
+#endif
+#endif
 
 uint64_t hton64(uint64_t val)
 {
-	if (__BYTE_ORDER == __BIG_ENDIAN) return (val);
-	else return __bswap_64(val);
+#if __BYTE_ORDER == __BIG_ENDIAN
+	return (val);
+#else
+	return bswap_64(val);
+#endif
 }
 
 uint64_t ntoh64(uint64_t val)
 {
-	if (__BYTE_ORDER == __BIG_ENDIAN) return (val);
-	else return __bswap_64(val);
+#if __BYTE_ORDER == __BIG_ENDIAN
+	return (val);
+#else
+	return bswap_64(val);
+#endif
 }
 
 
