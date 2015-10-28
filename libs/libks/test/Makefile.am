@@ -1,5 +1,5 @@
-AM_CFLAGS += -I$(abs_top_srcdir)/src/include -g -ggdb -O0
-TEST_LDADD = $(abs_top_srcdir)/libks.la
+AM_CFLAGS += -I$(abs_top_srcdir)/src/include -g -ggdb -O0 $(openssl_CFLAGS)
+TEST_LDADD = $(abs_top_srcdir)/libks.la $(openssl_LIBS)
 check_PROGRAMS = 
 
 check_PROGRAMS += testpools

@@ -259,7 +259,7 @@ int main(void)
 	have_v4 = zstr_buf(v4) ? 0 : 1;
 	have_v6 = zstr_buf(v6) ? 0 : 1;
 
-	plan((have_v4) + (have_v6) + 1);
+	plan((have_v4 * 2) + (have_v6 * 2) + 1);
 
 	ok(have_v4 || have_v6);
 
