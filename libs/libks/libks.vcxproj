@@ -153,6 +153,7 @@
     <ClCompile Include="src\ks_pool.c" />
     <ClCompile Include="src\ks_printf.c" />
     <ClCompile Include="src\ks_q.c" />
+    <ClCompile Include="src\ks_rng.c" />
     <ClCompile Include="src\ks_socket.c" />
     <ClCompile Include="src\ks_string.c" />
     <ClCompile Include="src\ks_thread.c" />
@@ -170,10 +171,8 @@
     <ClInclude Include="src\include\ks_threadmutex.h" />
     <ClInclude Include="src\include\ks_types.h" />
     <ClInclude Include="src\include\ks_pool.h" />
-    <ClInclude Include="src\include\ks_pool_loc.h" />
+    <ClInclude Include="src\include\ks_rng.h" />
     <ClInclude Include="src\include\simclist.h" />
-    <ClInclude Include="src\include\table.h" />
-    <ClInclude Include="src\include\table_loc.h" />
     <ClInclude Include="src\win\mman.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

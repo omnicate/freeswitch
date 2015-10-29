@@ -48,6 +48,9 @@
     <ClCompile Include="src\ks_pool.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\ks_rng.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="src\ks_thread.c">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -86,7 +89,7 @@
     <ClInclude Include="src\include\ks_pool.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="src\include\ks_pool_loc.h">
+    <ClInclude Include="src\include\ks_rng.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\include\simclist.h">
