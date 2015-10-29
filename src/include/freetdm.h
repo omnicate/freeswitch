@@ -1845,7 +1845,7 @@ FT_DECLARE(ftdm_status_t) ftdm_configure_span_channels(ftdm_span_t *span, const 
 
 /*! 
  * \brief Set the trunk type for a span
- *        This must be called before configuring any channels within the span
+ * \This must be called before configuring any channels within the span
  *
  * \param span The span 
  * \param type The trunk type
@@ -1854,6 +1854,29 @@ FT_DECLARE(ftdm_status_t) ftdm_configure_span_channels(ftdm_span_t *span, const 
 FT_DECLARE(void) ftdm_span_set_trunk_type(ftdm_span_t *span, ftdm_trunk_type_t type);
 
 /*! 
+ * \brief Set the reconfiguration state for a span
+ * \This must be called in case already existing span needs to be reconfigured
+ *
+ * \param span The span
+ * \param reconfig The reconfig state i.e. whether spans needs to be reconfigure or not
+ *
+ */
+FT_DECLARE(ftdm_status_t) ftdm_span_set_reconfig_flag(ftdm_span_t *span);
+
+
+/*!
+ * \brief Get the reconfiguration state for a span
+ * \This function return FTDM_SPAN_RECONFIG flag status
+ * \it return FTDM_SUCEESS (0) in case flag is set and
+ * \else return FTDM_FAIL (1)
+ */
+FT_DECLARE(ftdm_status_t) ftdm_span_test_reconfig_flag(ftdm_span_t *span);
+
+/*! \brief Clear the reconfiguration state for a span */
+FT_DECLARE(ftdm_status_t) ftdm_span_clear_reconfig_flag(ftdm_span_t *span);
+
+
+/*!
  * \brief Get the trunk type for a span
  *
  * \param span The span 

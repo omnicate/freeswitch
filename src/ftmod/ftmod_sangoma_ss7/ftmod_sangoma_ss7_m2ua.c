@@ -193,7 +193,7 @@ ftdm_status_t ftmod_ss7_m2ua_span_stop(int span_id)
     int m2ua_cfg_id=0;
 
     /* get the operation type */
-    opr_mode = ftmod_ss7_get_operating_mode(span_id);
+    opr_mode = ftmod_ss7_get_operating_mode_by_span_id(span_id);
 
     if (SNG_SS7_OPR_MODE_M2UA_SG != opr_mode) {
 

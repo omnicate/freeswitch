@@ -70,7 +70,7 @@ int find_ssf_type_in_map(const char *ssfType);
 int find_cic_cntrl_in_map(const char *cntrlType);
 
 ftdm_status_t check_status_of_all_isup_intf(void);
-ftdm_status_t check_for_reconfig_flag(ftdm_span_t *ftdmspan);
+ftdm_status_t check_for_reconfig_flag(ftdm_span_t *ftdmspan, ftdm_sngss7_operating_modes_e opr_mode);
 
 void sngss7_send_signal(sngss7_chan_data_t *sngss7_info, ftdm_signal_event_t event_id);
 ftdm_status_t sngss7_add_var(sngss7_chan_data_t *ss7_info, const char* var, const char* val);
@@ -3002,8 +3002,12 @@ ftdm_status_t extract_chan_data(uint32_t circuit, sngss7_chan_data_t **sngss7_in
 {
 
 	if (!ftdm_running()) {
-		SS7_DEBUG("Error: FTDM Stopped: circuit #%d\n", circuit);
-		return FTDM_FAIL;
+		/* In case when SS7 is shutting down in such a case disable circuit depending
+		 * upon flag set on SS7 circuit */
+		if (!(g_ftdm_sngss7_data.cfg.isupCkt[circuit].flags & SNGSS7_CKT_DISABLE)) {
+			SS7_DEBUG("Error: FTDM Stopped: circuit #%d\n", circuit);
+			return FTDM_FAIL;
+		}
 	}
 
 	if (!g_ftdm_sngss7_data.cfg.isupCkt[circuit].obj) {
@@ -3496,6 +3500,25 @@ ftdm_status_t check_for_res_sus_flag(ftdm_span_t *ftdmspan)
 	ftdm_span_trigger_signals(ftdmspan);
 
 	return FTDM_SUCCESS;
+}
+
+/******************************************************************************/
+ftdm_status_t check_if_active_calls_present(ftdm_span_t *ftdmspan)
+{
+	ftdm_status_t 	ret = FTDM_FAIL;
+	int 		idx = 0;
+
+	ftdm_assert_return(ftdmspan != NULL, FTDM_FAIL, "Invalid Span (NULL)!\n");
+
+	for (idx = 1; idx <= ftdmspan->chan_count; idx++) {
+		if ((ftdm_channel_get_state(ftdmspan->channels[idx])) ==  FTDM_CHANNEL_STATE_UP) {
+			return FTDM_FAIL;
+		}
+	}
+
+	ret = FTDM_SUCCESS;
+
+	return ret;
 }
 
 /******************************************************************************/
@@ -4269,7 +4292,7 @@ ftdm_status_t check_for_invalid_states(ftdm_channel_t *ftmchan)
 	
 
 /******************************************************************************/
-ftdm_status_t check_for_reconfig_flag(ftdm_span_t *ftdmspan)
+ftdm_status_t check_for_reconfig_flag(ftdm_span_t *ftdmspan, ftdm_sngss7_operating_modes_e opr_mode)
 {
 	ftdm_channel_t		*ftdmchan = NULL;
 	sngss7_chan_data_t	*sngss7_info = NULL;
@@ -4293,8 +4316,12 @@ ftdm_status_t check_for_reconfig_flag(ftdm_span_t *ftdmspan)
 
 		/* if the call data is NULL move on */
 		if (ftdmchan->call_data == NULL) {
-			SS7_WARN_CHAN(ftdmchan, "Found ftdmchan with no sig module data!%s\n", " ");
-			continue;
+			if(SNG_SS7_OPR_MODE_M3UA_SG == opr_mode) {
+				continue;
+			} else {
+				SS7_WARN_CHAN(ftdmchan, "Found ftdmchan with no sig module data!%s\n", " ");
+				continue;
+			}
 		}
 
 		/* grab the private data */

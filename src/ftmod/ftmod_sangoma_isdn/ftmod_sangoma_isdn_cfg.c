@@ -35,14 +35,15 @@
 #include "ftmod_sangoma_isdn.h"
 
 static ftdm_status_t parse_timer(const char* val, int32_t *target);
-static ftdm_status_t parse_switchtype(const char* switch_name, ftdm_span_t *span);
-static ftdm_status_t parse_signalling(const char* signalling, ftdm_span_t *span);
+static ftdm_status_t parse_switchtype(const char* switch_name, ftdm_span_t *span, int reload);
+static ftdm_status_t parse_signalling(const char* signalling, ftdm_span_t *span, int reload);
 static ftdm_status_t add_local_number(const char* val, ftdm_span_t *span);
 static ftdm_status_t parse_yesno(const char* var, const char* val, uint8_t *target);
 static ftdm_status_t set_switchtype_defaults(ftdm_span_t *span);
+static ftdm_status_t get_switch_type(const char* switch_name, ftdm_span_t *span , int *switchtype);
 
 extern ftdm_sngisdn_data_t	g_sngisdn_data;
-
+/* This is a local structure to store span data for validation in case of dynamic reconfiguration */
 
 static ftdm_status_t parse_timer(const char* val, int32_t *target)
 {
@@ -76,96 +77,65 @@ static ftdm_status_t add_local_number(const char* val, ftdm_span_t *span)
 	return FTDM_SUCCESS;
 }
 
-static ftdm_status_t parse_switchtype(const char* switch_name, ftdm_span_t *span)
+static ftdm_status_t parse_switchtype(const char* switch_name, ftdm_span_t *span, int reload)
 {
 	unsigned i;
+	int	switchtype =0;
 	ftdm_iterator_t *chaniter = NULL;
 	ftdm_iterator_t *curr = NULL;	
 	sngisdn_dchan_data_t *dchan_data;
 	sngisdn_span_data_t *signal_data = (sngisdn_span_data_t*) span->signal_data;
-	
-	switch(span->trunk_type) {
-		case FTDM_TRUNK_T1:
-			if (!strcasecmp(switch_name, "ni2") ||
-				!strcasecmp(switch_name, "national")) {
-				signal_data->switchtype = SNGISDN_SWITCH_NI2;
-			} else if (!strcasecmp(switch_name, "5ess")) {
-				signal_data->switchtype = SNGISDN_SWITCH_5ESS;
-			} else if (!strcasecmp(switch_name, "4ess")) {
-				signal_data->switchtype = SNGISDN_SWITCH_4ESS;
-			} else if (!strcasecmp(switch_name, "dms100")) {
-				signal_data->switchtype = SNGISDN_SWITCH_DMS100;
-			} else if (!strcasecmp(switch_name, "qsig")) {
-				signal_data->switchtype = SNGISDN_SWITCH_QSIG;
-			} else {
-				ftdm_log(FTDM_LOG_ERROR, "%s:Unsupported switchtype %s for trunktype:%s\n", span->name, switch_name, ftdm_trunk_type2str(span->trunk_type));
-				return FTDM_FAIL;
-			}
-			break;
-		case FTDM_TRUNK_E1:
-			if (!strcasecmp(switch_name, "euroisdn") ||
-				!strcasecmp(switch_name, "etsi")) {
-				signal_data->switchtype = SNGISDN_SWITCH_EUROISDN;
-			} else if (!strcasecmp(switch_name, "qsig")) {
-				signal_data->switchtype = SNGISDN_SWITCH_QSIG;
-			} else {
-				ftdm_log(FTDM_LOG_ERROR, "%s:Unsupported switchtype %s for trunktype:%s\n", span->name, switch_name, ftdm_trunk_type2str(span->trunk_type));
-				return FTDM_FAIL;
-			}
-			break;
-		case FTDM_TRUNK_BRI:
-		case FTDM_TRUNK_BRI_PTMP:
-			if (!strcasecmp(switch_name, "euroisdn") ||
-				!strcasecmp(switch_name, "etsi")) {
-				signal_data->switchtype = SNGISDN_SWITCH_EUROISDN;
-			} else if (!strcasecmp(switch_name, "insnet") ||
-						!strcasecmp(switch_name, "ntt")) {
-				signal_data->switchtype = SNGISDN_SWITCH_INSNET;
-			} else {
-				ftdm_log(FTDM_LOG_ERROR, "%s:Unsupported switchtype %s for trunktype:%s\n", span->name, switch_name, ftdm_trunk_type2str(span->trunk_type));
-				return FTDM_FAIL;
-			}
-			ftdm_set_flag(span, FTDM_SPAN_USE_AV_RATE);
-			ftdm_set_flag(span, FTDM_SPAN_PWR_SAVING);
-			 /* can be > 1 for some BRI variants */
-			break;
-		default:
-			ftdm_log(FTDM_LOG_ERROR, "%s:Unsupported trunktype:%s\n", span->name, switch_name, ftdm_trunk_type2str(span->trunk_type));
+	ftdm_status_t ret     = FTDM_FAIL;
+
+
+	/* If this is  dynamic configuration request validate  switch type with previous span configuration*/
+	if (reload) {
+		ret = ftmod_isdn_validate_switch_type_reconfig(switch_name, span, &switchtype);
+	}else {
+
+		if(get_switch_type(switch_name,span,&switchtype) != FTDM_SUCCESS) {
+			ftdm_log(FTDM_LOG_ERROR, "%s: Error getting switch type\n", span->name, SNGISDN_NUM_LOCAL_NUMBERS);
 			return FTDM_FAIL;
-	}
-	/* see if we have profile with this switch_type already */
-	for (i=1; i <= g_sngisdn_data.num_cc; i++) {
-		if (g_sngisdn_data.ccs[i].switchtype == signal_data->switchtype &&
-			g_sngisdn_data.ccs[i].trunktype == span->trunk_type) {
-			break;
 		}
 	}
-	/* need to create a new switch_type */
-	if (i > g_sngisdn_data.num_cc) {
-		g_sngisdn_data.num_cc++;
-		g_sngisdn_data.ccs[i].switchtype = signal_data->switchtype;
-		g_sngisdn_data.ccs[i].trunktype = span->trunk_type;
-		ftdm_log(FTDM_LOG_DEBUG, "%s: New switchtype:%s  cc_id:%u\n", span->name, switch_name, i);
+	signal_data->switchtype  = switchtype;
+	/* see if we have profile with this switch_type already */
+	if(!reload ) {
+
+		for (i=1; i <= g_sngisdn_data.num_cc; i++) {
+			if (g_sngisdn_data.ccs[i].switchtype == signal_data->switchtype &&
+					g_sngisdn_data.ccs[i].trunktype == span->trunk_type) {
+				break;
+			}
+		}
+		/* need to create a new switch_type */
+		if (i > g_sngisdn_data.num_cc) {
+			g_sngisdn_data.num_cc++;
+			g_sngisdn_data.ccs[i].switchtype = signal_data->switchtype;
+			g_sngisdn_data.ccs[i].trunktype = span->trunk_type;
+			ftdm_log(FTDM_LOG_DEBUG, "%s: New switchtype:%s  cc_id:%u\n", span->name, switch_name, i);
+		}
+		/* add this span to its ent_cc */
+		signal_data->cc_id = i;
+		g_sngisdn_data.num_dchan++;
+		signal_data->dchan_id = g_sngisdn_data.num_dchan;
+		dchan_data = &g_sngisdn_data.dchans[signal_data->dchan_id];
+		dchan_data->num_spans++;
+
+		signal_data->span_id = dchan_data->num_spans;
+		dchan_data->spans[signal_data->span_id] = signal_data;
+
+		g_sngisdn_data.spans[signal_data->link_id] = signal_data;
+
+	} else {
+		return ret;
 	}
 
-	/* add this span to its ent_cc */
-	signal_data->cc_id = i;
+
 
 	/* create a new dchan */ /* for NFAS - no-dchan on b-channels-only links */
-	g_sngisdn_data.num_dchan++;
-	signal_data->dchan_id = g_sngisdn_data.num_dchan;
-
-	dchan_data = &g_sngisdn_data.dchans[signal_data->dchan_id];
-	dchan_data->num_spans++;
-
-	signal_data->span_id = dchan_data->num_spans;
-	dchan_data->spans[signal_data->span_id] = signal_data;
-
-	g_sngisdn_data.spans[signal_data->link_id] = signal_data;
-	
 	ftdm_log(FTDM_LOG_DEBUG, "%s: cc_id:%d dchan_id:%d span_id:%d link_id:%d\n", span->name, signal_data->cc_id, signal_data->dchan_id, signal_data->span_id, signal_data->link_id);
 
-	
 	chaniter = ftdm_span_get_chan_iterator(span, NULL);
 	for (curr = chaniter; curr; curr = ftdm_iterator_next(curr)) {
 		int32_t chan_id;
@@ -186,24 +156,36 @@ static ftdm_status_t parse_switchtype(const char* switch_name, ftdm_span_t *span
 	return FTDM_SUCCESS;
 }
 
-static ftdm_status_t parse_signalling(const char* signalling, ftdm_span_t *span)
+static ftdm_status_t parse_signalling(const char* signalling, ftdm_span_t *span , int reload)
 {
 	sngisdn_span_data_t *signal_data = (sngisdn_span_data_t*) span->signal_data;
-	if (!strcasecmp(signalling, "net") ||
-		!strcasecmp(signalling, "pri_net")||
-		!strcasecmp(signalling, "bri_net")) {
+	ftdm_status_t ret     = FTDM_FAIL;
 
+
+	/* If this is  dynamic configuration request validate  signalling type with previous span configuration*/
+	if (reload ) {
+		ret = ftmod_isdn_validate_signal_type_reconfig(signalling, span);
+	}
+
+	if (!strcasecmp(signalling, "net") ||
+			!strcasecmp(signalling, "pri_net")||
+			!strcasecmp(signalling, "bri_net")) {
 		signal_data->signalling = SNGISDN_SIGNALING_NET;
 	} else if (!strcasecmp(signalling, "cpe") ||
-		!strcasecmp(signalling, "pri_cpe")||
-		!strcasecmp(signalling, "bri_cpe")) {
-
+			!strcasecmp(signalling, "pri_cpe")||
+			!strcasecmp(signalling, "bri_cpe")) {
 		signal_data->signalling = SNGISDN_SIGNALING_CPE;
 	} else {
 		ftdm_log(FTDM_LOG_ERROR, "Unsupported signalling/interface %s\n", signalling);
 		return FTDM_FAIL;
 	}
-	return FTDM_SUCCESS;
+
+	if (reload) {
+		return ret;
+	} else {
+		return FTDM_SUCCESS;
+	}
+
 }
 
 static ftdm_status_t parse_early_media(const char* opt, ftdm_span_t *span)
@@ -282,58 +264,78 @@ static ftdm_status_t set_switchtype_defaults(ftdm_span_t *span)
 }
 
 
-ftdm_status_t ftmod_isdn_parse_cfg(ftdm_conf_parameter_t *ftdm_parameters, ftdm_span_t *span)
+ftdm_status_t ftmod_isdn_parse_cfg(ftdm_conf_parameter_t *ftdm_parameters, ftdm_span_t *span, int reload)
 {
 	unsigned paramindex;
 	const char *var, *val;
 	sngisdn_span_data_t *signal_data = (sngisdn_span_data_t*) span->signal_data;
+	ftdm_status_t ret       = FTDM_FAIL;
+	ftdm_status_t status    = FTDM_FAIL;
+	uint8_t 	temp_store = 0;
+	int32_t		temp_store_time = 0;
+
 	/* Set defaults here */
-	signal_data->tei = 0;
-	signal_data->min_digits = 8;
-	signal_data->overlap_dial = SNGISDN_OPT_DEFAULT;
-	signal_data->overlap_dial_gentone = SNGISDN_OPT_DEFAULT;
-	signal_data->setup_arb = SNGISDN_OPT_DEFAULT;
-	signal_data->facility_ie_decode = SNGISDN_OPT_DEFAULT;
-	signal_data->ignore_cause_value = SNGISDN_OPT_DEFAULT;
-	signal_data->timer_t3 = 8;
-	signal_data->restart_opt = SNGISDN_OPT_DEFAULT;
-	signal_data->link_id = span->span_id;
-	signal_data->transfer_timeout = 20000;
-	signal_data->att_remove_dtmf = SNGISDN_OPT_DEFAULT;
-	signal_data->force_sending_complete = SNGISDN_OPT_DEFAULT;
+	/* If this is dynamic configuration then do not set default parameter again  */
+	if (!reload) {
 
-	signal_data->cid_name_method = SNGISDN_CID_NAME_AUTO;
-	signal_data->send_cid_name = SNGISDN_OPT_DEFAULT;
-	signal_data->send_connect_ack = SNGISDN_OPT_DEFAULT;
-	
-	span->default_caller_data.dnis.plan = FTDM_NPI_INVALID;
-	span->default_caller_data.dnis.type = FTDM_TON_INVALID;
-	span->default_caller_data.cid_num.plan = FTDM_NPI_INVALID;
-	span->default_caller_data.cid_num.type = FTDM_TON_INVALID;
-	span->default_caller_data.rdnis.plan = FTDM_NPI_INVALID;
-	span->default_caller_data.rdnis.type = FTDM_TON_INVALID;
+		signal_data->tei = 0;
+		signal_data->min_digits = 8;
+		signal_data->overlap_dial = SNGISDN_OPT_DEFAULT;
+		signal_data->overlap_dial_gentone = SNGISDN_OPT_DEFAULT;
+		signal_data->setup_arb = SNGISDN_OPT_DEFAULT;
+		signal_data->facility_ie_decode = SNGISDN_OPT_DEFAULT;
+		signal_data->ignore_cause_value = SNGISDN_OPT_DEFAULT;
+		signal_data->timer_t3 = 8;
+		signal_data->restart_opt = SNGISDN_OPT_DEFAULT;
+		signal_data->link_id = span->span_id;
+		signal_data->transfer_timeout = 20000;
+		signal_data->att_remove_dtmf = SNGISDN_OPT_DEFAULT;
+		signal_data->force_sending_complete = SNGISDN_OPT_DEFAULT;
 
-	span->default_caller_data.bearer_capability = IN_ITC_SPEECH;
-	/* Cannot set default bearer_layer1 yet, as we do not know the switchtype */
-	span->default_caller_data.bearer_layer1 = FTDM_INVALID_INT_PARM;
+		signal_data->cid_name_method = SNGISDN_CID_NAME_AUTO;
+		signal_data->send_cid_name = SNGISDN_OPT_DEFAULT;
+		signal_data->send_connect_ack = SNGISDN_OPT_DEFAULT;
+
+		span->default_caller_data.dnis.plan = FTDM_NPI_INVALID;
+		span->default_caller_data.dnis.type = FTDM_TON_INVALID;
+		span->default_caller_data.cid_num.plan = FTDM_NPI_INVALID;
+		span->default_caller_data.cid_num.type = FTDM_TON_INVALID;
+		span->default_caller_data.rdnis.plan = FTDM_NPI_INVALID;
+		span->default_caller_data.rdnis.type = FTDM_TON_INVALID;
+
+		span->default_caller_data.bearer_capability = IN_ITC_SPEECH;
+		/* Cannot set default bearer_layer1 yet, as we do not know the switchtype */
+		span->default_caller_data.bearer_layer1 = FTDM_INVALID_INT_PARM;
+	}
 
 	for (paramindex = 0; ftdm_parameters[paramindex].var; paramindex++) {
 		ftdm_log(FTDM_LOG_DEBUG, "Sangoma ISDN key=value, %s=%s\n", ftdm_parameters[paramindex].var, ftdm_parameters[paramindex].val);
 		var = ftdm_parameters[paramindex].var;
 		val = ftdm_parameters[paramindex].val;
-		
+
 		if (!strcasecmp(var, "switchtype")) {
-			if (parse_switchtype(val, span) != FTDM_SUCCESS) {
-				return FTDM_FAIL;
+			if ( (ret = parse_switchtype(val, span, reload)) != FTDM_SUCCESS) {
+				if ( ret == FTDM_FAIL)	{
+					return FTDM_FAIL;
+				}else {
+					status = ret ;
+				}
 			}
 			if (set_switchtype_defaults(span) != FTDM_SUCCESS) {
 				return FTDM_FAIL;
 			}
+
 		} else if (!strcasecmp(var, "signalling") ||
-				   !strcasecmp(var, "interface")) {
-			if (parse_signalling(val, span) != FTDM_SUCCESS) {
-				return FTDM_FAIL;
+				!strcasecmp(var, "interface")) {
+			if ((ret = parse_signalling(val, span , reload)) != FTDM_SUCCESS) {
+
+				if ( ret == FTDM_FAIL)	{
+					return FTDM_FAIL;
+				}else {
+					status = ret ;
+				}
 			}
+
 		} else if (!strcasecmp(var, "tei")) {
 			uint8_t tei = atoi(val);
 			if (tei > 127) {
@@ -342,6 +344,14 @@ ftdm_status_t ftmod_isdn_parse_cfg(ftdm_conf_parameter_t *ftdm_parameters, ftdm_
 			}
 			signal_data->tei = tei;
 		} else if (!strcasecmp(var, "overlap")) {
+			/* Check if this is a reconfiguration request, please apply this reconfiguration
+			 * 	and update the isdn global structure with cuurent configuration */
+			if (reload) {
+				parse_yesno(var, val, &temp_store);
+				if((g_sngisdn_data.spans[span->span_id]->overlap_dial) != temp_store)	{
+					status = FTDM_BREAK ;
+				}
+			}
 			if (!strcasecmp(val, "yes")) {
 				signal_data->overlap_dial = SNGISDN_OPT_TRUE;
 			} else if (!strcasecmp(val, "no")) {
@@ -350,6 +360,13 @@ ftdm_status_t ftmod_isdn_parse_cfg(ftdm_conf_parameter_t *ftdm_parameters, ftdm_
 				ftdm_log(FTDM_LOG_ERROR, "Invalid value for parameter:%s:%s\n", var, val);
 			}
 		} else if (!strcasecmp(var, "overlap-gentone")) {
+			/* Check if this is a reconfiguration request, please apply this reconfiguration
+			 * 	and update the isdn global structure with cuurent configuration */
+			if (reload) {
+				if((g_sngisdn_data.spans[span->span_id]->overlap_dial_gentone) != (!(strcasecmp(val, "yes")) ? SNGISDN_OPT_TRUE:SNGISDN_OPT_FALSE))	{
+					status = FTDM_BREAK ;
+				}
+			}
 			if (!strcasecmp(val, "yes")) {
 				signal_data->overlap_dial_gentone = SNGISDN_OPT_TRUE;
 			} else if (!strcasecmp(val, "no")) {
@@ -360,9 +377,24 @@ ftdm_status_t ftmod_isdn_parse_cfg(ftdm_conf_parameter_t *ftdm_parameters, ftdm_
 		} else if (!strcasecmp(var, "setup-arbitration")) {
 			parse_yesno(var, val, &signal_data->setup_arb);
 		} else if (!strcasecmp(var, "facility")) {
+			/* Check if this is a reconfiguration request, please apply this reconfiguration
+			 * 	and update the isdn global structure with cuurent configuration */
+			if (reload) {
+				parse_yesno(var, val, &temp_store);
+				if((g_sngisdn_data.spans[span->span_id]->facility) != temp_store)	{
+					status = FTDM_BREAK ;
+				}
+			}
 			parse_yesno(var, val, &signal_data->facility);
 		} else if (!strcasecmp(var, "min-digits") ||
-					!strcasecmp(var, "min_digits")) {
+				!strcasecmp(var, "min_digits")) {
+			/* Check if this is a reconfiguration request, please apply this reconfiguration
+			 * 	and update the isdn global structure with cuurent configuration */
+			if (reload) {
+				if((g_sngisdn_data.spans[span->span_id]->min_digits) != atoi(val))	{
+					status = FTDM_BREAK ;
+				}
+			}
 			signal_data->min_digits = atoi(val);
 		} else if (!strcasecmp(var, "outbound-called-ton")) {
 			ftdm_set_ton(val, &span->default_caller_data.dnis.type);
@@ -377,22 +409,53 @@ ftdm_status_t ftmod_isdn_parse_cfg(ftdm_conf_parameter_t *ftdm_parameters, ftdm_
 		} else if (!strcasecmp(var, "outbound-rdnis-npi")) {
 			ftdm_set_npi(val, &span->default_caller_data.rdnis.plan);
 		} else if (!strcasecmp(var, "outbound-bc-transfer-cap") ||
-					!strcasecmp(var, "outbound-bearer_cap")) {
+				!strcasecmp(var, "outbound-bearer_cap")) {
 			ftdm_set_bearer_capability(val, (uint8_t*)&span->default_caller_data.bearer_capability);
 		} else if (!strcasecmp(var, "outbound-bc-user-layer1") ||
-					!strcasecmp(var, "outbound-bearer_layer1")) {
+				!strcasecmp(var, "outbound-bearer_layer1")) {
 			ftdm_set_bearer_layer1(val, (uint8_t*)&span->default_caller_data.bearer_layer1);
 		} else if (!strcasecmp(var, "channel-restart-on-link-up")) {
+			/* Check if this is a reconfiguration request, please apply this reconfiguration
+			 * 	and update the isdn global structure with cuurent configuration */
+			if (reload) {
+				parse_yesno(var, val, &temp_store);
+				if((g_sngisdn_data.spans[span->span_id]->restart_opt) != temp_store)	{
+					status = FTDM_BREAK ;
+				}
+			}
 			parse_yesno(var, val, &signal_data->restart_opt);
 		} else if (!strcasecmp(var, "channel-restart-timeout")) {
+			/* Check if this is a reconfiguration request, please apply this reconfiguration
+			 * 	and update the isdn global structure with cuurent configuration */
+			if (reload) {
+				if((g_sngisdn_data.spans[span->span_id]->restart_timeout) != atoi(val))	{
+					status = FTDM_BREAK ;
+				}
+			}
 			signal_data->restart_timeout = atoi(val);
 		} else if (!strcasecmp(var, "local-number")) {
 			if (add_local_number(val, span) != FTDM_SUCCESS) {
 				return FTDM_FAIL;
 			}
 		} else if (!strcasecmp(var, "facility-timeout")) {
+			/* Check if this is a reconfiguration request, please apply this reconfiguration
+			 * 	and update the isdn global structure with cuurent configuration */
+			if (reload) {
+				parse_timer(val, &temp_store_time);
+				if((g_sngisdn_data.spans[span->span_id]->facility_timeout) != temp_store_time)	{
+					status = FTDM_BREAK ;
+				}
+			}
 			parse_timer(val, &signal_data->facility_timeout);
 		} else if (!strcasecmp(var, "transfer-timeout")) {
+			/* Check if this is a reconfiguration request, please apply this reconfiguration
+			 * 	and update the isdn global structure with cuurent configuration */
+			if (reload) {
+				parse_timer(val, &temp_store_time);
+				if((g_sngisdn_data.spans[span->span_id]->transfer_timeout) != temp_store_time)	{
+					status = FTDM_BREAK ;
+				}
+			}
 			parse_timer(val, &signal_data->transfer_timeout);
 		} else if (!strcasecmp(var, "att-remove-dtmf")) {
 			parse_yesno(var, val, &signal_data->att_remove_dtmf);
@@ -444,8 +507,8 @@ ftdm_status_t ftmod_isdn_parse_cfg(ftdm_conf_parameter_t *ftdm_parameters, ftdm_
 				ftdm_log(FTDM_LOG_WARNING, "Invalid option %s for parameter %s\n", val, var);
 				signal_data->send_cid_name = SNGISDN_OPT_DEFAULT;
 			}
-                } else if (!strcasecmp(var, "send-connect-ack")) {
-                        parse_yesno(var, val, &signal_data->send_connect_ack);
+		} else if (!strcasecmp(var, "send-connect-ack")) {
+			parse_yesno(var, val, &signal_data->send_connect_ack);
 		} else if (!strcasecmp(var, "timer-t301")) {
 			parse_timer(val, &signal_data->timer_t301);
 		} else if (!strcasecmp(var, "timer-t302")) {
@@ -482,7 +545,8 @@ ftdm_status_t ftmod_isdn_parse_cfg(ftdm_conf_parameter_t *ftdm_parameters, ftdm_
 			ftdm_log(FTDM_LOG_WARNING, "Ignoring unknown parameter %s\n", ftdm_parameters[paramindex].var);
 		}
 	} /* for (paramindex = 0; ftdm_parameters[paramindex].var; paramindex++) */
-	
+	// If reload check for validation
+
 	if (signal_data->switchtype == SNGISDN_SWITCH_INVALID) {
 		ftdm_log(FTDM_LOG_ERROR, "%s: switchtype not specified", span->name);
 		return FTDM_FAIL;
@@ -494,16 +558,144 @@ ftdm_status_t ftmod_isdn_parse_cfg(ftdm_conf_parameter_t *ftdm_parameters, ftdm_
 
 	if (span->default_caller_data.bearer_layer1 == FTDM_INVALID_INT_PARM) {
 		if (signal_data->switchtype == SNGISDN_SWITCH_EUROISDN ||
-			signal_data->switchtype == SNGISDN_SWITCH_QSIG) {
+				signal_data->switchtype == SNGISDN_SWITCH_QSIG) {
 			span->default_caller_data.bearer_layer1 = IN_UIL1_G711ALAW;
 		} else {
 			span->default_caller_data.bearer_layer1 = IN_UIL1_G711ULAW;
 		}
 	}
+
+	if (reload) {
+		if((status ==FTDM_BREAK) || (status == FTDM_EAGAIN)) {
+			return  status;
+		}else {
+			return FTDM_ECANCELED;
+		}
+	}
+
 	return FTDM_SUCCESS;
 }
 
+/***************************************************************************
+ *  This functio will set the ISDN switch parameter of particular span
+ *  and will compare with previous configuration
+ *  function parameter sngisdn_span_data_t
+ *  return type  FTDM_FAIL or FTDM_ECANCELED, or FTDM_BREAK
+ *
+ **************************************************************************/
+ftdm_status_t ftmod_isdn_validate_switch_type_reconfig ( const char* switch_name, ftdm_span_t *span ,int *switchtype)
+{
 
+	int	idx=0;
+
+	if(get_switch_type(switch_name, span , switchtype) != FTDM_SUCCESS) {
+		ftdm_log(FTDM_LOG_ERROR, "%s: Error getting switch type\n", span->name, SNGISDN_NUM_LOCAL_NUMBERS);
+		return FTDM_FAIL;
+	}
+
+	for(idx=1;idx<=MAX_L1_LINKS;idx++) {
+		if(g_sngisdn_data.spans[idx])	{
+			if( g_sngisdn_data.spans[idx]->link_id == span->span_id) {
+				if(!(g_sngisdn_data.spans[idx]->switchtype == *switchtype)) {
+					return FTDM_EAGAIN;
+				}
+			}
+		}
+	}
+	return FTDM_SUCCESS;
+}
+
+/***************************************************************************
+ *  This functio will set the ISDN signalling parameter of particular span
+ *  and will compare with previous configuration
+ *  function parameter sngisdn_span_data_t
+ *  return type  FTDM_FAIL or FTDM_ECANCELED, or FTDM_BREAK
+ *
+ **************************************************************************/
+ftdm_status_t ftmod_isdn_validate_signal_type_reconfig( const char* signalling, ftdm_span_t *span)
+{
+
+	int	idx = 0;
+	int	signalling_type = 0;
+
+	if (!strcasecmp(signalling, "net") ||
+			!strcasecmp(signalling, "pri_net")||
+			!strcasecmp(signalling, "bri_net")) {
+		signalling_type = SNGISDN_SIGNALING_NET;
+	} else if (!strcasecmp(signalling, "cpe") ||
+			!strcasecmp(signalling, "pri_cpe")||
+			!strcasecmp(signalling, "bri_cpe")) {
+		signalling_type = SNGISDN_SIGNALING_CPE;
+	} else {
+		ftdm_log(FTDM_LOG_ERROR, "Unsupported signalling/interface %s\n", signalling);
+		return FTDM_FAIL;
+	}
+
+	for(idx=1;idx<=MAX_L1_LINKS;idx++) {
+		if(g_sngisdn_data.spans[idx])	{
+			if(g_sngisdn_data.spans[idx]->link_id == span->span_id) {
+				if(!(g_sngisdn_data.spans[idx]->signalling == signalling_type)) {
+					return FTDM_EAGAIN;
+				}
+			}
+		}
+	}
+
+	return FTDM_SUCCESS;
+}
+
+ftdm_status_t get_switch_type(const char* switch_name,ftdm_span_t *span ,int *switchtype)
+{
+
+
+	switch(span->trunk_type) {
+		case FTDM_TRUNK_T1:
+			if (!strcasecmp(switch_name, "ni2") || !strcasecmp(switch_name, "national")) {
+				*switchtype = SNGISDN_SWITCH_NI2;
+			} else if (!strcasecmp(switch_name, "5ess")) {
+				*switchtype = SNGISDN_SWITCH_5ESS;
+			} else if (!strcasecmp(switch_name, "4ess")) {
+				*switchtype = SNGISDN_SWITCH_4ESS;
+			} else if (!strcasecmp(switch_name, "dms100")) {
+				*switchtype = SNGISDN_SWITCH_DMS100;
+			} else if (!strcasecmp(switch_name, "qsig")) {
+				*switchtype = SNGISDN_SWITCH_QSIG;
+			} else {
+				ftdm_log(FTDM_LOG_ERROR, "%s:Unsupported switchtype %s for trunktype:%s\n", span->name, switch_name, ftdm_trunk_type2str(span->trunk_type));
+				return FTDM_FAIL;
+			}
+			break;
+		case FTDM_TRUNK_E1:
+			if (!strcasecmp(switch_name, "euroisdn") || !strcasecmp(switch_name, "etsi")) {
+				*switchtype = SNGISDN_SWITCH_EUROISDN;
+			} else if (!strcasecmp(switch_name, "qsig")) {
+				*switchtype = SNGISDN_SWITCH_QSIG;
+			} else {
+				ftdm_log(FTDM_LOG_ERROR, "%s:Unsupported switchtype %s for trunktype:%s\n", span->name, switch_name, ftdm_trunk_type2str(span->trunk_type));
+				return FTDM_FAIL;
+			}
+			break;
+		case FTDM_TRUNK_BRI:
+		case FTDM_TRUNK_BRI_PTMP:
+			if (!strcasecmp(switch_name, "euroisdn") || !strcasecmp(switch_name, "etsi")) {
+				*switchtype = SNGISDN_SWITCH_EUROISDN;
+			} else if (!strcasecmp(switch_name, "insnet") || !strcasecmp(switch_name, "ntt")) {
+				*switchtype = SNGISDN_SWITCH_INSNET;
+			} else {
+				ftdm_log(FTDM_LOG_ERROR, "%s:Unsupported switchtype %s for trunktype:%s\n", span->name, switch_name, ftdm_trunk_type2str(span->trunk_type));
+				return FTDM_FAIL;
+			}
+			ftdm_set_flag(span, FTDM_SPAN_USE_AV_RATE);
+			ftdm_set_flag(span, FTDM_SPAN_PWR_SAVING);
+			/* can be > 1 for some BRI variants */
+			break;
+		default:
+			ftdm_log(FTDM_LOG_ERROR, "%s:Unsupported trunktype:%s\n", span->name, switch_name, ftdm_trunk_type2str(span->trunk_type));
+			return FTDM_FAIL;
+	}
+
+	return FTDM_SUCCESS;
+}
 /******************************************************************************/
 /* For Emacs:
  * Local Variables:

@@ -1113,8 +1113,8 @@ ftdm_status_t sngisdn_stack_cfg_cc_sap(ftdm_span_t *span)
 	cfg.hdr.elmId.elmnt = STTSAP;
 
 	cfg.t.cfg.s.ccISAP.pst.srcProcId	= SFndProcId();
-    cfg.t.cfg.s.ccISAP.pst.srcEnt		= ENTCC;
-    cfg.t.cfg.s.ccISAP.pst.srcInst		= S_INST;
+	cfg.t.cfg.s.ccISAP.pst.srcEnt		= ENTCC;
+	cfg.t.cfg.s.ccISAP.pst.srcInst		= S_INST;
 	cfg.t.cfg.s.ccISAP.pst.dstEnt		= ENTIN;
 	cfg.t.cfg.s.ccISAP.pst.dstInst		= S_INST;
 	cfg.t.cfg.s.ccISAP.pst.dstProcId	= SFndProcId();

@@ -34,6 +34,8 @@
  * Contributors: 
  *
  * James Zhang <jzhang@sangoma.com>
+ * Kapil Gupta <kgupta@sangoma.com>
+ * Pushkar Singh <psingh@sangoma.com>
  *
  */
 /******************************************************************************/
@@ -95,6 +97,8 @@
 #define ACC_REL_RECV_ACL2_DEBUG 7
 #endif
 
+#define NOT_CONFIGURED 255
+
 #define sngss7_flush_queue(queue) \
 			do { \
 					void *__queue_data = NULL; \
@@ -144,6 +148,12 @@ typedef enum {
 	SNG_CKT_SIG,
 	SNG_CKT_HOLE
 } sng_ckt_type_t;
+
+typedef enum sng_span_type_t {
+	SNG_SPAN_VOICE = 0,
+	SNG_SPAN_SIG,
+	SNG_SPAN_INVALID,
+} sng_span_type;
 
 typedef enum {
     SNGSS7_SAPTYPE_LSL,
@@ -221,6 +231,7 @@ typedef struct sng_mtp1_link {
 	char        span_name[MAX_NAME_LEN];
 	ftdm_channel_t *ftdmchan;
 	uint8_t     extSeqNum;
+	ftdm_bool_t reload;
 } sng_mtp1_link_t;
 
 typedef struct sng_mtp2_link {
@@ -247,15 +258,18 @@ typedef struct sng_mtp2_link {
     uint32_t    sdUe;
     uint32_t    sdDe;
 #endif
+	ftdm_bool_t 	reload;
+	ftdm_bool_t 	disable_sap;
 } sng_mtp2_link_t;
 
 typedef struct sng_mtp3_li_link {
-    char        name[MAX_NAME_LEN];
-    uint32_t    flags;
-    uint32_t    id;
-    uint32_t    mtp2Id;
-    uint32_t    mtp2ProcId;
+    char		name[MAX_NAME_LEN];
+    uint32_t		flags;
+    uint32_t		id;
+    uint32_t		mtp2Id;
+    uint32_t		mtp2ProcId;
     ftdm_channel_t *ftdmchan;
+    ftdm_bool_t     reload;
 } sng_mtp3_li_link_t;
 
 /* defining glare handling methods: 
@@ -326,23 +340,27 @@ typedef struct sng_mtp3_link {
 	uint32_t	tcraft;
 	uint32_t	tflc;
 	uint32_t	tbnd;
+	ftdm_bool_t 	reload;
+	ftdm_bool_t 	disable_sap;
 } sng_mtp3_link_t;
 
 typedef struct sng_link_set {
-	char			name[MAX_NAME_LEN];
-	uint32_t		flags;
-	uint32_t		id;
-	uint32_t		apc;
-	uint32_t		linkType;
-	uint32_t		switchType;
-	uint32_t		ssf;
-	uint32_t 		minActive;
-	uint32_t		numLinks;
-	uint32_t		links[16];
+	char		name[MAX_NAME_LEN];
+	uint32_t	flags;
+	uint32_t	id;
+	uint32_t	apc;
+	uint32_t	linkType;
+	uint32_t	switchType;
+	uint32_t	ssf;
+	uint32_t 	minActive;
+	uint32_t	numLinks;
+	uint32_t	links[16];
+	ftdm_bool_t 	reload;
+	ftdm_bool_t 	deactivate_linkset;
 } sng_link_set_t;
 
 typedef struct sng_link_set_list {
-	uint32_t					lsId;
+	uint32_t			lsId;
 	struct sng_link_set_list	*next;
 } sng_link_set_list_t;
 
@@ -378,6 +396,8 @@ typedef struct sng_route {
 	uint32_t		slsLnk;
 	uint32_t		tfrReq;
 	uint32_t 		tQuery;     /* MTP3 timer to query DPC status from M3UA in M3UA SG mode */
+	uint32_t        associated_route_id[MAX_MTP_ROUTES + 1];
+	ftdm_bool_t		reload;
 } sng_route_t;
 
 typedef struct sng_isup_intf {
@@ -414,6 +434,7 @@ typedef struct sng_isup_intf {
 	uint32_t		tfgr;
 	uint32_t		tpause;
 	uint32_t		tstaenq;
+	ftdm_bool_t 		reload;
 } sng_isup_inf_t;
 
 typedef struct sng_isup_ckt {
@@ -468,7 +489,16 @@ typedef struct sng_isup_ckt {
 	uint32_t		t35;
 	uint32_t		t39;
 	uint16_t		tval;
+	uint8_t 		blo_on_ckt_delete;	/* Send block message to its peer on circuit delete */
+	ftdm_bool_t     reload;
 } sng_isup_ckt_t;
+
+typedef struct sng_isup_cc {
+	int span_id;
+	int cc_span_id;
+	int ckt_start_val;
+	uint32_t infId;
+} sng_isup_cc_t;
 
 typedef struct sng_nsap {
 	uint32_t		flags;
@@ -480,6 +510,9 @@ typedef struct sng_nsap {
 	uint32_t		switchType;
 	uint32_t		ssf;
 	uint32_t 		opr_mode;
+	uint32_t		associated_route_id[MAX_MTP_ROUTES + 1];
+	ftdm_bool_t 	reload;
+	ftdm_bool_t 	disable_sap;
 } sng_nsap_t;
 
 typedef struct sng_isap {
@@ -510,6 +543,9 @@ typedef struct sng_isap {
 	uint32_t		trelrsp;
 	uint32_t		tfnlrelrsp;
 	uint32_t		defRelLocation;
+	uint32_t 		isup_intf_id[MAX_ISUP_INFS + 1];
+	ftdm_bool_t		reload;
+	ftdm_bool_t		disable_sap;
 } sng_isap_t;
 
 typedef struct sng_relay {
@@ -520,6 +556,7 @@ typedef struct sng_relay {
 	uint32_t		port;
 	char			hostname[RY_REMHOSTNAME_SIZE];
 	uint32_t		procId;
+	ftdm_bool_t		reload;
 } sng_relay_t;
 
 /* Transparent circuit infomation */
@@ -550,7 +587,7 @@ typedef struct sng_ss7_cfg {
 	sng_mtp3_link_t		mtp3Link[MAX_MTP_LINKS+1];
 	sng_mtp3_li_link_t  	mtp3LiLink[MAX_MTP_LINKS+1];
 	sng_link_set_t		mtpLinkSet[MAX_MTP_LINKSETS+1];
-	sng_route_t		mtpRoute[MAX_MTP_ROUTES+1];
+	sng_route_t		mtpRoute[MAX_MTP_ROUTES + SELF_ROUTE_INDEX + 1];
 	sng_isup_inf_t		isupIntf[MAX_ISUP_INFS+1];
 	sng_isup_ckt_t		isupCkt[25000]; 	/* 0-1000 aren't used since other servers are registerd else where */
 	sng_transparent_ckt_t 	transCkt[MAX_TRANSPARENT_CKTS];
@@ -567,6 +604,9 @@ typedef struct sng_ss7_cfg {
 	int 			msg_priority;
 	uint32_t 		set_msg_priority;
 	int			link_failure_action;
+	sng_isup_cc_t 	isupCc[MAX_ISUP_INFS + 1];
+	ftdm_bool_t 	reload;	/* Flag is set when there is some change in configuration
+							   in SS7 stack else donot set the flag*/
 } sng_ss7_cfg_t;
 
 typedef struct sng_ss7_mtp2api_data {
@@ -605,9 +645,10 @@ typedef struct ftdm_sngss7_data {
 	int			function_trace_level;
 	int			message_trace;
 	int			message_trace_level;
-    sng_ss7_mtp2api_data_t  	mtp2api;
+    sng_ss7_mtp2api_data_t	mtp2api;
 	fio_signal_cb_t		sig_cb;
 	int			stack_logging_enable;
+	sng_ss7_cfg_t		cfg_reload;
 } ftdm_sngss7_data_t;
 
 typedef struct ftdm_sngss7_call_reject_queue {
@@ -838,17 +879,17 @@ typedef enum {
 	FLAG_INFID_PAUSED		= (1 << 15),
 	FLAG_SENT_ACM			= (1 << 16),
 	FLAG_SENT_CPG			= (1 << 17),
-	FLAG_SUS_RECVD		    = (1 << 18),
+	FLAG_SUS_RECVD			= (1 << 18),
 	FLAG_T6_CANCELED 		= (1 << 19),
-	FLAG_INR_TX			= (1 << 20),
+	FLAG_INR_TX				= (1 << 20),
 	FLAG_INR_SENT			= (1 << 21),
-	FLAG_INR_RX			= (1 << 22),
+	FLAG_INR_RX				= (1 << 22),
 	FLAG_INR_RX_DN			= (1 << 23),
-	FLAG_INF_TX			= (1 << 24),
+	FLAG_INF_TX				= (1 << 24),
 	FLAG_INF_SENT			= (1 << 25),
-	FLAG_INF_RX			= (1 << 26),
+	FLAG_INF_RX				= (1 << 26),
 	FLAG_INF_RX_DN			= (1 << 27),
-	FLAG_FULL_NUMBER			= (1 << 28),
+	FLAG_FULL_NUMBER		= (1 << 28),
 	FLAG_RELAY_DOWN			= (1 << 30),
 	FLAG_CKT_RECONFIG		= (1 << 31)
 } sng_ckt_flag_t;
@@ -966,40 +1007,40 @@ typedef enum {
 	SNGSS7_MTP1_STARTED	= (1 << 5),
 
 	SNGSS7_MTP2_PRESENT	= (1 << 6),
-	SNGSS7_MTP2_STARTED     = (1 << 7),
+	SNGSS7_MTP2_STARTED = (1 << 7),
 
 	SNGSS7_MTP3_PRESENT	= (1 << 8),
-	SNGSS7_MTP3_STARTED     = (1 << 9),
+	SNGSS7_MTP3_STARTED = (1 << 9),
 
 	SNGSS7_ISUP_PRESENT	= (1 << 10),
-	SNGSS7_ISUP_STARTED     = (1 << 11),
+	SNGSS7_ISUP_STARTED = (1 << 11),
 
 	SNGSS7_CC_PRESENT	= (1 << 12),
-	SNGSS7_CC_STARTED       = (1 << 13),
+	SNGSS7_CC_STARTED   = (1 << 13),
 
-	SNGSS7_TUCL_PRESENT	 = (1 << 14),
-	SNGSS7_TUCL_STARTED      = (1 << 15),
+	SNGSS7_TUCL_PRESENT	= (1 << 14),
+	SNGSS7_TUCL_STARTED = (1 << 15),
 
 	SNGSS7_SCTP_PRESENT	 = (1 << 16),
 	SNGSS7_SCTP_STARTED      = (1 << 17),
 
-	SNGSS7_M2UA_PRESENT	 = (1 << 18),
-	SNGSS7_M2UA_STARTED      = (1 << 19),
+	SNGSS7_M2UA_PRESENT	= (1 << 18),
+	SNGSS7_M2UA_STARTED = (1 << 19),
 	SNGSS7_M2UA_EP_OPENED    = (1 << 20),
 	SNGSS7_M2UA_INIT_ASSOC_DONE    = (1 << 21),
 
-	SNGSS7_NIF_PRESENT	 = (1 << 22),
-	SNGSS7_NIF_STARTED       = (1 << 23),
+	SNGSS7_NIF_PRESENT  = (1 << 22),
+	SNGSS7_NIF_STARTED  = (1 << 23),
 
-	SNGSS7_M3UA_PRESENT	 = (1 << 24),
-	SNGSS7_M3UA_STARTED      = (1 << 25),
+	SNGSS7_M3UA_PRESENT	= (1 << 24),
+	SNGSS7_M3UA_STARTED = (1 << 25),
+	SNGSS7_CKT_DISABLE  = (1 << 26),
 } sng_task_flag_t;
 /******************************************************************************/
 
 /* GLOBALS ********************************************************************/
 extern ftdm_sngss7_data_t		g_ftdm_sngss7_data;
 extern ftdm_sngss7_global_data_t 	g_ftdm_sngss7_span_data;
-/*extern ftdm_sngss7_opr_mode		g_ftdm_operating_mode;*/
 extern sng_ssf_type_t			sng_ssf_type_map[];
 extern sng_switch_type_t		sng_switch_type_map[];
 extern sng_link_type_t			sng_link_type_map[];
@@ -1022,6 +1063,8 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan);
 /* To get the Local/Remote congestion Status
  * Only enable in case ACC feature is enabled */
 ftdm_status_t ftdm_sangoma_ss7_get_congestion_status(ftdm_channel_t *ftdmchan);
+/* to stop particular span in case of recofiguration request */
+ftdm_status_t ftmod_ss7_isup_span_stop(ftdm_span_t *span, ftdm_sngss7_operating_modes_e opr_mode);
 
 /* in ftmod_sangoma_ss7_logger.c */
 void handle_sng_log(uint8_t level, char *fmt,...);
@@ -1044,7 +1087,7 @@ ftdm_status_t handle_relay_disconnect_on_down(RyMngmt *sta);
 ftdm_status_t handle_relay_disconnect_on_error(RyMngmt *sta);
 
 /* in ftmod_sangoma_ss7_cfg.c */
-int ft_to_sngss7_cfg_all(ftdm_sngss7_operating_modes_e opr_mode);
+int ft_to_sngss7_cfg_all(ftdm_sngss7_operating_modes_e opr_mode, int reload);
 ftdm_status_t ft_to_sngss7_cfg_mtp2_api(ftdm_channel_t *ftdmchan);
 int ftmod_ss7_mtp1_gen_config(void);
 int ftmod_ss7_mtp2_gen_config(void);
@@ -1073,6 +1116,27 @@ int ft_to_sngss7_activate_mtp2(ftdm_channel_t *ftdmchan);
 
 int ftmod_ss7_delete_mtp2_link(int lnkNmb);
 int ftmod_ss7_delete_mtp1_link(int lnkNmb);
+
+int ftmod_ss7_disable_isup_intf(uint32_t intfId);
+int ftmod_ss7_delete_isup_intf(uint32_t intfId);
+
+int ftmod_ss7_disable_isup_ckt(uint32_t cktId);
+int ftmod_ss7_delete_isup_ckt(uint32_t cktId);
+
+int ftmod_ss7_disable_isap(int suId);
+int ftmod_ss7_delete_isap(int suId);
+
+int ftmod_ss7_disable_nsap(int suId);
+int ftmod_ss7_delete_nsap(int suId);
+
+int ftmod_ss7_disable_mtp3_nsap(uint32_t nsap_id);
+int ftmod_ss7_delete_mtp3_nsap(uint32_t nsap_id);
+
+int ftmod_ss7_delete_mtp3link(uint32_t id);
+int ftmod_ss7_delete_mtpLinkSet(int lnkSetId);
+int ftmod_ss7_delete_route(uint32_t id);
+
+int ftmod_ss7_disable_mtp2_link(int lnknmb);
 
 int ftmod_ss7_inhibit_mtp3link(uint32_t id);
 int ftmod_ss7_uninhibit_mtp3link(uint32_t id);
@@ -1223,10 +1287,12 @@ ftdm_status_t ftmod_sangoma_ss7_mtp2_indicate(ftdm_channel_t *ftdmchan);
 
 
 /* in ftmod_sangoma_ss7_xml.c */
-int ftmod_ss7_parse_xml(ftdm_conf_parameter_t *ftdm_parameters, ftdm_span_t *span);
-ftdm_sngss7_operating_modes_e ftmod_ss7_get_operating_mode(int span_id);
+int ftmod_ss7_parse_xml(ftdm_conf_parameter_t *ftdm_parameters, ftdm_span_t *span, int span_id[], ftdm_bool_t check, int reload);
+int ftmod_ss7_get_operatig_mode_cfg(const char* span_opr_mode, const char* sng_gen_opr_mode);
+ftdm_sngss7_operating_modes_e ftmod_ss7_get_operating_mode_by_span_id(int span_id);
 int ftmod_ss7_is_operating_mode_pres(ftdm_sngss7_operating_modes_e opr_mode);
 ftdm_status_t ftmod_ss7_check_gen_config_status(void);
+/* circuit start and end range based on procId */
 int ftmod_ss7_get_circuit_start_range(int procId);
 int ftmod_ss7_get_circuit_end_range(int procId);
 
@@ -1302,6 +1368,9 @@ ftdm_status_t check_if_rx_grs_started(ftdm_span_t *ftdmspan);
 ftdm_status_t check_if_rx_grs_processed(ftdm_span_t *ftdmspan);
 ftdm_status_t check_if_rx_gra_started(ftdm_span_t *ftdmspan);
 ftdm_status_t check_for_res_sus_flag(ftdm_span_t *ftdmspan);
+/* To check if there are any active calls present on channel for
+ * the span passed */
+ftdm_status_t check_if_active_calls_present(ftdm_span_t *ftdmspan);
 
 ftdm_status_t process_span_ucic(ftdm_span_t *ftdmspan);
 
@@ -1323,7 +1392,7 @@ int find_ssf_type_in_map(const char *ssfType);
 int find_cic_cntrl_in_map(const char *cntrlType);
 
 ftdm_status_t check_status_of_all_isup_intf(void);
-ftdm_status_t check_for_reconfig_flag(ftdm_span_t *ftdmspan);
+ftdm_status_t check_for_reconfig_flag(ftdm_span_t *ftdmspan, ftdm_sngss7_operating_modes_e opr_mode);
 
 void ftdm_sangoma_ss7_process_stack_event (sngss7_event_data_t *sngss7_event);
 ftdm_status_t ftdm_sangoma_ss7_stop (ftdm_span_t * span);
@@ -1371,6 +1440,77 @@ ftdm_status_t sng_acc_free_active_calls_hashlist(ftdm_sngss7_rmt_cong_t *sngss7_
 ftdm_status_t sng_acc_rmv_active_call(ftdm_channel_t *ftdmchan);
 ftdm_status_t ftdm_sangoma_ss7_received_call(ftdm_channel_t *ftdmchan);
 void sngss7_free_acc(void);
+
+/* in ftdm_sangoma_ss7_io.c */
+int ftmod_ss7_get_start_cic_value_by_span_id(int span_id);
+
+sng_span_type ftmod_ss7_get_span_type(int span_id, int cc_span_id);
+ftdm_status_t ftmod_ss7_get_sig_span_status(int span_id, int cc_span_id);
+int ftmod_ss7_get_mtp1_id_by_span_id(int span_id);
+int ftmod_ss7_get_mtp2_id_by_mtp1_id(int mtp1Idx);
+int ftmod_ss7_get_mtp3_id_by_mtp2_id(int mtp2Idx);
+int ftmod_ss7_get_mtp3_link_by_linkset_id(int linkset_id);
+int ftmod_ss7_get_linkset_id_by_mtp3_id(int mtp3Idx);
+ftdm_status_t ftmod_ss7_get_linkset_id_by_route_id(int route_idx, int linkset_id[], int num_linksets);
+int ftmod_ss7_get_route_id_by_isup_intf_id(int isup_intf_idx);
+ftdm_status_t ftmod_ss7_get_route_id_by_linkset_id(int linkset_idx, int route_id[], int num_routes);
+int ftmod_ss7_get_self_route_id_by_isup_intf_id(int isup_intf_idx);
+int ftmod_ss7_get_isup_intf_id_by_span_id(int span_id);
+int ftmod_ss7_get_cc_span_id_by_span_id(int span_id);
+int ftmod_ss7_get_nsap_id_by_mtp3_id(int mtp3_idx);
+int ftmod_ss7_get_nsap_id_by_mtp_route_id(int route_idx);
+int ftmod_ss7_get_isap_id_by_isup_intf_id(int isup_intf_idx);
+int ftmod_ss7_get_spId_by_span_id(int span_id);
+
+int ftmod_ss7_get_num_of_cc_span_by_isup_intf(int isup_intf_idx, int span_id);
+int ftmod_ss7_get_num_of_mtp3_links_by_linkset_id(int linkset_idx);
+int ftmod_ss7_get_num_of_mtp3_routes_using_nsap(int nsap_idx);
+int ftmod_ss7_get_num_of_isup_intf_using_route(int route_idx);
+int ftmod_ss7_get_num_of_intf_using_isap(int isap_idx);
+
+int ftmod_ss7_disable_isup_circuit_by_interface_id(int isup_intf_idx, int span_id);
+int ftmod_ss7_disable_isup_circuit_by_span_id(int span_id, int cc_span_id);
+int ftmod_ss7_delete_isup_circuit_by_interface_id(int isup_intf_idx, int span_id);
+int ftmod_ss7_delete_isup_circuit_by_span_id(int span_id, int cc_span_id);
+void ftmod_ss7_send_circuit_block(int span_id, int cc_span_id);
+ftdm_status_t ftmod_ss7_clear_isup_circuit_timers_by_interface_id(int isup_intf_idx, int span_id);
+ftdm_status_t ftmod_ss7_clear_isup_circuit_timers_by_span_id(int span_id, int cc_span_id);
+void ftmod_ss7_clear_all_isup_circuits(int isup_intf_idx, int span_id);
+void ftmod_ss7_clear_isup_circuits(int span_id, int cc_span_id);
+void ftmod_ss7_clear_cc_span_info_by_span_id(int span_id);
+
+/* Reconfiguation validation functions */
+ftdm_status_t ftmod_ss7_validate_reconfig_changes(int span_id, int span_list[]);
+ftdm_status_t ftmod_ss7_validate_mtp1_reconfig_changes(int span_id, int span_list[]);
+ftdm_status_t ftmod_ss7_validate_mtp2_reconfig_changes(int span_id, int span_list[]);
+ftdm_status_t ftmod_ss7_validate_mtp3_reconfig_changes(int span_id, int span_list[]);
+ftdm_status_t ftmod_ss7_validate_linkset_reconfig_changes(int span_id, int span_list[]);
+ftdm_status_t ftmod_ss7_validate_route_reconfig_changes(int span_id, int span_list[]);
+ftdm_status_t ftmod_ss7_validate_self_route_reconfig_changes(int span_id, int span_list[]);
+ftdm_status_t ftmod_ss7_validate_nsap_reconfig_changes(int span_id, int span_list[]);
+ftdm_status_t ftmod_ss7_validate_isap_reconfig_changes(int span_id, int span_list[]);
+ftdm_status_t ftmod_ss7_validate_isup_interface_reconfig_changes(int span_id, int span_list[]);
+ftdm_status_t ftmod_ss7_validate_cc_span_reconfig_changes(int span_id, int span_list[]);
+
+int ftmod_ss7_is_new_link_for_existing_linkset(sng_mtp3_link_t *mtp3Link);
+ftdm_status_t ftmod_ss7_add_span_to_list(int span_id, int span_list[]);
+
+ftdm_status_t ftdm_ss7_clear_ss7_reload_config(void);
+ftdm_status_t ftdm_ss7_clear_ss7_flag(void);
+
+/* check links and activate them */
+ftdm_status_t ftdm_ss7_check_and_activate_mtp3_link(void);
+
+/* retrieve span id based on SS7 porotcol structures */
+int ftmod_get_span_id_by_mtp2_id(int mtp2_idx);
+int ftmod_ss7_get_span_id_by_mtp3_id(int mtp3_idx);
+void ftmod_ss7_get_span_id_by_linkset_id(int linkset_idx, int span_id[]);
+void ftmod_ss7_get_span_id_by_route_id(int route_idx, int span_id[]);
+void ftmod_ss7_get_span_id_by_isup_interface_id(int isup_intf_idx, int span_id[]);
+int ftmod_ss7_get_span_id_by_cc_span_id(int cc_span_id);
+void ftmod_ss7_get_span_id_by_mtp_self_route(int self_route_idx, int span_id[]);
+void ftmod_ss7_get_span_id_by_nsap_id(int nsap_idx, int span_id[]);
+void ftmod_ss7_get_span_id_by_isap_id(int isap_idx, int span_id[]);
 
 #if JZ_BLO_TIMER
 void handle_disable_tx_ubl_timeout_on_tx_blo(void *userdata);

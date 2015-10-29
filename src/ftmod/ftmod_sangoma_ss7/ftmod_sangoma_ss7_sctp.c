@@ -275,6 +275,10 @@ int ftmod_sctp_gen_config(void)
 #ifdef SB_ECN
 	cfg.t.cfg.s.genCfg.reConfig.ecnFlg                      = TRUE;
 #endif
+#ifdef LSB13
+	cfg.t.cfg.s.genCfg.checkSumFlg                      = TRUE; /* TODO - should be a configurable option */
+	cfg.t.cfg.s.genCfg.checkSumType                     = SB_DUAL; /* or SB_CRC32 - TODO - should be a configurable option */
+#endif
 
 	return(sng_cfg_sctp(&pst, &cfg));
 }
@@ -458,6 +462,10 @@ ftdm_status_t ftmod_sctp_sap_config(int id)
 
 	c->reConfig.handleInitFlg 	= FALSE;
 
+#ifdef LSB13
+	c->reConfig.checksumType        = TRUE; /* TODO - should be a configurable option */
+#endif
+
 	ret = sng_cfg_sctp(&pst, &cfg);
 	if (0 == ret) {
 		SS7_INFO("SCTP SAP [%d] configuration DONE!\n", id);
@@ -529,7 +537,7 @@ int ftmod_sctp_debug(int action)
 
 	cntrl.t.cntrl.action = action;
 	cntrl.t.cntrl.subAction = SADBG;
-	cntrl.t.cntrl.dbgMask   = 0xFFFF;
+	cntrl.t.cntrl.dbgMask   = 0xFFFFFFFF;
 
 	return (sng_cntrl_sctp (&pst, &cntrl));
 }

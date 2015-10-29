@@ -34,6 +34,8 @@
  *
  * Ricardo Barroetaveña <rbarroetavena@anura.com.ar>
  * James Zhang <jzhang@sangoma.com>
+ * Kapil Gupta <kgupta@sangoma.com>
+ * Pushkar Singh <psingh@sangoma.com>
  *
  */
 
@@ -1489,10 +1491,11 @@ ftdm_status_t handle_pause(uint32_t suInstId, uint32_t spInstId, uint32_t circui
 {
 	SS7_FUNC_TRACE_ENTER(__FUNCTION__);
 	
-	sngss7_chan_data_t  *sngss7_info = NULL;
-	ftdm_channel_t	  *ftdmchan = NULL;
-	int				 infId;
-	int				 i;
+	sngss7_chan_data_t	*sngss7_info = NULL;
+	ftdm_channel_t		*ftdmchan = NULL;
+	int					infId;
+	int					i;
+	int					idx = 0;
 	
 	ftdm_running_return(FTDM_FAIL);
 	infId = g_ftdm_sngss7_data.cfg.isupCkt[circuit].infId;
@@ -1502,59 +1505,69 @@ ftdm_status_t handle_pause(uint32_t suInstId, uint32_t spInstId, uint32_t circui
 	
 	/* go through all the circuits now and find any other circuits on this infId */
 	i = ftmod_ss7_get_circuit_start_range(g_ftdm_sngss7_data.cfg.procId);
-	while (g_ftdm_sngss7_data.cfg.isupCkt[i].id != 0) {
-		
-		/* check that the infId matches and that this is not a siglink */
-		if ((g_ftdm_sngss7_data.cfg.isupCkt[i].infId == infId) && 
-			(g_ftdm_sngss7_data.cfg.isupCkt[i].type == SNG_CKT_VOICE)) {
 
-			/* confirm that the circuit is active on our side otherwise move to the next circuit */
-			if (!sngss7_test_flag(&g_ftdm_sngss7_data.cfg.isupCkt[i], SNGSS7_ACTIVE)) {
-				SS7_ERROR("[CIC:%d]Circuit is not active yet, skipping!\n",g_ftdm_sngss7_data.cfg.isupCkt[i].cic);
-				i++;
-				continue;
-			}
-	
-			/* get the ftdmchan and ss7_chan_data from the circuit */
-			if (extract_chan_data(i, &sngss7_info, &ftdmchan)) {
-				SS7_ERROR("Failed to extract channel data for circuit = %d!\n", circuit);
-				i++;
-				continue;
-			}
+	for (idx = 1; idx < MAX_ISUP_INFS; idx++) {
+		if (g_ftdm_sngss7_data.cfg.isupCc[idx].span_id) {
+			i = g_ftdm_sngss7_data.cfg.isupCc[idx].ckt_start_val;
+		} else {
+			continue;
+		}
+
+		while ((g_ftdm_sngss7_data.cfg.isupCkt[i].id != 0) &&
+			(g_ftdm_sngss7_data.cfg.isupCc[idx].span_id == g_ftdm_sngss7_data.cfg.isupCkt[i].span))  {
+
+			/* check that the infId matches and that this is not a siglink */
+			if ((g_ftdm_sngss7_data.cfg.isupCkt[i].infId == infId) &&
+				(g_ftdm_sngss7_data.cfg.isupCkt[i].type == SNG_CKT_VOICE)) {
+
+				/* confirm that the circuit is active on our side otherwise move to the next circuit */
+				if (!sngss7_test_flag(&g_ftdm_sngss7_data.cfg.isupCkt[i], SNGSS7_ACTIVE)) {
+					SS7_ERROR("[CIC:%d]Circuit is not active yet, skipping!\n",g_ftdm_sngss7_data.cfg.isupCkt[i].cic);
+					i++;
+					continue;
+				}
+
+				/* get the ftdmchan and ss7_chan_data from the circuit */
+				if (extract_chan_data(i, &sngss7_info, &ftdmchan)) {
+					SS7_ERROR("Failed to extract channel data for circuit = %d!\n", circuit);
+					i++;
+					continue;
+				}
 
 #if 0
-			/* Temp fix did for BT to answer sip client as soon as ss7 link went down */
+				/* Temp fix did for BT to answer sip client as soon as ss7 link went down */
 #ifdef SS7_UK
-			/* If recieved PAUSE indication for channel on which it call is in progress then change channel state to UP */
-			if ((FTDM_CHANNEL_STATE_RINGING == ftdmchan->state ) || 
-				(ftdmchan->state == FTDM_CHANNEL_STATE_PROGRESS_MEDIA)) {
-				ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_UP);
-				SS7_DEBUG("Changing span[%d] channel[%d] state to UP as call is in progress\n", ftdmchan->span_id, ftdmchan->chan_id);
-			}
+				/* If recieved PAUSE indication for channel on which it call is in progress then change channel state to UP */
+				if ((FTDM_CHANNEL_STATE_RINGING == ftdmchan->state ) ||
+						(ftdmchan->state == FTDM_CHANNEL_STATE_PROGRESS_MEDIA)) {
+					ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_UP);
+					SS7_DEBUG("Changing span[%d] channel[%d] state to UP as call is in progress\n", ftdmchan->span_id, ftdmchan->chan_id);
+				}
 #endif
 #endif
-	
-			/* lock the channel */
-			ftdm_mutex_lock(ftdmchan->mutex);
-	
-			/* check if the circuit is fully started */
-			if (ftdm_test_flag(ftdmchan->span, FTDM_SPAN_IN_THREAD)) {
-				SS7_DEBUG_CHAN(ftdmchan, "Rx PAUSE%s\n", "");
-				/* set the pause flag on the channel */
-				sngss7_set_ckt_flag(sngss7_info, FLAG_INFID_PAUSED);
 
-				/* clear the resume flag on the channel */
-				sngss7_clear_ckt_flag(sngss7_info, FLAG_INFID_RESUME);
+				/* lock the channel */
+				ftdm_mutex_lock(ftdmchan->mutex);
+
+				/* check if the circuit is fully started */
+				if (ftdm_test_flag(ftdmchan->span, FTDM_SPAN_IN_THREAD)) {
+					SS7_DEBUG_CHAN(ftdmchan, "Rx PAUSE%s\n", "");
+					/* set the pause flag on the channel */
+					sngss7_set_ckt_flag(sngss7_info, FLAG_INFID_PAUSED);
+
+					/* clear the resume flag on the channel */
+					sngss7_clear_ckt_flag(sngss7_info, FLAG_INFID_RESUME);
+				}
+
+				/* unlock the channel again before we exit */
+				ftdm_mutex_unlock(ftdmchan->mutex);
+
 			}
-	
-			/* unlock the channel again before we exit */
-			ftdm_mutex_unlock(ftdmchan->mutex);
-	
-		} 
-	
-		i++;
-	} 
-	
+
+			i++;
+		}
+	}
+
 	SS7_FUNC_TRACE_EXIT(__FUNCTION__);
 	return FTDM_SUCCESS;
 }
@@ -1564,10 +1577,11 @@ ftdm_status_t handle_resume(uint32_t suInstId, uint32_t spInstId, uint32_t circu
 {
 	SS7_FUNC_TRACE_ENTER(__FUNCTION__);
 
-	sngss7_chan_data_t  *sngss7_info = NULL;
-	ftdm_channel_t	  *ftdmchan = NULL;
-	int				 infId;
-	int				 i;
+	sngss7_chan_data_t	*sngss7_info = NULL;
+	ftdm_channel_t		*ftdmchan = NULL;
+	int					infId;
+	int					i;
+	int					idx = 0;
 	
 	ftdm_running_return(FTDM_FAIL);
 
@@ -1579,43 +1593,53 @@ ftdm_status_t handle_resume(uint32_t suInstId, uint32_t spInstId, uint32_t circu
 
 	/* go through all the circuits now and find any other circuits on this infId */
 	i = ftmod_ss7_get_circuit_start_range(g_ftdm_sngss7_data.cfg.procId);
-	while (g_ftdm_sngss7_data.cfg.isupCkt[i].id != 0) {
 
-		/* check that the infId matches and that this is not a siglink */
-		if ((g_ftdm_sngss7_data.cfg.isupCkt[i].infId == infId) && 
-			(g_ftdm_sngss7_data.cfg.isupCkt[i].type == SNG_CKT_VOICE)) {
-
-			/* confirm that the circuit is active on our side otherwise move to the next circuit */
-			if (!sngss7_test_flag(&g_ftdm_sngss7_data.cfg.isupCkt[i], SNGSS7_ACTIVE)) {
-				ftdm_log(FTDM_LOG_DEBUG, "[CIC:%d]Circuit is not active yet, skipping!\n",g_ftdm_sngss7_data.cfg.isupCkt[i].cic);
-				i++;
-				continue;
-			}
-
-			/* get the ftdmchan and ss7_chan_data from the circuit */
-			if (extract_chan_data(i, &sngss7_info, &ftdmchan)) {
-				SS7_ERROR("Failed to extract channel data for circuit = %d!\n", circuit);
-				i++;
-				continue;
-			}
-
-			/* lock the channel */
-			ftdm_mutex_lock(ftdmchan->mutex);
-
-			/* only resume if we are paused */
-			if (sngss7_test_ckt_flag(sngss7_info, FLAG_INFID_PAUSED)) {
-				SS7_DEBUG_CHAN(ftdmchan, "Rx RESUME%s\n", "");
-
-				/* set the resume flag on the channel */
-				sngss7_set_ckt_flag(sngss7_info, FLAG_INFID_RESUME);
-
-				/* clear the paused flag */
-				sngss7_clear_ckt_flag(sngss7_info, FLAG_INFID_PAUSED);
-			}
-			
-			ftdm_mutex_unlock(ftdmchan->mutex);
+	for (idx = 1; idx < MAX_ISUP_INFS; idx++) {
+		if (g_ftdm_sngss7_data.cfg.isupCc[idx].span_id) {
+			i = g_ftdm_sngss7_data.cfg.isupCc[idx].ckt_start_val;
+		} else {
+			continue;
 		}
-		i++;
+
+		while ((g_ftdm_sngss7_data.cfg.isupCkt[i].id != 0) &&
+		       (g_ftdm_sngss7_data.cfg.isupCc[idx].span_id == g_ftdm_sngss7_data.cfg.isupCkt[i].span))  {
+
+			/* check that the infId matches and that this is not a siglink */
+			if ((g_ftdm_sngss7_data.cfg.isupCkt[i].infId == infId) &&
+				(g_ftdm_sngss7_data.cfg.isupCkt[i].type == SNG_CKT_VOICE)) {
+
+				/* confirm that the circuit is active on our side otherwise move to the next circuit */
+				if (!sngss7_test_flag(&g_ftdm_sngss7_data.cfg.isupCkt[i], SNGSS7_ACTIVE)) {
+					ftdm_log(FTDM_LOG_DEBUG, "[CIC:%d]Circuit is not active yet, skipping!\n",g_ftdm_sngss7_data.cfg.isupCkt[i].cic);
+					i++;
+					continue;
+				}
+
+				/* get the ftdmchan and ss7_chan_data from the circuit */
+				if (extract_chan_data(i, &sngss7_info, &ftdmchan)) {
+					SS7_ERROR("Failed to extract channel data for circuit = %d!\n", circuit);
+					i++;
+					continue;
+				}
+
+				/* lock the channel */
+				ftdm_mutex_lock(ftdmchan->mutex);
+
+				/* only resume if we are paused */
+				if (sngss7_test_ckt_flag(sngss7_info, FLAG_INFID_PAUSED)) {
+					SS7_DEBUG_CHAN(ftdmchan, "Rx RESUME%s\n", "");
+
+					/* set the resume flag on the channel */
+					sngss7_set_ckt_flag(sngss7_info, FLAG_INFID_RESUME);
+
+					/* clear the paused flag */
+					sngss7_clear_ckt_flag(sngss7_info, FLAG_INFID_PAUSED);
+				}
+
+				ftdm_mutex_unlock(ftdmchan->mutex);
+			}
+			i++;
+		}
 	}
 
 	SS7_FUNC_TRACE_EXIT(__FUNCTION__);
@@ -2052,11 +2076,18 @@ ftdm_status_t handle_rsc_rsp(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 		SS7_FUNC_TRACE_EXIT(__FUNCTION__);
 		return FTDM_FAIL;
 	}
+
 	SS7_INFO_CHAN(ftdmchan, "[CIC:%d]Rx %s\n", g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic, DECODE_LCC_EVENT(evntType));
 	
 	if (sngss7_info->t_waiting_rsca.hb_timer_id) {
-		ftdm_sched_cancel_timer (sngss7_info->t_waiting_rsca.sched, sngss7_info->t_waiting_rsca.hb_timer_id);
-		SS7_DEBUG_CHAN(ftdmchan, "[CIC:%d]Cancel waiting RSCA timer.\n",	g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic);
+		if (ftdm_sched_cancel_timer (sngss7_info->t_waiting_rsca.sched, sngss7_info->t_waiting_rsca.hb_timer_id)) {
+			SS7_ERROR_CHAN(ftdmchan, "[CIC:%d]Unable to Cancel waiting RSCA timer %d!\n",
+					g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic, (int)sngss7_info->t_waiting_rsca.hb_timer_id);
+		} else {
+			SS7_DEBUG_CHAN(ftdmchan, "[CIC:%d]Cancel waiting RSCA timer %d\n",
+					g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic, (int)sngss7_info->t_waiting_rsca.hb_timer_id);
+			sngss7_info->t_waiting_rsca.hb_timer_id = 0;
+		}
 	}
 	
 	ftdm_mutex_lock(ftdmchan->mutex);

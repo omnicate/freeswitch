@@ -336,7 +336,7 @@ ftdm_status_t ft_to_sngss7_cfg_mtp2_api(ftdm_channel_t *ftdmchan)
 #endif
 
 	if (!(g_ftdm_sngss7_data.cfg.mtp1Link[mtp1Id].flags & SNGSS7_CONFIGURED)) {
-		opr_mode = ftmod_ss7_get_operating_mode(ftdmchan->span_id);
+		opr_mode = ftmod_ss7_get_operating_mode_by_span_id(ftdmchan->span_id);
 
 		if (ftmod_ss7_mtp1_psap_config(mtp1Id, opr_mode)) {
 			ftdm_log(FTDM_LOG_CRIT, "MTP1 PSAP %d configuration FAILED!\n", mtp1Id);

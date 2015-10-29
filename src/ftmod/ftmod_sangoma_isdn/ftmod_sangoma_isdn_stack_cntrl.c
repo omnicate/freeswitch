@@ -43,7 +43,9 @@ ftdm_status_t sngisdn_deactivate_phy(ftdm_span_t *span);
 ftdm_status_t sngisdn_activate_cc(ftdm_span_t *span);
 
 ftdm_status_t sngisdn_cntrl_q931(ftdm_span_t *span, uint8_t action, uint8_t subaction);
+
 ftdm_status_t sngisdn_cntrl_q921(ftdm_span_t *span, uint8_t action, uint8_t subaction);
+ftdm_status_t sngisdn_q921_dlsap_cntrl_req(ftdm_span_t *span, uint8_t action, uint8_t subaction);
 /* Stack logging enable */
 ftdm_status_t sngisdn_debug_q931(uint8_t action, uint8_t subaction);
 ftdm_status_t sngisdn_debug_q921(uint8_t action, uint8_t subaction);
@@ -94,23 +96,40 @@ ftdm_status_t sngisdn_stack_start(ftdm_span_t *span)
 
 ftdm_status_t sngisdn_stack_stop(ftdm_span_t *span)
 {
+	/* Proper explanation for why we need to remove FTDM FAIL */
 	/* Stop L1 first, so we do not receive any more frames */
 	if (sngisdn_deactivate_phy(span) != FTDM_SUCCESS) {
 		ftdm_log(FTDM_LOG_CRIT, "%s:Failed to deactivate stack phy\n", span->name);
-		return FTDM_FAIL;
 	}
 
 	if (sngisdn_cntrl_q931(span, AUBND_DIS, SAELMNT) != FTDM_SUCCESS) {
 		ftdm_log(FTDM_LOG_CRIT, "%s:Failed to deactivate stack q931\n", span->name);
-		return FTDM_FAIL;
 	}
 
 	if (sngisdn_cntrl_q921(span, AUBND_DIS, SAELMNT) != FTDM_SUCCESS) {
 		ftdm_log(FTDM_LOG_CRIT, "%s:Failed to deactivate stack q921\n", span->name);
-		return FTDM_FAIL;
 	}
-	
+
+	/* Deactivate q921 DLSAP */
+	if (sngisdn_q921_dlsap_cntrl_req(span, AUBND_DIS, SAELMNT)) {
+		ftdm_log(FTDM_LOG_CRIT, "%s:Failed to deactivate q921 DLSAP\n", span->name);
+	}
+
+	if (sngisdn_cntrl_q931(span, ADEL, SAELMNT) != FTDM_SUCCESS) {
+		ftdm_log(FTDM_LOG_CRIT, "%s:Failed to delete stack q931\n", span->name);
+	}
+
+	if (sngisdn_cntrl_q921(span, ADEL, SAELMNT) != FTDM_SUCCESS) {
+		ftdm_log(FTDM_LOG_CRIT, "%s:Failed to delete stack q921\n", span->name);
+	}
+
+	/* Delete q921 DLSAP */
+	if (sngisdn_q921_dlsap_cntrl_req(span, ADEL, SAELMNT)) {
+		ftdm_log(FTDM_LOG_CRIT, "%s:Failed to delete q921 DLSAP\n", span->name);
+	}
+
 	ftdm_log(FTDM_LOG_INFO, "%s:Signalling stopped\n", span->name);
+
 	return FTDM_SUCCESS;
 }
 
@@ -464,6 +483,60 @@ ftdm_status_t sngisdn_cntrl_q921(ftdm_span_t *span, uint8_t action, uint8_t suba
 	return FTDM_SUCCESS;
 }
 
+
+ftdm_status_t sngisdn_q921_dlsap_cntrl_req(ftdm_span_t *span, uint8_t action, uint8_t subaction)
+{
+	BdMngmt cntrl;
+        Pst pst;
+        sngisdn_span_data_t *signal_data = (sngisdn_span_data_t*)span->signal_data;
+
+        /* initalize the post structure */
+        stack_pst_init(&pst);
+
+        /* insert the destination Entity */
+        pst.dstEnt = ENTLD;
+
+        /* initalize the control structure */
+        memset(&cntrl, 0, sizeof(cntrl));
+
+        /* initalize the control header */
+        stack_hdr_init(&cntrl.hdr);
+        /* build control request */
+        cntrl.hdr.msgType          = TCNTRL;
+        cntrl.hdr.entId.ent        = ENTLD;
+        cntrl.hdr.entId.inst       = S_INST;
+
+#if (SMBD_LMINT3 || BD_LMINT3)
+        stack_resp_hdr_init(&cntrl.hdr);
+#endif /* _LMINT3 */
+
+        cntrl.hdr.elmId.elmnt      = STDLSAP;
+        cntrl.t.cntrl.action       = action;
+        cntrl.t.cntrl.subAction    = subaction;
+
+#if (SMBD_LMINT3 || BD_LMINT3)
+        cntrl.t.cntrl.lnkNmb       = signal_data->dchan_id;
+        cntrl.t.cntrl.sapi         = NOTUSED;
+        cntrl.t.cntrl.tei          = NOTUSED;
+#else /* _LMINT3 */
+        cntrl.hdr.elmId.elmntInst1 = signal_data->dchan_id;
+        cntrl.hdr.elmId.elmntInst2 = NOTUSED;
+        cntrl.hdr.elmId.elmntInst3 = NOTUSED;
+#endif /* _LMINT3 */
+
+        cntrl.t.cntrl.logInt       = NOTUSED;
+        cntrl.t.cntrl.trcLen       = NOTUSED;
+        if (action == AENA && subaction == SATRC) {
+                cntrl.t.cntrl.trcLen = -1; /* Trace the entire message buffer */
+        }
+
+        SGetDateTime(&(cntrl.t.cntrl.dt));
+        if(sng_isdn_q921_cntrl(&pst, &cntrl)) {
+                return FTDM_FAIL;
+        }
+
+	return FTDM_SUCCESS;
+}
 
 void stack_resp_hdr_init(Header *hdr)
 { 

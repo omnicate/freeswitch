@@ -392,7 +392,7 @@ typedef struct ftdm2trillium
 extern ftdm_sngisdn_data_t	g_sngisdn_data;
 
 /* Configuration functions */
-ftdm_status_t ftmod_isdn_parse_cfg(ftdm_conf_parameter_t *ftdm_parameters, ftdm_span_t *span);
+ftdm_status_t ftmod_isdn_parse_cfg(ftdm_conf_parameter_t *ftdm_parameters, ftdm_span_t *span, int reload);
 
 /* Support functions */
 uint32_t get_unique_suInstId(int16_t cc_id);
@@ -400,6 +400,8 @@ void clear_call_data(sngisdn_chan_data_t *sngisdn_info);
 void clear_call_glare_data(sngisdn_chan_data_t *sngisdn_info);
 ftdm_status_t get_ftdmchan_by_suInstId(int16_t cc_id, uint32_t suInstId, sngisdn_chan_data_t **sngisdn_data);
 ftdm_status_t get_ftdmchan_by_spInstId(int16_t cc_id, uint32_t spInstId, sngisdn_chan_data_t **sngisdn_data);
+ftdm_status_t ftmod_isdn_validate_switch_type_reconfig(const char* switch_name, ftdm_span_t *span, int *switchtype);
+ftdm_status_t ftmod_isdn_validate_signal_type_reconfig ( const char* signalling, ftdm_span_t *span);
 
 ftdm_status_t sngisdn_set_span_avail_rate(ftdm_span_t *span, sngisdn_avail_t avail);
 ftdm_status_t sngisdn_set_chan_avail_rate(ftdm_channel_t *chan, sngisdn_avail_t avail);

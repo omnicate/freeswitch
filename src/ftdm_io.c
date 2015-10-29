@@ -34,6 +34,7 @@
  *
  * Moises Silva <moy@sangoma.com>
  * David Yat Sin <dyatsin@sangoma.com>
+ * Pushkar Singh <psingh@sangoma.com>
  *
  */
 #define _GNU_SOURCE
@@ -2241,6 +2242,24 @@ FT_DECLARE(const char *) ftdm_channel_get_span_name(const ftdm_channel_t *ftdmch
 FT_DECLARE(void) ftdm_span_set_trunk_type(ftdm_span_t *span, ftdm_trunk_type_t type)
 {
 	span->trunk_type = type;
+}
+
+FT_DECLARE(ftdm_status_t) ftdm_span_set_reconfig_flag(ftdm_span_t *span)
+{
+	ftdm_assert_return(span, FTDM_FAIL, "Null span\n");
+	return ftdm_set_flag(span, FTDM_SPAN_RECONFIG);
+}
+
+FT_DECLARE(ftdm_status_t) ftdm_span_clear_reconfig_flag(ftdm_span_t *span )
+{
+	ftdm_assert_return(span, FTDM_FAIL, "Null span\n");
+	return ftdm_clear_flag(span, FTDM_SPAN_RECONFIG);
+}
+
+FT_DECLARE(ftdm_status_t) ftdm_span_test_reconfig_flag(ftdm_span_t *span)
+{
+	ftdm_assert_return(span, FTDM_FAIL, "Null span\n");
+	return (!ftdm_test_flag(span,FTDM_SPAN_RECONFIG));
 }
 
 FT_DECLARE(ftdm_status_t) ftdm_span_set_blocking_mode(const ftdm_span_t *span, ftdm_bool_t enabled)
@@ -5021,7 +5040,7 @@ static void print_span_flag_values(ftdm_stream_handle_t *stream)
 
 FT_DECLARE(int ) ftdm_get_all_span_list(char *buffer)
 {
-    ftdm_span_t *sp;
+    ftdm_span_t *sp = NULL;
     int          len = 0x00;
     int count = 0x00;
 
@@ -5396,6 +5415,385 @@ FT_DECLARE(ftdm_status_t) ftdm_configure_span_channels(ftdm_span_t *span, const 
 	return FTDM_SUCCESS;
 }
 
+/* Check if Channel Type is reconfigured for already existing span channels
+ * and create a list of B/voice channels that needs to be configured for span */
+static ftdm_status_t ftdm_check_channel_type_reconfig(ftdm_span_t *span, const char *val, ftdm_chan_type_t chan_type, ftdm_channel_t *bchan[])
+{
+	ftdm_status_t ret = FTDM_FAIL;
+	ftdm_channel_t *fchan = NULL;
+	char *mydata=NULL, *item_list[10];
+	int span_id = 0;
+	int first = 0;
+	int end = 0;
+	int i = 0, items = 0, idx = 0;
+	char *sp, *ch, *mx;
+
+	mydata = ftdm_strdup(val);
+	assert(mydata != NULL);
+
+	items = ftdm_separate_string(mydata, ',', item_list, (sizeof(item_list) / sizeof(item_list[0])));
+
+	for(i = 0; i < items; i++) {
+		sp = item_list[i];
+		if ((ch = strchr(sp, ':'))) {
+			*ch++ = '\0';
+		}
+
+		if (!(sp && ch)) {
+			ftdm_log(FTDM_LOG_ERROR, "No valid wanpipe span and channel was specified\n");
+			continue;
+		}
+
+		first = atoi(ch);
+		span_id = atoi(sp);
+
+		if (first < 0) {
+			ftdm_log(FTDM_LOG_ERROR, "Invalid channel number %d\n", first);
+			continue;
+		}
+
+		if (span_id < 0) {
+			ftdm_log(FTDM_LOG_ERROR, "Invalid span number %d\n", span_id);
+			continue;
+		}
+
+		if ((mx = strchr(ch, '-'))) {
+			mx++;
+			end = atoi(mx) ;
+		} else {
+			end = first ;
+		}
+
+
+		if (end < 0) {
+			ftdm_log(FTDM_LOG_ERROR, "Invalid range number %d\n", first);
+			continue;
+		}
+
+	}
+
+	if (span->span_id != span_id) {
+		ftdm_log(FTDM_LOG_DEBUG, "Invalid span %d comparision with span %d for reconfiguration!\n", span_id, span->span_id);
+		goto done;
+	}
+
+	/* If channel is D channel then only single channel it is possible that only single channel is specified for d channel */
+	if ((chan_type == FTDM_CHAN_TYPE_DQ931) || (chan_type == FTDM_CHAN_TYPE_DQ921)) {
+		if (end == 0) {
+			end = first ;
+		}
+	} else if (end == 0) {
+		ftdm_log(FTDM_LOG_WARNING, "Incorrect reconfiguration found for span %d!\n", span->span_id);
+		goto done;
+	}
+
+	/*
+	 * Check is the channel Type of already cofigured channel is different
+	 * from that of configuration passed and maintain a list of voice
+	 * channels that needs to be configured as per configuration passed
+	 * NOTE: Channels are inserted in list at index equals to channels
+	 * 	 physical channel ID
+	 */
+	for (idx = first; idx <= end; idx++) {
+		fchan = ftdm_span_get_channel_ph(span, idx);
+
+		if (!fchan) {
+			ftdm_log(FTDM_LOG_DEBUG, "New channel %d found while reconfiguring span %d\n!", idx, span->span_id);
+			ret = FTDM_SUCCESS;
+			break;
+		}
+		if (ftdm_channel_get_type(fchan) != chan_type) {
+			ftdm_log(FTDM_LOG_DEBUG, "Reconfigured channel %d type from %s to %s for span %d\n!",
+					idx, ftdm_chan_type2str(ftdm_channel_get_type(fchan)), ftdm_chan_type2str(chan_type), span->span_id);
+			ret = FTDM_SUCCESS;
+			break;
+		}
+
+		bchan[idx] = fchan;
+	}
+
+done:
+	ftdm_safe_free(mydata);
+	return ret;
+}
+
+/* Check if number of B/Voice channels that needs to be configure as per
+ * current configuration is same that of already configured channel for
+ * span passed. Also, check if channels are present in both aleady
+ * configured span channels list and temporary b channel list */
+static ftdm_status_t ftdm_new_chan_configured(ftdm_channel_t *bchan[], ftdm_span_t *span)
+{
+	ftdm_status_t ret 	= FTDM_FAIL;
+	ftdm_channel_t *fchan   = NULL;
+	int idx 		= 0;
+
+
+	for (idx = 1; idx < FTDM_MAX_CHANNELS_SPAN; idx++) {
+		fchan = ftdm_span_get_channel_ph(span, idx);
+		if (!fchan) {
+			if (!bchan[idx]) {
+				continue;
+			} else {
+				ftdm_log_chan(bchan[idx], FTDM_LOG_DEBUG, "New B Channel %d needs to be configured for span %d!\n", idx, span->span_id);
+				ret = FTDM_SUCCESS;
+				break;
+			}
+		} else {
+			if (!bchan[idx]) {
+				ftdm_log_chan(fchan, FTDM_LOG_DEBUG, "New D Channel %d needs to be configured for span %d!\n", idx, span->span_id);
+				ret = FTDM_SUCCESS;
+				break;
+			} else {
+				continue;
+			}
+		}
+	}
+
+	return ret;
+}
+
+/* Check all channel state i.e. is there any active calls present on ftdm channel
+ * or not */
+static ftdm_status_t ftdm_check_channels_state(ftdm_span_t *ftdmspan)
+{
+	ftdm_status_t 	ret  = FTDM_FAIL;
+	int 		idx  = 0;
+
+	ftdm_assert_return(ftdmspan != NULL, FTDM_FAIL, "Invalid Span (NULL)!\n");
+
+	for (idx = 1; idx <= ftdmspan->chan_count; idx++) {
+
+		if ((ftdm_channel_get_state(ftdmspan->channels[idx])) ==  FTDM_CHANNEL_STATE_UP) {
+			return FTDM_FAIL;
+		}
+	}
+
+	ret = FTDM_SUCCESS;
+
+	return ret;
+}
+
+/* Check if span needs to be reconfig then delete already configured
+ * span and return SUCCESS */
+static ftdm_status_t ftdm_check_span_reconfig(ftdm_span_t *ftdmspan)
+{
+	ftdm_bool_t reconfig = FTDM_FALSE;
+	ftdm_channel_t *bchan[FTDM_MAX_CHANNELS_SPAN] = { 0 };
+	char cfg_name[] = "freetdm.conf";
+	ftdm_status_t ret = FTDM_FAIL;
+	ftdm_span_t *span = NULL;
+	ftdm_config_t cfg;
+	char *var = NULL;
+        char *val = NULL;
+	unsigned d = 0;
+	int catno = -1;
+	int idx = 0;
+
+	if (!ftdm_config_open_file(&cfg, cfg_name)) {
+		return FTDM_FAIL;
+	}
+
+	ftdm_log(FTDM_LOG_DEBUG, "Reading configuration file to get change in configuration for span %s\n", ftdmspan->name);
+	while (ftdm_config_next_pair(&cfg, &var, &val)) {
+		if (!strncasecmp(cfg.category, "span", 4)) {
+			if (cfg.catno != catno) {
+				char *type = cfg.category + 4;
+				char *name;
+
+				if (*type == ' ') {
+					type++;
+				}
+
+				catno = cfg.catno;
+
+				if (ftdm_strlen_zero(type)) {
+					ftdm_log(FTDM_LOG_CRIT, "Failure checking span reconfig, no type specified.\n");
+					span = NULL;
+					continue;
+				}
+
+				if ((name = strchr(type, ' '))) {
+					*name++ = '\0';
+				}
+
+				/* Verify is trunk_type was specified for previous span */
+				if (span && span->trunk_type == FTDM_TRUNK_NONE) {
+					ftdm_log(FTDM_LOG_ERROR, "trunk_type is not specified for span %d (%s) in reconfiguration\n", span->span_id, span->name);
+					ret = FTDM_FAIL;
+					goto done;
+				}
+
+				if (FTDM_SUCCESS != ftdm_span_find_by_name(name, &span)) {
+					ftdm_log(FTDM_LOG_DEBUG, "span %s not found for reconfiguration check!\n", name);
+					break;
+				}
+			}
+
+			if ((!span) || (span->span_id != ftdmspan->span_id)) {
+				continue;
+			}
+
+			/* Check if the reconfig flag is already set for the span then stop trversing span configuration further
+			 * and reconfigure the span */
+			if (span->span_id == ftdmspan->span_id) {
+				if (reconfig == FTDM_TRUE) {
+					break;
+				}
+			}
+
+			ftdm_log(FTDM_LOG_DEBUG, "span reconfig %d [%s]=[%s]\n", span->span_id, var, val);
+
+			if (!strcasecmp(var, "trunk_type")) {
+				ftdm_trunk_type_t trtype = ftdm_str2ftdm_trunk_type(val);
+				if (ftdmspan->trunk_type != trtype) {
+					ftdm_log(FTDM_LOG_DEBUG, "Trunk Type for Span %s reconfigured from %s to %s\n",
+						 span->name, ftdm_trunk_type2str(ftdmspan->trunk_type), ftdm_trunk_type2str(trtype));
+					reconfig = FTDM_TRUE;
+				}
+			} else if (!strcasecmp(var, "b-channel")) {
+				ret = ftdm_check_channel_type_reconfig(ftdmspan, val, FTDM_CHAN_TYPE_B, bchan);
+
+				if (ret == FTDM_SUCCESS) {
+					ftdm_log(FTDM_LOG_DEBUG, "Reconfigure B channel for span %s\n", span->name);
+					reconfig = FTDM_TRUE;
+				}
+			} else if (!strcasecmp(var, "d-channel")) {
+				if (d) {
+					ftdm_log(FTDM_LOG_WARNING, "ignoring extra d-channel\n");
+				} else {
+					if (!strncasecmp(val, "lapd:", 5)) {
+						ret = ftdm_check_channel_type_reconfig(ftdmspan, val, FTDM_CHAN_TYPE_DQ931, bchan);
+					} else {
+						ret = ftdm_check_channel_type_reconfig(ftdmspan, val, FTDM_CHAN_TYPE_DQ921, bchan);
+					}
+
+					if (ret == FTDM_SUCCESS) {
+						ftdm_log(FTDM_LOG_DEBUG, "Reconfigure D channel for span %s\n", span->name);
+						reconfig = FTDM_TRUE;
+					}
+					d++;
+				}
+			}
+		} else {
+			ftdm_log(FTDM_LOG_DEBUG, "unknown param for reconfiguration [%s] '%s' / '%s'\n", cfg.category, var, val);
+		}
+	}
+
+done:
+	ftdm_config_close_file(&cfg);
+
+	/*
+	 * This is possible that we are not able to get change in channel
+	 * type as, user can change very first or last span channel from
+	 * Voice to Signalling or vice-versa
+	 * E.g.:
+	 * 	Previous Configuration:
+	 * 	b-channel=>2:1:24
+	 *
+	 * 	Current Configuration:
+	 * 	b-channel=>2:1:23
+	 * 	d-channel=>2:24
+	 */
+	if (reconfig != FTDM_TRUE) {
+		if (FTDM_SUCCESS == ftdm_new_chan_configured(bchan, ftdmspan)) {
+			reconfig = FTDM_TRUE;
+		}
+	}
+
+	if (reconfig == FTDM_TRUE) {
+		idx = ftdmspan->span_id;
+
+		/* check if there are any calls present on this span */
+		ret = ftdm_check_channels_state(ftdmspan);
+		if (ret == FTDM_FAIL) {
+			ftdm_log(FTDM_LOG_NOTICE, "Span %s(%d) can not be destroyed due to active calls present!\n",
+					ftdmspan->name, ftdmspan->span_id);
+			ret = FTDM_FAIL;
+			goto end;
+		}
+
+		ftdm_mutex_lock(ftdmspan->mutex);
+		/* stop this span forcefully */
+		ftdm_set_flag (ftdmspan, FTDM_SPAN_FORCE_STOP);
+		ftdm_mutex_unlock(ftdmspan->mutex);
+		ret = ftdm_span_delete(ftdmspan);
+
+		if (ret == FTDM_SUCCESS) {
+			ftdm_log(FTDM_LOG_DEBUG, "Span %d destroyed successfully for reconfiguration!\n", idx);
+		} else {
+			ftdm_log(FTDM_LOG_DEBUG, "Unable to destroy span %d for reconfiguration!\n", idx);
+		}
+
+	} else {
+		ret = FTDM_FAIL;
+	}
+
+end:
+	return ret;
+}
+
+static ftdm_status_t  ftdm_check_span_reload(int configure_span_list[], int index)
+{
+	ftdm_bool_t pres = FTDM_FALSE;
+	ftdm_status_t ret = FTDM_FAIL;
+	ftdm_span_t *span = NULL;
+	ftdm_span_t *temp_span = NULL;
+	int span_id = 0;
+	int idx = 0;
+
+	if (NULL == globals.spans) {
+		ftdm_log(FTDM_LOG_DEBUG, "No configured span found\n");
+		return FTDM_FAIL;
+	}
+
+	for (span = globals.spans; span;) {
+
+		pres = FTDM_FALSE;
+		temp_span = span->next;
+
+		for (idx = 0; idx < index; idx++) {
+			if (configure_span_list[idx] == span->span_id) {
+				pres = FTDM_TRUE;
+				break;
+			}
+		}
+
+		if (pres != FTDM_TRUE) {
+			/* stop span first and then delete span
+			 * and destroy it */
+			span_id = span->span_id;
+
+			/* check if there are any calls present on this span */
+			ret = ftdm_check_channels_state(span);
+			if (ret == FTDM_FAIL) {
+				ftdm_log(FTDM_LOG_WARNING, "Span %s(%d) can not be destroyed due to active calls present!\n",
+					 span->name, span->span_id);
+				ret = FTDM_FAIL;
+				goto done;
+			}
+
+			ftdm_mutex_lock(span->mutex);
+			/* stop this span forcefully */
+			ftdm_set_flag (span, FTDM_SPAN_FORCE_STOP);
+			ftdm_mutex_unlock(span->mutex);
+			ret = ftdm_span_delete(span);
+
+			if (ret == FTDM_SUCCESS) {
+				ftdm_log(FTDM_LOG_DEBUG, "Span %d destroyed successfully\n", span_id);
+			} else {
+				ftdm_log(FTDM_LOG_DEBUG, "Unable to destroy span %d\n", span_id);
+			}
+
+		}
+
+		span = temp_span;
+	}
+
+	ret = FTDM_SUCCESS;
+done:
+	return ret;
+
+}
 
 static ftdm_status_t load_config(int reload)
 {
@@ -5410,6 +5808,9 @@ static ftdm_status_t load_config(int reload)
 	ftdm_size_t len = 0;
 	ftdm_channel_config_t chan_config;
 	ftdm_status_t ret = FTDM_SUCCESS;
+	ftdm_bool_t span_reconfig = FTDM_FALSE;
+	int configure_span_list[FTDM_MAX_SPANS_INTERFACE] = { 0 };
+	int idx = 0;
 
 	memset(&chan_config, 0, sizeof(chan_config));
 	sprintf(chan_config.group_name, "__default");
@@ -5429,6 +5830,7 @@ static ftdm_status_t load_config(int reload)
 				char *type = cfg.category + 4;
 				char *name;
 				
+				span_reconfig = FTDM_FALSE;
 				if (*type == ' ') {
 					type++;
 				}
@@ -5453,11 +5855,27 @@ static ftdm_status_t load_config(int reload)
 					goto done;
 				}
 
-                if ((reload) && (FTDM_SUCCESS == ftdm_span_find_by_name(name, &span) )) {
-                    ftdm_log(FTDM_LOG_INFO, "Span [%s] found in current running configuration \n", name);
-                    span = NULL;
-                    continue;
-                }
+				if ((reload) && (FTDM_SUCCESS == ftdm_span_find_by_name(name, &span) )) {
+					/* Check if the configuration is changed then please delete this span
+					 * and create a new one else do nothing and add the same in to configure
+					 * span list */
+					configure_span_list[idx] = span->span_id;
+
+					ret = ftdm_check_span_reconfig(span);
+					if (ret == FTDM_FAIL) {
+						span = NULL;
+						ftdm_log(FTDM_LOG_INFO, "Span [%s] found with same existing running configuration \n", name);
+						ret = FTDM_SUCCESS;
+						idx++;
+						continue;
+					} else {
+						ftdm_log(FTDM_LOG_DEBUG, "Reconfiguring span [%s]!\n", name);
+						/* setting configured_span_list[idx] to zero as this span will be added to
+						 * current configure span list when span is created */
+						configure_span_list[idx] = 0;
+						span_reconfig = FTDM_TRUE;
+					}
+				}
 
 				if (ftdm_span_create(type, name, &span) == FTDM_SUCCESS) {
 					ftdm_log(FTDM_LOG_DEBUG, "created span %d (%s) of type %s\n", span->span_id, span->name, type);
@@ -5467,6 +5885,12 @@ static ftdm_status_t load_config(int reload)
 					sprintf(chan_config.group_name, "__default");
 					/* default to storing iostats */
 					chan_config.iostats = FTDM_TRUE;
+
+					ftdm_span_clear_reconfig_flag(span);
+					if (reload) {
+						configure_span_list[idx] = span->span_id;
+						idx++;
+					}
 				} else {
 					ftdm_log(FTDM_LOG_CRIT, "failure creating span of type %s\n", type);
 					span = NULL;
@@ -5476,6 +5900,23 @@ static ftdm_status_t load_config(int reload)
 
 			if (!span) {
 				continue;
+			}
+
+			/*
+			 * manipulate span->reconfig FLAG to convey mod_freetdm
+			 * to consider reload request as a span reconfiguration
+			 * request or addition of a new span
+			 * NOTE:
+			 * 	1) If flag is TRUE then consider as a addition of
+			 * 	   new span
+			 * 	2) If flag is FALSE then consider as a span
+			 * 	   reconfiguration request
+			 */
+
+			if (span_reconfig == FTDM_TRUE) {
+				ftdm_span_set_reconfig_flag(span);
+			} else {
+				ftdm_span_clear_reconfig_flag(span);
 			}
 
 			ftdm_log(FTDM_LOG_DEBUG, "span %d [%s]=[%s]\n", span->span_id, var, val);
@@ -5709,6 +6150,14 @@ static ftdm_status_t load_config(int reload)
 		}
 	}
 
+	/* Check if current configured span list is same as that of previous span
+	 * configure list. If not then please delete the span which is present in
+	 * previous span configure list and not present in current span configure
+	 * list */
+	if (reload) {
+		ret = ftdm_check_span_reload(configure_span_list, idx);
+	}
+
 	/* Verify is trunk_type was specified for the last span */
 	if (span && span->trunk_type == FTDM_TRUNK_NONE) {
 		ftdm_log(FTDM_LOG_ERROR, "trunk_type not specified for span %d (%s)\n", span->span_id, span->name);
@@ -5719,13 +6168,6 @@ done:
 	ftdm_config_close_file(&cfg);
 
 	ftdm_log(FTDM_LOG_INFO, "Configured %u channel(s)\n", configured);
-	
-#if 0
-	/* nothing configured is as good as success */
-	if (!configured) {
-		ret = FTDM_FAIL;
-	}
-#endif
 	
 	return ret;
 }
@@ -6023,10 +6465,10 @@ FT_DECLARE(ftdm_status_t) ftdm_configure_span_signaling(ftdm_span_t *span, const
 	ftdm_module_t *mod = (ftdm_module_t *) hashtable_search(globals.module_hash, (void *)type);
 	ftdm_status_t status = FTDM_FAIL;
 
-	ftdm_assert_return(type != NULL, FTDM_FAIL, "No signaling type");
-	ftdm_assert_return(span != NULL, FTDM_FAIL, "No span");
-	ftdm_assert_return(sig_cb != NULL, FTDM_FAIL, "No signaling callback");
-	ftdm_assert_return(parameters != NULL, FTDM_FAIL, "No parameters");
+	ftdm_assert_return(type != NULL, FTDM_FAIL, "No signaling type\n");
+	ftdm_assert_return(span != NULL, FTDM_FAIL, "No span\n");
+	ftdm_assert_return(sig_cb != NULL, FTDM_FAIL, "No signaling callback\n");
+	ftdm_assert_return(parameters != NULL, FTDM_FAIL, "No parameters\n");
 
 	if (!span->chan_count) {
 		ftdm_log(FTDM_LOG_WARNING, "Cannot configure signaling on span %s with no channels\n", span->name);
@@ -6047,7 +6489,18 @@ FT_DECLARE(ftdm_status_t) ftdm_configure_span_signaling(ftdm_span_t *span, const
 
 	if (mod->configure_span_signaling) {
 		status = mod->configure_span_signaling(span, sig_cb, parameters);
-		if (status == FTDM_SUCCESS) {
+
+		/* check if due to reconfiguration span needs to be stop and then restart
+		 * the configuration from start */
+		if (status == FTDM_EAGAIN ) {
+			ftdm_log(FTDM_LOG_DEBUG, "Stopping Span %s(%d) and then reconfiguring it\n",
+				 span->name, span->span_id);
+			ftdm_clear_flag(span, FTDM_SPAN_NON_STOPPABLE);
+			ftdm_span_stop(span);
+			status = mod->configure_span_signaling(span, sig_cb, parameters);
+		}
+
+		if ((status == FTDM_SUCCESS) && (!ftdm_span_test_reconfig_flag(span) == FTDM_FALSE)) {
 			status = post_configure_span_channels(span);
 		}
 	} else {
@@ -6680,13 +7133,13 @@ FT_DECLARE(ftdm_status_t) ftdm_global_reconfiguration(void)
 	if (!globals.running) {
 		return FTDM_FAIL;
 	}
-	
+
 	if (load_config(0x01) != FTDM_SUCCESS) {
 		ftdm_log(FTDM_LOG_ERROR, "FreeTDM global re-configuration failed!\n");
 		return FTDM_FAIL;
 	}
 
-    ftdm_log(FTDM_LOG_DEBUG, "FreeTDM global re-configuration passed!\n");
+	ftdm_log(FTDM_LOG_DEBUG, "FreeTDM global re-configuration passed!\n");
 
 	return FTDM_SUCCESS;
 }
@@ -7250,8 +7703,6 @@ FT_DECLARE(ftdm_status_t) ftdm_usrmsg_free(ftdm_usrmsg_t **usrmsg)
 	ftdm_safe_free(*usrmsg);
 	return FTDM_SUCCESS;
 }
-
-
 
 /* For Emacs:
  * Local Variables:

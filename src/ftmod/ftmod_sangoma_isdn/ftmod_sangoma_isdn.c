@@ -382,6 +382,15 @@ static void *ftdm_sangoma_isdn_io_run(ftdm_thread_t *me, void *obj)
 		waitms = 1000;
 		memset(poll_events, 0, sizeof(short)*span->chan_count);
 
+		/* check if ftdmspan needs to be reconfigured then please do not check i.e poll
+		 * for event and wait untill span is properly reconfigured */
+
+		if (!ftdm_span_test_reconfig_flag(span)) {
+			ftdm_sleep(100);
+			continue;
+		}
+
+
 		for (i = 0, citer = ftdm_span_get_chan_iterator(span, chaniter); citer; citer = ftdm_iterator_next(citer), i++) {
 			ftdmchan = ftdm_iterator_current(citer);
 
@@ -487,6 +496,13 @@ static void *ftdm_sangoma_isdn_run(ftdm_thread_t *me, void *obj)
 	}
 
 	while (ftdm_running() && !(ftdm_test_flag(span, FTDM_SPAN_STOP_THREAD))) {
+             /* check if ftdmspan needs to be reconfigured then please do not check i.e poll
+              * for event and wait untill span is properly reconfigured */
+                if (!ftdm_span_test_reconfig_flag(span)) {
+                        ftdm_sleep(100);
+                        continue;
+                }
+
 		/* Check if there are any timers to process */
 		ftdm_sched_run(signal_data->sched);
 		ftdm_span_trigger_signals(span);
@@ -599,6 +615,15 @@ static void *ftdm_sangoma_isdn_tones_run(ftdm_thread_t *me, void *obj)
 		ftdm_status_t status;
 		int last_chan_state = 0;
 		int gated = 0;
+		/* check if ftdmspan needs to be reconfigured then please do not check i.e poll
+		 * for event and wait untill span is properly reconfigured */
+
+		if (!ftdm_span_test_reconfig_flag(span)) {
+			ftdm_sleep(100);
+			continue;
+		}
+
+
 		// unsigned long now = ftdm_current_time_in_ms();
 
 		/* check b-channel states and generate & send tones if neccessary */
@@ -1389,6 +1414,9 @@ static ftdm_status_t ftdm_sangoma_isdn_stop(ftdm_span_t *span)
 			ftdm_safe_free(signal_data->local_numbers[i]);
 		}
 	}
+
+	g_sngisdn_data.spans[signal_data->link_id] = NULL;
+
 	ftdm_safe_free(span->signal_data);
 
 	ftdm_log(FTDM_LOG_DEBUG, "Finished stopping span %s\n", span->name);
@@ -1396,107 +1424,153 @@ static ftdm_status_t ftdm_sangoma_isdn_stop(ftdm_span_t *span)
 	return FTDM_SUCCESS;
 }
 
+/* ISDN SIG_FUNCTIONS ***************************************************************/
+
 static FIO_CONFIGURE_SPAN_SIGNALING_FUNCTION(ftdm_sangoma_isdn_span_config)
 {
 	ftdm_iterator_t *chaniter = NULL;
 	ftdm_iterator_t *curr = NULL;
+	ftdm_status_t status = FTDM_SUCCESS;
+	int idx=0;
 
-	sngisdn_span_data_t *span_data;
-	
-	ftdm_log(FTDM_LOG_INFO, "Configuring ftmod_sangoma_isdn span = %s\n", span->name);	
 
-	span_data = ftdm_calloc(1, sizeof(sngisdn_span_data_t));
-	span_data->ftdm_span = span;
-	span->signal_data = span_data;
-	
+	sngisdn_span_data_t *span_data=NULL;
+
+        /* check if this is a configuration request where whole span is destroyed first and created again,
+	 * then in such cases this must be considered as a new configuration request */
+	if ((span->flags == FTDM_SPAN_CONFIGURED)) {
+		/* If this span is not yet configured in  span list then this is a confirm a new
+		 * configureation request */
+
+		if ((idx == MAX_VARIANTS) && (!(ftdm_test_flag(span, FTDM_SPAN_STARTED)))) {
+			ftdm_log(FTDM_LOG_DEBUG,"Start Configuration for Span %s(%d)\n",
+					span->name, span->span_id);
+
+		}
+		ftdm_span_clear_reconfig_flag(span);
+		span_data = ftdm_calloc(1, sizeof(sngisdn_span_data_t));
+		span_data->ftdm_span = span;
+		span->signal_data = span_data;
+	}
+
 	chaniter = ftdm_span_get_chan_iterator(span, NULL);
 	for (curr = chaniter; curr; curr = ftdm_iterator_next(curr)) {
 		sngisdn_chan_data_t *chan_data = ftdm_calloc(1, sizeof(sngisdn_chan_data_t));
 		chan_data->ftdmchan = ((ftdm_channel_t*)ftdm_iterator_current(curr));
 		((ftdm_channel_t*)ftdm_iterator_current(curr))->call_data = chan_data;
-		
+
 	}
 	ftdm_iterator_free(chaniter);
 
-	if (ftmod_isdn_parse_cfg(ftdm_parameters, span) != FTDM_SUCCESS) {
-		ftdm_log(FTDM_LOG_ERROR, "Failed to parse configuration\n");
-		return FTDM_FAIL;
-	}
+	/* Check if this is a reconfiguration request, please apply this reconfiguration */
+	if (ftdm_span_test_reconfig_flag(span)) {
+		/* First need to check whether this is new span configuration request or need to reconfigure alrady
+		 * existing span. */
+		/* parse isdn cfg with reload paramater 0 so that we can segregate logic inside ftmod_isdn_parse_cfg function */
+		if (ftmod_isdn_parse_cfg(ftdm_parameters, span, 0 ) != FTDM_SUCCESS) {
+			ftdm_log(FTDM_LOG_ERROR, "Failed to parse configuration\n");
+			return FTDM_FAIL;
+		}
 
-	if (sngisdn_stack_cfg(span) != FTDM_SUCCESS) {
-		ftdm_log(FTDM_LOG_CRIT, "Sangoma ISDN Stack configuration failed\n");
-		return FTDM_FAIL;
-	}
+		if (sngisdn_stack_cfg(span) != FTDM_SUCCESS) {
+			ftdm_log(FTDM_LOG_CRIT, "Sangoma ISDN Stack configuration failed\n");
+			ftdm_sangoma_isdn_stop(span);
+			return FTDM_FAIL;
+		}
 
-	if (span_data->cid_name_method == SNGISDN_CID_NAME_AUTO) {
-		switch (span_data->switchtype) {
-			case SNGISDN_SWITCH_EUROISDN:
-				if (FTDM_SPAN_IS_BRI(span)) {
-					span_data->cid_name_method = SNGISDN_CID_NAME_USR_USR_IE;
-				} else {
+		if (span_data->cid_name_method == SNGISDN_CID_NAME_AUTO) {
+			switch (span_data->switchtype) {
+				case SNGISDN_SWITCH_EUROISDN:
+					if (FTDM_SPAN_IS_BRI(span)) {
+						span_data->cid_name_method = SNGISDN_CID_NAME_USR_USR_IE;
+					} else {
+						span_data->cid_name_method = SNGISDN_CID_NAME_DISPLAY_IE;
+					}
+					break;
+				case SNGISDN_SWITCH_DMS100:
 					span_data->cid_name_method = SNGISDN_CID_NAME_DISPLAY_IE;
-				}
-				break;
-			case SNGISDN_SWITCH_DMS100:
-				span_data->cid_name_method = SNGISDN_CID_NAME_DISPLAY_IE;
-				break;
-			case SNGISDN_SWITCH_NI2:
-			case SNGISDN_SWITCH_5ESS:
-			case SNGISDN_SWITCH_4ESS:
-				span_data->cid_name_method = SNGISDN_CID_NAME_FACILITY_IE;
-				break;
-			default:
-				break;
+					break;
+				case SNGISDN_SWITCH_NI2:
+				case SNGISDN_SWITCH_5ESS:
+				case SNGISDN_SWITCH_4ESS:
+					span_data->cid_name_method = SNGISDN_CID_NAME_FACILITY_IE;
+					break;
+				default:
+					break;
+			}
 		}
-	}
 
-	if (span_data->send_cid_name == SNGISDN_OPT_DEFAULT) {
-		switch (span_data->switchtype) {
-			case SNGISDN_SWITCH_EUROISDN:
+		if (span_data->send_cid_name == SNGISDN_OPT_DEFAULT) {
+			switch (span_data->switchtype) {
+				case SNGISDN_SWITCH_EUROISDN:
 #ifdef SNGISDN_SUPPORT_CALLING_NAME_IN_FACILITY
-			case SNGISDN_SWITCH_NI2:
-			case SNGISDN_SWITCH_5ESS:
-			case SNGISDN_SWITCH_4ESS:
+				case SNGISDN_SWITCH_NI2:
+				case SNGISDN_SWITCH_5ESS:
+				case SNGISDN_SWITCH_4ESS:
 #endif
-				if (span_data->signalling == SNGISDN_SIGNALING_NET) {
+					if (span_data->signalling == SNGISDN_SIGNALING_NET) {
+						span_data->send_cid_name = SNGISDN_OPT_TRUE;
+					} else {
+						span_data->send_cid_name = SNGISDN_OPT_FALSE;
+					}
+					break;
+				case SNGISDN_SWITCH_DMS100:
 					span_data->send_cid_name = SNGISDN_OPT_TRUE;
-				} else {
+					break;
+#ifndef SNGISDN_SUPPORT_CALLING_NAME_IN_FACILITY
+				case SNGISDN_SWITCH_NI2:
+				case SNGISDN_SWITCH_5ESS:
+				case SNGISDN_SWITCH_4ESS:
 					span_data->send_cid_name = SNGISDN_OPT_FALSE;
-				}
-				break;
-			case SNGISDN_SWITCH_DMS100:
-				span_data->send_cid_name = SNGISDN_OPT_TRUE;
-				break;
-#ifndef SNGISDN_SUPPORT_CALLING_NAME_IN_FACILITY
-			case SNGISDN_SWITCH_NI2:
-			case SNGISDN_SWITCH_5ESS:
-			case SNGISDN_SWITCH_4ESS:
-				span_data->send_cid_name = SNGISDN_OPT_FALSE;
-				break;
+					break;
 #endif
-			default:
-				span_data->send_cid_name = SNGISDN_OPT_FALSE;
-				break;
+				default:
+					span_data->send_cid_name = SNGISDN_OPT_FALSE;
+					break;
+			}
+		} else if (span_data->send_cid_name == SNGISDN_OPT_TRUE) {
+			switch (span_data->switchtype) {
+				case SNGISDN_SWITCH_NI2:
+				case SNGISDN_SWITCH_5ESS:
+				case SNGISDN_SWITCH_4ESS:
+#ifndef SNGISDN_SUPPORT_CALLING_NAME_IN_FACILITY
+					ftdm_log(FTDM_LOG_WARNING, "Sending Calling Name in Facility IE not supported, please update your libsng_isdn library\n");
+					span_data->send_cid_name = SNGISDN_OPT_FALSE;
+#endif
+					break;
+				case SNGISDN_SWITCH_INSNET: /* Don't know how to transmit caller ID name on INSNET */
+				case SNGISDN_SWITCH_QSIG: /* It seems like QSIG does not support Caller ID */
+					span_data->send_cid_name = SNGISDN_OPT_FALSE;
+					break;
+				case SNGISDN_SWITCH_EUROISDN:
+					break;
+				default:
+					span_data->send_cid_name = SNGISDN_OPT_FALSE;
+					break;
+			}
 		}
-	} else if (span_data->send_cid_name == SNGISDN_OPT_TRUE) {
-		switch (span_data->switchtype) {
-			case SNGISDN_SWITCH_NI2:
-			case SNGISDN_SWITCH_5ESS:
-			case SNGISDN_SWITCH_4ESS:
-#ifndef SNGISDN_SUPPORT_CALLING_NAME_IN_FACILITY
-				ftdm_log(FTDM_LOG_WARNING, "Sending Calling Name in Facility IE not supported, please update your libsng_isdn library\n");
-				span_data->send_cid_name = SNGISDN_OPT_FALSE;
-#endif
-				break;
-			case SNGISDN_SWITCH_INSNET: /* Don't know how to transmit caller ID name on INSNET */
-			case SNGISDN_SWITCH_QSIG: /* It seems like QSIG does not support Caller ID */
-				span_data->send_cid_name = SNGISDN_OPT_FALSE;
-				break;
-			case SNGISDN_SWITCH_EUROISDN:
-				break;
-			default:
-				span_data->send_cid_name = SNGISDN_OPT_FALSE;
-				break;
+	} else {
+		ftdm_log (FTDM_LOG_INFO, "[Reload]: Reconfiguring ftmod_sangoma_isdn span = %s(%d)...\n",
+				span->name,
+				span->span_id);
+		/* parse isdn cfg with reload paramater 1 so that we can segregate logic inside ftmod_isdn_parse_cfg function */
+		if (( status = ftmod_isdn_parse_cfg(ftdm_parameters, span, 1 ) )) {
+
+			if (status == FTDM_BREAK) {
+				ftdm_log(FTDM_LOG_INFO,"Stopping Span %s(%d) and then reconfiguring it\n",
+						span->name, span->span_id);
+
+			} else if (status == FTDM_ECANCELED) {
+				ftdm_log (FTDM_LOG_INFO, "[Reload]: Operation Cancelled for span = %s(%d) due to same configuration received!\n",
+						span->name,
+						span->span_id);
+				return status;
+			}
+			if((status==FTDM_EAGAIN)) {
+				ftdm_sangoma_isdn_stop(span);
+				span->flags = FTDM_SPAN_CONFIGURED;
+				return status;
+			}
 		}
 	}
 
@@ -1844,5 +1918,3 @@ EX_DECLARE_DATA ftdm_module_t ftdm_module =
  */
 
 /******************************************************************************/
-
-

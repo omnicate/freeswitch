@@ -49,8 +49,8 @@
 #define MAX_M3UA_PS     100
 #define MAX_M3UA_PSP    100
 #define M3UA_SELF_ROUTE_IDX    50
-#define M3UA_MTP3_ROUTE_IDX    100
-#define MAX_M3UA_RTE    100
+#define M3UA_MTP3_ROUTE_IDX    200
+#define MAX_M3UA_RTE    500
 #define MAX_M3UA_SAP    10
 #define MAX_PSP_PER_PS  LIT_MAX_PSP /* 20 */
 #define MAX_APPEARANCE_SIZE     32

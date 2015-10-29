@@ -28,6 +28,8 @@
  * David Yat Sin <dyatsin@sangoma.com>
  * James Zhang <jzhang@sangoma.com>
  * Gideon Sadan <gsadan@sangoma.com>
+ * Kapil Gupta <kgupta@sangoma.com>
+ * Pushkar Singh <psingh@sangoma.com>
  *
  * mod_freetdm.c -- FreeTDM Endpoint Module
  *
@@ -3787,6 +3789,213 @@ static void parse_gsm_spans(switch_xml_t cfg, switch_xml_t spans)
 	}
 }
 
+static void parse_ss7_spans(switch_xml_t cfg, switch_xml_t spans, int reload)
+{
+	int sp_list[FTDM_MAX_SPANS_INTERFACE] = { 0 };
+	ftdm_conf_node_t *ss7confnode = NULL;
+	char *last_operating_mode = NULL;
+	switch_xml_t myspan, param;
+	int span_idx = 0;
+	int idx = 0;
+	int reconfig = 0;
+
+start:
+	for (myspan = switch_xml_child(spans, "span"); myspan; myspan = myspan->next) {
+		ftdm_status_t zstatus = FTDM_FAIL;
+		const char *context = "default";
+		const char *dialplan = "XML";
+		ftdm_conf_parameter_t spanparameters[FTDM_MAX_SIG_PARAMETERS];
+		char *id = (char *) switch_xml_attr(myspan, "id");
+		char *name = (char *) switch_xml_attr(myspan, "name");
+		char *configname = (char *) switch_xml_attr(myspan, "cfgprofile");
+		char *operating_mode = (char *) switch_xml_attr(myspan, "operating_mode");
+		ftdm_span_t *span = NULL;
+		uint32_t span_id = 0;
+		unsigned paramindex = 0;
+		uint32_t b_span_found = 0;
+		ftdm_conf_node_t *tmp_node = NULL;
+
+		if (!name && !id) {
+			LOAD_ERROR("ss7 span missing required attribute 'id' or 'name', skipping ...\n");
+			continue;
+		}
+		if (!configname) {
+			LOAD_ERROR("ss7 span missing required attribute, skipping ...\n");
+			continue;
+		}
+
+		if (name) {
+			zstatus = ftdm_span_find_by_name(name, &span);
+		} else {
+			if (switch_is_number(id)) {
+				span_id = atoi(id);
+				zstatus = ftdm_span_find(span_id, &span);
+			}
+
+			if (zstatus != FTDM_SUCCESS) {
+				zstatus = ftdm_span_find_by_name(id, &span);
+			}
+		}
+
+		if (zstatus != FTDM_SUCCESS) {
+			LOAD_ERROR("Error finding FreeTDM span id:%s name:%s\n", switch_str_nil(id), switch_str_nil(name));
+			continue;
+		}
+
+		if (!span_id) {
+			span_id = ftdm_span_get_id(span);
+		}
+
+		/* There are scenarios where we need to reconfigure span and start span after reconfiguration
+		 * Scenarios for e.g.:Span 4 needs to be configured as a result of dynamic configuration
+		 * request where Span 3 is already configured and is up and running in such a case when both
+		 * span shares the same linkset/route during reconfiguration of new span Old span needs to be
+		 * stopped as it is a part of reconfiguration and there we need to be sure that all spans are
+		 * configured and are running in case of dynamic reconfiguration request */
+		if (reconfig) {
+			if (ftdm_get_span_running_status(span)) {
+				ftdm_log(FTDM_LOG_NOTICE, "[Reload]: Found span %s(%d) that needs to be configured and started\n",
+					 name , span_id);
+			} else {
+				continue;
+			}
+		}
+
+		if (reload ) {
+			b_span_found = 0;
+			for (idx = 0; idx < FTDM_MAX_SPANS_INTERFACE; idx++) {
+				if (SPAN_CONFIG[idx].span) {
+					if (!strcasecmp(name, ftdm_span_get_name(SPAN_CONFIG[idx].span))) {
+						b_span_found = 1;
+						break;
+					}
+				}
+			}
+
+			if (b_span_found) {
+				ftdm_span_set_reconfig_flag(span);
+			}
+
+			tmp_node = switch_core_hash_find(globals.ss7_configs, configname);
+			if (tmp_node) {
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "ss7 config %s was found. Deleting current hash entry.\n", configname);
+				switch_core_hash_delete(globals.ss7_configs, configname);
+			}
+		} /* reload */
+
+		/* check if the last operating mode is same as that of current parsed span operating mode then
+		 * please get the already existing configuration and remove it from global hash list */
+		if ((last_operating_mode) && (operating_mode) && (strcasecmp(last_operating_mode, operating_mode))) {
+			tmp_node = switch_core_hash_find(globals.ss7_configs, configname);
+			if (tmp_node) {
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "ss7 config %s was found for operating mode %s. Deleting current hash entry.\n",
+						last_operating_mode, configname);
+				switch_core_hash_delete(globals.ss7_configs, configname);
+			}
+		}
+
+		if (operating_mode) {
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "creating ss7 config node for operating mode %s!\n", operating_mode);
+		}
+
+		ss7confnode = _get_ss7_config_node(cfg, configname, operating_mode);
+		if (!ss7confnode) {
+			LOAD_ERROR("Error finding ss7config '%s' for FreeTDM span id: %s\n", configname, switch_str_nil(id));
+			continue;
+		}
+
+		memset(spanparameters, 0, sizeof(spanparameters));
+		paramindex = 0;
+
+		if (operating_mode) {
+			spanparameters[paramindex].var = "operating-mode";
+			spanparameters[paramindex].val = operating_mode;
+			paramindex++;
+			last_operating_mode = operating_mode;
+		}
+
+		spanparameters[paramindex].var = "confnode";
+		spanparameters[paramindex].ptr = ss7confnode;
+		paramindex++;
+		for (param = switch_xml_child(myspan, "param"); param; param = param->next) {
+			char *var = (char *) switch_xml_attr_soft(param, "name");
+			char *val = (char *) switch_xml_attr_soft(param, "value");
+
+			if (ftdm_array_len(spanparameters) - 1 == paramindex) {
+				LOAD_ERROR("Too many parameters for ss7 span, ignoring any parameter after %s\n", var);
+				break;
+			}
+
+			if (!strcasecmp(var, "context")) {
+				context = val;
+			} else if (!strcasecmp(var, "dialplan")) {
+				dialplan = val;
+			} else {
+				spanparameters[paramindex].var = var;
+				spanparameters[paramindex].val = val;
+				paramindex++;
+			}
+		}
+
+		/* There is scenarios where we need to reload span which we have stopped due to dynamic reconfiguration
+		* Example : suppose we are running span 1 as a signalling span  and  2 is pure voice span on NSG , now due to dynamic configuration we have stoppped span 2 because
+		* of signaling span 1 has reconfiguration request  , now we need to recheck voice span corresponding to their signaling span  */
+		if ((reload) && (reconfig)) {
+			ftdm_span_set_reconfig_flag(span);
+		}
+
+		if (ftdm_configure_span_signaling(span,
+					"sangoma_ss7",
+					on_clear_channel_signal,
+					spanparameters) != FTDM_SUCCESS) {
+			if ((!ftdm_span_test_reconfig_flag(span)) && (reload)) {
+				ftdm_span_clear_reconfig_flag(span);
+				sp_list[span_idx] = span_id;
+				span_idx++;
+				ftdm_log(FTDM_LOG_WARNING, "Unable to reconfigure ss7 FreeTDM span %d!\n", span_id);
+			} else {
+				LOAD_ERROR("Error %s configuring ss7 FreeTDM span %d\n",
+						b_span_found == 1 ? "Reconfiguring" : "configuring",
+						span_id);
+			}
+			continue;
+		}
+
+		sp_list[span_idx] = span_id;
+		span_idx++;
+		if ((b_span_found) && ((!ftdm_span_test_reconfig_flag(span)))) {
+			/* remove reconfig flag */
+			ftdm_span_clear_reconfig_flag(span);
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "ss7 config %s was found in the hash already. Thus, reconfiguring it.\n", configname);
+			continue;
+		} else {
+			/* remove reconfig flag */  // DONE
+			ftdm_span_clear_reconfig_flag(span);
+		}
+
+		SPAN_CONFIG[span_id].span = span;
+		switch_copy_string(SPAN_CONFIG[span_id].context, context, sizeof(SPAN_CONFIG[span_id].context));
+		switch_copy_string(SPAN_CONFIG[span_id].dialplan, dialplan, sizeof(SPAN_CONFIG[span_id].dialplan));
+		switch_copy_string(SPAN_CONFIG[span_id].type, "Sangoma (SS7)", sizeof(SPAN_CONFIG[span_id].type));
+		ftdm_log(FTDM_LOG_DEBUG, "Configured ss7 FreeTDM span %d with config node %s\n", span_id, configname);
+		if(FTDM_SUCCESS != ftdm_span_start(span)){
+			LOAD_ERROR("Error Starting ss7 FreeTDM span %d\n", span_id);
+			continue;
+		}
+	}
+
+	/* If configuration is done check if there is any specific SS7 span which is not started due to reconfiguration
+	 * request, so please start that SPAN */
+	/* Example : suppose we are running span 1 and  2  and both span have signaling link which has the same
+	* configuration e.g OPC,DPC, Linkset etc.Now due to dynamic configuration if we have to reload span 1 then we
+	* also neet to stop and reload span 2 due to same Linkset */
+	if ( (!reconfig) && (reload) ) {
+		reconfig = 1;
+		goto start;
+	}
+
+}
+
 static void parse_isdn_tap_spans(switch_xml_t cfg, switch_xml_t spans)
 {
 	switch_xml_t myspan, param;
@@ -3922,9 +4131,10 @@ static void parse_isup_tap_spans(switch_xml_t cfg, switch_xml_t spans)
 {
 }
 
-static void parse_bri_pri_spans(switch_xml_t cfg, switch_xml_t spans)
+static void parse_bri_pri_spans(switch_xml_t cfg, switch_xml_t spans , int reload)
 {
 	switch_xml_t myspan, param;
+        int idx = 0;
 
 	for (myspan = switch_xml_child(spans, "span"); myspan; myspan = myspan->next) {
 		ftdm_status_t zstatus = FTDM_FAIL;
@@ -3936,6 +4146,7 @@ static void parse_bri_pri_spans(switch_xml_t cfg, switch_xml_t spans)
 		char *configname = (char *) switch_xml_attr(myspan, "cfgprofile");
 		ftdm_span_t *span = NULL;
 		uint32_t span_id = 0;
+		uint32_t b_span_found = 0;
 		unsigned paramindex = 0;
 
 		if (!name && !id) {
@@ -3960,10 +4171,28 @@ static void parse_bri_pri_spans(switch_xml_t cfg, switch_xml_t spans)
 			LOAD_ERROR("Error finding FreeTDM span id:%s name:%s\n", switch_str_nil(id), switch_str_nil(name));
 			continue;
 		}
-		
+
 		if (!span_id) {
 			span_id = ftdm_span_get_id(span);
 		}
+
+		if (reload ) {
+			b_span_found = 0;
+
+			for (idx = 0; idx < FTDM_MAX_SPANS_INTERFACE; idx++) {
+				if (SPAN_CONFIG[idx].span) {
+					if (!strcasecmp(name, ftdm_span_get_name(SPAN_CONFIG[idx].span))) {
+						b_span_found = 1;
+						break;
+					}
+				}
+			}
+
+			if (b_span_found) {
+				ftdm_span_set_reconfig_flag(span);
+			}
+
+		} /* reload */
 
 		memset(spanparameters, 0, sizeof(spanparameters));
 		paramindex = 0;
@@ -4005,7 +4234,7 @@ static void parse_bri_pri_spans(switch_xml_t cfg, switch_xml_t spans)
 					SPAN_CONFIG[span_id].digital_codec = switch_core_strdup(module_pool, codec->iananame);
 					SPAN_CONFIG[span_id].digital_sampling_rate = codec->samples_per_second;
 					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, 
-						"Unrestricted digital codec is %s at %dhz for span %d\n", 
+						"Unrestricted digital codec is %s at %dhz for span %d\n",
 						SPAN_CONFIG[span_id].digital_codec, SPAN_CONFIG[span_id].digital_sampling_rate, span_id);
 				}
 			} else if (!strcasecmp(var, "call_limit_backend")) {
@@ -4038,12 +4267,27 @@ static void parse_bri_pri_spans(switch_xml_t cfg, switch_xml_t spans)
 		}
 
 		if (ftdm_configure_span_signaling(span, 
-						  "sangoma_isdn", 
+						  "sangoma_isdn",
 						  on_clear_channel_signal,
 						  spanparameters) != FTDM_SUCCESS) {
-			LOAD_ERROR("Error configuring Sangoma ISDN FreeTDM span %d\n", span_id);
+			if ((!ftdm_span_test_reconfig_flag(span)) && (reload)) {
+                                ftdm_span_clear_reconfig_flag(span);
+                                ftdm_log(FTDM_LOG_WARNING, "Unable to reconfigure sangoma_isdn  FreeTDM span %d!\n", span_id);
+                        } else {
+                                LOAD_ERROR("Error %s configuring Sangoma ISDN FreeTDM span %d\n",
+                                                b_span_found == 1 ? "Reconfiguring" : "configuring",
+                                                span_id);
+                        }
 			continue;
 		}
+
+		ftdm_span_clear_reconfig_flag(span);
+
+		if ((b_span_found) && ((!ftdm_span_test_reconfig_flag(span)))) {
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, " Sangoma ISDN config %s was found in the hash already. Thus, reconfiguring it.\n", configname);
+			continue;
+		}
+
 		SPAN_CONFIG[span_id].span = span;
 		switch_copy_string(SPAN_CONFIG[span_id].context, context, sizeof(SPAN_CONFIG[span_id].context));
 		switch_copy_string(SPAN_CONFIG[span_id].dialplan, dialplan, sizeof(SPAN_CONFIG[span_id].dialplan));
@@ -4057,12 +4301,10 @@ static switch_status_t load_config(int reload)
 {
 	const char *cf = "freetdm.conf";
 	switch_xml_t cfg, xml, settings, param, spans, myspan;
-	ftdm_conf_node_t *ss7confnode = NULL;
 	unsigned int i = 0;
 	ftdm_channel_t *fchan = NULL;
 	ftdm_iterator_t *chaniter = NULL;
 	ftdm_iterator_t *curr = NULL;
-	char *last_operating_mode = NULL;
 
 	memset(&globals, 0, sizeof(globals));
 	switch_mutex_init(&globals.mutex, SWITCH_MUTEX_NESTED, module_pool);
@@ -4092,6 +4334,36 @@ static switch_status_t load_config(int reload)
 		}
 	}
 
+	/*
+	 * If this is a reconfiguration request then below points are valid
+	 * 1) In case when span is deleted as a result of reconfiguration
+	 *    update SPAN_CONFIG span list as present in mod_freetdm
+	 * 2) In case of addtion of new span due to reconfiguration include
+	 *    it in SPAN_CONFIG list
+	 * 3) In case when already existing span is reconfigure then first
+	 *    delete span from SPAN_CONFIG list and again include it as a
+	 *    newly configured span
+	 */
+	if (reload) {
+		ftdm_status_t status = FTDM_FAIL;
+		ftdm_span_t   *span  = NULL;
+		int 	      idx    = 0;
+		for (idx = 0; idx < FTDM_MAX_SPANS_INTERFACE; idx++) {
+			if (SPAN_CONFIG[idx].span) {
+				status = ftdm_span_find(idx, &span);
+
+				if ((status != FTDM_SUCCESS) || (!ftdm_span_test_reconfig_flag(span))) {
+					ftdm_log(FTDM_LOG_DEBUG, "Deleting span %d from mod freetdm span list!\n", idx);
+					SPAN_CONFIG[idx].span = NULL;
+					memset(&SPAN_CONFIG[idx], 0, sizeof(SPAN_CONFIG[idx]));
+					/* clear reconfig flag as this must be configured as new
+					 * a new configuration request */
+					ftdm_span_clear_reconfig_flag(span);
+				}
+			}
+		}
+	}
+
 	/* Configure transparent span if present */
 	/* NOTE: Transparent span must be configured before all other spans &
 	 * transparent must be open before configuring any signalling module,
@@ -4115,11 +4387,11 @@ static switch_status_t load_config(int reload)
 	}
 
 	if ((spans = switch_xml_child(cfg, "sangoma_pri_spans"))) {
-		parse_bri_pri_spans(cfg, spans);
+		parse_bri_pri_spans(cfg, spans, reload);
 	}
 
 	if ((spans = switch_xml_child(cfg, "sangoma_bri_spans"))) {
-		parse_bri_pri_spans(cfg, spans);
+		parse_bri_pri_spans(cfg, spans, reload);
 	}
 
 	if ((spans = switch_xml_child(cfg, "gsm_spans"))) {
@@ -4128,148 +4400,7 @@ static switch_status_t load_config(int reload)
 
 	switch_core_hash_init(&globals.ss7_configs, module_pool);
 	if ((spans = switch_xml_child(cfg, "sangoma_ss7_spans"))) {
-		for (myspan = switch_xml_child(spans, "span"); myspan; myspan = myspan->next) {
-			ftdm_status_t zstatus = FTDM_FAIL;
-			const char *context = "default";
-			const char *dialplan = "XML";
-			ftdm_conf_parameter_t spanparameters[FTDM_MAX_SIG_PARAMETERS];
-			char *id = (char *) switch_xml_attr(myspan, "id");
-			char *name = (char *) switch_xml_attr(myspan, "name");
-			char *configname = (char *) switch_xml_attr(myspan, "cfgprofile");
-			char *operating_mode = (char *) switch_xml_attr(myspan, "operating_mode");
-			ftdm_span_t *span = NULL;
-			uint32_t span_id = 0;
-			unsigned paramindex = 0;
-			uint32_t b_span_found = 0;
-            ftdm_conf_node_t *tmp_node = NULL;
-
-			if (!name && !id) {
-				LOAD_ERROR("ss7 span missing required attribute 'id' or 'name', skipping ...\n");
-				continue;
-			}
-			if (!configname) {
-				LOAD_ERROR("ss7 span missing required attribute, skipping ...\n");
-				continue;
-			}
-
-           if (name) {
-                		zstatus = ftdm_span_find_by_name(name, &span);
-			} else {
-				if (switch_is_number(id)) {
-					span_id = atoi(id);
-					zstatus = ftdm_span_find(span_id, &span);
-				}
-
-				if (zstatus != FTDM_SUCCESS) {
-					zstatus = ftdm_span_find_by_name(id, &span);
-				}
-			}
-
-			if (zstatus != FTDM_SUCCESS) {
-				LOAD_ERROR("Error finding FreeTDM span id:%s name:%s\n", switch_str_nil(id), switch_str_nil(name));
-				continue;
-			}
-			
-			if (!span_id) {
-				span_id = ftdm_span_get_id(span);
-			}
-
-            if (reload ) {
-                b_span_found = 0;
-                for (int i = 0; i < FTDM_MAX_SPANS_INTERFACE; i++) {
-                    if (SPAN_CONFIG[i].span) {
-                        if (!strcasecmp(name, ftdm_span_get_name(SPAN_CONFIG[i].span))) {
-                            b_span_found = 1;
-                            break;
-                        }
-                    }
-                }
-
-                if (b_span_found) {
-                    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "ss7 config %s was found in the hash already. skipping it.\n", configname);
-                    continue;
-                }
-
-
-
-                tmp_node = switch_core_hash_find(globals.ss7_configs, configname);
-                if (tmp_node) {
-                    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "ss7 config %s was found. Deleting current hash entry.\n", configname);
-                    switch_core_hash_delete(globals.ss7_configs, configname);
-                }
-            } /* reload */
-
-			/* check if the last operating mode is same as that of current parsed span operating mode then
-			 * please get the already existing configuration and remove it from global hash list */
-			 if ((last_operating_mode) && (operating_mode) && (strcasecmp(last_operating_mode, operating_mode))) {
-				tmp_node = switch_core_hash_find(globals.ss7_configs, configname);
-				if (tmp_node) {
-					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "ss7 config %s was found for operating mode %s. Deleting current hash entry.\n",
-							  last_operating_mode, configname);
-					switch_core_hash_delete(globals.ss7_configs, configname);
-				}
-			}
-
-			if (operating_mode) {
-				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "creating ss7 config node for operating mode %s!\n", operating_mode);
-			}
-
-			ss7confnode = _get_ss7_config_node(cfg, configname, operating_mode);
-			if (!ss7confnode) {
-				LOAD_ERROR("Error finding ss7config '%s' for FreeTDM span id: %s\n", configname, switch_str_nil(id));
-				continue;
-			}
-
-			memset(spanparameters, 0, sizeof(spanparameters));
-			paramindex = 0;
-
-			if (operating_mode) {
-				spanparameters[paramindex].var = "operating-mode";
-				spanparameters[paramindex].val = operating_mode;
-				paramindex++;
-				last_operating_mode = operating_mode;
-			}
-
-			spanparameters[paramindex].var = "confnode";
-			spanparameters[paramindex].ptr = ss7confnode;
-			paramindex++;
-			for (param = switch_xml_child(myspan, "param"); param; param = param->next) {
-				char *var = (char *) switch_xml_attr_soft(param, "name");
-				char *val = (char *) switch_xml_attr_soft(param, "value");
-
-				if (ftdm_array_len(spanparameters) - 1 == paramindex) {
-					LOAD_ERROR("Too many parameters for ss7 span, ignoring any parameter after %s\n", var);
-					break;
-				}
-
-				if (!strcasecmp(var, "context")) {
-					context = val;
-				} else if (!strcasecmp(var, "dialplan")) {
-					dialplan = val;
-				} else {
-					spanparameters[paramindex].var = var;
-					spanparameters[paramindex].val = val;
-					paramindex++;
-				}
-			}
-
-			if (ftdm_configure_span_signaling(span, 
-						          "sangoma_ss7", 
-						          on_clear_channel_signal,
-							  spanparameters) != FTDM_SUCCESS) {
-				LOAD_ERROR("Error configuring ss7 FreeTDM span %d\n", span_id);
-				continue;
-			}
-			SPAN_CONFIG[span_id].span = span;
-			switch_copy_string(SPAN_CONFIG[span_id].context, context, sizeof(SPAN_CONFIG[span_id].context));
-			switch_copy_string(SPAN_CONFIG[span_id].dialplan, dialplan, sizeof(SPAN_CONFIG[span_id].dialplan));
-			switch_copy_string(SPAN_CONFIG[span_id].type, "Sangoma (SS7)", sizeof(SPAN_CONFIG[span_id].type));
-			ftdm_log(FTDM_LOG_DEBUG, "Configured ss7 FreeTDM span %d with config node %s\n", span_id, configname);
-			if(FTDM_SUCCESS != ftdm_span_start(span)){
-				LOAD_ERROR("Error Starting ss7 FreeTDM span %d\n", span_id);
-				continue;
-			}
-		}
+		parse_ss7_spans(cfg, spans, reload);
 	}
 
 	if ((spans = switch_xml_child(cfg, "analog_spans"))) {
@@ -4879,7 +5010,11 @@ end:
 	switch_xml_free(xml);
 
 	if (globals.fail_on_error && globals.config_error) {
-		ftdm_log(FTDM_LOG_ERROR, "Refusing to load module with errors\n");
+		if (!reload) {
+			ftdm_log(FTDM_LOG_ERROR, "Refusing to load module with errors\n");
+		} else {
+			ftdm_log(FTDM_LOG_ERROR, "[Reload]: Refusing to load reconfigure module with invalid re-configuration\n");
+		}
 		return SWITCH_STATUS_TERM;
 	}
 
@@ -5404,11 +5539,11 @@ FTDM_CLI_DECLARE(ftdm_cmd_reload)
     }
 
     if (SWITCH_STATUS_SUCCESS !=  load_config(0x01) ) {
-        ftdm_log (FTDM_LOG_ERROR, "Freetdm SS7 reconfiguration failed \n");
+        ftdm_log (FTDM_LOG_ERROR, "Freetdm Signalling reconfiguration failed \n");
         return SWITCH_STATUS_FALSE;
     }
 
-    ftdm_log (FTDM_LOG_DEBUG, "Successfully reloaded freetdm SS7 configuration. \n");
+    ftdm_log (FTDM_LOG_DEBUG, "Successfully reloaded freetdm Signalling configuration. \n");
 
     return SWITCH_STATUS_SUCCESS;
 }

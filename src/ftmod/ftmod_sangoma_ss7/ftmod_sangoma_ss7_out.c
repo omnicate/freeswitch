@@ -43,19 +43,30 @@
 
 /* FUNCTIONS ******************************************************************/
 void ft_to_sngss7_iam (ftdm_channel_t * ftdmchan)
-{	
-	const char *var = NULL;
-	SiConEvnt 			iam;
+{
+	const char			*var = NULL;
+	SiConEvnt			iam;
 	ftdm_bool_t         native_going_up = FTDM_FALSE;
 	sngss7_chan_data_t	*sngss7_info = ftdmchan->call_data;;
 	sngss7_event_data_t *event_clone = NULL;
-	
+	int					spId = 0;
+
 	SS7_FUNC_TRACE_ENTER (__FUNCTION__);
-	
+
 	sngss7_info->suInstId 	= get_unique_id ();
 	sngss7_info->spInstId 	= 0;
-	sngss7_info->spId 		= 1;
-	
+	/* Please take out the spId from respective isap if in case not found then assume it as 1,
+	 * but please donot simply hardcode it to 1 as it may lead to numerous problems in case of
+	 * dynamic reconfiguration */
+	spId = ftmod_ss7_get_spId_by_span_id(ftdmchan->span_id);
+
+	if (!spId) {
+		sngss7_info->spId 	= 1;
+	} else {
+		sngss7_info->spId       = spId;
+	}
+
+	SS7_DEBUG("Found spId %d mapped to span %d\n", sngss7_info->spId, ftdmchan->span_id);
 	memset (&iam, 0x0, sizeof (iam));
 
 	if (ftdm_test_flag(ftdmchan, FTDM_CHANNEL_NATIVE_SIGBRIDGE)) {
@@ -324,7 +335,19 @@ void ft_to_sngss7_inf(ftdm_channel_t *ftdmchan, SiCnStEvnt *inr)
 {
 	SiCnStEvnt evnt;
 	sngss7_chan_data_t	*sngss7_info = ftdmchan->call_data;
-	
+	int spId = 0;
+
+	/* Please take out the spId from respective isap if in case not found then assume it as 1,
+	 * but please donot simply hardcode it to 1 as it may lead to numerous problems in case of
+	 * dynamic reconfiguration */
+	spId = ftmod_ss7_get_spId_by_span_id(ftdmchan->span_id);
+
+	if (!spId) {
+		spId 	= 1;
+	}
+
+	SS7_DEBUG("Found spId %d mapped to span %d\n", sngss7_info->spId, ftdmchan->span_id);
+
 	memset (&evnt, 0x0, sizeof (evnt));
 	
 	evnt.infoInd.eh.pres	   = PRSNT_NODEF;
@@ -375,7 +398,7 @@ void ft_to_sngss7_inf(ftdm_channel_t *ftdmchan, SiCnStEvnt *inr)
 		SS7_DEBUG_CHAN(ftdmchan,"[CIC:%d]Received INR with no information request. Sending back default INF.\n", sngss7_info->circuit->cic);
 	}
 		
-	sng_cc_inf(1, 
+	sng_cc_inf(spId,
 			  sngss7_info->suInstId,
 			  sngss7_info->spInstId,
 			  sngss7_info->circuit->id, 
@@ -391,6 +414,18 @@ void ft_to_sngss7_inr(ftdm_channel_t *ftdmchan)
 	SiCnStEvnt evnt;
 	const char *val = NULL;
 	sngss7_chan_data_t	*sngss7_info = ftdmchan->call_data;
+	int spId = 0;
+
+	/* Please take out the spId from respective isap if in case not found then assume it as 1,
+	 * but please donot simply hardcode it to 1 as it may lead to numerous problems in case of
+	 * dynamic reconfiguration */
+	spId = ftmod_ss7_get_spId_by_span_id(ftdmchan->span_id);
+
+	if (!spId) {
+		spId 	= 1;
+	}
+
+	SS7_DEBUG("Found spId %d mapped to span %d\n", sngss7_info->spId, ftdmchan->span_id);
 
 	memset (&evnt, 0x0, sizeof (evnt));
 
@@ -430,7 +465,7 @@ void ft_to_sngss7_inr(ftdm_channel_t *ftdmchan)
 		evnt.infoReqInd.malCaIdReqInd.val = MLBG_INFOREQ;
 	}
 
-	sng_cc_inr(1, 
+	sng_cc_inr(spId,
 			  sngss7_info->suInstId,
 			  sngss7_info->spInstId,
 			  sngss7_info->circuit->id, 
@@ -448,7 +483,19 @@ void ft_to_sngss7_acm (ftdm_channel_t * ftdmchan)
 	SiCnStEvnt acm;
 	const char *backwardInd = NULL;
 	const char *isdnUsrPrtInd = NULL;
-	
+	int spId = 0;
+
+	/* Please take out the spId from respective isap if in case not found then assume it as 1,
+	 * but please donot simply hardcode it to 1 as it may lead to numerous problems in case of
+	 * dynamic reconfiguration */
+	spId = ftmod_ss7_get_spId_by_span_id(ftdmchan->span_id);
+
+	if (!spId) {
+		spId 	= 1;
+	}
+
+	SS7_DEBUG("Found spId %d mapped to span %d\n", sngss7_info->spId, ftdmchan->span_id);
+
 	memset (&acm, 0x0, sizeof (acm));
 	
 	/* fill in the needed information for the ACM */
@@ -557,7 +604,7 @@ void ft_to_sngss7_acm (ftdm_channel_t * ftdmchan)
 	} /* if (sngss7_test_options(isup_intf, SNGSS7_ACM_OBCI_BITA)) */
 
 	/* send the ACM request to LibSngSS7 */
-	sng_cc_con_status  (1,
+	sng_cc_con_status  (spId,
 						sngss7_info->suInstId,
 						sngss7_info->spInstId,
 						sngss7_info->circuit->id, 
@@ -576,7 +623,20 @@ void ft_to_sngss7_cpg (ftdm_channel_t *ftdmchan, int indication, int presentatio
 	SS7_FUNC_TRACE_ENTER (__FUNCTION__);
 	
 	sngss7_chan_data_t *sngss7_info = ftdmchan->call_data;
-	
+	int spId = 0;
+
+	/* Please take out the spId from respective isap if in case not found then assume it as 1,
+	 * but please donot simply hardcode it to 1 as it may lead to numerous problems in case of
+	 * dynamic reconfiguration */
+	spId = ftmod_ss7_get_spId_by_span_id(ftdmchan->span_id);
+
+	if (!spId) {
+		spId 	= 1;
+	}
+
+	SS7_DEBUG("Found spId %d mapped to span %d\n", sngss7_info->spId, ftdmchan->span_id);
+
+
 
 	memset (&cpg, 0, sizeof (cpg));
 
@@ -590,23 +650,37 @@ void ft_to_sngss7_cpg (ftdm_channel_t *ftdmchan, int indication, int presentatio
 	cpg.evntInfo.evntPresResInd.val = presentation;		
 	
 	/* send the CPG request to LibSngSS7 */
-	sng_cc_con_status  (1, sngss7_info->suInstId, sngss7_info->spInstId, sngss7_info->circuit->id, &cpg, PROGRESS);
+	sng_cc_con_status  (spId, sngss7_info->suInstId, sngss7_info->spInstId, sngss7_info->circuit->id, &cpg, PROGRESS);
 
 	ftdm_log_chan(ftdmchan, FTDM_LOG_INFO, "[CIC:%d]Tx CPG\n", sngss7_info->circuit->cic);
 	SS7_FUNC_TRACE_EXIT (__FUNCTION__);
 	return;
 }
+
 void ft_to_sngss7_anm (ftdm_channel_t * ftdmchan)
 {
 	SS7_FUNC_TRACE_ENTER (__FUNCTION__);
 	
 	sngss7_chan_data_t *sngss7_info = ftdmchan->call_data;
 	SiConEvnt anm;
-	
+	int spId = 0;
+
+	/* Please take out the spId from respective isap if in case not found then assume it as 1,
+	 * but please donot simply hardcode it to 1 as it may lead to numerous problems in case of
+	 * dynamic reconfiguration */
+	spId = ftmod_ss7_get_spId_by_span_id(ftdmchan->span_id);
+
+	if (!spId) {
+		spId 	= 1;
+	}
+
+	SS7_DEBUG("Found spId %d mapped to span %d\n", sngss7_info->spId, ftdmchan->span_id);
+
+
 	memset (&anm, 0x0, sizeof (anm));
 	
 	/* send the ANM request to LibSngSS7 */
-	sng_cc_con_response(1,
+	sng_cc_con_response(spId,
 						sngss7_info->suInstId,
 						sngss7_info->spInstId,
 						sngss7_info->circuit->id, 
@@ -630,7 +704,20 @@ void ft_to_sngss7_rel (ftdm_channel_t * ftdmchan)
 	
 	sngss7_chan_data_t *sngss7_info = ftdmchan->call_data;
 	SiRelEvnt rel;
-	
+	int spId = 0;
+
+	/* Please take out the spId from respective isap if in case not found then assume it as 1,
+	 * but please donot simply hardcode it to 1 as it may lead to numerous problems in case of
+	 * dynamic reconfiguration */
+	spId = ftmod_ss7_get_spId_by_span_id(ftdmchan->span_id);
+
+	if (!spId) {
+		spId 	= 1;
+	}
+
+	SS7_DEBUG("Found spId %d mapped to span %d\n", sngss7_info->spId, ftdmchan->span_id);
+
+
 	memset (&rel, 0x0, sizeof (rel));
 	
 	rel.causeDgn.eh.pres = PRSNT_NODEF;
@@ -685,7 +772,7 @@ void ft_to_sngss7_rel (ftdm_channel_t * ftdmchan)
 	rel.causeDgn.dgnVal.pres = NOTPRSNT;
 	
 	/* send the REL request to LibSngSS7 */
-	sng_cc_rel_request (1,
+	sng_cc_rel_request (spId,
 			sngss7_info->suInstId,
 			sngss7_info->spInstId, 
 			sngss7_info->circuit->id, 
@@ -706,11 +793,24 @@ void ft_to_sngss7_rlc (ftdm_channel_t * ftdmchan)
 	
 	sngss7_chan_data_t *sngss7_info = ftdmchan->call_data;
 	SiRelEvnt rlc;
-	
+	int spId = 0;
+
+	/* Please take out the spId from respective isap if in case not found then assume it as 1,
+	 * but please donot simply hardcode it to 1 as it may lead to numerous problems in case of
+	 * dynamic reconfiguration */
+	spId = ftmod_ss7_get_spId_by_span_id(ftdmchan->span_id);
+
+	if (!spId) {
+		spId 	= 1;
+	}
+
+	SS7_DEBUG("Found spId %d mapped to span %d\n", sngss7_info->spId, ftdmchan->span_id);
+
+
 	memset (&rlc, 0x0, sizeof (rlc));
 	
 	/* send the RLC request to LibSngSS7 */
-	sng_cc_rel_response (1,
+	sng_cc_rel_response (spId,
 						sngss7_info->suInstId,
 						sngss7_info->spInstId, 
 						sngss7_info->circuit->id, 
@@ -726,28 +826,56 @@ void ft_to_sngss7_rlc (ftdm_channel_t * ftdmchan)
 void ft_to_sngss7_rsc (ftdm_channel_t * ftdmchan)
 {
 	SS7_FUNC_TRACE_ENTER (__FUNCTION__);
-	
+
 	sngss7_chan_data_t *sngss7_info = ftdmchan->call_data;
-	
-	sng_cc_sta_request (1,
-						sngss7_info->suInstId,
-						sngss7_info->spInstId,
-						sngss7_info->circuit->id,
-						sngss7_info->globalFlg, 
-						SIT_STA_CIRRESREQ, 
-						NULL);
-	
+	int spId = 0;
+
+	/* Please take out the spId from respective isap if in case not found then assume it as 1,
+	 * but please donot simply hardcode it to 1 as it may lead to numerous problems in case of
+	 * dynamic reconfiguration */
+	spId = ftmod_ss7_get_spId_by_span_id(ftdmchan->span_id);
+
+	if (!spId) {
+		spId 	= 1;
+	}
+
+	SS7_DEBUG("Found spId %d mapped to span %d\n", sngss7_info->spId, ftdmchan->span_id);
+
+
+	sng_cc_sta_request (spId,
+				sngss7_info->suInstId,
+				sngss7_info->spInstId,
+				sngss7_info->circuit->id,
+				sngss7_info->globalFlg,
+				SIT_STA_CIRRESREQ,
+				NULL);
+
+	/* stop RSC retransmission timer */
+	if (sngss7_info->t_waiting_rsca.hb_timer_id) {
+		SS7_DEBUG_CHAN(ftdmchan, "RSCA Timer %d already running thus stopping that first for CIC %d\n",
+			   (int)sngss7_info->t_waiting_rsca.hb_timer_id, sngss7_info->circuit->cic);
+
+		if (ftdm_sched_cancel_timer (sngss7_info->t_waiting_rsca.sched, sngss7_info->t_waiting_rsca.hb_timer_id)) {
+			SS7_DEBUG("Unable to Stop RSC re-transmission timer for span %d Circuit %d!\n",
+					ftdmchan->span_id, sngss7_info->circuit->cic);
+			goto done;
+		} else {
+			sngss7_info->t_waiting_rsca.hb_timer_id = 0;
+		}
+	}
+
 	/* start timer of waiting for RSCA message */
 	if (ftdm_sched_timer (sngss7_info->t_waiting_rsca.sched,
-					     "t_waiting_rsca",
-					     sngss7_info->t_waiting_rsca.beat,
-					     sngss7_info->t_waiting_rsca.callback,
-					     &sngss7_info->t_waiting_rsca,
-					     &sngss7_info->t_waiting_rsca.hb_timer_id)) 
+				"t_waiting_rsca",
+				sngss7_info->t_waiting_rsca.beat,
+				sngss7_info->t_waiting_rsca.callback,
+				&sngss7_info->t_waiting_rsca,
+				&sngss7_info->t_waiting_rsca.hb_timer_id))
 	{
 		SS7_ERROR ("Unable to schedule timer of waiting for RSCA. \n");
 	}
-	
+
+done:
 	SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Tx RSC\n", sngss7_info->circuit->cic);
 
 	SS7_FUNC_TRACE_EXIT (__FUNCTION__);
@@ -760,8 +888,21 @@ void ft_to_sngss7_rsca (ftdm_channel_t * ftdmchan)
 	SS7_FUNC_TRACE_ENTER (__FUNCTION__);
 	
 	sngss7_chan_data_t *sngss7_info = ftdmchan->call_data;
-	
-	sng_cc_sta_request (1,
+	int spId = 0;
+
+	/* Please take out the spId from respective isap if in case not found then assume it as 1,
+	 * but please donot simply hardcode it to 1 as it may lead to numerous problems in case of
+	 * dynamic reconfiguration */
+	spId = ftmod_ss7_get_spId_by_span_id(ftdmchan->span_id);
+
+	if (!spId) {
+		spId 	= 1;
+	}
+
+	SS7_DEBUG("Found spId %d mapped to span %d\n", sngss7_info->spId, ftdmchan->span_id);
+
+
+	sng_cc_sta_request (spId,
 						sngss7_info->suInstId,
 						sngss7_info->spInstId,
 						sngss7_info->circuit->id,
@@ -783,6 +924,19 @@ void ft_to_sngss7_ccr (ftdm_channel_t * ftdmchan)
 
 	sngss7_chan_data_t *sngss7_info = ftdmchan->call_data;
 	SiStaEvnt ccr;
+	int spId = 0;
+
+	/* Please take out the spId from respective isap if in case not found then assume it as 1,
+	 * but please donot simply hardcode it to 1 as it may lead to numerous problems in case of
+	 * dynamic reconfiguration */
+	spId = ftmod_ss7_get_spId_by_span_id(ftdmchan->span_id);
+
+	if (!spId) {
+		spId 	= 1;
+	}
+
+	SS7_DEBUG("Found spId %d mapped to span %d\n", sngss7_info->spId, ftdmchan->span_id);
+
 
 	/* clean out the gra struct */
 	memset (&ccr, 0x0, sizeof (ccr));
@@ -792,7 +946,7 @@ void ft_to_sngss7_ccr (ftdm_channel_t * ftdmchan)
 	ccr.contInd.contInd.pres = PRSNT_NODEF;
 	ccr.contInd.contInd.val = CONT_CHKSUCC;
 
-	sng_cc_sta_request (1,
+	sng_cc_sta_request (spId,
 			sngss7_info->suInstId,
 			sngss7_info->spInstId,
 			sngss7_info->circuit->id,
@@ -814,6 +968,19 @@ void ft_to_sngss7_cot (ftdm_channel_t * ftdmchan)
 
 	sngss7_chan_data_t *sngss7_info = ftdmchan->call_data;
 	SiStaEvnt cot;
+	int spId = 0;
+
+	/* Please take out the spId from respective isap if in case not found then assume it as 1,
+	 * but please donot simply hardcode it to 1 as it may lead to numerous problems in case of
+	 * dynamic reconfiguration */
+	spId = ftmod_ss7_get_spId_by_span_id(ftdmchan->span_id);
+
+	if (!spId) {
+		spId 	= 1;
+	}
+
+	SS7_DEBUG("Found spId %d mapped to span %d\n", sngss7_info->spId, ftdmchan->span_id);
+
 
 	/* clean out the gra struct */
 	memset (&cot, 0x0, sizeof (cot));
@@ -823,7 +990,7 @@ void ft_to_sngss7_cot (ftdm_channel_t * ftdmchan)
 	cot.contInd.contInd.pres = PRSNT_NODEF;
 	cot.contInd.contInd.val = CONT_CHKSUCC;
 
-	sng_cc_sta_request (1,
+	sng_cc_sta_request (spId,
 			sngss7_info->suInstId,
 			sngss7_info->spInstId,
 			sngss7_info->circuit->id,
@@ -848,11 +1015,24 @@ void ft_to_sngss7_blo (ftdm_channel_t * ftdmchan)
 	SS7_INFO_CHAN(ftdmchan, "[CIC:%d]blk_flag = 0x%x, ckt_flag = 0x%x\n, cmd_pending_flag = 0x%x\n", 
 					sngss7_info->circuit->cic, sngss7_info->blk_flags, sngss7_info->ckt_flags, sngss7_info->cmd_pending_flags);
 	*/
-	
+	int spId = 0;
+
+	/* Please take out the spId from respective isap if in case not found then assume it as 1,
+	 * but please donot simply hardcode it to 1 as it may lead to numerous problems in case of
+	 * dynamic reconfiguration */
+	spId = ftmod_ss7_get_spId_by_span_id(ftdmchan->span_id);
+
+	if (!spId) {
+		spId 	= 1;
+	}
+
+	SS7_DEBUG("Found spId %d mapped to span %d\n", sngss7_info->spId, ftdmchan->span_id);
+
+
 	sngss7_set_cmd_pending_flag(sngss7_info, FLAG_CMD_PENDING_WAIT_FOR_RX_BLA);
 	SS7_DEBUG ("Set FLAG_CMD_PENDING_WAIT_FOR_RX_BLA flag. \n");
 	
-	sng_cc_sta_request (1,
+	sng_cc_sta_request (spId,
 						0,
 						0,
 						sngss7_info->circuit->id,
@@ -904,8 +1084,21 @@ void ft_to_sngss7_bla (ftdm_channel_t * ftdmchan)
 	SS7_FUNC_TRACE_ENTER (__FUNCTION__);
 	
 	sngss7_chan_data_t *sngss7_info = ftdmchan->call_data;
-	
-	sng_cc_sta_request (1,
+	int spId = 0;
+
+	/* Please take out the spId from respective isap if in case not found then assume it as 1,
+	 * but please donot simply hardcode it to 1 as it may lead to numerous problems in case of
+	 * dynamic reconfiguration */
+	spId = ftmod_ss7_get_spId_by_span_id(ftdmchan->span_id);
+
+	if (!spId) {
+		spId 	= 1;
+	}
+
+	SS7_DEBUG("Found spId %d mapped to span %d\n", sngss7_info->spId, ftdmchan->span_id);
+
+
+	sng_cc_sta_request (spId,
 						0,
 						0,
 						sngss7_info->circuit->id,
@@ -926,6 +1119,19 @@ ft_to_sngss7_ubl (ftdm_channel_t * ftdmchan)
 	SS7_FUNC_TRACE_ENTER (__FUNCTION__);
 	
 	sngss7_chan_data_t *sngss7_info = ftdmchan->call_data;
+	int spId = 0;
+
+	/* Please take out the spId from respective isap if in case not found then assume it as 1,
+	 * but please donot simply hardcode it to 1 as it may lead to numerous problems in case of
+	 * dynamic reconfiguration */
+	spId = ftmod_ss7_get_spId_by_span_id(ftdmchan->span_id);
+
+	if (!spId) {
+		spId 	= 1;
+	}
+
+	SS7_DEBUG("Found spId %d mapped to span %d\n", sngss7_info->spId, ftdmchan->span_id);
+
 
 	/*
 	SS7_INFO_CHAN(ftdmchan, "[CIC:%d]blk_flag = 0x%x, ckt_flag = 0x%x\n, cmd_pending_flag = 0x%x\n", 
@@ -940,7 +1146,7 @@ ft_to_sngss7_ubl (ftdm_channel_t * ftdmchan)
 	} 
 
 	if (!sngss7_test_cmd_pending_flag(sngss7_info, FLAG_CMD_UBL_DUMB) ) {
-		sng_cc_sta_request (1,
+		sng_cc_sta_request (spId,
 							0,
 							0,
 							sngss7_info->circuit->id,
@@ -974,8 +1180,21 @@ void ft_to_sngss7_uba (ftdm_channel_t * ftdmchan)
 	SS7_FUNC_TRACE_ENTER (__FUNCTION__);
 	
 	sngss7_chan_data_t *sngss7_info = ftdmchan->call_data;
-	
-	sng_cc_sta_request (1,
+	int spId = 0;
+
+	/* Please take out the spId from respective isap if in case not found then assume it as 1,
+	 * but please donot simply hardcode it to 1 as it may lead to numerous problems in case of
+	 * dynamic reconfiguration */
+	spId = ftmod_ss7_get_spId_by_span_id(ftdmchan->span_id);
+
+	if (!spId) {
+		spId 	= 1;
+	}
+
+	SS7_DEBUG("Found spId %d mapped to span %d\n", sngss7_info->spId, ftdmchan->span_id);
+
+
+	sng_cc_sta_request (spId,
 						0,
 						0,
 						sngss7_info->circuit->id,
@@ -995,8 +1214,21 @@ void ft_to_sngss7_lpa (ftdm_channel_t * ftdmchan)
 	SS7_FUNC_TRACE_ENTER (__FUNCTION__);
 	
 	sngss7_chan_data_t *sngss7_info = ftdmchan->call_data;
-	
-	sng_cc_sta_request (1,
+	int spId = 0;
+
+	/* Please take out the spId from respective isap if in case not found then assume it as 1,
+	 * but please donot simply hardcode it to 1 as it may lead to numerous problems in case of
+	 * dynamic reconfiguration */
+	spId = ftmod_ss7_get_spId_by_span_id(ftdmchan->span_id);
+
+	if (!spId) {
+		spId 	= 1;
+	}
+
+	SS7_DEBUG("Found spId %d mapped to span %d\n", sngss7_info->spId, ftdmchan->span_id);
+
+
+	sng_cc_sta_request (spId,
 						sngss7_info->suInstId,
 						sngss7_info->spInstId,
 						sngss7_info->circuit->id,
@@ -1017,7 +1249,20 @@ void ft_to_sngss7_gra (ftdm_channel_t * ftdmchan)
 	
 	sngss7_chan_data_t *sngss7_info = ftdmchan->call_data;
 	SiStaEvnt	gra;
-	
+	int spId = 0;
+
+	/* Please take out the spId from respective isap if in case not found then assume it as 1,
+	 * but please donot simply hardcode it to 1 as it may lead to numerous problems in case of
+	 * dynamic reconfiguration */
+	spId = ftmod_ss7_get_spId_by_span_id(ftdmchan->span_id);
+
+	if (!spId) {
+		spId 	= 1;
+	}
+
+	SS7_DEBUG("Found spId %d mapped to span %d\n", sngss7_info->spId, ftdmchan->span_id);
+
+
 	/* clean out the gra struct */
 	memset (&gra, 0x0, sizeof (gra));
 
@@ -1036,7 +1281,7 @@ void ft_to_sngss7_gra (ftdm_channel_t * ftdmchan)
 	*/
 	
 	/* send the GRA to LibSng-SS7 */
-	sng_cc_sta_request (1,
+	sng_cc_sta_request (spId,
 						0,
 						0,
 						sngss7_info->rx_grs.circuit,
@@ -1062,7 +1307,20 @@ void ft_to_sngss7_grs (ftdm_channel_t *fchan)
 	sngss7_chan_data_t *cinfo = fchan->call_data;
 	
 	SiStaEvnt grs;
-	
+	int spId = 0;
+
+	/* Please take out the spId from respective isap if in case not found then assume it as 1,
+	 * but please donot simply hardcode it to 1 as it may lead to numerous problems in case of
+	 * dynamic reconfiguration */
+	spId = ftmod_ss7_get_spId_by_span_id(fchan->span_id);
+
+	if (!spId) {
+		spId 	= 1;
+	}
+
+	SS7_DEBUG("Found spId %d mapped to span %d\n", cinfo->spId, fchan->span_id);
+
+
 	ftdm_assert(sngss7_test_ckt_flag(cinfo, FLAG_GRP_RESET_TX) && 
 		   !sngss7_test_ckt_flag(cinfo, FLAG_GRP_RESET_SENT), "Incorrect flags\n");
 
@@ -1071,7 +1329,7 @@ void ft_to_sngss7_grs (ftdm_channel_t *fchan)
 	grs.rangStat.range.pres = PRSNT_NODEF;
 	grs.rangStat.range.val  = cinfo->tx_grs.range;
 
-	sng_cc_sta_request (1,
+	sng_cc_sta_request (spId,
 		0,
 		0,
 		cinfo->tx_grs.circuit,
@@ -1099,6 +1357,19 @@ void ft_to_sngss7_cgba(ftdm_channel_t * ftdmchan)
 	int					x = 0;
 	
 	SiStaEvnt cgba;
+	int spId = 0;
+
+	/* Please take out the spId from respective isap if in case not found then assume it as 1,
+	 * but please donot simply hardcode it to 1 as it may lead to numerous problems in case of
+	 * dynamic reconfiguration */
+	spId = ftmod_ss7_get_spId_by_span_id(ftdmchan->span_id);
+
+	if (!spId) {
+		spId 	= 1;
+	}
+
+	SS7_DEBUG("Found spId %d mapped to span %d\n", sngss7_info->spId, ftdmchan->span_id);
+
 
 	memset (&cgba, 0x0, sizeof(cgba));
 
@@ -1118,7 +1389,7 @@ void ft_to_sngss7_cgba(ftdm_channel_t * ftdmchan)
 		cgba.rangStat.status.val[x] = sngss7_span->rx_cgb.status[x];
 	}
 
-	sng_cc_sta_request (1,
+	sng_cc_sta_request (spId,
 						0,
 						0,
 						sngss7_span->rx_cgb.circuit,
@@ -1140,7 +1411,7 @@ void ft_to_sngss7_cgba(ftdm_channel_t * ftdmchan)
 
 /******************************************************************************/
 void ft_to_sngss7_cgua(ftdm_channel_t * ftdmchan)
-{	
+{
 	SS7_FUNC_TRACE_ENTER (__FUNCTION__);
 	
 	sngss7_span_data_t 	*sngss7_span = ftdmchan->span->signal_data;
@@ -1148,6 +1419,19 @@ void ft_to_sngss7_cgua(ftdm_channel_t * ftdmchan)
 	int					x = 0;
 	
 	SiStaEvnt cgua;
+	int spId = 0;
+
+	/* Please take out the spId from respective isap if in case not found then assume it as 1,
+	 * but please donot simply hardcode it to 1 as it may lead to numerous problems in case of
+	 * dynamic reconfiguration */
+	spId = ftmod_ss7_get_spId_by_span_id(ftdmchan->span_id);
+
+	if (!spId) {
+		spId 	= 1;
+	}
+
+	SS7_DEBUG("Found spId %d mapped to span %d\n", sngss7_info->spId, ftdmchan->span_id);
+
 
 	memset (&cgua, 0x0, sizeof(cgua));
 
@@ -1167,7 +1451,7 @@ void ft_to_sngss7_cgua(ftdm_channel_t * ftdmchan)
 		cgua.rangStat.status.val[x] = sngss7_span->rx_cgu.status[x];
 	}
 
-	sng_cc_sta_request (1,
+	sng_cc_sta_request (spId,
 						0,
 						0,
 						sngss7_span->rx_cgu.circuit,
@@ -1197,7 +1481,18 @@ void ft_to_sngss7_cgb(ftdm_channel_t * ftdmchan)
 	sngss7_chan_data_t	*sngss7_info = ftdmchan->call_data;
 	SiStaEvnt 			cgb;
 	int					x = 0;
+	int spId = 0;
 
+	/* Please take out the spId from respective isap if in case not found then assume it as 1,
+	 * but please donot simply hardcode it to 1 as it may lead to numerous problems in case of
+	 * dynamic reconfiguration */
+	spId = ftmod_ss7_get_spId_by_span_id(ftdmchan->span_id);
+
+	if (!spId) {
+		spId 	= 1;
+	}
+
+	SS7_DEBUG("Found spId %d mapped to span %d\n", sngss7_info->spId, ftdmchan->span_id);
 
 	memset (&cgb, 0x0, sizeof(cgb));
 
@@ -1218,7 +1513,7 @@ void ft_to_sngss7_cgb(ftdm_channel_t * ftdmchan)
 		cgb.rangStat.status.val[x] = sngss7_span->tx_cgb.status[x];
 	}
 
-	sng_cc_sta_request (1,
+	sng_cc_sta_request (spId,
 						0,
 						0,
 						sngss7_span->tx_cgb.circuit,
@@ -1248,7 +1543,18 @@ void ft_to_sngss7_cgu(ftdm_channel_t * ftdmchan)
 	sngss7_chan_data_t	*sngss7_info = ftdmchan->call_data;
 	SiStaEvnt 			cgu;
 	int					x = 0;
+	int spId = 0;
 
+	/* Please take out the spId from respective isap if in case not found then assume it as 1,
+	 * but please donot simply hardcode it to 1 as it may lead to numerous problems in case of
+	 * dynamic reconfiguration */
+	spId = ftmod_ss7_get_spId_by_span_id(ftdmchan->span_id);
+
+	if (!spId) {
+		spId 	= 1;
+	}
+
+	SS7_DEBUG("Found spId %d mapped to span %d\n", sngss7_info->spId, ftdmchan->span_id);
 
 	memset (&cgu, 0x0, sizeof(cgu));
 
@@ -1269,7 +1575,7 @@ void ft_to_sngss7_cgu(ftdm_channel_t * ftdmchan)
 		cgu.rangStat.status.val[x] = sngss7_span->tx_cgu.status[x];
 	}
 
-	sng_cc_sta_request (1,
+	sng_cc_sta_request (spId,
 						0,
 						0,
 						sngss7_span->tx_cgu.circuit,
@@ -1301,7 +1607,18 @@ void ft_to_sngss7_itx (ftdm_channel_t * ftdmchan)
 	const char* var = NULL;
 	sngss7_chan_data_t	*sngss7_info = ftdmchan->call_data;
 	SiCnStEvnt itx;
-	
+	int spId = 0;
+
+	/* Please take out the spId from respective isap if in case not found then assume it as 1,
+	 * but please donot simply hardcode it to 1 as it may lead to numerous problems in case of
+	 * dynamic reconfiguration */
+	spId = ftmod_ss7_get_spId_by_span_id(ftdmchan->span_id);
+
+	if (!spId) {
+		spId 	= 1;
+	}
+
+	SS7_DEBUG("Found spId %d mapped to span %d\n", sngss7_info->spId, ftdmchan->span_id);
 	SS7_FUNC_TRACE_ENTER (__FUNCTION__);
 
 	memset (&itx, 0x0, sizeof (itx));
@@ -1325,7 +1642,7 @@ void ft_to_sngss7_itx (ftdm_channel_t * ftdmchan)
 	}
 
 	ftdm_log_chan(ftdmchan, FTDM_LOG_INFO, "ITX Charging Unit:%d Msg Num:%d\n", itx.chargUnitNum.chargUnitNum.val, itx.msgNum.msgNum.val);
-	sng_cc_con_status  (1, sngss7_info->suInstId, sngss7_info->spInstId, sngss7_info->circuit->id, &itx, CHARGE_UNIT);
+	sng_cc_con_status  (spId, sngss7_info->suInstId, sngss7_info->spInstId, sngss7_info->circuit->id, &itx, CHARGE_UNIT);
 
 	SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Tx ITX\n", sngss7_info->circuit->cic);
 #endif
@@ -1343,10 +1660,21 @@ void ft_to_sngss7_txa (ftdm_channel_t * ftdmchan)
 	SiCnStEvnt txa;
 	sngss7_chan_data_t	*sngss7_info = ftdmchan->call_data;
 	SS7_FUNC_TRACE_ENTER (__FUNCTION__);
-		
+	int spId = 0;
+
+	/* Please take out the spId from respective isap if in case not found then assume it as 1,
+	 * but please donot simply hardcode it to 1 as it may lead to numerous problems in case of
+	 * dynamic reconfiguration */
+	spId = ftmod_ss7_get_spId_by_span_id(ftdmchan->span_id);
+
+	if (!spId) {
+		spId 	= 1;
+	}
+
+	SS7_DEBUG("Found spId %d mapped to span %d\n", sngss7_info->spId, ftdmchan->span_id);
 	memset (&txa, 0x0, sizeof(txa));
 
-	sng_cc_con_status(1, sngss7_info->suInstId, sngss7_info->spInstId, sngss7_info->circuit->id, &txa, CHARGE_ACK);
+	sng_cc_con_status(spId, sngss7_info->suInstId, sngss7_info->spInstId, sngss7_info->circuit->id, &txa, CHARGE_ACK);
 	
 	SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Tx TXA\n", sngss7_info->circuit->cic);
 #endif

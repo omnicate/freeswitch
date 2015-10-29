@@ -195,6 +195,9 @@ typedef enum {
 	FTDM_EINVAL, /*!< Invalid argument */
 	FTDM_ECANCELED, /*!< Operation cancelled */
 	FTDM_EBUSY, /*!< Device busy */
+
+	FTDM_EAGAIN, /*!< Span required to be stop first and then apply the new configiuration and then start mainly
+			  used for in order to configure span dynamically */
 } ftdm_status_t;
 
 /*! \brief FreeTDM bool type. */

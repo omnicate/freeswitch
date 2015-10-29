@@ -388,10 +388,17 @@ void handle_wait_rsca_timeout(void *userdata)
 	ftdm_channel_t      *ftdmchan = sngss7_info->ftdmchan;
 	
 	SS7_FUNC_TRACE_ENTER(__FUNCTION__);
+
+	if (timer->hb_timer_id) {
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "handle_wait_rsca_timeout() Clearing timer %d\n", (int)timer->hb_timer_id);
+		timer->hb_timer_id = 0;
+	}
+
 	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "handle_wait_rsca_timeout() timer kicked in. %s\n", " ");
 	ft_to_sngss7_rsc(ftdmchan);
 	SS7_FUNC_TRACE_EXIT(__FUNCTION__);
 }
+
 void handle_disable_ubl_timeout(void *userdata)
 {
 	sngss7_timer_data_t *timer = userdata;
