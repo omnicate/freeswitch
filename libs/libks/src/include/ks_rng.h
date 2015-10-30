@@ -33,6 +33,8 @@ typedef UUID uuid_t;
 
 KS_DECLARE(uuid_t *) ks_uuid(uuid_t *uuid);
 KS_DECLARE(char *) ks_uuid_str(ks_pool_t *pool, uuid_t *uuid);
+KS_DECLARE(ks_status_t) ks_rng_init(void);
+KS_DECLARE(ks_status_t) ks_rng_shutdown(void);
 
 KS_END_EXTERN_C
 
