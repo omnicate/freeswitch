@@ -81,7 +81,7 @@
 
 #include "sha2.h"
 
-#include <cryptcommon/brg_endian.h>
+#include <crypt/brg_endian.h>
 
 #if defined(__cplusplus)
 extern "C"

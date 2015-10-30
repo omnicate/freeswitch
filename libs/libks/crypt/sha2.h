@@ -47,7 +47,7 @@
 #  define NEED_UINT_64T
 #endif
 
-#include <cryptcommon/brg_types.h>
+#include <crypt/brg_types.h>
 
 #if defined(__cplusplus)
 extern "C"
