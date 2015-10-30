@@ -4,17 +4,17 @@
 
 int main(void)
 {
-	ks_pool_t *pool = NULL;
 	ks_status_t status;
+	blade_handle_t *bh = NULL;
 
 	blade_init();
 
 	plan(1);
 
-	status = ks_pool_open(&pool);
-	ks_pool_close(&pool);
+	status = blade_handle_create(&bh, NULL);
+	status = blade_handle_destroy(&bh);
 
-	ok(status == 0);
+	ok(status == KS_STATUS_SUCCESS);
 	done_testing();
 
 	blade_shutdown();

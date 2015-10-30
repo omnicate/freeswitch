@@ -142,7 +142,8 @@ am__installdirs = "$(DESTDIR)$(libdir)" \
 LTLIBRARIES = $(lib_LTLIBRARIES)
 libblade_la_LIBADD =
 am__dirstamp = $(am__leading_dot)dirstamp
-am_libblade_la_OBJECTS = src/libblade_la-blade.lo
+am_libblade_la_OBJECTS = src/libblade_la-blade.lo \
+	src/libblade_la-blade_stack.lo src/libblade_la-blade_peer.lo
 libblade_la_OBJECTS = $(am_libblade_la_OBJECTS)
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
@@ -403,7 +404,7 @@ EXTRA_DIST =
 SUBDIRS = . test
 AUTOMAKE_OPTIONS = subdir-objects
 lib_LTLIBRARIES = libblade.la
-libblade_la_SOURCES = src/blade.c
+libblade_la_SOURCES = src/blade.c src/blade_stack.c src/blade_peer.c
 libblade_la_CFLAGS = $(AM_CFLAGS) $(AM_CPPFLAGS)
 libblade_la_LDFLAGS = -version-info 0:1:0 -lncurses -lpthread -lm $(AM_LDFLAGS)
 library_includedir = $(prefix)/include
@@ -489,6 +490,10 @@ src/$(DEPDIR)/$(am__dirstamp):
 	@: > src/$(DEPDIR)/$(am__dirstamp)
 src/libblade_la-blade.lo: src/$(am__dirstamp) \
 	src/$(DEPDIR)/$(am__dirstamp)
+src/libblade_la-blade_stack.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
+src/libblade_la-blade_peer.lo: src/$(am__dirstamp) \
+	src/$(DEPDIR)/$(am__dirstamp)
 
 libblade.la: $(libblade_la_OBJECTS) $(libblade_la_DEPENDENCIES) $(EXTRA_libblade_la_DEPENDENCIES) 
 	$(AM_V_CCLD)$(libblade_la_LINK) -rpath $(libdir) $(libblade_la_OBJECTS) $(libblade_la_LIBADD) $(LIBS)
@@ -502,6 +507,8 @@ distclean-compile:
 	-rm -f *.tab.c
 
 @AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/libblade_la-blade.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/libblade_la-blade_peer.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@src/$(DEPDIR)/libblade_la-blade_stack.Plo@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	$(AM_V_CC)depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.o$$||'`;\
@@ -533,6 +540,20 @@ src/libblade_la-blade.lo: src/blade.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='src/blade.c' object='src/libblade_la-blade.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libblade_la_CFLAGS) $(CFLAGS) -c -o src/libblade_la-blade.lo `test -f 'src/blade.c' || echo '$(srcdir)/'`src/blade.c
+
+src/libblade_la-blade_stack.lo: src/blade_stack.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libblade_la_CFLAGS) $(CFLAGS) -MT src/libblade_la-blade_stack.lo -MD -MP -MF src/$(DEPDIR)/libblade_la-blade_stack.Tpo -c -o src/libblade_la-blade_stack.lo `test -f 'src/blade_stack.c' || echo '$(srcdir)/'`src/blade_stack.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) src/$(DEPDIR)/libblade_la-blade_stack.Tpo src/$(DEPDIR)/libblade_la-blade_stack.Plo
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='src/blade_stack.c' object='src/libblade_la-blade_stack.lo' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libblade_la_CFLAGS) $(CFLAGS) -c -o src/libblade_la-blade_stack.lo `test -f 'src/blade_stack.c' || echo '$(srcdir)/'`src/blade_stack.c
+
+src/libblade_la-blade_peer.lo: src/blade_peer.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libblade_la_CFLAGS) $(CFLAGS) -MT src/libblade_la-blade_peer.lo -MD -MP -MF src/$(DEPDIR)/libblade_la-blade_peer.Tpo -c -o src/libblade_la-blade_peer.lo `test -f 'src/blade_peer.c' || echo '$(srcdir)/'`src/blade_peer.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) src/$(DEPDIR)/libblade_la-blade_peer.Tpo src/$(DEPDIR)/libblade_la-blade_peer.Plo
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='src/blade_peer.c' object='src/libblade_la-blade_peer.lo' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(libblade_la_CFLAGS) $(CFLAGS) -c -o src/libblade_la-blade_peer.lo `test -f 'src/blade_peer.c' || echo '$(srcdir)/'`src/blade_peer.c
 
 mostlyclean-libtool:
 	-rm -f *.lo

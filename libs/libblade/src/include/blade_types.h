@@ -31,17 +31,14 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef _BLADE_H_
-#define _BLADE_H_
+#ifndef _BLADE_TYPES_H_
+#define _BLADE_TYPES_H_
 #include <ks.h>
-#include "blade_types.h"
-#include "blade_stack.h"
-#include "blade_peer.h"
 
 KS_BEGIN_EXTERN_C
 
-KS_DECLARE(ks_status_t) blade_init(void);
-KS_DECLARE(ks_status_t) blade_shutdown(void);
+typedef struct blade_handle_s blade_handle_t;
+typedef struct blade_peer_s blade_peer_t;
 
 KS_END_EXTERN_C
 

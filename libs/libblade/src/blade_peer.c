@@ -31,21 +31,62 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef _BLADE_H_
-#define _BLADE_H_
-#include <ks.h>
-#include "blade_types.h"
-#include "blade_stack.h"
-#include "blade_peer.h"
+#include "blade.h"
 
-KS_BEGIN_EXTERN_C
+typedef enum {
+	BP_NONE = 0,
+	BP_MYPOOL = (1 << 0)
+} bppvt_flag_t;
 
-KS_DECLARE(ks_status_t) blade_init(void);
-KS_DECLARE(ks_status_t) blade_shutdown(void);
+struct blade_peer_s {
+	bppvt_flag_t flags;
+	ks_pool_t *pool;
+};
 
-KS_END_EXTERN_C
 
-#endif
+KS_DECLARE(ks_status_t) blade_peer_destroy(blade_peer_t **bpP)
+{
+	blade_peer_t *bp = NULL;
+	bppvt_flag_t flags;
+	ks_pool_t *pool;
+
+	ks_assert(bpP);
+
+	bp = *bpP;
+	*bpP = NULL;
+
+	ks_assert(bp);
+
+	flags = bp->flags;
+	pool = bp->pool;
+
+	ks_pool_free(bp->pool, bp);
+
+	if (pool && (flags & BP_MYPOOL)) {
+		ks_pool_close(&pool);
+	}
+
+	return KS_STATUS_SUCCESS;
+}
+
+KS_DECLARE(ks_status_t) blade_peer_create(blade_peer_t **bpP, ks_pool_t *pool)
+{
+	bppvt_flag_t newflags = BP_NONE;
+	blade_peer_t *bp = NULL;
+
+	if (!pool) {
+		newflags |= BP_MYPOOL;
+		ks_pool_open(&pool);
+	}
+
+	bp = ks_pool_alloc(pool, sizeof(*bp));
+	bp->pool = pool;
+	bp->flags = newflags;
+	*bpP = bp;
+
+	return KS_STATUS_SUCCESS;
+}
+
 
 /* For Emacs:
  * Local Variables:

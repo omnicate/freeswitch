@@ -31,18 +31,13 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef _BLADE_H_
-#define _BLADE_H_
-#include <ks.h>
-#include "blade_types.h"
-#include "blade_stack.h"
-#include "blade_peer.h"
+#ifndef _BLADE_STACK_H_
+#define _BLADE_STACK_H_
+#include <blade.h>
 
 KS_BEGIN_EXTERN_C
-
-KS_DECLARE(ks_status_t) blade_init(void);
-KS_DECLARE(ks_status_t) blade_shutdown(void);
-
+KS_DECLARE(ks_status_t) blade_handle_destroy(blade_handle_t **bhP);
+KS_DECLARE(ks_status_t) blade_handle_create(blade_handle_t **bhP, ks_pool_t *pool);
 KS_END_EXTERN_C
 
 #endif
