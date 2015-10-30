@@ -39,7 +39,7 @@ int fd = -1;
  * memset(buf, val, len), but the use of a volatile pointer
  * guarantees that the compiler will not optimise the call away.
  */
-//static void * (*volatile memset_volatile)(void *, int, size_t) = memset;
+static void * (*volatile memset_volatile)(void *, int, size_t) = memset;
 
 KS_DECLARE(uuid_t *) ks_uuid(uuid_t *uuid)
 {
@@ -70,6 +70,7 @@ KS_DECLARE(char *) ks_uuid_str(ks_pool_t *pool, uuid_t *uuid)
 KS_DECLARE(ks_status_t) ks_rng_init(void)
 {
 	if (!initialized) {
+		ks_aes_init();
 		ks_mutex_create(&rng_mutex, KS_MUTEX_FLAG_DEFAULT, ks_global_pool());
 #ifdef __WINDOWS__
 		if (!crypt_provider) {		
@@ -164,6 +165,61 @@ KS_DECLARE(size_t) ks_rng_add_entropy(const uint8_t *buffer, size_t length)
     ks_mutex_unlock(rng_mutex);
 
     return length;
+}
+
+KS_DECLARE(size_t) ks_rng_get_data(uint8_t* buffer, size_t length) {
+
+	aes_encrypt_ctx cx[1];
+    sha512_ctx random_context;
+    uint8_t    md[SHA512_DIGEST_SIZE];
+    uint8_t    ctr[AES_BLOCK_SIZE];
+    uint8_t    rdata[AES_BLOCK_SIZE];
+    size_t     generated = length;
+
+    /* Add entropy from system state. We will include whatever happens to be in the buffer, it can't hurt */
+	ks_rng_add_entropy(buffer, length);
+
+    ks_mutex_lock(rng_mutex);
+
+    /* Copy the mainCtx and finalize it into the md buffer */
+    memcpy(&random_context, &global_sha512, sizeof(sha512_ctx));
+    sha512_end(md, &random_context);
+
+    ks_mutex_lock(rng_mutex);
+
+    /* Key an AES context from this buffer */
+	aes_encrypt_key256(md, cx);
+
+    /* Initialize counter, using excess from md if available */
+    memset (ctr, 0, sizeof(ctr));
+	uint32_t ctrbytes = AES_BLOCK_SIZE;
+	memcpy(ctr + sizeof(ctr) - ctrbytes, md + 32, ctrbytes);
+
+    /* Encrypt counter, copy to destination buffer, increment counter */
+    while (length) {
+        uint8_t *ctrptr;
+        size_t copied;
+		aes_encrypt(ctr, rdata, cx);
+        copied = (sizeof(rdata) < length) ? sizeof(rdata) : length;
+        memcpy (buffer, rdata, copied);
+        buffer += copied;
+        length -= copied;
+
+        /* Increment counter */
+        ctrptr = ctr + sizeof(ctr) - 1;
+        while (ctrptr >= ctr) {
+            if ((*ctrptr-- += 1) != 0) {
+                break;
+            }
+        }
+    }
+    memset_volatile(&random_context, 0, sizeof(random_context));
+    memset_volatile(md, 0, sizeof(md));
+    memset_volatile(&cx, 0, sizeof(cx));
+    memset_volatile(ctr, 0, sizeof(ctr));
+    memset_volatile(rdata, 0, sizeof(rdata));
+
+    return generated;
 }
 
 /* For Emacs:
