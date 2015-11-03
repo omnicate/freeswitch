@@ -1,6 +1,8 @@
 AM_CFLAGS += -I$(abs_top_srcdir)/src/include -g -ggdb -O0 $(openssl_CFLAGS)
-TEST_LDADD = $(abs_top_srcdir)/libks.la $(openssl_LIBS)
+TEST_LDADD = $(abs_top_builddir)/libks.la $(openssl_LIBS)
 check_PROGRAMS = 
+
+EXTRA_DIST = tap.h
 
 check_PROGRAMS += testpools
 testpools_SOURCES = testpools.c
