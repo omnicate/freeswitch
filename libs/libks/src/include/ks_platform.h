@@ -40,10 +40,10 @@ KS_BEGIN_EXTERN_C
 #define _XOPEN_SOURCE 600
 #endif
 
-#if defined(__linux__) && !defined(_BSD_SOURCE)
-#define _BSD_SOURCE 1
+#if defined(__linux__) && !defined(_DEFAULT_SOURCE)
+#define _DEFAULT_SOURCE 1
 #endif
-	
+
 #if !defined(__WINDOWS__) && (defined(WIN32) || defined(WIN64) || defined(_MSC_VER) || defined(_WIN32))
 #define __WINDOWS__
 #endif
