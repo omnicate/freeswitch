@@ -251,6 +251,7 @@ AM_LDFLAGS="${AM_LDFLAGS} ${SODIUM_LIBS}"
 
 AC_CONFIG_FILES([Makefile
 	test/Makefile
+	libks.pc
 ])
 
 AC_OUTPUT
