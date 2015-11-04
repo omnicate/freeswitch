@@ -72,12 +72,13 @@ PAYLOAD
 
 
 typedef struct bpcp_header_s {
-	
+	uint32_t header;
+	uint64_t seq;
 } bpcp_header_t;
 
 typedef struct bpcp_channel_nfo_s {
 	char *channel_name;
-	unsigned_char key[crypto_generichash_BYTES];
+	unsigned char key[crypto_generichash_BYTES];
 	uint32_t ttl;
 } bpcp_channel_nfo_t;
 
@@ -89,10 +90,10 @@ typedef struct bpcp_handle_s {
 } bpcp_handle_t;
 
 KS_DECLARE(ks_status_t) bpcp_create(bpcp_handle_t **handle,
-									const char *local_addr, ks_port_t local_port, 
+									const char *local_addr, ks_port_t local_port,
 									const char *bootstrap_addr, ks_port_t bootstrap_port)
 {
-	
+	return KS_STATUS_SUCCESS;
 }
 
 /* For Emacs:
