@@ -1,0 +1,16 @@
+
+== Build ==
+To build against the in tree version of libks follow these steps, from the starting point of ./libs/libblade/:
+
+cd ../libks/
+./bootstrap.sh
+./configure
+make
+make check
+
+cd ../libblade/
+./boostrap.sh
+./configure --with-libks=`realpath ../libks/`
+make
+make check
+
