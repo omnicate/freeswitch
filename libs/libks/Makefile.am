@@ -24,6 +24,8 @@ library_include_HEADERS = src/include/ks_config.h src/include/ks.h src/include/k
 library_include_HEADERS += src/include/ks_pool.h src/include/simclist.h src/include/ks_time.h src/include/ks_q.h src/include/ks_socket.h
 library_include_HEADERS += src/include/ks_dso.h src/include/ks_dht.h src/include/ks_platform.h src/include/ks_types.h # src/include/ks_rng.h 
 library_include_HEADERS += src/include/ks_printf.h src/include/ks_hash.h src/include/ks_ssl.h src/include/kws.h
+library_include_HEADERS += utp/utp_internal.h utp/utp.h utp/utp_types.h utp/utp_callbacks.h utp/utp_templates.h utp/utp_hash.h utp/utp_packedsockaddr.h
+library_include_HEADERS += utp/utp_utils.h
 
 tests: libks.la
 	$(MAKE) -C test tests
