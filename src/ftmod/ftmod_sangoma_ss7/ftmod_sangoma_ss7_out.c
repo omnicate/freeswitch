@@ -204,6 +204,9 @@ void ft_to_sngss7_iam (ftdm_channel_t * ftdmchan)
 		if (SNGSS7_SWITCHTYPE_ANSI(g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].switchType)) {
 			/* User Service Info A */
 			copy_usrServInfoA_to_sngss7(ftdmchan, &iam.usrServInfoA);
+		} else {
+			/* User Service Info */
+			copy_usrServInfoA_to_sngss7(ftdmchan, &iam.usrServInfo);
 		}
 
 		/* Fill in User Service Information only if it is set from dialplan */
@@ -228,6 +231,9 @@ void ft_to_sngss7_iam (ftdm_channel_t * ftdmchan)
 			/* Calling Number information */
 			copy_cgPtyNum_to_sngss7(ftdmchan, &iam.cgPtyNum);
 		}
+
+		/* chargeNum*/
+		copy_chargeNum_to_sngss7(ftdmchan, &iam.chargeNum);
 
 		/* Location Number information */
 		copy_locPtyNum_to_sngss7(ftdmchan, &iam.cgPtyNum1);
@@ -257,7 +263,9 @@ void ft_to_sngss7_iam (ftdm_channel_t * ftdmchan)
 			copy_nfci_to_sngss7(ftdmchan, &iam.natFwdCalInd);
 			copy_presnum_to_sngss7(ftdmchan, &iam.presntNum);
 			copy_nflxl_to_sngss7(ftdmchan, &iam.natFwdCalIndLnk);
-			copy_paramcompatibility_to_sngss7(ftdmchan, &iam.parmCom);
+			/* make sure parameter compatibility should be last one to fill
+			 * as it looks for filled parameters to add entry in this IE */
+			copy_paramcompatibility_to_sngss7(ftdmchan, &iam, &iam.parmCom);
 		}
 #endif
 
@@ -439,6 +447,7 @@ void ft_to_sngss7_acm (ftdm_channel_t * ftdmchan)
 	sngss7_chan_data_t	*sngss7_info = ftdmchan->call_data;
 	SiCnStEvnt acm;
 	const char *backwardInd = NULL;
+	const char *isdnUsrPrtInd = NULL;
 	
 	memset (&acm, 0x0, sizeof (acm));
 	
@@ -449,7 +458,11 @@ void ft_to_sngss7_acm (ftdm_channel_t * ftdmchan)
 	acm.bckCallInd.cadPtyStatInd.pres	= PRSNT_NODEF;
 	acm.bckCallInd.cadPtyStatInd.val	= 0x01;
 	acm.bckCallInd.cadPtyCatInd.pres	= PRSNT_NODEF;
-	acm.bckCallInd.cadPtyCatInd.val		= CADCAT_ORDSUBS;
+	if (g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].switchType == LSI_SW_UK) {
+		acm.bckCallInd.cadPtyCatInd.val		= CADCAT_NOIND;
+	} else {
+		acm.bckCallInd.cadPtyCatInd.val		= CADCAT_ORDSUBS;
+	}
 	backwardInd = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "acm_bi_cpc");
 	if (!ftdm_strlen_zero(backwardInd)) {
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found user supplied backward indicator Called Party Category ACM, value \"%s\"\n", backwardInd);
@@ -463,12 +476,30 @@ void ft_to_sngss7_acm (ftdm_channel_t * ftdmchan)
 	acm.bckCallInd.end2EndMethInd.pres	= PRSNT_NODEF;
 	acm.bckCallInd.end2EndMethInd.val	= E2EMTH_NOMETH;
 	acm.bckCallInd.intInd.pres			= PRSNT_NODEF;
-	acm.bckCallInd.intInd.val 			= INTIND_NOINTW;
+	if (g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].switchType == LSI_SW_UK) {
+		acm.bckCallInd.intInd.val 			= INTIND_INTW; 
+	} else {
+		acm.bckCallInd.intInd.val 			= INTIND_NOINTW; 
+	}
 	acm.bckCallInd.end2EndInfoInd.pres	= PRSNT_NODEF;
 	acm.bckCallInd.end2EndInfoInd.val	= E2EINF_NOINFO;
 
 	acm.bckCallInd.isdnUsrPrtInd.pres	= PRSNT_NODEF;
 	acm.bckCallInd.isdnUsrPrtInd.val	= ISUP_NOTUSED;
+	isdnUsrPrtInd = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "acm_bi_isdnuserpart_ind");
+	if (!ftdm_strlen_zero(isdnUsrPrtInd)) {
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found user supplied backward indicator ISDN User part indicator value \"%s\"\n", isdnUsrPrtInd);
+		if (!strcasecmp(isdnUsrPrtInd, "NULL")) {
+			acm.bckCallInd.isdnUsrPrtInd.val	= ISUP_NOTUSED;
+		} else if (atoi(isdnUsrPrtInd) == 1 ) {
+			acm.bckCallInd.isdnUsrPrtInd.val	= ISUP_USED;
+		}
+	} else {
+		acm.bckCallInd.isdnUsrPrtInd.val	= ISUP_USED;
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "User supplied backward indicator ISDN User part indicator NOT FOUND..using default value \"%d\"\n", acm.bckCallInd.isdnUsrPrtInd.val);
+	}
+
+
 	backwardInd = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "acm_bi_iup");
 	if (!ftdm_strlen_zero(backwardInd)) {
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found user supplied backward indicator ISDN user part indicator ACM, value \"%s\"\n", backwardInd);
@@ -501,6 +532,14 @@ void ft_to_sngss7_acm (ftdm_channel_t * ftdmchan)
 		break;
 	/**********************************************************************/
 	} /* switch (ftdmchan->caller_data.bearer_capability) */
+
+
+#if 0
+	/* for BT making echo control consistent with IAM field */
+	acm.bckCallInd.echoCtrlDevInd.val	= sngss7_info->echoControlIncluded;
+	SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Tx ACM with EchoControl[%d]\n", sngss7_info->circuit->cic, acm.bckCallInd.echoCtrlDevInd.val);
+#endif
+
 	acm.bckCallInd.sccpMethInd.pres		= PRSNT_NODEF;
 	acm.bckCallInd.sccpMethInd.val		= SCCPMTH_NOIND;
 
@@ -622,6 +661,23 @@ void ft_to_sngss7_rel (ftdm_channel_t * ftdmchan)
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "No user supplied re-direct number in REL, using 0x01\"%s\"\n", "");
 	}
 
+	if (g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].switchType == LSI_SW_UK) {
+		/* BT specific location value based on cause as mentioned in BT spec ND0117 */
+		rel.causeDgn.location.val = ILOC_NETINTER;
+
+		if ((rel.causeDgn.causeVal.val == 24) ||
+				(rel.causeDgn.causeVal.val == 31) ||
+				(rel.causeDgn.causeVal.val == 17) ||
+				(rel.causeDgn.causeVal.val == 21) ||
+				(rel.causeDgn.causeVal.val == 4)) {
+			rel.causeDgn.location.val = ILOC_USER;
+		}
+
+		if (rel.causeDgn.causeVal.val == 34) {
+			rel.causeDgn.location.val = ILOC_TRANNET;
+		}
+	}
+
 	rel.causeDgn.cdeStand.pres = PRSNT_NODEF;
 	rel.causeDgn.cdeStand.val = 0x00;
 	rel.causeDgn.recommend.pres = NOTPRSNT;
@@ -717,6 +773,68 @@ void ft_to_sngss7_rsca (ftdm_channel_t * ftdmchan)
 
 	SS7_FUNC_TRACE_EXIT (__FUNCTION__);
   return;
+}
+
+/******************************************************************************/
+/* sending continuity check */
+void ft_to_sngss7_ccr (ftdm_channel_t * ftdmchan)
+{
+	SS7_FUNC_TRACE_ENTER (__FUNCTION__);
+
+	sngss7_chan_data_t *sngss7_info = ftdmchan->call_data;
+	SiStaEvnt ccr;
+
+	/* clean out the gra struct */
+	memset (&ccr, 0x0, sizeof (ccr));
+
+	ccr.contInd.eh.pres = PRSNT_NODEF;
+
+	ccr.contInd.contInd.pres = PRSNT_NODEF;
+	ccr.contInd.contInd.val = CONT_CHKSUCC;
+
+	sng_cc_sta_request (1,
+			sngss7_info->suInstId,
+			sngss7_info->spInstId,
+			sngss7_info->circuit->id,
+			sngss7_info->globalFlg,
+			SIT_STA_CONTCHK,
+			&ccr);
+
+	SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Tx CCR\n", sngss7_info->circuit->cic);
+
+	SS7_FUNC_TRACE_EXIT (__FUNCTION__);
+	return;
+}
+
+/******************************************************************************/
+/* generate COT and send it to peer */
+void ft_to_sngss7_cot (ftdm_channel_t * ftdmchan)
+{
+	SS7_FUNC_TRACE_ENTER (__FUNCTION__);
+
+	sngss7_chan_data_t *sngss7_info = ftdmchan->call_data;
+	SiStaEvnt cot;
+
+	/* clean out the gra struct */
+	memset (&cot, 0x0, sizeof (cot));
+
+	cot.contInd.eh.pres = PRSNT_NODEF;
+
+	cot.contInd.contInd.pres = PRSNT_NODEF;
+	cot.contInd.contInd.val = CONT_CHKSUCC;
+
+	sng_cc_sta_request (1,
+			sngss7_info->suInstId,
+			sngss7_info->spInstId,
+			sngss7_info->circuit->id,
+			sngss7_info->globalFlg,
+			SIT_STA_CONTREP,
+			&cot);
+
+	SS7_INFO_CHAN(ftdmchan,"[CIC:%d]Tx CCR\n", sngss7_info->circuit->cic);
+
+	SS7_FUNC_TRACE_EXIT (__FUNCTION__);
+	return;
 }
 
 /******************************************************************************/

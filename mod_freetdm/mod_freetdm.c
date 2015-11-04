@@ -605,13 +605,22 @@ static switch_status_t channel_on_hangup(switch_core_session_t *session)
 			if (hcause  < 1 || hcause > 127) {
 				hcause = FTDM_CAUSE_DESTINATION_OUT_OF_ORDER;
 			}
-			var = switch_channel_get_variable(channel, "ss7_rel_loc");
-			if (var) {
-				ftdm_usrmsg_add_var(&usrmsg, "ss7_rel_loc", var);
-			}
+
+			/* release cause from dialplan is highest priority..*/
 			var   = switch_channel_get_variable(channel, "ss7_rel_cause");
 			if (var) {
 				ftdm_usrmsg_add_var(&usrmsg, "ss7_rel_cause", var);
+			} else {
+				/* sip_term_cause will be set based on reason header,
+				 * so pick this value for releasing call */
+				var = switch_channel_get_variable(channel, "sip_term_cause");
+				if (var) {
+					ftdm_usrmsg_add_var(&usrmsg, "ss7_rel_cause", var);
+				}
+			}
+			var = switch_channel_get_variable(channel, "ss7_rel_loc");
+			if (var) {
+				ftdm_usrmsg_add_var(&usrmsg, "ss7_rel_loc", var);
 			}
 			var = switch_channel_get_variable(channel, "ss7_redirect_number");
 			if (var ) {
@@ -735,6 +744,7 @@ static switch_status_t channel_read_frame(switch_core_session_t *session, switch
 	int chunk, do_break = 0;
 	uint32_t span_id, chan_id;
 	const char *name = NULL;
+	int offset = 1;
 
 	channel = switch_core_session_get_channel(session);
 	assert(channel != NULL);
@@ -759,7 +769,9 @@ static switch_status_t channel_read_frame(switch_core_session_t *session, switch
 	   Yes, we support digium cards, ain't we nice.......
 	   6 double length intervals should compensate */
 	chunk = ftdm_channel_get_io_interval(tech_pvt->ftdmchan) * 2;
-	total_to = chunk * 6;
+	/* Get the offset in order to increse timeout interval */
+	offset = ftdm_channel_get_io_timer_offset(tech_pvt->ftdmchan);
+	total_to = chunk * 6 * offset;
 
  top:
 
@@ -1486,6 +1498,21 @@ static switch_call_cause_t channel_outgoing_channel(switch_core_session_t *sessi
 		if (sipvar) {
 			ftdm_set_string(caller_data.loc.digits, sipvar);
 		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-ChargeNum");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_chargenum", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-ChargeNum-NADI");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_chargenum_nadi", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-ChargeNum-Plan");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_chargenum_plan", sipvar);
+		}
 		
 		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-Access-Transport-URLENC");
 		if (sipvar) {
@@ -1594,9 +1621,14 @@ static switch_call_cause_t channel_outgoing_channel(switch_core_session_t *sessi
 			ftdm_usrmsg_add_var(&usrmsg, "ss7_pres_ind", sipvar);
 		}
 
-		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-CLI-BlockingInd");
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-NFCI-CLI-BlockingInd");
 		if (sipvar) {
-			ftdm_usrmsg_add_var(&usrmsg, "ss7_cli_blocking_ind", sipvar);
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_nfci_cli_blocking_ind", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-NFCI-NwTransAddr-Ind");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_nfci_nw_trans_addr_ind", sipvar);
 		}
 
 		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-CPC");
@@ -2261,14 +2293,34 @@ ftdm_status_t ftdm_channel_from_event(ftdm_sigmsg_t *sigmsg, switch_core_session
 			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-OPC", "%s", var_value);
 		}
 
-		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_cli_blocking_ind");
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_nfci_cli_blocking_ind");
 		if (!ftdm_strlen_zero(var_value)) {
-			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-CLI-BlockingInd", "%s", var_value);
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-NFCI-CLI-BlockingInd", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_nfci_nw_trans_addr_ind");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-NFCI-NwTransAddr-Ind", "%s", var_value);
 		}
 
 		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_loc_digits");
 		if (!ftdm_strlen_zero(var_value)) {
 			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-LOC", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_chargenum");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-ChargeNum", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_chargenum_nadi");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-ChargeNum-NADI", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_chargenum_plan");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-ChargeNum-Plan", "%s", var_value);
 		}
 
 		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_loc_screen_ind");
@@ -3106,6 +3158,13 @@ static FIO_SIGNAL_CB_FUNCTION(on_clear_channel_signal)
 				tech_pvt = switch_core_session_get_private(session);
 				switch_set_flag_locked(tech_pvt, TFLAG_DEAD);
 				channel = switch_core_session_get_channel(session);
+				{
+					char ct[10]={0};
+					sprintf(ct,"%d",caller_data->hangup_cause);
+					switch_channel_set_variable_partner(channel, "q850_term_cause", ct);
+				}
+
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "hangup_cause=%d\n", caller_data->hangup_cause);
 				switch_channel_hangup(channel, caller_data->hangup_cause);
 				switch_core_session_rwunlock(session);
 			}

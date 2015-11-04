@@ -1522,6 +1522,15 @@ FT_DECLARE(uint32_t) ftdm_channel_get_io_interval(const ftdm_channel_t *ftdmchan
 	return count;
 }
 
+FT_DECLARE(uint32_t) ftdm_channel_get_io_timer_offset(const ftdm_channel_t *ftdmchan)
+{
+	uint32_t count;
+	ftdm_mutex_lock(ftdmchan->mutex);
+	count = ftdmchan->io_timer_offset;
+	ftdm_mutex_unlock(ftdmchan->mutex);
+	return count;
+}
+
 FT_DECLARE(uint32_t) ftdm_channel_get_io_packet_len(const ftdm_channel_t *ftdmchan)
 {
 	uint32_t count;
@@ -2594,6 +2603,10 @@ FT_DECLARE(ftdm_channel_t *) ftdm_span_get_channel_ph(const ftdm_span_t *span, u
 
 	for (curr = citer ; curr; curr = ftdm_iterator_next(curr)) {
 		fchan = ftdm_iterator_current(curr);
+		if (!fchan) {
+			ftdm_log(FTDM_LOG_WARNING, "Failed to find chan %i on span %s\n",chanid,span->name);
+			break;
+		}
 		if (fchan->physical_chan_id == chanid) {
 			chan = fchan;
 			break;
@@ -3072,6 +3085,7 @@ static ftdm_status_t ftdm_channel_done(ftdm_channel_t *ftdmchan)
 	ftdm_clear_flag(ftdmchan, FTDM_CHANNEL_USER_HANGUP);
 	ftdm_clear_flag(ftdmchan, FTDM_CHANNEL_DIGITAL_MEDIA);
 	ftdm_clear_flag(ftdmchan, FTDM_CHANNEL_NATIVE_SIGBRIDGE);
+	ftdm_clear_flag(ftdmchan, FTDM_CHANNEL_MUTE);
 	ftdm_mutex_lock(ftdmchan->pre_buffer_mutex);
 	ftdm_buffer_destroy(&ftdmchan->pre_buffer);
 	ftdmchan->pre_buffer_size = 0;
@@ -4313,6 +4327,11 @@ FT_DECLARE(ftdm_status_t) ftdm_channel_process_media(ftdm_channel_t *ftdmchan, v
 	ftdm_size_t max = *datalen;
 	ftdm_status_t tone_status;
 
+	/* check if the channel is a D/signalling channel the return SUCCESS */
+	if (FTDM_IS_DCHAN(ftdmchan)) {
+		goto done;
+	}
+
 	tone_status = handle_tone_generation(ftdmchan);
 	if (tone_status != FTDM_SUCCESS) {
 		ftdm_log_chan_msg(ftdmchan, FTDM_LOG_CRIT, "Failed handle tone generation on read\n");
@@ -5355,9 +5374,19 @@ FT_DECLARE(ftdm_status_t) ftdm_configure_span_channels(ftdm_span_t *span, const 
 		if (chan_config->dtmf_on_start) {
 			span->channels[chan_index]->dtmfdetect.trigger_on_start = 1;
 		}
+
 		if (chan_config->prebuffer_size) {
 			span->channels[chan_index]->prebuffer_size_opt = chan_config->prebuffer_size;
 		}
+
+		if (chan_config->io_timer_offset) {
+			span->channels[chan_index]->io_timer_offset = chan_config->io_timer_offset;
+		} else {
+			span->channels[chan_index]->io_timer_offset = 1;
+		}
+
+		ftdm_log(FTDM_LOG_DEBUG, "Setting io timer offset for Channel at index %d of span %d to %d\n",
+			 chan_index, span->span_id, span->channels[chan_index]->io_timer_offset);
 
 		if (chan_config->forward_collect_digit_dtmf) {
 			span->channels[chan_index]->forward_collect_digit_dtmf =  chan_config->forward_collect_digit_dtmf;
@@ -5613,6 +5642,14 @@ static ftdm_status_t load_config(int reload)
 				}
 				memcpy(chan_config.group_name, val, len);
 				chan_config.group_name[len] = '\0';
+			} else if (!strcasecmp(var, "io_timer_offset")) {
+				chan_config.io_timer_offset = atoi(val);
+				if (!chan_config.io_timer_offset) {
+					ftdm_log(FTDM_LOG_WARNING, "Invalid value. Channel io timer offset can not be set to zero!\n");
+					ftdm_log(FTDM_LOG_DEBUG, "Setting io timer offset to default value 1\n");
+					continue;
+				}
+				ftdm_log(FTDM_LOG_DEBUG, "Setting io timer offset to %d\n", chan_config.io_timer_offset);
 			} else {
 				ftdm_log(FTDM_LOG_ERROR, "unknown span variable '%s'\n", var);
 			}

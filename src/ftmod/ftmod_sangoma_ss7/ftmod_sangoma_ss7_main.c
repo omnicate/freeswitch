@@ -84,7 +84,8 @@ ftdm_state_map_t sangoma_ss7_state_map = {
 	{FTDM_CHANNEL_STATE_RESTART, FTDM_END},
 	{FTDM_CHANNEL_STATE_SUSPENDED, FTDM_CHANNEL_STATE_TERMINATING,
 	 FTDM_CHANNEL_STATE_HANGUP, FTDM_CHANNEL_STATE_HANGUP_COMPLETE,
-	 FTDM_CHANNEL_STATE_DOWN, FTDM_CHANNEL_STATE_IDLE, FTDM_END}
+	 FTDM_CHANNEL_STATE_DOWN, FTDM_CHANNEL_STATE_IDLE,
+	 FTDM_CHANNEL_STATE_IN_LOOP, FTDM_END}
 	},
 	{
 	ZSD_INBOUND,
@@ -204,7 +205,8 @@ ftdm_state_map_t sangoma_ss7_state_map = {
 	{FTDM_CHANNEL_STATE_RESTART, FTDM_END},
 	{FTDM_CHANNEL_STATE_SUSPENDED, FTDM_CHANNEL_STATE_TERMINATING,
 	 FTDM_CHANNEL_STATE_HANGUP, FTDM_CHANNEL_STATE_HANGUP_COMPLETE,
-	 FTDM_CHANNEL_STATE_DOWN, FTDM_CHANNEL_STATE_IDLE, FTDM_END}
+	 FTDM_CHANNEL_STATE_DOWN, FTDM_CHANNEL_STATE_IDLE,
+	 FTDM_CHANNEL_STATE_IN_LOOP, FTDM_END}
 	},
 	{
 	ZSD_OUTBOUND,
@@ -311,7 +313,7 @@ static void handle_hw_alarm(ftdm_event_t *e)
 					
 	SS7_DEBUG("handle_hw_alarm event [%d/%d]\n",e->channel->physical_span_id,e->channel->physical_chan_id);
 
-	for (x = (g_ftdm_sngss7_data.cfg.procId * MAX_CIC_MAP_LENGTH) + 1; g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0; x++) {
+	for (x = (ftmod_ss7_get_circuit_start_range(g_ftdm_sngss7_data.cfg.procId)); g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0; x++) {
 		if (g_ftdm_sngss7_data.cfg.isupCkt[x].type == SNG_CKT_VOICE) {
 			ss7_info = (sngss7_chan_data_t *)g_ftdm_sngss7_data.cfg.isupCkt[x].obj;
 
@@ -501,7 +503,7 @@ static void *ftdm_sangoma_ss7_run(ftdm_thread_t * me, void *obj)
 		int x = 0;
 		if (b_alarm_test) {
 			b_alarm_test = 0;
-			for (x = (g_ftdm_sngss7_data.cfg.procId * MAX_CIC_MAP_LENGTH) + 1; 
+			for (x = (ftmod_ss7_get_circuit_start_range(g_ftdm_sngss7_data.cfg.procId )); 
 			     g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0; x++) {	
 				if (g_ftdm_sngss7_data.cfg.isupCkt[x].type == SNG_CKT_VOICE) {
 					ss7_info = (sngss7_chan_data_t *)g_ftdm_sngss7_data.cfg.isupCkt[x].obj;
@@ -1507,6 +1509,14 @@ ftdm_status_t ftdm_sangoma_ss7_process_state_change (ftdm_channel_t *ftdmchan)
 			if (!sngss7_test_ckt_flag(sngss7_info, FLAG_SENT_ACM)) {
 				sngss7_set_ckt_flag(sngss7_info, FLAG_SENT_ACM);
 				ft_to_sngss7_acm(ftdmchan);
+
+				/* CPG on Alert configuration option set then send CPG as well */
+				if (g_ftdm_sngss7_data.cfg.isupCkt[sngss7_info->circuit->id].cpg_on_alert == FTDM_TRUE) {
+					if (!sngss7_test_ckt_flag(sngss7_info, FLAG_SENT_CPG)) {
+						sngss7_set_ckt_flag(sngss7_info, FLAG_SENT_CPG);
+						ft_to_sngss7_cpg(ftdmchan, EV_PROGRESS, EVPR_NOIND);
+					}
+				}
 			} else {
 				if (!sngss7_test_ckt_flag(sngss7_info, FLAG_SENT_CPG)) {
 					sngss7_set_ckt_flag(sngss7_info, FLAG_SENT_CPG);
@@ -2651,9 +2661,9 @@ static ftdm_status_t ftdm_sangoma_ss7_start(ftdm_span_t * span)
 
 	SS7_INFO ("Starting span %s:%u.\n", span->name, span->span_id);
 
-    if (SNG_SS7_OPR_MODE_MTP2_API == g_ftdm_operating_mode) {
-        return sngss7_activate_mtp2api(span);
-    }
+	if (SNG_SS7_OPR_MODE_MTP2_API == g_ftdm_operating_mode) {
+		return sngss7_activate_mtp2api(span);
+	}
 
 	/* clear the monitor thread stop flag */
 	ftdm_clear_flag (span, FTDM_SPAN_STOP_THREAD);

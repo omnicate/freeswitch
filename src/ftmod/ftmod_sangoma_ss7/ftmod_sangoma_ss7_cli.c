@@ -81,6 +81,9 @@ static ftdm_status_t handle_tx_grs(ftdm_stream_handle_t *stream, int span, int c
 static ftdm_status_t handle_tx_blo(ftdm_stream_handle_t *stream, int span, int chan, int verbose);
 static ftdm_status_t handle_tx_ubl(ftdm_stream_handle_t *stream, int span, int chan, int verbose);
 
+static ftdm_status_t handle_tx_cot(ftdm_stream_handle_t *stream, int span, int chan, int verbose);
+static ftdm_status_t handle_tx_ccr(ftdm_stream_handle_t *stream, int span, int chan, int verbose);
+
 static ftdm_status_t handle_tx_cgb(ftdm_stream_handle_t *stream, int span, int chan, int range, int verbose);
 static ftdm_status_t handle_tx_cgu(ftdm_stream_handle_t *stream, int span, int chan, int range, int verbose);
 
@@ -690,7 +693,47 @@ ftdm_status_t ftdm_sngss7_handle_cli_cmd(ftdm_stream_handle_t *stream, const cha
 			stream->write_function(stream, "Unknown \"cgu\" command\n");
 			goto handle_cli_error;
 		/**********************************************************************/
+		}
+	/**************************************************************************/
+	} else if (!strcasecmp(argv[c], "cot")) {
+	/**************************************************************************/
+		if (check_arg_count(argc, 2)) goto handle_cli_error_argc;
+		c++;
+
+		if (!strcasecmp(argv[c], "span")) {
+		/**********************************************************************/
+			if (check_arg_count(argc, 5)) goto handle_cli_error_argc;
+
+			if (extract_span_chan(argv, c, &span, &chan)) goto handle_cli_error_span_chan;
+
+			handle_tx_cot(stream, span, chan, verbose);
+		/**********************************************************************/
+		} else {
+		/**********************************************************************/
+			stream->write_function(stream, "Unknown \"COT\" command\n");
+			goto handle_cli_error;
+		/**********************************************************************/
 		} 
+	/**************************************************************************/
+	} else if (!strcasecmp(argv[c], "ccr")) {
+	/**************************************************************************/
+		if (check_arg_count(argc, 2)) goto handle_cli_error_argc;
+		c++;
+
+		if (!strcasecmp(argv[c], "span")) {
+		/**********************************************************************/
+			if (check_arg_count(argc, 5)) goto handle_cli_error_argc;
+
+			if (extract_span_chan(argv, c, &span, &chan)) goto handle_cli_error_span_chan;
+
+			handle_tx_ccr(stream, span, chan, verbose);
+		/**********************************************************************/
+		} else {
+		/**********************************************************************/
+			stream->write_function(stream, "Unknown \"CCR\" command\n");
+			goto handle_cli_error;
+		/**********************************************************************/
+		}
 	/**************************************************************************/
 	} else if (!strcasecmp(argv[c], "rsc")) {
 	/**************************************************************************/
@@ -1038,6 +1081,8 @@ static ftdm_status_t handle_print_usage(ftdm_stream_handle_t *stream)
 	stream->write_function(stream, "ftmod_sangoma_ss7 circuit control:\n");
 	stream->write_function(stream, "ftdm ss7 blo span X chan Y\n");
 	stream->write_function(stream, "ftdm ss7 ubl span X chan Y\n");
+	stream->write_function(stream, "ftdm ss7 cot span X chan Y\n");
+	stream->write_function(stream, "ftdm ss7 ccr span X chan Y\n");
 	stream->write_function(stream, "ftdm ss7 rsc span X chan Y\n");
 	stream->write_function(stream, "ftdm ss7 grs span X chan Y range Z\n");
 	stream->write_function(stream, "ftdm ss7 cgb span X chan Y range Z\n");
@@ -1155,7 +1200,7 @@ static ftdm_status_t handle_show_free(ftdm_stream_handle_t *stream, int span, in
 	int				 lspan;
 	int				 lchan;
 
-	x = (g_ftdm_sngss7_data.cfg.procId * 1000) + 1;
+	x = ftmod_ss7_get_circuit_start_range(g_ftdm_sngss7_data.cfg.procId);
 	free = 0;
 	while (g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0) {
 		if (g_ftdm_sngss7_data.cfg.isupCkt[x].type == SNG_CKT_VOICE) {
@@ -1218,7 +1263,7 @@ static ftdm_status_t handle_show_inuse(ftdm_stream_handle_t *stream, int span, i
 	int				 lspan;
 	int				 lchan;
 
-	x = (g_ftdm_sngss7_data.cfg.procId * 1000) + 1;
+	x = ftmod_ss7_get_circuit_start_range(g_ftdm_sngss7_data.cfg.procId);
 	in_use = 0;
 	while (g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0) {
 		if (g_ftdm_sngss7_data.cfg.isupCkt[x].type == SNG_CKT_VOICE) {
@@ -1288,7 +1333,7 @@ static ftdm_status_t handle_show_inreset(ftdm_stream_handle_t *stream, int span,
 	int				 lspan;
 	int				 lchan;
 
-	x = (g_ftdm_sngss7_data.cfg.procId * 1000) + 1;
+	x = ftmod_ss7_get_circuit_start_range(g_ftdm_sngss7_data.cfg.procId);
 	in_reset = 0;
 	while (g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0) {
 		if (g_ftdm_sngss7_data.cfg.isupCkt[x].type == SNG_CKT_VOICE) {
@@ -1349,7 +1394,7 @@ static ftdm_status_t handle_show_flags(ftdm_stream_handle_t *stream, int span, i
 	const char			*text;
 	int					flag;
 
-	x = (g_ftdm_sngss7_data.cfg.procId * 1000) + 1;
+	x = ftmod_ss7_get_circuit_start_range(g_ftdm_sngss7_data.cfg.procId);
 	while (g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0) {
 		if (g_ftdm_sngss7_data.cfg.isupCkt[x].type == SNG_CKT_VOICE) {
 			ss7_info = (sngss7_chan_data_t *)g_ftdm_sngss7_data.cfg.isupCkt[x].obj;
@@ -1414,7 +1459,7 @@ static ftdm_status_t handle_show_blocks(ftdm_stream_handle_t *stream, int span, 
 	int				 lspan;
 	int				 lchan;
 
-	x = (g_ftdm_sngss7_data.cfg.procId * 1000) + 1;
+	x = ftmod_ss7_get_circuit_start_range(g_ftdm_sngss7_data.cfg.procId);
 	while (g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0) {
 		if (g_ftdm_sngss7_data.cfg.isupCkt[x].type == SNG_CKT_VOICE) {
 			ss7_info = (sngss7_chan_data_t *)g_ftdm_sngss7_data.cfg.isupCkt[x].obj;
@@ -1506,7 +1551,7 @@ static ftdm_status_t handle_show_stack_status(ftdm_stream_handle_t *stream, char
 		spanNo = atoi(span);
 	}
 	
-	for (x = (g_ftdm_sngss7_data.cfg.procId * 1000) + 1; 
+	for (x = ftmod_ss7_get_circuit_start_range(g_ftdm_sngss7_data.cfg.procId);
 		g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0;  
 		x++) 
 	{
@@ -1531,7 +1576,7 @@ static ftdm_status_t handle_show_status(ftdm_stream_handle_t *stream, int span, 
 	ftdm_signaling_status_t		sigstatus = FTDM_SIG_STATE_DOWN;
 	sng_isup_ckt_t				*ckt;
 
-	x = (g_ftdm_sngss7_data.cfg.procId * 1000) + 1;
+	x = ftmod_ss7_get_circuit_start_range(g_ftdm_sngss7_data.cfg.procId);
 	while (g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0) {
 			/* extract the circuit to make it easier to work with */
 			ckt = &g_ftdm_sngss7_data.cfg.isupCkt[x];
@@ -1766,7 +1811,7 @@ static ftdm_status_t handle_tx_blo(ftdm_stream_handle_t *stream, int span, int c
 	int				 lspan;
 	int				 lchan;
 
-	x = (g_ftdm_sngss7_data.cfg.procId * 1000) + 1;
+	x = ftmod_ss7_get_circuit_start_range(g_ftdm_sngss7_data.cfg.procId);
 	while (g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0) {
 		if (g_ftdm_sngss7_data.cfg.isupCkt[x].type == SNG_CKT_VOICE) {
 			ss7_info = (sngss7_chan_data_t *)g_ftdm_sngss7_data.cfg.isupCkt[x].obj;
@@ -1822,7 +1867,7 @@ static ftdm_status_t handle_tx_ubl(ftdm_stream_handle_t *stream, int span, int c
 	int				 lspan;
 	int				 lchan;
 
-	x = (g_ftdm_sngss7_data.cfg.procId * 1000) + 1;
+	x = ftmod_ss7_get_circuit_start_range(g_ftdm_sngss7_data.cfg.procId);
 	while (g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0) {
 		if (g_ftdm_sngss7_data.cfg.isupCkt[x].type == SNG_CKT_VOICE) {
 			ss7_info = (sngss7_chan_data_t *)g_ftdm_sngss7_data.cfg.isupCkt[x].obj;
@@ -2005,6 +2050,106 @@ success:
 }
 
 /******************************************************************************/
+static ftdm_status_t handle_tx_cot(ftdm_stream_handle_t *stream, int span, int chan, int verbose)
+{
+	int 		    x;
+	sngss7_chan_data_t  *sngss7_info;
+	ftdm_channel_t	    *ftdmchan;
+	int		    lspan;
+	int		    lchan;
+
+	x = (g_ftdm_sngss7_data.cfg.procId * 1000) + 1;
+	while (g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0) {
+		if (g_ftdm_sngss7_data.cfg.isupCkt[x].type == SNG_CKT_VOICE) {
+			sngss7_info = (sngss7_chan_data_t *)g_ftdm_sngss7_data.cfg.isupCkt[x].obj;
+			ftdmchan = sngss7_info->ftdmchan;
+
+			/* if span == 0 then all spans should be printed */
+			if (span == 0) {
+				lspan = ftdmchan->physical_span_id;
+			} else {
+				lspan = span;
+			}
+
+			/* if chan == 0 then all chans should be printed */
+			if (chan == 0) {
+				lchan = ftdmchan->physical_chan_id;
+			} else {
+				lchan = chan;
+			}
+
+			if ((ftdmchan->physical_span_id == lspan) && (ftdmchan->physical_chan_id == lchan)) {
+				/* lock the channel */
+				ftdm_mutex_lock(ftdmchan->mutex);
+				ft_to_sngss7_cot(ftdmchan);
+
+				/* unlock the channel again before we exit */
+				ftdm_mutex_unlock(ftdmchan->mutex);
+			} /* if ( span and chan) */
+
+		} /* if ( cic == voice) */
+
+		/* go the next circuit */
+		x++;
+	} /* while (g_ftdm_sngss7_data.cfg.isupCkt[x]id != 0) */
+
+	/* print the status of channels */
+	handle_show_status(stream, span, chan, verbose);
+
+	return FTDM_SUCCESS;
+}
+
+/******************************************************************************/
+static ftdm_status_t handle_tx_ccr(ftdm_stream_handle_t *stream, int span, int chan, int verbose)
+{
+	int 		    x;
+	sngss7_chan_data_t  *sngss7_info;
+	ftdm_channel_t	    *ftdmchan;
+	int		    lspan;
+	int		    lchan;
+
+	x = (g_ftdm_sngss7_data.cfg.procId * 1000) + 1;
+	while (g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0) {
+		if (g_ftdm_sngss7_data.cfg.isupCkt[x].type == SNG_CKT_VOICE) {
+			sngss7_info = (sngss7_chan_data_t *)g_ftdm_sngss7_data.cfg.isupCkt[x].obj;
+			ftdmchan = sngss7_info->ftdmchan;
+
+			/* if span == 0 then all spans should be printed */
+			if (span == 0) {
+				lspan = ftdmchan->physical_span_id;
+			} else {
+				lspan = span;
+			}
+
+			/* if chan == 0 then all chans should be printed */
+			if (chan == 0) {
+				lchan = ftdmchan->physical_chan_id;
+			} else {
+				lchan = chan;
+			}
+
+			if ((ftdmchan->physical_span_id == lspan) && (ftdmchan->physical_chan_id == lchan)) {
+				/* lock the channel */
+				ftdm_mutex_lock(ftdmchan->mutex);
+				ft_to_sngss7_ccr(ftdmchan);
+
+				/* unlock the channel again before we exit */
+				ftdm_mutex_unlock(ftdmchan->mutex);
+			} /* if ( span and chan) */
+
+		} /* if ( cic == voice) */
+
+		/* go the next circuit */
+		x++;
+	} /* while (g_ftdm_sngss7_data.cfg.isupCkt[x]id != 0) */
+
+	/* print the status of channels */
+	handle_show_status(stream, span, chan, verbose);
+
+	return FTDM_SUCCESS;
+}
+
+/******************************************************************************/
 static ftdm_status_t handle_tx_rsc(ftdm_stream_handle_t *stream, int span, int chan, int verbose)
 {
 	int				 	x;
@@ -2013,7 +2158,7 @@ static ftdm_status_t handle_tx_rsc(ftdm_stream_handle_t *stream, int span, int c
 	int				 	lspan;
 	int				 	lchan;
 
-	x = (g_ftdm_sngss7_data.cfg.procId * 1000) + 1;
+	x = ftmod_ss7_get_circuit_start_range(g_ftdm_sngss7_data.cfg.procId);
 	while (g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0) {
 		if (g_ftdm_sngss7_data.cfg.isupCkt[x].type == SNG_CKT_VOICE) {
 			sngss7_info = (sngss7_chan_data_t *)g_ftdm_sngss7_data.cfg.isupCkt[x].obj;
@@ -2093,7 +2238,7 @@ static ftdm_status_t handle_tx_grs(ftdm_stream_handle_t *stream, int span, int c
 		return FTDM_SUCCESS;
 	}
 
-	x = (g_ftdm_sngss7_data.cfg.procId * 1000) + 1;
+	x = ftmod_ss7_get_circuit_start_range(g_ftdm_sngss7_data.cfg.procId);
 	while (g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0) {
 		if (g_ftdm_sngss7_data.cfg.isupCkt[x].type == SNG_CKT_VOICE) {
 
@@ -2142,8 +2287,8 @@ static ftdm_status_t handle_tx_grs(ftdm_stream_handle_t *stream, int span, int c
 		/* go the next circuit */
 		x++;
 	}
-	
-	x = (g_ftdm_sngss7_data.cfg.procId * 1000) + 1;
+
+	x = ftmod_ss7_get_circuit_start_range(g_ftdm_sngss7_data.cfg.procId);
 	while (g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0) {
 		if (g_ftdm_sngss7_data.cfg.isupCkt[x].type == SNG_CKT_VOICE) {
 
@@ -2185,7 +2330,7 @@ static ftdm_status_t handle_tx_cgb(ftdm_stream_handle_t *stream, int span, int c
 		return FTDM_SUCCESS;
 	}
 
-	x = (g_ftdm_sngss7_data.cfg.procId * 1000) + 1;
+	x = ftmod_ss7_get_circuit_start_range(g_ftdm_sngss7_data.cfg.procId);
 	while (g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0) {
 		if (g_ftdm_sngss7_data.cfg.isupCkt[x].type == SNG_CKT_VOICE) {
 
@@ -2246,7 +2391,7 @@ static ftdm_status_t handle_tx_cgb(ftdm_stream_handle_t *stream, int span, int c
 	/* send the circuit group block */
 	ft_to_sngss7_cgb(main_chan);
 
-	x = (g_ftdm_sngss7_data.cfg.procId * 1000) + 1;
+	x = ftmod_ss7_get_circuit_start_range(g_ftdm_sngss7_data.cfg.procId);
 	while (g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0) {
 		if (g_ftdm_sngss7_data.cfg.isupCkt[x].type == SNG_CKT_VOICE) {
 
@@ -2293,7 +2438,7 @@ static ftdm_status_t handle_tx_cgu(ftdm_stream_handle_t *stream, int span, int c
 
 	/* verify that there is not hardware block in the range. 
 	 * if there is any channel within the group unblock range, do not execute the group unblock */
-	x = (g_ftdm_sngss7_data.cfg.procId * MAX_CIC_MAP_LENGTH) + 1;
+	x = ftmod_ss7_get_circuit_start_range(g_ftdm_sngss7_data.cfg.procId);
 	while (g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0) {
 		if (g_ftdm_sngss7_data.cfg.isupCkt[x].type == SNG_CKT_VOICE) {
 			sngss7_info = (sngss7_chan_data_t *)g_ftdm_sngss7_data.cfg.isupCkt[x].obj;
@@ -2313,7 +2458,7 @@ static ftdm_status_t handle_tx_cgu(ftdm_stream_handle_t *stream, int span, int c
 	}
 
 
-	x = (g_ftdm_sngss7_data.cfg.procId * MAX_CIC_MAP_LENGTH) + 1;
+	x = ftmod_ss7_get_circuit_start_range(g_ftdm_sngss7_data.cfg.procId);
 	while (g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0) {
 		if (g_ftdm_sngss7_data.cfg.isupCkt[x].type == SNG_CKT_VOICE) {
 
@@ -2385,7 +2530,7 @@ static ftdm_status_t handle_tx_cgu(ftdm_stream_handle_t *stream, int span, int c
 		sngss7_clear_ckt_blk_flag(sngss7_info, FLAG_CKT_MN_BLOCK_TX_DN);
 	}
 
-	x = (g_ftdm_sngss7_data.cfg.procId * 1000) + 1;
+	x = ftmod_ss7_get_circuit_start_range(g_ftdm_sngss7_data.cfg.procId);
 	while (g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0) {
 		if (g_ftdm_sngss7_data.cfg.isupCkt[x].type == SNG_CKT_VOICE) {
 
@@ -4295,7 +4440,7 @@ static ftdm_status_t ftdm_isup_snd_itx(ftdm_stream_handle_t *stream, char *argv[
 		return FTDM_FAIL;
 	}
 
-	x = (g_ftdm_sngss7_data.cfg.procId * 1000) + 1;
+	x = ftmod_ss7_get_circuit_start_range(g_ftdm_sngss7_data.cfg.procId);
 	while (g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0) {
 		/* extract the circuit to make it easier to work with */
 		ckt = &g_ftdm_sngss7_data.cfg.isupCkt[x];
