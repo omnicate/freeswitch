@@ -232,6 +232,7 @@ else
 fi
 
 PKG_CHECK_MODULES([SODIUM], [libsodium >= 1.0.0],[AC_MSG_RESULT([yes])],[AC_MSG_ERROR([libsodium is required])])
+PKG_CHECK_MODULES([LIBKS], [libks >= 0.1],[AC_MSG_RESULT([yes])],[AC_MSG_ERROR([libks is required])])
 
 #  Enable clang address sanitizer bit build
 AC_ARG_ENABLE(address_sanitizer,
@@ -247,8 +248,8 @@ if test "${enable_address_sanitizer}" = "yes"; then
   fi
 fi
 
-AM_CPPFLAGS="-I./src -I./src/include -I${blade_srcdir}/../libks/src -I${blade_srcdir}/../libks/src/include ${openssl_CFLAGS} ${SODIUM_CFLAGS}"
-AM_LDFLAGS="${AM_LDFLAGS} ${blade_builddir}/../libks/libks.la ${openssl_LIBS} ${SODIUM_LIBS}"
+AM_CPPFLAGS="-I./src -I./src/include ${LIBKS_CFLAGS} ${openssl_CFLAGS} ${SODIUM_CFLAGS}"
+AM_LDFLAGS="${AM_LDFLAGS} ${LIBKS_LIBS} ${openssl_LIBS} ${SODIUM_LIBS}"
 
 AC_SUBST([AM_CFLAGS])
 AC_SUBST([AM_CPPFLAGS])
