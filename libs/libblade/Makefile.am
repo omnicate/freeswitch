@@ -12,6 +12,7 @@ libblade_la_LDFLAGS  =  -version-info 0:1:0 -lncurses -lpthread -lm $(AM_LDFLAGS
 
 library_includedir	= $(prefix)/include
 library_include_HEADERS = src/include/blade.h src/include/blade_types.h src/include/blade_stack.h src/include/blade_peer.h src/include/bpcp.h
+library_include_HEADERS += test/tap.h
 
 tests: libblade.la
 	$(MAKE) -C test tests

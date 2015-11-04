@@ -253,7 +253,7 @@ AC_ARG_WITH([libks],
 	[with_libks="$withval"])
 
 if test "x$with_libks" != "xno"; then
-   LIBKS_LIBS="-L${with_libks} -lks"
+   LIBKS_LIBS="-L${with_libks} -L${with_libks}/.libs/ -lks"
    LIBKS_CFLAGS="-I${with_libks}/src/include"
 fi
 

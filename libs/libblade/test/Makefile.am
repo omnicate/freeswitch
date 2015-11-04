@@ -1,6 +1,6 @@
 AM_CFLAGS += -I$(abs_top_srcdir)/src/include -g -ggdb -O0 
-TEST_LDADD = $(abs_top_srcdir)/libblade.la
-check_PROGRAMS = 
+TEST_LDADD = $(abs_top_builddir)/libblade.la
+check_PROGRAMS =
 
 check_PROGRAMS += testbuild
 testbuild_SOURCES = testbuild.c tap.c
