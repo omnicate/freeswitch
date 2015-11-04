@@ -15,8 +15,8 @@ libks_la_SOURCES += src/ks_ssl.c src/kws.c #src/ks_rng.c
 
 #aes.h aescpp.h brg_endian.h aesopt.h aestab.h brg_types.h sha2.h twofish.h
 
-libks_la_CFLAGS	  = $(AM_CFLAGS) $(openssl_CFLAGS)
-libks_la_LDFLAGS  =  -version-info 0:1:0 -lncurses -lpthread -lm $(openssl_LIBS)
+libks_la_CFLAGS	  = $(AM_CFLAGS)
+libks_la_LDFLAGS  = $(AM_LDFLAGS) -version-info 0:1:0 -lncurses -lpthread -lm
 
 library_includedir	= $(prefix)/include
 library_include_HEADERS = src/include/ks_config.h src/include/ks.h src/include/ks_threadmutex.h src/include/ks_json.h src/include/ks_buffer.h

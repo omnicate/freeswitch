@@ -222,7 +222,8 @@ SAC_OPENSSL
 
 if test x$HAVE_OPENSSL = x1; then
    	openssl_CFLAGS="$openssl_CFLAGS -DHAVE_OPENSSL";
-	AM_CFLAGS="${AM_CFLAGS} -DHAVE_OPENSSL"
+	AM_CFLAGS="${AM_CFLAGS} ${openssl_CFLAGS} -DHAVE_OPENSSL"
+	AM_LDFLAGS="${AM_LDFLAGS} ${openssl_LIBS}"
 else
 	AC_MSG_ERROR([OpenSSL and associated developement headers required])
 fi
@@ -241,6 +242,11 @@ if test "${enable_address_sanitizer}" = "yes"; then
     AM_LDFLAGS="${AM_LDFLAGS} -fsanitize=address"
   fi
 fi
+
+PKG_CHECK_MODULES([SODIUM], [libsodium >= 1.0.0],[AC_MSG_RESULT([yes])],[AC_MSG_ERROR([libsodium is required])])
+
+AM_CFLAGS="${AM_CFLAGS} -Werror ${SODIUM_CFLAGS}"
+AM_LDFLAGS="${AM_LDFLAGS} ${SODIUM_LIBS}"
 
 AC_CONFIG_FILES([Makefile
 	test/Makefile
