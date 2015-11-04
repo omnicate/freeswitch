@@ -232,7 +232,7 @@ else
 fi
 
 PKG_CHECK_MODULES([SODIUM], [libsodium >= 1.0.0],[AC_MSG_RESULT([yes])],[AC_MSG_ERROR([libsodium is required])])
-PKG_CHECK_MODULES([LIBKS], [libks >= 0.1],[AC_MSG_RESULT([yes])],[AC_MSG_ERROR([libks is required])])
+PKG_CHECK_MODULES([LIBKS], [libks >= 0.1],[AC_MSG_RESULT([yes])],[AC_MSG_WARN([libks is required, but not found with pkg-config. Must use --with-libks])])
 
 #  Enable clang address sanitizer bit build
 AC_ARG_ENABLE(address_sanitizer,
@@ -246,6 +246,15 @@ if test "${enable_address_sanitizer}" = "yes"; then
     AM_CXXFLAGS="${AM_CXXFLAGS} -fsanitize=address -fno-omit-frame-pointer"
     AM_LDFLAGS="${AM_LDFLAGS} -fsanitize=address"
   fi
+fi
+
+AC_ARG_WITH([libks],
+	AS_HELP_STRING([--with-libks=DIR],[libks location @<:@/usr/src/freeswitch/libs/libks/@:>@]),
+	[with_libks="$withval"])
+
+if test "x$with_libks" != "xno"; then
+   LIBKS_LIBS="-L${with_libks} -lks"
+   LIBKS_CFLAGS="-I${with_libks}/src/include"
 fi
 
 AM_CPPFLAGS="-I./src -I./src/include ${LIBKS_CFLAGS} ${openssl_CFLAGS} ${SODIUM_CFLAGS}"
