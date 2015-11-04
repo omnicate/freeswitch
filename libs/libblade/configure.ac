@@ -258,6 +258,7 @@ AC_SUBST([AM_LDFLAGS])
 
 AC_CONFIG_FILES([Makefile
 	test/Makefile
+	libblade.pc
 ])
 
 AC_OUTPUT
