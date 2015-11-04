@@ -31,13 +31,13 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef _BLADE_PEER_H_
-#define _BLADE_PEER_H_
+#ifndef _BPCP_H_
+#define _BPCP_H_
 #include <blade.h>
 
 KS_BEGIN_EXTERN_C
-KS_DECLARE(ks_status_t) blade_peer_destroy(blade_peer_t **bpP);
 KS_DECLARE(ks_status_t) blade_peer_create(blade_peer_t **bpP, ks_pool_t *pool);
+KS_DECLARE(ks_status_t) blade_peer_destroy(blade_peer_t **bpP);
 KS_END_EXTERN_C
 
 #endif
