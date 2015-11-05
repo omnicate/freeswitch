@@ -252,9 +252,19 @@ AC_ARG_WITH([libks],
 	AS_HELP_STRING([--with-libks=DIR],[libks location @<:@/usr/src/freeswitch/libs/libks/@:>@]),
 	[with_libks="$withval"])
 
-if test "x$with_libks" != "xno"; then
+if test "x$with_libks" != "x"; then
    LIBKS_LIBS="-L${with_libks} -L${with_libks}/.libs/ -lks"
    LIBKS_CFLAGS="-I${with_libks}/src/include"
+fi
+
+
+#TODO: If LIBKS_CFLAGS is not defined and --with-libks is not defined, then check if ../libks/libks.la exists, and if so then use that path as a fallback
+if test "${LIBKS_CFLAGS}" = ""; then
+   AC_CHECK_FILE([../libks/libks.la],
+		AC_MSG_WARN([libks.la found in default source tree location. Using that path])
+		LIBKS_CFLAGS="-I../libks/src/include"
+		LIBKS_LIBS="-L../libks/.libs/ -lks",
+		AC_MSG_ERROR([libks.la not found. Have you built libks yet?]))
 fi
 
 AM_CPPFLAGS="-I./src -I./src/include ${LIBKS_CFLAGS} ${openssl_CFLAGS} ${SODIUM_CFLAGS}"
