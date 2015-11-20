@@ -509,6 +509,8 @@ ftdm_status_t ftmod_isdn_parse_cfg(ftdm_conf_parameter_t *ftdm_parameters, ftdm_
 			}
 		} else if (!strcasecmp(var, "send-connect-ack")) {
 			parse_yesno(var, val, &signal_data->send_connect_ack);
+		} else if (!strcasecmp(var, "lawful-interception-user-info")) {
+			parse_yesno(var, val, &signal_data->lawful_interception_user_info);
 		} else if (!strcasecmp(var, "timer-t301")) {
 			parse_timer(val, &signal_data->timer_t301);
 		} else if (!strcasecmp(var, "timer-t302")) {
