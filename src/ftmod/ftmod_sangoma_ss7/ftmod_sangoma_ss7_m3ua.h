@@ -171,7 +171,9 @@ typedef struct sng_m3ua_rte_cfg {
 	int psId;
 	int nsapId;
 	int rtType;
-	char	name[MAX_NAME_LEN];
+	char name[MAX_NAME_LEN];
+	int includeSsn;
+	int ssn;
 } sng_m3ua_rte_cfg_t;
 
 typedef struct sng_m3ua_sap_cfg {

@@ -625,7 +625,9 @@ static ftdm_status_t ftmod_ss7_parse_m3ua_user(ftdm_conf_node_t *node)
         } else if (!strcasecmp(param->var, "service-user-type")) {
             /******************************************************************************************************/
             /* cm/lit.h header file has all possible values */
-            if (!strcasecmp(param->val, "MTP3") ) {
+            if (!strcasecmp(param->val, "SCCP") ) {
+                t_sap.suType = LIT_SU_SCCP;
+            } else if (!strcasecmp(param->val, "MTP3") ) {
                 t_sap.suType = LIT_SP_MTP3;
             } else if (!strcasecmp(param->val, "ISUP") ) {
                 t_sap.suType = LIT_SU_ISUP;
@@ -635,6 +637,7 @@ static ftdm_status_t ftmod_ss7_parse_m3ua_user(ftdm_conf_node_t *node)
                 SS7_CRITICAL("M3UA - SU Type of %s is not supported now\n", param->val);
                 return FTDM_FAIL;
             }
+            SS7_INFO("M3UA - Parsing <m3ua_sap> with suType = %s [%d]\n", param->val, t_sap.suType);
             /******************************************************************************************************/
         } else {
             /******************************************************************************************************/
@@ -700,6 +703,9 @@ static ftdm_status_t ftmod_ss7_parse_m3ua_route(ftdm_conf_node_t *node, ftdm_sng
         SS7_INFO("M3UA - Parsing <m3ua_route> configurations\n");
     }
 
+    /* By default setting both these values to 0 */
+    t_rte.includeSsn = 0;
+    t_rte.ssn 	     = 0;
     for (i=0; i<num_params; i++, param++)
     {
         /******************************************************************************************************/
@@ -772,6 +778,21 @@ static ftdm_status_t ftmod_ss7_parse_m3ua_route(ftdm_conf_node_t *node, ftdm_sng
             /******************************************************************************************************/
             t_rte.psId = atoi(param->val);
             SS7_INFO("M3UA - Parsing <m3ua_route> with psId = %s\n", param->val);
+            /******************************************************************************************************/
+	} else if (!strcasecmp(param->var, "include-ssn")) {
+            /******************************************************************************************************/
+	    if (ftdm_true(param->val)) {
+		t_rte.includeSsn = 1;
+	    } else {
+		t_rte.includeSsn = 0;
+	    }
+
+            SS7_INFO("M3UA - Parsing <m3ua_route> with includeSsn = %s\n", param->val);
+            /******************************************************************************************************/
+	} else if (!strcasecmp(param->var, "ssn")) {
+            /******************************************************************************************************/
+            t_rte.ssn = atoi(param->val);
+            SS7_INFO("M3UA - Parsing <m3ua_route> with ssn = %s\n", param->val);
             /******************************************************************************************************/
         } else {
             /******************************************************************************************************/
@@ -863,6 +884,8 @@ ftdm_status_t ftmod_ss7_fill_m3ua_route(sng_m3ua_rte_cfg_t *t_rte, sng_m3ua_rout
     g_ftdm_sngss7_data.cfg.g_m3ua_cfg.rteCfg[idx].psId        = t_rte->psId;
     g_ftdm_sngss7_data.cfg.g_m3ua_cfg.rteCfg[idx].nsapId      = t_rte->nsapId;
     g_ftdm_sngss7_data.cfg.g_m3ua_cfg.rteCfg[idx].rtType      = rttype;
+    g_ftdm_sngss7_data.cfg.g_m3ua_cfg.rteCfg[idx].includeSsn  = t_rte->includeSsn;
+    g_ftdm_sngss7_data.cfg.g_m3ua_cfg.rteCfg[idx].ssn 	      = t_rte->ssn;
     strncpy(g_ftdm_sngss7_data.cfg.g_m3ua_cfg.rteCfg[idx].name, name, strlen(name) );
 
     return FTDM_SUCCESS;

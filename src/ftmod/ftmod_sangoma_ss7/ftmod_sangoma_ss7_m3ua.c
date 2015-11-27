@@ -1334,8 +1334,8 @@ static ftdm_status_t ftmod_m3ua_route_config(int id, int nsap_id, ftdm_sngss7_op
     c->rtFilter.includeCic = FALSE;
     c->rtFilter.cicStart = 0;
     c->rtFilter.cicEnd = 0;
-    c->rtFilter.includeSsn = FALSE;
-    c->rtFilter.ssn = 0;
+    c->rtFilter.includeSsn = k->includeSsn;
+    c->rtFilter.ssn = k->ssn;
     c->rtFilter.includeTrid = FALSE;
     c->rtFilter.tridStart = 0;
     c->rtFilter.tridEnd = 0;
@@ -1344,12 +1344,12 @@ static ftdm_status_t ftmod_m3ua_route_config(int id, int nsap_id, ftdm_sngss7_op
             "\t\tnSapId = %d, noStatus = %d, rtFilter.dpc = %d, rcFilter.dpcMask = %x, rtFilter.opc = %d, rtFilter.opcMask = %x,\n"
             "\t\trtFilter.sls = %d, rtFilter.sio = %d, rtFilter.sioMask = %x, \n"
             "\t\trtFilter.includeCic = %d, rtFilter.cicStart = %d, rtFilter.cicEnd = %d, \n"
-            "\t\trtFilter.includeSsn = %d, rtFilter.includeTrid = %d, rtFilter.tridStart = %d, rtFilter.tridEnd = %d\n\n",
+            "\t\trtFilter.includeSsn = %d, rtFilter.ssn = %d, rtFilter.includeTrid = %d, rtFilter.tridStart = %d, rtFilter.tridEnd = %d\n\n",
             id, c->nwkId, c->rtType, c->psId, c->nSapIdPres,
             c->nSapId, c->noStatus, c->rtFilter.dpc, c->rtFilter.dpcMask, c->rtFilter.opc, c->rtFilter.opcMask,
             c->rtFilter.sls, c->rtFilter.sio, c->rtFilter.sioMask,
             c->rtFilter.includeCic, c->rtFilter.cicStart, c->rtFilter.cicEnd,
-            c->rtFilter.includeSsn, c->rtFilter.includeTrid, c->rtFilter.tridStart, c->rtFilter.tridEnd);
+            c->rtFilter.includeSsn, c->rtFilter.ssn, c->rtFilter.includeTrid, c->rtFilter.tridStart, c->rtFilter.tridEnd);
 
     ret = sng_cfg_m3ua(&pst, &cfg);
     if (ret==0) {
