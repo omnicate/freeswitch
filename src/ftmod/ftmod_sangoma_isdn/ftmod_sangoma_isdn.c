@@ -1860,6 +1860,47 @@ static FIO_API_FUNCTION(ftdm_sangoma_isdn_api)
 		sngisdn_get_memory_info();
 		status = FTDM_SUCCESS;
 	}
+
+	if (!strcasecmp(argv[0], "send")) {
+		ftdm_span_t *span = NULL;
+		ftdm_channel_t *chan = NULL;
+		if (argc == 5) {
+			if (!((!strcasecmp(argv[1], "unblock")) || (!strcasecmp(argv[1], "block")))) {
+				stream->write_function(stream, "Invalid action specified only support block/unblock!\n");
+				stream->write_function(stream, "Usage: ftdm sangoma_isdn send <block/unblock> srv_req <span_name/span_id> <channel_id>\n");
+				goto done;
+			}
+
+			if (!strcasecmp(argv[2], "srv_req")) {
+				status = ftdm_span_find_by_name(argv[3], &span);
+				if (FTDM_SUCCESS != status) {
+					stream->write_function(stream, "Invalid span specified!\n");
+					stream->write_function(stream, "Usage: ftdm sangoma_isdn send <block/unblock> srv_req <span_name/span_id> <channel_id>\n");
+					status = FTDM_FAIL;
+					goto done;
+				}
+
+				chan = ftdm_span_get_channel(span, atoi(argv[4]));
+				if (chan == NULL) {
+					stream->write_function(stream, "Invalid channel specified!\n");
+					stream->write_function(stream, "Usage: ftdm sangoma_isdn send <block/unblock> srv_req <span_name/span_id> <channel_id>\n");
+					status = FTDM_FAIL;
+					goto done;
+				}
+
+				status = sngisdn_snd_srv_req(chan, argv[1]);
+				goto done;
+
+			}
+			status = FTDM_FAIL;
+			stream->write_function(stream, "Usage: ftdm sangoma_isdn send <block/unblock> srv_req <span_name/span_id> <channel_id>\n");
+			goto done;
+		}
+		stream->write_function(stream, "-ERR invalid send option provided!\n");
+		stream->write_function(stream, "Usage: ftdm sangoma_isdn send <block/unblock> srv_req <span_name/span_id> <channel_id>\n");
+		status = FTDM_FAIL;
+		goto done;
+	}
 done:
 	switch (status) {
 		case FTDM_SUCCESS:

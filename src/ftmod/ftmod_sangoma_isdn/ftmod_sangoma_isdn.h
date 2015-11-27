@@ -433,6 +433,8 @@ void sngisdn_snd_status_enq(ftdm_channel_t *ftdmchan);
 void sngisdn_snd_restart(ftdm_channel_t *ftdmchan);
 void sngisdn_snd_data(ftdm_channel_t *dchan, uint8_t *data, ftdm_size_t len);
 void sngisdn_snd_event(ftdm_channel_t *dchan, ftdm_oob_event_t event);
+/* send service request message */
+ftdm_status_t sngisdn_snd_srv_req(ftdm_channel_t *ftdmchan, char *str);
 
 /* Inbound Call Control functions */
 void sngisdn_rcv_con_ind(int16_t suId, uint32_t suInstId, uint32_t spInstId, ConEvnt *conEvnt, int16_t dChan, uint8_t ces);

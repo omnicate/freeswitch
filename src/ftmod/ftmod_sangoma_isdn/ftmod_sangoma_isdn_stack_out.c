@@ -366,6 +366,69 @@ void sngisdn_snd_notify_req(ftdm_channel_t *ftdmchan)
 	return;
 }
 
+/* =================================== */
+ftdm_status_t sngisdn_snd_srv_req(ftdm_channel_t *ftdmchan, char *str)
+{
+	Srv q931_srvMsg;
+
+	sngisdn_chan_data_t *sngisdn_info = (sngisdn_chan_data_t*) ftdmchan->call_data;
+	sngisdn_span_data_t *signal_data = (sngisdn_span_data_t*) ftdmchan->span->signal_data;
+
+	memset(&q931_srvMsg, 0, sizeof(q931_srvMsg));
+
+	/* Filling up Channel status token */
+	q931_srvMsg.chStatus.eh.pres = PRSNT_NODEF;
+
+	q931_srvMsg.chStatus.preference.pres = PRSNT_NODEF;
+	q931_srvMsg.chStatus.preference.val = 0x01;
+
+	q931_srvMsg.chStatus.newStatus.pres = PRSNT_NODEF;
+	if (!strcasecmp(str, "unblock")) {
+	       q931_srvMsg.chStatus.newStatus.val = 0x00;
+	} else if (!strcasecmp(str, "block")) {
+		q931_srvMsg.chStatus.newStatus.val = 0x02;
+	}
+
+	/* Filling up Channel Id element */
+	q931_srvMsg.chanId.eh.pres = PRSNT_NODEF;
+
+	q931_srvMsg.chanId.infoChanSel.pres = PRSNT_NODEF;
+	q931_srvMsg.chanId.infoChanSel.val = 0x01;
+
+	q931_srvMsg.chanId.dChanInd.pres = PRSNT_NODEF;
+	q931_srvMsg.chanId.dChanInd.val = 0x00;
+
+	q931_srvMsg.chanId.prefExc.pres = PRSNT_NODEF;
+	q931_srvMsg.chanId.prefExc.val = 0x01;
+
+	q931_srvMsg.chanId.intType.pres = PRSNT_NODEF;
+	q931_srvMsg.chanId.intType.val = 0x01;
+
+	q931_srvMsg.chanId.intIdentPres.pres = PRSNT_NODEF;
+	q931_srvMsg.chanId.intIdentPres.val = 0x00;
+
+	q931_srvMsg.chanId.nmbMap.pres = PRSNT_NODEF;
+	q931_srvMsg.chanId.nmbMap.val = 0x00;
+
+	q931_srvMsg.chanId.codeStand1.pres = PRSNT_NODEF;
+	q931_srvMsg.chanId.codeStand1.val = 0x00;
+
+	q931_srvMsg.chanId.chanMapType.pres = PRSNT_NODEF;
+	q931_srvMsg.chanId.chanMapType.val = 0x03;
+
+	q931_srvMsg.chanId.chanNmbSlotMap.pres = PRSNT_NODEF;
+	q931_srvMsg.chanId.chanNmbSlotMap.len = 0x01;
+	q931_srvMsg.chanId.chanNmbSlotMap.val[0] = ftdmchan->chan_id;
+
+	ftdm_log_chan(ftdmchan, FTDM_LOG_INFO, "Sending SERVICE (suId:%d dchan:%d ces:%d)\n", signal_data->cc_id, signal_data->dchan_id, sngisdn_info->ces);
+
+	if (sng_isdn_service_request(signal_data->cc_id,  &q931_srvMsg, MI_SRV, signal_data->dchan_id, sngisdn_info->ces)) {
+		ftdm_log_chan_msg(ftdmchan, FTDM_LOG_CRIT, "stack refused SERVICE request\n");
+		return FTDM_FAIL;
+	}
+	return FTDM_SUCCESS;
+}
+/* ======================================= */
 
 void sngisdn_snd_status_enq(ftdm_channel_t *ftdmchan)
 {
