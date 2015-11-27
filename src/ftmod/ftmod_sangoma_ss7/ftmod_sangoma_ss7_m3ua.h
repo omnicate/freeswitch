@@ -207,7 +207,10 @@ typedef struct sng_m3ua_tmr {
     int                      id;            /* identifier could be peer_id/suId */
 } sng_m3ua_tmr_sched_t;
 
-
+typedef struct sng_m3ua_gen_cfg {
+	ftdm_bool_t hbeat_tmr_enable;
+	uint32_t    hbeat_tmr_val;
+} sng_m3ua_gen_cfg_t;
 
 typedef struct sng_m3ua_gbl_cfg{
 	sng_m3ua_nwk_cfg_t 	nwkCfg[MAX_M3UA_NWK];   /* M3UA Network configuration                   */
@@ -217,6 +220,7 @@ typedef struct sng_m3ua_gbl_cfg{
 	sng_m3ua_sap_cfg_t	sapCfg[MAX_M3UA_SAP];   /* M3UA (User) Upper Sap Configuration          */
 	sng_m3ua_nif_cfg_t	nifCfg[MAX_M3UA_RTE];   /* M3UA (User) Upper Sap Configuration          */
 	sng_m3ua_tmr_sched_t	sched;
+	sng_m3ua_gen_cfg_t 	gen_cfg;
 }sng_m3ua_gbl_cfg_t;
 
 /* m3ua stack logging enable/disable api's */

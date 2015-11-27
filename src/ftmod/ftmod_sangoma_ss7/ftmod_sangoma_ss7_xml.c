@@ -1019,6 +1019,10 @@ static int ftmod_ss7_parse_sng_gen(ftdm_conf_node_t *sng_gen, char* operating_mo
 	g_ftdm_sngss7_data.cfg.set_msg_priority = DEFAULT_MSG_PRIORITY;
 	g_ftdm_sngss7_data.cfg.link_failure_action = SNGSS7_ACTION_RELEASE_CALLS;
 
+	/* By default M3UA relatied general configuration values */
+	g_ftdm_sngss7_data.cfg.g_m3ua_cfg.gen_cfg.hbeat_tmr_enable = FTDM_FALSE;
+	g_ftdm_sngss7_data.cfg.g_m3ua_cfg.gen_cfg.hbeat_tmr_val = 1000;
+
 	/* extract all the information from the parameters */
 	for (i = 0; i < num_parms; i++) {
 		if (!strcasecmp(parm->var, "procId")) {
@@ -1126,7 +1130,30 @@ static int ftmod_ss7_parse_sng_gen(ftdm_conf_node_t *sng_gen, char* operating_mo
 				/* default value release calls (for backward compatibility) */
 				g_ftdm_sngss7_data.cfg.link_failure_action = SNGSS7_ACTION_RELEASE_CALLS;
 			}
-		} else {
+		} else if (!strcasecmp(parm->var, "heartbeat-timer")) {
+			if (ftdm_true(parm->val)) {
+				g_ftdm_sngss7_data.cfg.g_m3ua_cfg.gen_cfg.hbeat_tmr_enable = FTDM_TRUE;
+			} else {
+				g_ftdm_sngss7_data.cfg.g_m3ua_cfg.gen_cfg.hbeat_tmr_enable = FTDM_FALSE;
+			}
+			 SS7_DEBUG("Found M3UA heartbeat-timer enable  = %d\n", g_ftdm_sngss7_data.cfg.g_m3ua_cfg.gen_cfg.hbeat_tmr_enable);
+		} else if (!strcasecmp(parm->var, "heartbeat-timer-value")) {
+			if (g_ftdm_sngss7_data.cfg.g_m3ua_cfg.gen_cfg.hbeat_tmr_enable == FTDM_TRUE) {
+				g_ftdm_sngss7_data.cfg.g_m3ua_cfg.gen_cfg.hbeat_tmr_val = atoi(parm->val);
+				if ((g_ftdm_sngss7_data.cfg.g_m3ua_cfg.gen_cfg.hbeat_tmr_val == 0) ||
+				    (g_ftdm_sngss7_data.cfg.g_m3ua_cfg.gen_cfg.hbeat_tmr_val > 65535)) {
+					SS7_DEBUG("Found M3UA heartbeat-timer value  = %d\n", g_ftdm_sngss7_data.cfg.g_m3ua_cfg.gen_cfg.hbeat_tmr_val);
+					/* Moving back to default value */
+					g_ftdm_sngss7_data.cfg.g_m3ua_cfg.gen_cfg.hbeat_tmr_val = 1000;
+				} else {
+					SS7_DEBUG("Found M3UA heartbeat-timer value  = %d\n", g_ftdm_sngss7_data.cfg.g_m3ua_cfg.gen_cfg.hbeat_tmr_val);
+				}
+			} else {
+				SS7_DEBUG("Invalid entry of M3UA heartbeat-timer value = %s found as M3UA heartbeat-timer is not enable\n",
+					  parm->val);
+			}
+		}
+		else {
 			SS7_ERROR("Found an invalid parameter \"%s\"!\n", parm->var);
 			return FTDM_FAIL;
 		}

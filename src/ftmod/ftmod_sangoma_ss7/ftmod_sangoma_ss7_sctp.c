@@ -438,7 +438,7 @@ ftdm_status_t ftmod_sctp_sap_config(int id)
 	/* Base cookie lifetime for the cookie in the Initiation Acknowledgement (INIT ACK) message. */
 	c->reConfig.cookieLife 		= 60000;
 	/* Default heartbeat interval timer. Valid range is 1 - 65535. */
-	c->reConfig.intervalTm 		= 3000;
+	c->reConfig.intervalTm 		= k->hbeat_interval_tmr;
 	/* Maximum burst value. Valid range is 1 - 65535. */
 	c->reConfig.maxBurst 		= 4;
 	/*Maximum number of heartbeats sent at each retransmission timeout (RTO). Valid range is 1 - 65535. */
@@ -468,7 +468,8 @@ ftdm_status_t ftmod_sctp_sap_config(int id)
 
 	ret = sng_cfg_sctp(&pst, &cfg);
 	if (0 == ret) {
-		SS7_INFO("SCTP SAP [%d] configuration DONE!\n", id);
+		SS7_INFO("SCTP SAP [%d] configuration DONE with freeze timer as %d and heartbeat timer as %d!\n",
+			 id, c->reConfig.freezeTm, c->reConfig.intervalTm);
 		return FTDM_SUCCESS;
 	} else {
 		SS7_CRITICAL("SCTP SAP [%d] configuration FAILED!\n", id);
@@ -663,21 +664,20 @@ static int ftmod_ss7_parse_sctp_link(ftdm_conf_node_t *node)
 		SS7_DEBUG("SCTP - Parsing <sng_sctp_interface> configurations\n");
 	}
 
+	/* default value of heartbeat interval timer */
+	t_link.hbeat_interval_tmr = 3000;
 	for (i=0; i<num_params; i++, param++) {
 		if (!strcasecmp(param->var, "name")) {
 			int n_strlen = strlen(param->val);
 			strncpy((char*)t_link.name, param->val, (n_strlen>MAX_NAME_LEN)?MAX_NAME_LEN:n_strlen);
 			SS7_DEBUG("SCTP - Parsing <sng_sctp_interface> with name = %s\n", param->val);
-		}
-		else if (!strcasecmp(param->var, "id")) {
+		} else if (!strcasecmp(param->var, "id")) {
 			t_link.id = atoi(param->val);
 			SS7_DEBUG("SCTP - Parsing <sng_sctp_interface> with id = %s\n", param->val);
-		}
-		else if (!strcasecmp(param->var, "freeze_timer")) {
+		} else if (!strcasecmp(param->var, "freeze_timer")) {
 			t_link.freeze_tmr = atoi(param->val);
 			SS7_DEBUG("SCTP - Parsing <sng_sctp_interface> with Freeze Timer = %s\n", param->val);
-		}
-		else if (!strcasecmp(param->var, "address")) {
+		} else if (!strcasecmp(param->var, "address")) {
 			if (t_link.numSrcAddr < SCT_MAX_NET_ADDRS) {
 				t_link.srcAddrList[t_link.numSrcAddr+1] = iptoul (param->val);
 				t_link.numSrcAddr++;
@@ -688,8 +688,15 @@ static int ftmod_ss7_parse_sctp_link(ftdm_conf_node_t *node)
 		} else if (!strcasecmp(param->var, "source-port")) {
 			t_link.port = atoi(param->val);
 			SS7_DEBUG("SCTP - Parsing <sng_sctp_interface> with port = %s\n", param->val);
-		}
-		else {
+		} else if (!strcasecmp(param->var, "heartbeat-interval-timer")) {
+			t_link.hbeat_interval_tmr = atoi(param->val);
+			if ((t_link.hbeat_interval_tmr == 0) || (t_link.hbeat_interval_tmr > 65535)) {
+				SS7_DEBUG("SCTP - Parsing <sng_sctp_interface> with invalid heartbeat interval timer = %d\n", t_link.hbeat_interval_tmr);
+				t_link.hbeat_interval_tmr = 3000;
+			} else {
+				SS7_DEBUG("SCTP - Parsing <sng_sctp_interface> with heartbeat interval timer = %d\n", t_link.hbeat_interval_tmr);
+			}
+		} else {
 			SS7_ERROR("SCTP - Found an unknown parameter <%s>. Skipping it.\n", param->var);
 		}
 	}
@@ -697,6 +704,7 @@ static int ftmod_ss7_parse_sctp_link(ftdm_conf_node_t *node)
 	g_ftdm_sngss7_data.cfg.sctpCfg.linkCfg[t_link.id].id 		= t_link.id;
 	g_ftdm_sngss7_data.cfg.sctpCfg.linkCfg[t_link.id].port   	= t_link.port;
 	g_ftdm_sngss7_data.cfg.sctpCfg.linkCfg[t_link.id].freeze_tmr 	= t_link.freeze_tmr;
+	g_ftdm_sngss7_data.cfg.sctpCfg.linkCfg[t_link.id].hbeat_interval_tmr = t_link.hbeat_interval_tmr;
 	strncpy((char*)g_ftdm_sngss7_data.cfg.sctpCfg.linkCfg[t_link.id].name, t_link.name, strlen(t_link.name) );
 	g_ftdm_sngss7_data.cfg.sctpCfg.linkCfg[t_link.id].numSrcAddr = t_link.numSrcAddr;
 	for (i=1; i<=t_link.numSrcAddr; i++) {

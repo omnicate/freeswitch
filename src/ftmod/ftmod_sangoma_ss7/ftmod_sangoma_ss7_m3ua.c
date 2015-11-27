@@ -733,9 +733,8 @@ static ftdm_status_t ftmod_m3ua_gen_config(ftdm_sngss7_operating_modes_e opr_mod
     /* According to M3UA RFC 4666, Heartbeat (BEAT) is
        recommended when M3UA runs over a transport layer
        other than SCTP, which has its own heartbeat */
-
-    cfg.t.cfg.s.genCfg.tmr.tmrHeartbeat.enb = TRUE;                 /* heartbeat period */
-    cfg.t.cfg.s.genCfg.tmr.tmrHeartbeat.val = 1000;
+    cfg.t.cfg.s.genCfg.tmr.tmrHeartbeat.enb = g_ftdm_sngss7_data.cfg.g_m3ua_cfg.gen_cfg.hbeat_tmr_enable;  /* heartbeat period */
+    cfg.t.cfg.s.genCfg.tmr.tmrHeartbeat.val = g_ftdm_sngss7_data.cfg.g_m3ua_cfg.gen_cfg.hbeat_tmr_val;
 
     cfg.t.cfg.s.genCfg.tmr.tmrAspDn.enb     = TRUE;                 /* time between ASPDN */
     cfg.t.cfg.s.genCfg.tmr.tmrAspDn.val     = 2000;                 /* Recommended value is 2 sec */
@@ -768,7 +767,8 @@ static ftdm_status_t ftmod_m3ua_gen_config(ftdm_sngss7_operating_modes_e opr_mod
 
     ret = sng_cfg_m3ua(&pst, &cfg);
     if (ret==0) {
-        SS7_INFO("M3UA General configuration DONE!\n");
+        SS7_INFO("M3UA General configuration DONE with heartbeat timer as %d with value %d!\n",
+		 cfg.t.cfg.s.genCfg.tmr.tmrHeartbeat.enb, cfg.t.cfg.s.genCfg.tmr.tmrHeartbeat.val);
         return FTDM_SUCCESS;
     } else {
         SS7_CRITICAL("M3UA General configuration FAILED!\n");

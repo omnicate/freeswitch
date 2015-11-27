@@ -58,6 +58,7 @@ typedef struct sng_sctp_link {
 	uint32_t	numSrcAddr;
 	int 		freeze_tmr;
 	uint32_t	srcAddrList[SCT_MAX_NET_ADDRS+1];
+	uint32_t 	hbeat_interval_tmr;
 } sng_sctp_link_t;
 
 typedef struct sng_sctp_cfg {
