@@ -1481,6 +1481,7 @@ static FIO_GET_ALARMS_FUNCTION(wanpipe_get_alarms)
 {
 	wanpipe_tdm_api_t tdm_api;
 	unsigned int alarms = 0;
+	unsigned int ftdm_old_alarms=0;
 	int err;
 
 	memset(&tdm_api, 0, sizeof(tdm_api));
@@ -1499,6 +1500,7 @@ static FIO_GET_ALARMS_FUNCTION(wanpipe_get_alarms)
 	}
 	alarms = tdm_api.wp_tdm_cmd.fe_alarms;
 #endif
+
 #ifdef WIN32
 	/* Temporary fix: in the current trunk of libsangoma, for BRI,
 		WAN_TE_BIT_ALARM_RED bit is set if the card is in disconnected state, but this has
@@ -1511,42 +1513,50 @@ static FIO_GET_ALARMS_FUNCTION(wanpipe_get_alarms)
 	}
 #endif
 
+	ftdm_old_alarms=ftdmchan->alarm_flags;
 	ftdmchan->alarm_flags = FTDM_ALARM_NONE;
+
+	/* Ignore Open Circuit Alarms */
+	if (alarms & WAN_TE_BIT_ALARM_LIU_OC) {
+		alarms &= ~WAN_TE_BIT_ALARM_LIU_OC;
+	}
 
 	if (alarms & WAN_TE_BIT_ALARM_RED) {
 		ftdmchan->alarm_flags |= FTDM_ALARM_RED;
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Wanpipe RED Alarm Set %s\n", " ");
 		alarms &= ~WAN_TE_BIT_ALARM_RED;
 	}
 		
-
 	if (alarms & WAN_TE_BIT_ALARM_AIS) {
 		ftdmchan->alarm_flags |= FTDM_ALARM_BLUE;
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Wanpipe BLUE Alarm Set %s\n", " ");
 		alarms &= ~WAN_TE_BIT_ALARM_AIS;
 	}
 
 	if (alarms & WAN_TE_BIT_ALARM_RAI) {
 		ftdmchan->alarm_flags |= FTDM_ALARM_YELLOW;
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Wanpipe RAI Alarm Set\n", " ");
 		alarms &= ~WAN_TE_BIT_ALARM_RAI;
 	}
 
 	if (!ftdmchan->alarm_flags) {
 		if (FTDM_IS_DIGITAL_CHANNEL(ftdmchan)) {
 			ftdm_channel_hw_link_status_t sangoma_status = 0;
-			/* there is a bug in wanpipe where alarms were not properly set when they should be
+			/* there was a bug in wanpipe where alarms were not properly set when they should be
 			 * on at application startup, until that is fixed we check the link status here too */
 			ftdm_channel_command(ftdmchan, FTDM_COMMAND_GET_LINK_STATUS, &sangoma_status);
 			ftdmchan->alarm_flags = sangoma_status == FTDM_HW_LINK_DISCONNECTED ? FTDM_ALARM_RED : FTDM_ALARM_NONE;
-			ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Link status is %s (alarms=0x%X)\n", 
-						sangoma_status?"Connected":"Disconnected",ftdmchan->alarm_flags);
 		} 
 	}
-
-	/* Ignore Open Circuit Alaram */
-	if (alarms == WAN_TE_BIT_ALARM_LIU_OC) {
-		ftdmchan->alarm_flags = FTDM_ALARM_NONE;
-		alarms = FTDM_ALARM_NONE;
+			
+	if (ftdm_old_alarms != ftdmchan->alarm_flags) { 
+		if (ftdmchan->alarm_flags) {
+			ftdm_log_chan(ftdmchan, FTDM_LOG_WARNING, "Link status is Disconnected (alarms=0x%X)\n",ftdmchan->alarm_flags);
+		} else {
+			ftdm_log_chan(ftdmchan, FTDM_LOG_INFO, "Link status is Connected (alarms=0x%X)\n",ftdmchan->alarm_flags);
+		}
 	}
-
+	
 	if (alarms) {
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Unmapped wanpipe alarm(0x%x): %s\n", alarms, DECODE_WAN_ALARM(alarms));
 	}
