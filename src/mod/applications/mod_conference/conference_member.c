@@ -221,6 +221,8 @@ void conference_member_update_status_field(conference_member_t *member)
 								  cJSON_CreateString(member->video_reservation_id) : cJSON_CreateNull());
 
 			cJSON_AddItemToObject(video, "videoLayerID", cJSON_CreateNumber(member->video_layer_id));
+			cJSON_AddItemToObject(video, "videoCanvasID", cJSON_CreateNumber(member->canvas_id));
+			cJSON_AddItemToObject(video, "videoWatchingCanvasID", cJSON_CreateNumber(member->watching_canvas_id));
 
 			cJSON_AddItemToObject(json, "video", video);
 		} else {
@@ -766,7 +768,12 @@ switch_status_t conference_member_add(conference_obj_t *conference, conference_m
 		}
 
 		if ((var = switch_channel_get_variable_dup(member->channel, "video_reservation_id", SWITCH_FALSE, -1))) {
+			char tmp[50] = "";
+
 			member->video_reservation_id = switch_core_strdup(member->pool, var);
+			conference_api_clear_res_id(member->conference, var);
+			snprintf(tmp, sizeof(tmp), "%d", member->id);
+			conference_event_info_event(member->conference, "vidResIDSet", tmp, var, SWITCH_FALSE, NULL);
 		}
 
 		if ((var = switch_channel_get_variable(channel, "video_use_dedicated_encoder")) && switch_true(var)) {

@@ -674,6 +674,7 @@ switch_status_t conference_api_sub_watching_canvas(conference_member_t *member, 
 {
 	int index;
 	char *val = (char *) data;
+	char tmp[80] = "";
 
 	if (member->conference->canvas_count == 1) {
 		stream->write_function(stream, "-ERR Only 1 Canvas\n");
@@ -694,6 +695,8 @@ switch_status_t conference_api_sub_watching_canvas(conference_member_t *member, 
 	member->conference->canvases[index]->send_keyframe = 10;
 	member->conference->canvases[index]->refresh = 1;
 	stream->write_function(stream, "+OK watching canvas %d\n", index + 1);
+	snprintf(tmp, sizeof(tmp), "%d", member->watching_canvas_id + 1);
+	conference_event_info_event(member->conference, "vidWatchingCanvas", tmp, NULL, SWITCH_FALSE, NULL);
 
 	return SWITCH_STATUS_SUCCESS;
 }
@@ -702,6 +705,8 @@ switch_status_t conference_api_sub_canvas(conference_member_t *member, switch_st
 {
 	int index;
 	char *val = (char *) data;
+	char tmp[35] = "";
+
 	//mcu_canvas_t *canvas = NULL;
 
 	if (member->conference->canvas_count == 1) {
@@ -733,6 +738,8 @@ switch_status_t conference_api_sub_canvas(conference_member_t *member, switch_st
 	member->conference->canvases[index]->send_keyframe = 10;
 	member->conference->canvases[index]->refresh = 1;
 	stream->write_function(stream, "+OK canvas %d\n", member->canvas_id + 1);
+	snprintf(tmp, sizeof(tmp), "%d", member->canvas_id + 1);
+	conference_event_info_event(member->conference, "vidCanvas", tmp, NULL, SWITCH_FALSE, NULL);
 
 	return SWITCH_STATUS_SUCCESS;
 }
@@ -1249,7 +1256,7 @@ switch_status_t conference_api_sub_vid_layout(conference_obj_t *conference, swit
 		conference->canvases[idx]->new_vlayout = vlayout;
 		switch_mutex_unlock(conference->canvases[idx]->mutex);
 	}
-
+	
 	return SWITCH_STATUS_SUCCESS;
 }
 
@@ -1585,9 +1592,29 @@ switch_status_t conference_api_sub_get_uuid(conference_member_t *member, switch_
 	return SWITCH_STATUS_SUCCESS;
 }
 
+void conference_api_clear_res_id(conference_obj_t *conference, const char *res_id)
+{
+	conference_member_t *member = NULL;
+
+	switch_mutex_lock(conference->member_mutex);
+	for (member = conference->members; member; member = member->next) {
+		if (!res_id || (member->video_reservation_id && !strcmp(member->video_reservation_id, res_id))) {
+			char tmp[50] = "";
+			if (member->video_reservation_id) {
+				snprintf(tmp, sizeof(tmp), "%d", member->id);
+				conference_event_info_event(conference, "vidResIDClear", tmp, NULL, SWITCH_FALSE, NULL);
+			}
+			member->video_reservation_id = NULL;
+		} 
+	}
+	switch_mutex_unlock(conference->member_mutex);
+
+}
+
 switch_status_t conference_api_sub_vid_res_id(conference_member_t *member, switch_stream_handle_t *stream, void *data)
 {
 	char *text = (char *) data;
+	char tmp[50] = "";
 
 	if (member == NULL)
 		return SWITCH_STATUS_GENERR;
@@ -1601,10 +1628,19 @@ switch_status_t conference_api_sub_vid_res_id(conference_member_t *member, switc
 		return SWITCH_STATUS_SUCCESS;
 	}
 
+	snprintf(tmp, sizeof(tmp), "%d", member->id);
+
 	if (zstr(text) || !strcasecmp(text, "clear") || (member->video_reservation_id && !strcasecmp(text, member->video_reservation_id))) {
-		member->video_reservation_id = NULL;
-		stream->write_function(stream, "+OK reservation_id cleared\n");
+		if (member->video_reservation_id) {
+			conference_event_info_event(member->conference, "vidResIDClear", tmp, member->video_reservation_id, SWITCH_FALSE, NULL);
+			member->video_reservation_id = NULL;
+			stream->write_function(stream, "+OK reservation_id cleared\n");
+		} else {
+			stream->write_function(stream, "-ERR reservation_id not set\n");
+		}
 	} else {
+		conference_api_clear_res_id(member->conference, text);
+		conference_event_info_event(member->conference, "vidResIDSet", tmp, text, SWITCH_FALSE, NULL);
 		member->video_reservation_id = switch_core_strdup(member->pool, text);
 		stream->write_function(stream, "+OK reservation_id %s\n", text);
 		conference_video_detach_video_layer(member);

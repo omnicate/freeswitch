@@ -485,6 +485,39 @@ void conference_event_la_command_handler(switch_live_array_t *la, const char *cm
 }
 
 
+void conference_event_info_broadcast(conference_obj_t *conference, cJSON **msg, switch_bool_t mod)
+{
+	switch_event_channel_broadcast(mod ? conference->mod_event_channel : conference->la_event_channel, msg, "mod_conference", conference_globals.event_channel_id);
+}
+
+void conference_event_info_event(conference_obj_t *conference, const char *action, const char *object, const char *arg, switch_bool_t mod, cJSON **data)
+{
+	cJSON *msg = cJSON_CreateObject();
+	cJSON *outerdata = cJSON_CreateObject();
+	cJSON *innerdata = NULL;
+
+	cJSON_AddItemToObject(msg, "eventChannel", cJSON_CreateString(mod ? conference->mod_event_channel : conference->user_event_channel));
+	cJSON_AddItemToObject(msg, "eventType", cJSON_CreateString("conferenceInfo"));
+	
+	cJSON_AddItemToObject(outerdata, "eventAction", cJSON_CreateString(action));
+	cJSON_AddItemToObject(outerdata, "eventObject", cJSON_CreateString(object));
+	cJSON_AddItemToObject(outerdata, "eventArgument", cJSON_CreateString(arg));
+
+	cJSON_AddItemToObject(msg, "data", outerdata);
+
+	if (data) {
+		innerdata = *data;
+		*data = NULL;
+	} else {
+		innerdata = cJSON_CreateObject();
+	}
+
+	cJSON_AddItemToObject(outerdata, "data", innerdata);
+
+	conference_event_info_broadcast(conference, &msg, mod);
+	
+}
+
 void conference_event_adv_la(conference_obj_t *conference, conference_member_t *member, switch_bool_t join)
 {
 
@@ -524,6 +557,7 @@ void conference_event_adv_la(conference_obj_t *conference, conference_member_t *
 		}
 
 		cJSON_AddItemToObject(data, "chatChannel", cJSON_CreateString(conference->chat_event_channel));
+		cJSON_AddItemToObject(data, "userChannel", cJSON_CreateString(conference->user_event_channel));
 
 		switch_core_get_variables(&variables);
 		for (hp = variables->headers; hp; hp = hp->next) {
@@ -541,6 +575,7 @@ void conference_event_adv_la(conference_obj_t *conference, conference_member_t *
 		if (cookie) {
 			switch_event_channel_permission_modify(cookie, conference->la_event_channel, join);
 			switch_event_channel_permission_modify(cookie, conference->mod_event_channel, join);
+			switch_event_channel_permission_modify(cookie, conference->user_event_channel, join);
 			switch_event_channel_permission_modify(cookie, conference->chat_event_channel, join);
 		}
 	}

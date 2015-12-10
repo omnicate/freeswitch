@@ -1001,6 +1001,7 @@ switch_status_t conference_video_attach_video_layer(conference_member_t *member,
 void conference_video_init_canvas_layers(conference_obj_t *conference, mcu_canvas_t *canvas, video_layout_t *vlayout)
 {
 	int i = 0;
+	char canvas_id[80] = "";
 
 	if (!canvas) return;
 
@@ -1019,7 +1020,27 @@ void conference_video_init_canvas_layers(conference_obj_t *conference, mcu_canva
 		return;
 	}
 
+	if (canvas->vlayout) {
+		int i, j;
+
+		for (i = 0; i < canvas->vlayout->layers; i++) {
+			if (canvas->vlayout->images[i].res_id) {
+				int both = 0;
+				for (j = 0; j < vlayout->layers; j++) {
+					if (vlayout->images[i].res_id && !strcmp(canvas->vlayout->images[i].res_id, vlayout->images[i].res_id)) {
+						both = 1;
+						break;
+					}
+				}
+				if (!both) {
+					conference_api_clear_res_id(conference, canvas->vlayout->images[i].res_id);
+				}
+			}
+		}
+	}
+
 	canvas->vlayout = vlayout;
+
 
 	for (i = 0; i < vlayout->layers; i++) {
 		mcu_layer_t *layer = &canvas->layers[i];
@@ -1092,6 +1113,8 @@ void conference_video_init_canvas_layers(conference_obj_t *conference, mcu_canva
 	
 	switch_mutex_unlock(canvas->mutex);
 	switch_thread_rwlock_unlock(canvas->video_rwlock);
+	switch_snprintf(canvas_id, sizeof(canvas_id), "%d", canvas->canvas_id + 1);
+	conference_event_info_event(conference, "vidLayout", vlayout->name, canvas_id, SWITCH_FALSE, NULL);
 
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Canvas position %d applied layout %s\n", canvas->canvas_id + 1, vlayout->name);
 
