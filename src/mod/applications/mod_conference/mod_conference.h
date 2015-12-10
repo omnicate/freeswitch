@@ -527,6 +527,7 @@ typedef struct conference_obj {
 	char *la_event_channel;
 	char *chat_event_channel;
 	char *mod_event_channel;
+	char *user_event_channel;
 	char *desc;
 	char *timer_name;
 	char *tts_engine;
@@ -1031,7 +1032,8 @@ void conference_event_channel_handler(const char *event_channel, cJSON *json, co
 void conference_event_la_channel_handler(const char *event_channel, cJSON *json, const char *key, switch_event_channel_id_t id);
 void conference_event_mod_channel_handler(const char *event_channel, cJSON *json, const char *key, switch_event_channel_id_t id);
 void conference_event_chat_channel_handler(const char *event_channel, cJSON *json, const char *key, switch_event_channel_id_t id);
-
+void conference_event_info_broadcast(conference_obj_t *conference, cJSON **msg, switch_bool_t mod);
+void conference_event_info_event(conference_obj_t *conference, const char *action, const char *object, const char *arg, switch_bool_t mod, cJSON **data);
 void conference_member_itterator(conference_obj_t *conference, switch_stream_handle_t *stream, uint8_t non_mod, conference_api_member_cmd_t pfncallback, void *data);
 
 switch_status_t conference_api_sub_mute(conference_member_t *member, switch_stream_handle_t *stream, void *data);
@@ -1098,7 +1100,7 @@ switch_status_t conference_api_sub_vid_personal(conference_obj_t *conference, sw
 switch_status_t conference_api_dispatch(conference_obj_t *conference, switch_stream_handle_t *stream, int argc, char **argv, const char *cmdline, int argn);
 switch_status_t conference_api_sub_syntax(char **syntax);
 switch_status_t conference_api_main_real(const char *cmd, switch_core_session_t *session, switch_stream_handle_t *stream);
-
+void conference_api_clear_res_id(conference_obj_t *conference, const char *res_id);
 
 void conference_loop_mute_on(conference_member_t *member, caller_control_action_t *action);
 void conference_loop_mute_toggle(conference_member_t *member, caller_control_action_t *action);
