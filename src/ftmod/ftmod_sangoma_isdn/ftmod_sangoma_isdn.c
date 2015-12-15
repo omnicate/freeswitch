@@ -1070,7 +1070,13 @@ static ftdm_status_t ftdm_sangoma_isdn_process_state_change(ftdm_channel_t *ftdm
 	case FTDM_CHANNEL_STATE_TERMINATING: /* call is hung up by the remote end */
 		{
 			/* this state is set when the line is hanging up */
-			sngisdn_send_signal(sngisdn_info, FTDM_SIGEVENT_STOP);
+			if (ftdm_test_flag(ftdmchan, FTDM_CHANNEL_USER_HANGUP)) {
+				sngisdn_set_flag(sngisdn_info, FLAG_LOCAL_ABORT);
+				state_change++;
+				ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_HANGUP_COMPLETE);
+			} else {
+				sngisdn_send_signal(sngisdn_info, FTDM_SIGEVENT_STOP);
+			}
 		}
 		break;
 	case FTDM_CHANNEL_STATE_HANGUP:	/* call is hung up locally */
