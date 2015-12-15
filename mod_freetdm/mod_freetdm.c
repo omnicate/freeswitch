@@ -5667,7 +5667,7 @@ FTDM_CLI_DECLARE(ftdm_cmd_dump)
 	uint32_t chan_id = 0;
 	ftdm_span_t *span;
 	char *as = NULL;
-    char buffer[1024*5];
+    char buffer[1024*20];
 
     memset(&buffer,0,sizeof(buffer));
 
