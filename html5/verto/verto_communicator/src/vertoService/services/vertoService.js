@@ -422,6 +422,13 @@ vertoService.service('verto', ['$rootScope', '$cookieStore', '$location', 'stora
             },
             onBroadcast: function(v, conf, message) {
               console.log('>>> conf.onBroadcast:', arguments);
+
+              if (message.eventAction == 'vidLayout') {
+                data.canvasInfo[packet.eventArgument -1].layoutName = message.eventObject;
+                if ((message.eventArgument -1) == data.conf.watchingCanvasId)
+                  $rootScope.$emit('vidLayoutSync', message.eventObject);
+              }
+
               if (message.action == 'response') {
                 // This is a response with the video layouts list.
                 if (message['conf-command'] == 'list-videoLayouts') {
@@ -445,10 +452,25 @@ vertoService.service('verto', ['$rootScope', '$cookieStore', '$location', 'stora
                   data.confLayouts = options;
                 } else if (message['conf-command'] == 'canvasInfo') {
                   data.canvasInfo = message.responseData;
-                  $rootScope.$emit('conference.canvasInfo', message.responseData);
+                  $rootScope.$emit('conference.canvasInfo', data.canvasInfo);
                 } else {
                   $rootScope.$emit('conference.broadcast', message);
                 }
+              }
+            },
+            onUserBroadcast: function(v, e) {
+              var packet = e.data;
+
+              switch (packet.eventAction) {
+                case 'vidLayout':
+                  data.canvasInfo[packet.eventArgument -1].layoutName = packet.eventObject;
+                  if ((packet.eventArgument -1) == data.conf.watchingCanvasId)
+                    $rootScope.$emit('vidLayoutSync', packet.eventObject);
+                  break;
+                case 'vidWatchingCanvas':
+                  data.conf.watchingCanvasId = packet.eventObject -1;
+                  $rootScope.$emit('watchingCanvasIdSync', data.conf.watchingCanvasId);
+                  break;
               }
             }
           });
@@ -461,13 +483,9 @@ vertoService.service('verto', ['$rootScope', '$cookieStore', '$location', 'stora
 
           data.conf = conf;
 
-          data.liveArray = new $.verto.liveArray(
-            data.instance, pvtData.laChannel,
-            pvtData.laName, {
-              subParams: {
-                callID: dialog ? dialog.callID : null
-              }
-            });
+          var channelCfg = { subParams: { callID: dialog ? dialog.callID : null } };
+
+          data.liveArray = new $.verto.liveArray(data.instance, pvtData.laChannel, pvtData.laName, channelCfg);
 
           data.liveArray.onErr = function(obj, args) {
             console.log('liveArray.onErr', obj, args);
@@ -482,6 +500,7 @@ vertoService.service('verto', ['$rootScope', '$cookieStore', '$location', 'stora
                 args.data.forEach(function(member){
                   var callId = member[0];
                   var status = angular.fromJson(member[1][4]);
+                  trackUserData(member[1]);
                   if (callId === data.call.callID) {
                     $rootScope.$apply(function(){
                       data.mutedMic = status.audio.muted;
@@ -502,6 +521,7 @@ vertoService.service('verto', ['$rootScope', '$cookieStore', '$location', 'stora
                 $rootScope.$emit('members.clear');
                 break;
               case 'modify':
+                trackUserData(args.data);
                 var member = [args.key, args.data];
                 $rootScope.$emit('members.update', member);
                 break;
@@ -509,6 +529,14 @@ vertoService.service('verto', ['$rootScope', '$cookieStore', '$location', 'stora
                 console.log('NotImplemented', args.action);
             }
           };
+        }
+
+        function trackUserData(member) {
+          var callId = member[0], status = JSON.parse(member[4]);
+          if (parseInt(callId) == data.conferenceMemberID) {
+            data.conf.watchingCanvasId = status.video.videoWatchingCanvasID;
+            $rootScope.$emit('watchingCanvasIdSync', data.conf.watchingCanvasId);
+          }
         }
 
         function stopConference() {

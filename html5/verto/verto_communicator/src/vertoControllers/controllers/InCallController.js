@@ -73,8 +73,7 @@
 
         $scope.confChangeVideoLayout = function(layout) {
           verto.data.conf.setVideoLayout(layout);
-          $scope.videoLayout = layout;
-          $rootScope.$emit('changedVideoLayout', layout);
+          $rootScope.currentLayout = layout;
         };
 
         $scope.confChangeSpeaker = function(speakerId) {
@@ -118,6 +117,10 @@
 
         $scope.muteMic = verto.muteMic;
         $scope.muteVideo = verto.muteVideo;
+
+        $rootScope.$on('vidLayoutSync', function(event, data) {
+          $rootScope.currentLayout = data;
+        });
 
         $rootScope.$on('ScreenShareExtensionStatus', function(event, error) {
           var pluginUrl = 'https://chrome.google.com/webstore/detail/screen-capturing/ajhifddimkapgcifgcodmmfdlknahffk';

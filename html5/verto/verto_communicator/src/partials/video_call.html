@@ -31,7 +31,7 @@
         </button>
         <ul class="dropdown-menu">
           <li ng-repeat="layout in verto.data.confLayouts">
-            <a ng-click="confChangeVideoLayout(layout)" ng-class="{ 'selected': layout == videoLayout }">{{ layout }}</a>
+            <a ng-click="confChangeVideoLayout(layout)" ng-class="{ 'selected': layout == currentLayout }">{{ layout }}</a>
           </li>
         </ul>
       </div>
@@ -89,13 +89,16 @@
     </div>
     <div class="video-footer panel-body">
       <div class="row">
-        <div class="col-md-6 col-xs-6 text-left">
+        <div class="col-md-4 col-xs-4 text-left">
           <div class="video-timer">
             <span ng-show="watcher" style="font-size: 18px">Room {{ extension }} - Canvas {{ canvasID }}</span>
             <timer start-time="start_time" autostart="false" interval="1000" ng-if="!watcher">{{hhours}}:{{mminutes}}:{{sseconds}}</timer>
           </div>
         </div>
-        <div class="col-md-6 col-xs-6 text-right">
+        <div class="col-md-4 col-xs-4 text-center">
+          <span ng-show="!watcher" style="font-size: 20px; color: white">Canvas {{ verto.data.conf.watchingCanvasId + 1}}</span>
+        </div>
+        <div class="col-md-4 col-xs-4 text-right">
           <button class="btn btn-danger" ng-click="hangup()">
             <i class="mdi-communication-call-end"></i>
             {{ watcher ? 'Close' : 'End Call' }}
