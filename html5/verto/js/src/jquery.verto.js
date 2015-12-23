@@ -1249,6 +1249,14 @@
                 }
             }
         });
+
+	verto.subscribe(conf.params.laData.userChannel, {
+            handler: function(v, e) {
+                if (typeof(conf.params.onUserBroadcast) === "function") {
+                    conf.params.onUserBroadcast(v,e);
+                }
+            }
+        });
     };
 
     $.verto.conf.prototype.modCommand = function(cmd, id, value) {
@@ -1277,6 +1285,10 @@
 
         if (conf.params.laData.chatChannel) {
             conf.verto.unsubscribe(conf.params.laData.chatChannel);
+        }
+
+        if (conf.params.laData.userChannel) {
+            conf.verto.unsubscribe(conf.params.laData.userChannel);
         }
     };
 
@@ -1675,6 +1687,14 @@
 	    }
 	});
 
+	verto.subscribe(confMan.params.laData.userChannel, {
+	    handler: function(v, e) {
+		if (typeof(confMan.params.onUserBroadcast) === "function") {
+		    confMan.params.onUserBroadcast(v,e);
+		}
+	    }
+	});
+
         if (confMan.params.laData.role === "moderator") {
             atitle = "Action";
             awidth = 600;
@@ -1871,6 +1891,10 @@
 
         if (confMan.params.laData.modChannel) {
             confMan.verto.unsubscribe(confMan.params.laData.modChannel);
+        }
+
+        if (confMan.params.laData.userChannel) {
+            confMan.verto.unsubscribe(confMan.params.laData.userChannel);
         }
 
         if (confMan.params.mainModID) {

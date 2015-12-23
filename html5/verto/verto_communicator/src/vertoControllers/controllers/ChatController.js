@@ -58,39 +58,31 @@
 
       $rootScope.$on('changedVideoLayout', function(event, layout) {
         $scope.resIDs = getResByLayout(layout);
-
-        // remove resIDs param to clear every members resID.
-        // passing $scope.resIDs results in preserving resIDs compatible
-        // with the current layout
-        clearMembersResID($scope.resIDs);
       });
 
       $rootScope.$on('conference.canvasInfo', function(event, data) {
-        $scope.currentLayout = data[0].layoutName;
-        $scope.resIDs = getResByLayout($scope.currentLayout);
+        $rootScope.currentLayout = data[0].layoutName;
+        $scope.resIDs = getResByLayout($rootScope.currentLayout);
+      });
+
+      $rootScope.$on('watchingCanvasIdSync', function(event, canvasId) {
+        if (!verto.data.canvasInfo) return;
+        $rootScope.currentLayout = verto.data.canvasInfo[canvasId].layoutName;
+        $scope.resIDs = getResByLayout($rootScope.currentLayout);
+        $scope.$apply();
       });
 
       function getResByLayout(layout) {
         var layoutsData = verto.data.confLayoutsData;
+
+        if (!layoutsData) return;
+
         for (var i = 0; i < layoutsData.length; i++) {
           if (layoutsData[i].name === layout) {
             return layoutsData[i].resIDS;
           }
         }
       }
-
-      // @preserve - a array of values to be preserved
-      function clearMembersResID(preserve) {
-        $scope.members.forEach(function(member) {
-          var resID = member.status.video.reservationID;
-          console.debug("resID to clear: " + resID);
-          if (resID && preserve && preserve.indexOf(resID) !== -1) return;
-          if (resID){
-            console.debug("clearing resid [" + resID + "] from [" + member.id + "]");
-            $scope.confResID(member.id, resID);
-          }
-        });
-      };
 
       function findMemberByUUID(uuid) {
         var found = false;
