@@ -4609,6 +4609,12 @@ switch_status_t config_sofia(sofia_config_t reload, char *profile_name)
 						} else {
 							sofia_clear_pflag(profile, PFLAG_THREAD_PER_REG);
 						}
+					} else if (!strcasecmp(var, "inbound-invite-require-matching-reg") && val) {
+						if (switch_true(val)) {
+							sofia_set_pflag(profile, PFLAG_REQUIRE_MATCHING_REG);
+						} else {
+							sofia_clear_pflag(profile, PFLAG_REQUIRE_MATCHING_REG);
+						}
 					} else if (!strcasecmp(var, "inbound-use-callid-as-uuid")) {
 						if (switch_true(val)) {
 							sofia_set_pflag(profile, PFLAG_CALLID_AS_UUID);
@@ -5754,6 +5760,9 @@ struct cb_helper_sip_user_status {
 	char *contact;
 	size_t contact_len;
 
+	char *port;
+	size_t port_len;
+
 	int count;
 };
 
@@ -5761,8 +5770,8 @@ int sofia_sip_user_status_callback(void *pArg, int argc, char **argv, char **col
 {
 	struct cb_helper_sip_user_status *cbt = (struct cb_helper_sip_user_status *) pArg;
 
-	if (argc != 3) {
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "expected 3 arguments from query, instead got %d\n", argc);
+	if (argc != 4) {
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "expected 4 arguments from query, instead got %d\n", argc);
 		return 0;
 	}
 
@@ -5770,6 +5779,8 @@ int sofia_sip_user_status_callback(void *pArg, int argc, char **argv, char **col
 	cbt->count = (argv[1] && switch_is_number(argv[1])) ? atoi(argv[1]) : 0;
 
 	switch_copy_string(cbt->contact, argv[2], cbt->contact_len);
+
+	switch_copy_string(cbt->port, argv[3], cbt->port_len);
 
 	return 1;
 }
@@ -5849,6 +5860,7 @@ static void sofia_handle_sip_r_options(switch_core_session_t *session, int statu
 		struct cb_helper_sip_user_status sip_user_status;
 		char ping_status[255] = "";
 		char sip_contact[1024] = "";
+		char sip_port[1024] = "";
 		int sip_user_ping_min = profile->sip_user_ping_min;
 		int sip_user_ping_max = profile->sip_user_ping_max;
 
@@ -5863,7 +5875,9 @@ static void sofia_handle_sip_r_options(switch_core_session_t *session, int statu
 		sip_user_status.status_len = sizeof(ping_status);
 		sip_user_status.contact = sip_contact;
 		sip_user_status.contact_len = sizeof(sip_contact);
-		sql = switch_mprintf("select ping_status, ping_count, contact from sip_registrations where sip_user='%s' and sip_host='%s' and call_id='%q'",
+		sip_user_status.port = sip_port;
+		sip_user_status.port_len = sizeof(sip_port);
+		sql = switch_mprintf("select ping_status, ping_count, contact, network_port from sip_registrations where sip_user='%s' and sip_host='%s' and call_id='%q'",
 				     sip->sip_to->a_url->url_user, sip->sip_to->a_url->url_host, call_id);
 		sofia_glue_execute_sql_callback(profile, profile->ireg_mutex, sql, sofia_sip_user_status_callback, &sip_user_status);
 		switch_safe_free(sql);
@@ -9243,6 +9257,68 @@ void sofia_handle_sip_i_invite(switch_core_session_t *session, nua_t *nua, sofia
 
 	switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(tech_pvt->session), SWITCH_LOG_DEBUG, "%s receiving invite from %s:%d version: %s\n",
 					  switch_channel_get_name(tech_pvt->channel), network_ip, network_port, switch_version_full_human());
+
+	if (sofia_test_pflag(profile, PFLAG_REQUIRE_MATCHING_REG)) {
+		char *sql = NULL, *tmp = NULL, *source = NULL, *contact_path = NULL, *contact_source = NULL;
+		struct cb_helper_sip_user_status sip_user_status;
+		char ping_status[255] = "";
+		char sip_contact[1024] = "";
+		char sip_port[1024] = "";
+
+		sip_user_status.status = ping_status;
+		sip_user_status.status_len = sizeof(ping_status);
+		sip_user_status.contact = sip_contact;
+		sip_user_status.contact_len = sizeof(sip_contact);
+		sip_user_status.port = sip_port;
+		sip_user_status.port_len = sizeof(sip_port);
+		sql = switch_mprintf("select ping_status, ping_count, contact, network_port from sip_registrations where sip_user='%s' and sip_host='%s'",
+				     sip->sip_from->a_url->url_user, sip->sip_from->a_url->url_host);
+		sofia_glue_execute_sql_callback(profile, profile->ireg_mutex, sql, sofia_sip_user_status_callback, &sip_user_status);
+		switch_safe_free(sql);
+
+		if (zstr(sip_contact)) {
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Invite does not match a registered user!\n");
+			nua_respond(nh, 403, "Forbidden", TAG_END());
+			goto fail;
+		} else {
+			contact_path = sofia_glue_get_path_from_contact(sip_contact);
+			if (!contact_path) {
+				contact_path = sofia_glue_get_url_from_contact(sip_contact, SWITCH_TRUE);
+			}
+			if (contact_path) {
+				contact_source = strchr(contact_path, '@');
+				if (!contact_source) {
+					switch_safe_free(contact_path);
+					goto fail;
+				}
+				++contact_source;
+				tmp = strchr(contact_source, ':');
+				if (!tmp) {
+					tmp = strchr(contact_source, ';');
+				}
+				if (tmp) {
+					*tmp = '\0';
+				}
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Parsed contact source [%s]!\n", switch_str_nil(contact_source));
+
+				contact_source = switch_mprintf("%s:%s", switch_str_nil(contact_source), sip_port);
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Generated contact source [%s]!\n", switch_str_nil(contact_source));
+
+				switch_safe_free(contact_path);
+
+				source = switch_mprintf("%s:%d", network_ip, network_port);
+				if (strcmp(source, contact_source)) {
+					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Invite does not match a registered user [%s != %s]!\n", switch_str_nil(source), switch_str_nil(contact_source));
+					nua_respond(nh, 403, "Forbidden", TAG_END());
+					switch_safe_free(source);
+					switch_safe_free(contact_source);
+					goto fail;
+				}
+			}
+			switch_safe_free(source);
+			switch_safe_free(contact_source);
+		}
+	}
 
 
 	if (sip && sip->sip_via && sip->sip_via->v_protocol && switch_stristr("sip/2.0/ws", sip->sip_via->v_protocol)) {
