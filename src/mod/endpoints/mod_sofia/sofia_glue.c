@@ -924,7 +924,7 @@ switch_status_t sofia_glue_do_invite(switch_core_session_t *session)
 				ipv6 = strchr(ip_addr, ':');
 
 				if (sofia_glue_transport_has_tls(tech_pvt->transport)) {
-					tech_pvt->invite_contact = switch_core_session_sprintf(session, "sip:%s@%s%s%s:%d", contact,
+					tech_pvt->invite_contact = switch_core_session_sprintf(session, "sips:%s@%s%s%s:%d", contact,
 																		   ipv6 ? "[" : "", ip_addr, ipv6 ? "]" : "", tech_pvt->profile->tls_sip_port);
 				} else {
 					tech_pvt->invite_contact = switch_core_session_sprintf(session, "sip:%s@%s%s%s:%d", contact,
@@ -2696,9 +2696,7 @@ switch_status_t sofia_glue_send_notify(sofia_profile_t *profile, const char *use
 	}
 
 	if (!zstr(network_ip) && sofia_glue_check_nat(profile, network_ip)) {
-		id = switch_mprintf("sip:%s@%s", user, profile->extsipip);
-		switch_assert(id);
-
+		const char *proto = "sip";
 		if ((ptr = sofia_glue_find_parameter(o_contact, "transport="))) {
 			sofia_transport_t transport = sofia_glue_str2transport( ptr + 10 );
 
@@ -2709,6 +2707,7 @@ switch_status_t sofia_glue_send_notify(sofia_profile_t *profile, const char *use
 			case SOFIA_TRANSPORT_TCP_TLS:
 				contact_str = sofia_test_pflag(profile, PFLAG_TLS) ?
 					profile->tls_public_contact : profile->tcp_public_contact;
+				proto = "sips";
 				break;
 			default:
 				contact_str = profile->public_url;
@@ -2719,10 +2718,10 @@ switch_status_t sofia_glue_send_notify(sofia_profile_t *profile, const char *use
 			user_via = sofia_glue_create_external_via(NULL, profile, SOFIA_TRANSPORT_UDP);
 			contact_str = profile->public_url;		
 		}
-	} else {
-		id = switch_mprintf("sip:%s@%s", user, host);
+		id = switch_mprintf("%s:%s@%s", proto, user, profile->extsipip);
 		switch_assert(id);
-		
+	} else {
+		const char *proto = "sip";
 		if ((ptr = sofia_glue_find_parameter(o_contact, "transport="))) {
 			sofia_transport_t transport = sofia_glue_str2transport( ptr + 10 );
 
@@ -2733,6 +2732,7 @@ switch_status_t sofia_glue_send_notify(sofia_profile_t *profile, const char *use
 			case SOFIA_TRANSPORT_TCP_TLS:
 				contact_str = sofia_test_pflag(profile, PFLAG_TLS) ?
 					profile->tls_contact : profile->tcp_contact;
+				proto = "sips";
 				break;
 			default:
 				contact_str = profile->url;
@@ -2741,6 +2741,8 @@ switch_status_t sofia_glue_send_notify(sofia_profile_t *profile, const char *use
 		} else {
 			contact_str = profile->url;
 		}
+		id = switch_mprintf("%s:%s@%s", proto, user, host);
+		switch_assert(id);
 	}
 
 	dst = sofia_glue_get_destination((char *) o_contact);
@@ -2987,7 +2989,8 @@ char *sofia_glue_gen_contact_str(sofia_profile_t *profile, sip_t const *sip, nua
 		char *path_encoded;
 		int path_encoded_len;
 		char *path_val;
-		const char *tp;
+		const char *tp, *proto = "sip";
+		sofia_transport_t transport;
 
 		full_contact_dup = sofia_glue_get_url_from_contact(full_contact, 1);
 
@@ -2999,7 +3002,11 @@ char *sofia_glue_gen_contact_str(sofia_profile_t *profile, sip_t const *sip, nua
 			tp = "udp";
 		}
 
-		path_val = switch_mprintf("sip:%s:%d;transport=%s", np->network_ip, np->network_port, tp);
+		if ((transport = sofia_glue_str2transport( tp )) == SOFIA_TRANSPORT_TCP_TLS) {
+			proto = "sips";
+		}
+
+		path_val = switch_mprintf("%s:%s:%d;transport=%s", proto, np->network_ip, np->network_port, tp);
 		path_encoded_len = (int)(strlen(path_val) * 3) + 1;
 
 		switch_zmalloc(path_encoded, path_encoded_len);
@@ -3033,14 +3040,14 @@ char *sofia_glue_gen_contact_str(sofia_profile_t *profile, sip_t const *sip, nua
 		
 
 		if (contact->m_url->url_params) {
-			contact_str = switch_mprintf("%s <sip:%s%s%s%s%s%s;%s>%s",
-										 display, contact->m_url->url_user,
+			contact_str = switch_mprintf("%s <%s:%s%s%s%s%s%s;%s>%s",
+										 display, url_scheme(contact->m_url->url_type), contact->m_url->url_user,
 										 contact->m_url->url_user ? "@" : "",
 										 ipv6 ? "[" : "",
 										 contact_host, ipv6 ? "]" : "", new_port, contact->m_url->url_params, np->is_nat ? ";fs_nat=yes" : "");
 		} else {
-			contact_str = switch_mprintf("%s <sip:%s%s%s%s%s%s>%s",
-										 display,
+			contact_str = switch_mprintf("%s <%s:%s%s%s%s%s%s>%s",
+										 display, url_scheme(contact->m_url->url_type),
 										 contact->m_url->url_user,
 										 contact->m_url->url_user ? "@" : "",
 										 ipv6 ? "[" : "", contact_host, ipv6 ? "]" : "", new_port, np->is_nat ? ";fs_nat=yes" : "");

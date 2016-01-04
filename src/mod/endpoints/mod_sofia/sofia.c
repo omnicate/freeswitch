@@ -3922,7 +3922,7 @@ static void config_sofia_profile_urls(sofia_profile_t * profile)
 		if (profile->extsipip) {
 			char *ipv6 = strchr(profile->extsipip, ':');
 			profile->tls_public_url = switch_core_sprintf(profile->pool,
-														  "sip:%s@%s%s%s:%d",
+														  "sips:%s@%s%s%s:%d",
 														  profile->contact_user,
 														  ipv6 ? "[" : "", profile->extsipip, ipv6 ? "]" : "", profile->tls_sip_port);
 		}
@@ -3931,7 +3931,7 @@ static void config_sofia_profile_urls(sofia_profile_t * profile)
 			char *ipv6 = strchr(profile->extsipip, ':');
 			profile->tls_url =
 				switch_core_sprintf(profile->pool,
-									"sip:%s@%s%s%s:%d",
+									"sips:%s@%s%s%s:%d",
 									profile->contact_user, ipv6 ? "[" : "", profile->extsipip, ipv6 ? "]" : "", profile->tls_sip_port);
 			profile->tls_bindurl =
 				switch_core_sprintf(profile->pool,
@@ -3942,7 +3942,7 @@ static void config_sofia_profile_urls(sofia_profile_t * profile)
 			char *ipv6 = strchr(profile->sipip, ':');
 			profile->tls_url =
 				switch_core_sprintf(profile->pool,
-									"sip:%s@%s%s%s:%d",
+									"sips:%s@%s%s%s:%d",
 									profile->contact_user, ipv6 ? "[" : "", profile->sipip, ipv6 ? "]" : "", profile->tls_sip_port);
 			profile->tls_bindurl =
 				switch_core_sprintf(profile->pool,
@@ -9791,7 +9791,7 @@ void sofia_handle_sip_i_invite(switch_core_session_t *session, nua_t *nua, sofia
 			tmp = sofia_overcome_sip_uri_weakness(session, url, transport, SWITCH_TRUE, NULL, NULL);
 
 			if ((at = strchr(tmp, '@'))) {
-				url = switch_core_session_sprintf(session, "sip:%s%s", user, at);
+				url = switch_core_session_sprintf(session, "%s:%s%s", (sofia_glue_transport_has_tls(transport)) ? "sips" : "sip", user, at);
 			}
 
 			if (url) {
