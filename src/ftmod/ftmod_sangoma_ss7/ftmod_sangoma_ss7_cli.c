@@ -1835,6 +1835,16 @@ static ftdm_status_t handle_show_status(ftdm_stream_handle_t *stream, int span, 
 			/* go the next circuit */
 			x++;
 		} /* while (g_ftdm_sngss7_data.cfg.isupCkt[x]id != 0) */
+
+		/* it is possible that if the last channel itself is a signalling channel i.e. channel 31
+		 * in case of E1 */
+		if ((g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0) && (g_ftdm_sngss7_data.cfg.isupCkt[x].span == 0) &&
+				(g_ftdm_sngss7_data.cfg.isupCkt[x].type == SNG_CKT_SIG)) {
+			stream->write_function(stream, "span=%2d|chan=%2d|cic=%4d|SIGNALING LINK\n",
+					ckt->span,
+					ckt->chan,
+					ckt->cic);
+		}
 	}
 
 	/* Look spans that are being used by M2UA SG links */

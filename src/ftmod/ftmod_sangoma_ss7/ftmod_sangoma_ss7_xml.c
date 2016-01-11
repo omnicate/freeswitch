@@ -4565,18 +4565,25 @@ static int ftmod_ss7_fill_in_circuits(sng_span_t *sngSpan, ftdm_sngss7_operating
 			}
 
 			/* check if the ccSpanId matches and the physical channel # match */
-			if ((sngSpan->ccSpanId == isupCkt->ccSpanId) &&
-				(ftdmchan->physical_chan_id == isupCkt->chan)) {
+			if (sngSpan->ccSpanId == isupCkt->ccSpanId) {
+				if (ftdmchan->physical_chan_id == isupCkt->chan) {
+					/* we've found the channel in the ckt structure...raise the flag */
+					flag = 1;
 
-				/* we've found the channel in the ckt structure...raise the flag */
-				flag = 1;
-
-				/* now get out of the loop */
-				break;
+					/* now get out of the loop */
+					break;
+				/* if isup circuit channel is not same as ftdmchannel due to signalling circuit then
+				 * please fill the start of circuit as signalling circuit ID is there is any */
+				} else if (isupCkt->type == SNG_CKT_SIG) {
+				       if (FTDM_SUCCESS != ftmod_ss7_insert_cc_span_info(isupCkt, ftdmspan, &g_ftdm_sngss7_data.cfg)) {
+					       return FTDM_FAIL;
+				       }
+			       }
+			       x++;
+			} else {
+				/* move to the next ckt */
+				x++;
 			}
-
-			/* move to the next ckt */
-			x++;
 
 			/* check if we are outside of the range of possible indexes */
 			if (x == (ftmod_ss7_get_circuit_end_range(g_ftdm_sngss7_data.cfg.procId))) {
@@ -4691,6 +4698,22 @@ static int ftmod_ss7_fill_in_circuits(sng_span_t *sngSpan, ftdm_sngss7_operating
 		}
 	/**************************************************************************/
 	} /* for (i == 1; i < ftdmspan->chan_count; i++) */
+
+	/* incrementing it to next circuit if present any */
+	x++;
+
+	/* check if in case the last channel of the span is a signalling channel and circuit value is assign to it then,
+	 * please fillup the span value for that particular signalling channel */
+	if ((ftdmspan->channels[i] == NULL) && (g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0) &&
+		(g_ftdm_sngss7_data.cfg.isupCkt[x].type == SNG_CKT_SIG)) {
+		/* if the ccSpanId's match fill in the span value...this is for sigs
+		 * because they will never have a channel that matches since they
+		 * have a ftdmchan at this time */
+		if (sngSpan->ccSpanId == g_ftdm_sngss7_data.cfg.isupCkt[x].ccSpanId) {
+			g_ftdm_sngss7_data.cfg.isupCkt[x].span = ftdmspan->span_id;
+		}
+
+	}
 
 	if(SNG_SS7_OPR_MODE_M2UA_ASP == opr_mode){
 		g_ftdm_sngss7_data.cfg.g_m2ua_cfg.sched.tmr_sched = ((sngss7_span_data_t *)(ftdmspan->signal_data))->sched; 
