@@ -232,7 +232,7 @@ else
 fi
 
 PKG_CHECK_MODULES([SODIUM], [libsodium >= 1.0.0],[AC_MSG_RESULT([yes])],[AC_MSG_ERROR([libsodium is required])])
-PKG_CHECK_MODULES([LIBKS], [libks >= 0.1],[AC_MSG_RESULT([yes])],[AC_MSG_WARN([libks is required, but not found with pkg-config. Must use --with-libks])])
+PKG_CHECK_MODULES([LIBKS], [libks >= 0.1],[AC_MSG_RESULT([yes])],[AC_MSG_WARN([libks is required, but not found.])])
 
 #  Enable clang address sanitizer bit build
 AC_ARG_ENABLE(address_sanitizer,
@@ -260,11 +260,11 @@ fi
 
 #TODO: If LIBKS_CFLAGS is not defined and --with-libks is not defined, then check if ../libks/libks.la exists, and if so then use that path as a fallback
 if test "${LIBKS_CFLAGS}" = ""; then
-   AC_CHECK_FILE([../libks/src/include/ks.h ],
-		AC_MSG_WARN([src/include/ks.h found in default source tree location. Using that path])
+   AC_CHECK_FILE([../libks/libks.la],
+		AC_MSG_WARN([local development version of libks is being used. This is probably not portable.])
 		LIBKS_CFLAGS="-I../libks/src/include"
 		LIBKS_LIBS="-L../libks/.libs/ -lks",
-		AC_MSG_ERROR([src/include/ks.h not found. Have you built libks yet?]))
+		AC_MSG_ERROR([libks cannot be found. Fatal Error]))
 fi
 
 AM_CPPFLAGS="-I./src -I./src/include ${LIBKS_CFLAGS} ${openssl_CFLAGS} ${SODIUM_CFLAGS}"
