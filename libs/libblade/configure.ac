@@ -262,8 +262,8 @@ fi
 if test "${LIBKS_CFLAGS}" = ""; then
    AC_CHECK_FILE([../libks/libks.la],
 		AC_MSG_WARN([local development version of libks is being used. This is probably not portable.])
-		LIBKS_CFLAGS="-I../libks/src/include"
-		LIBKS_LIBS="-L../libks/.libs/ -lks",
+		LIBKS_CFLAGS="-I`pwd`/../libks/src/include"
+		LIBKS_LIBS="-L`pwd`/../libks/.libs/ -lks",
 		AC_MSG_ERROR([libks cannot be found. Fatal Error]))
 fi
 
