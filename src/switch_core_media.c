@@ -3164,6 +3164,7 @@ static switch_status_t check_ice(switch_media_handle_t *smh, switch_media_type_t
 	int i = 0, got_rtcp_mux = 0;
 	const char *val;
 	int ice_seen = 0, cid = 0, ai = 0;
+	int cid_max = 1; // Start out assuming we will just do RTP and no RTCP
 
 	//if (engine->ice_in.is_chosen[0] && engine->ice_in.is_chosen[1]) {
 		//return SWITCH_STATUS_SUCCESS;
@@ -3190,6 +3191,18 @@ static switch_status_t check_ice(switch_media_handle_t *smh, switch_media_type_t
 
 		if (zstr(attr->a_name)) {
 			continue;
+		}
+
+		// We need to know if we are going to do RTCP. Technically, we should check the
+		// bandwidth parameters, but if someone sends us an RTCP candidate, we can probably
+		// assume they will handle RTCP, even if the bandwidth parameters are set to 0. Since
+		// they should not send a RTCP candidate if they set the bandwidth to 0, it's their
+		// fault if it doesn't work, anyway.
+		if (!strcasecmp(attr->a_name, "candidate")) {
+			char *cid_loc = strchr(attr->a_value, ' ');
+			if (cid_loc && *(cid_loc+1) == '2') {
+				cid_max = 2;
+			}
 		}
 		
 		if (!strcasecmp(attr->a_name, "ice-ufrag")) {
@@ -3337,7 +3350,7 @@ static switch_status_t check_ice(switch_media_handle_t *smh, switch_media_type_t
 	}
 
 
-	for (cid = 0; cid < 2; cid++) {
+	for (cid = 0; cid < cid_max; cid++) {
 		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(smh->session), SWITCH_LOG_DEBUG, "Searching for %s candidate.\n", cid ? "rtcp" : "rtp");
 
 		for (ai = 0; ai < engine->cand_acl_count; ai++) {
@@ -3380,14 +3393,14 @@ static switch_status_t check_ice(switch_media_handle_t *smh, switch_media_type_t
  done_choosing:
 
 
-	if (!engine->ice_in.is_chosen[0] || !engine->ice_in.is_chosen[1]) {
+	if (!engine->ice_in.is_chosen[0] || (!engine->ice_in.is_chosen[1] && cid_max == 2)) {
 		/* PUNT */
 		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(smh->session), SWITCH_LOG_DEBUG, "%s no suitable candidates found.\n", 
 						  switch_channel_get_name(smh->session->channel));
 		return SWITCH_STATUS_FALSE;
 	}
 
-	for (i = 0; i < 2; i++) {
+	for (i = 0; i < cid_max; i++) {
 		if (engine->ice_in.cands[engine->ice_in.chosen[i]][i].ready) {
 			if (zstr(engine->ice_in.ufrag) || zstr(engine->ice_in.pwd)) {
 				engine->ice_in.cands[engine->ice_in.chosen[i]][i].ready = 0;
@@ -3419,7 +3432,7 @@ static switch_status_t check_ice(switch_media_handle_t *smh, switch_media_type_t
 		switch_channel_set_variable(smh->session->channel, SWITCH_REMOTE_MEDIA_PORT_VARIABLE, tmp);					
 	}
 
-	if (engine->ice_in.cands[engine->ice_in.chosen[1]][1].con_port) {
+	if (engine->ice_in.is_chosen[1] && engine->ice_in.cands[engine->ice_in.chosen[1]][1].con_port) {
 		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(smh->session), SWITCH_LOG_DEBUG,
 						  "Setting remote rtcp %s addr to %s:%d based on candidate\n", type2str(type),
 						  engine->ice_in.cands[engine->ice_in.chosen[1]][1].con_addr, engine->ice_in.cands[engine->ice_in.chosen[1]][1].con_port);
@@ -3486,7 +3499,7 @@ static switch_status_t check_ice(switch_media_handle_t *smh, switch_media_type_t
 			}
 		}
 			
-		if (engine->rtp_session && engine->ice_in.cands[engine->ice_in.chosen[1]][1].ready) {
+		if (engine->rtp_session && engine->ice_in.is_chosen[1] && engine->ice_in.cands[engine->ice_in.chosen[1]][1].ready) {
 			if (engine->rtcp_mux > 0 && !strcmp(engine->ice_in.cands[engine->ice_in.chosen[1]][1].con_addr, engine->ice_in.cands[engine->ice_in.chosen[0]][0].con_addr)
 				&& engine->ice_in.cands[engine->ice_in.chosen[1]][1].con_port == engine->ice_in.cands[engine->ice_in.chosen[0]][0].con_port) {
 				switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(smh->session), SWITCH_LOG_INFO, "Skipping %s RTCP ICE (Same as RTP)\n", type2str(type));
@@ -6250,7 +6263,7 @@ SWITCH_DECLARE(switch_status_t) switch_core_media_activate_rtp(switch_core_sessi
 				
 			}
 
-			if (a_engine->ice_in.cands[a_engine->ice_in.chosen[1]][1].ready) {
+			if (a_engine->ice_in.is_chosen[1] && a_engine->ice_in.cands[a_engine->ice_in.chosen[1]][1].ready) {
 				if (a_engine->rtcp_mux > 0 && !strcmp(a_engine->ice_in.cands[a_engine->ice_in.chosen[1]][1].con_addr, a_engine->ice_in.cands[a_engine->ice_in.chosen[0]][0].con_addr)
 					&& a_engine->ice_in.cands[a_engine->ice_in.chosen[1]][1].con_port == a_engine->ice_in.cands[a_engine->ice_in.chosen[0]][0].con_port) {
 					switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, "Skipping RTCP ICE (Same as RTP)\n");
@@ -6631,7 +6644,7 @@ SWITCH_DECLARE(switch_status_t) switch_core_media_activate_rtp(switch_core_sessi
 					}
 					
 
-					if (v_engine->ice_in.cands[v_engine->ice_in.chosen[1]][1].ready) {
+					if (v_engine->ice_in.is_chosen[1] && v_engine->ice_in.cands[v_engine->ice_in.chosen[1]][1].ready) {
 
 						if (v_engine->rtcp_mux > 0 && !strcmp(v_engine->ice_in.cands[v_engine->ice_in.chosen[1]][1].con_addr, v_engine->ice_in.cands[v_engine->ice_in.chosen[0]][0].con_addr)
 							&& v_engine->ice_in.cands[v_engine->ice_in.chosen[1]][1].con_port == v_engine->ice_in.cands[v_engine->ice_in.chosen[0]][0].con_port) {
@@ -6954,6 +6967,8 @@ static void generate_m(switch_core_session_t *session, char *buf, size_t buflen,
 		} else {
 			switch_snprintf(buf + strlen(buf), buflen - strlen(buf), "a=rtcp:%d IN %s %s\n", port + 1, family, ip);
 		}
+	} else { // RFC 5245 Section 4 says we MUST signal no RTCP by setting send/recv bandwidth to 0
+		switch_snprintf(buf + strlen(buf), buflen - strlen(buf), "b=RS:0\nb=RR:0\n");
 	}
 
 	//switch_snprintf(buf + strlen(buf), SDPBUFLEN - strlen(buf), "a=ssrc:%u\n", a_engine->ssrc);
@@ -6963,11 +6978,17 @@ static void generate_m(switch_core_session_t *session, char *buf, size_t buflen,
 		char tmp2[11] = "";
 		uint32_t c1 = (2^24)*126 + (2^8)*65535 + (2^0)*(256 - 1);
 		uint32_t c2 = c1 - 1;
+		char *gen = " generation 0"; // This is a WebRTC extension, not present in vanilla ICE
+		switch_bool_t vanilla_ice = SWITCH_FALSE;
 
 		//uint32_t c2 = (2^24)*126 + (2^8)*65535 + (2^0)*(256 - 2);
 		//uint32_t c3 = (2^24)*126 + (2^8)*65534 + (2^0)*(256 - 1);
 		//uint32_t c4 = (2^24)*126 + (2^8)*65534 + (2^0)*(256 - 2);
 		ice_t *ice_out;
+
+		if (switch_true(switch_channel_get_variable(session->channel, "vanilla_ice"))) {
+			vanilla_ice = SWITCH_TRUE;
+		}
 
 		tmp1[10] = '\0';
 		tmp2[10] = '\0';
@@ -6988,38 +7009,43 @@ static void generate_m(switch_core_session_t *session, char *buf, size_t buflen,
 		switch_snprintf(buf + strlen(buf), buflen - strlen(buf), "a=ice-pwd:%s\n", ice_out->pwd);
 
 
-		switch_snprintf(buf + strlen(buf), buflen - strlen(buf), "a=candidate:%s 1 %s %u %s %d typ host generation 0\n", 
+		switch_snprintf(buf + strlen(buf), buflen - strlen(buf), "a=candidate:%s 1 %s %u %s %d typ host%s\n", 
 						tmp1, ice_out->cands[0][0].transport, c1,
-						ice_out->cands[0][0].con_addr, ice_out->cands[0][0].con_port
+						ice_out->cands[0][0].con_addr, ice_out->cands[0][0].con_port,
+						(vanilla_ice ? "" : gen)
 						);
 
 		if (!zstr(a_engine->local_sdp_ip) && !zstr(ice_out->cands[0][0].con_addr) && 
 			strcmp(a_engine->local_sdp_ip, ice_out->cands[0][0].con_addr)
 			&& a_engine->local_sdp_port != ice_out->cands[0][0].con_port) {
 
-			switch_snprintf(buf + strlen(buf), buflen - strlen(buf), "a=candidate:%s 1 %s %u %s %d typ srflx raddr %s rport %d generation 0\n", 
+			switch_snprintf(buf + strlen(buf), buflen - strlen(buf), "a=candidate:%s 1 %s %u %s %d typ srflx raddr %s rport %d%s\n", 
 							tmp2, ice_out->cands[0][0].transport, c2,
 							ice_out->cands[0][0].con_addr, ice_out->cands[0][0].con_port,
-							a_engine->local_sdp_ip, a_engine->local_sdp_port
+							a_engine->local_sdp_ip, a_engine->local_sdp_port,
+							(vanilla_ice ? "" : gen)
 							);
 		}
 
-		if (a_engine->rtcp_mux < 1 || switch_channel_direction(session->channel) == SWITCH_CALL_DIRECTION_OUTBOUND || switch_channel_test_flag(session->channel, CF_RECOVERING)) {
+		// Don't send an RTCP candidate if we are not doing RTCP
+		if (smh->mparams->rtcp_audio_interval_msec && (a_engine->rtcp_mux < 1 || switch_channel_direction(session->channel) == SWITCH_CALL_DIRECTION_OUTBOUND || switch_channel_test_flag(session->channel, CF_RECOVERING))) {
 			
 
-			switch_snprintf(buf + strlen(buf), buflen - strlen(buf), "a=candidate:%s 2 %s %u %s %d typ host generation 0\n", 
+			switch_snprintf(buf + strlen(buf), buflen - strlen(buf), "a=candidate:%s 2 %s %u %s %d typ host%s\n", 
 							tmp1, ice_out->cands[0][0].transport, c1,
-							ice_out->cands[0][0].con_addr, ice_out->cands[0][0].con_port + (a_engine->rtcp_mux > 0 ? 0 : 1)
+							ice_out->cands[0][0].con_addr, ice_out->cands[0][0].con_port + (a_engine->rtcp_mux > 0 ? 0 : 1),
+							(vanilla_ice ? "" : gen)
 							);
 			
 			if (!zstr(a_engine->local_sdp_ip) && !zstr(ice_out->cands[0][1].con_addr) && 
 				strcmp(a_engine->local_sdp_ip, ice_out->cands[0][1].con_addr)
 				&& a_engine->local_sdp_port != ice_out->cands[0][1].con_port) {
 				
-				switch_snprintf(buf + strlen(buf), buflen - strlen(buf), "a=candidate:%s 2 %s %u %s %d typ srflx raddr %s rport %d generation 0\n", 
+				switch_snprintf(buf + strlen(buf), buflen - strlen(buf), "a=candidate:%s 2 %s %u %s %d typ srflx raddr %s rport %d%s\n", 
 								tmp2, ice_out->cands[0][0].transport, c2,
 								ice_out->cands[0][0].con_addr, ice_out->cands[0][0].con_port + (a_engine->rtcp_mux > 0 ? 0 : 1),
-								a_engine->local_sdp_ip, a_engine->local_sdp_port + (a_engine->rtcp_mux > 0 ? 0 : 1)
+								a_engine->local_sdp_ip, a_engine->local_sdp_port + (a_engine->rtcp_mux > 0 ? 0 : 1),
+								(vanilla_ice ? "" : gen)
 								);
 			}
 		}
@@ -7280,6 +7306,9 @@ SWITCH_DECLARE(void) switch_core_media_gen_local_sdp(switch_core_session_t *sess
 			switch_channel_set_flag(session->channel, CF_ICE);
 			smh->mparams->rtcp_audio_interval_msec = SWITCH_RTCP_AUDIO_INTERVAL_MSEC;
 			smh->mparams->rtcp_video_interval_msec = SWITCH_RTCP_VIDEO_INTERVAL_MSEC;
+		}
+		if (switch_true(switch_channel_get_variable(session->channel, "use_ice"))) {
+			switch_channel_set_flag(session->channel, CF_ICE);
 		}
 
 		if ( switch_rtp_has_dtls() && dtls_ok(session)) {
