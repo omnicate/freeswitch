@@ -288,10 +288,12 @@ var callbacks = {
 
         switch (msg) {
         case $.verto.enum.message.pvtEvent:
-//            console.error("pvtEvent", data.pvtData);
             if (data.pvtData) {
                 switch (data.pvtData.action) {
 
+		case "notify":
+		    alert(data.pvtData.notifyData.text);
+		    break;
                 case "conference-liveArray-part":
                     clearConfMan();
 		    if (data.pvtData.secondScreen) {

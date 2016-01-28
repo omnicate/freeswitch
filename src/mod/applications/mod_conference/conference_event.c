@@ -71,10 +71,12 @@ void conference_event_mod_channel_handler(const char *event_channel, cJSON *json
 	cJSON *msg, *jdata, *jvalue;
 	char *argv[10] = {0};
 	int argc = 0;
+	const char *replyto = cJSON_GetObjectCstr(json, "sessid");
 
 	if (conference_name && (p = strchr(conference_name, '@'))) {
 		*p = '\0';
 	}
+
 
 	if ((data = cJSON_GetObjectItem(json, "data"))) {
 		action = cJSON_GetObjectCstr(data, "command");
@@ -230,23 +232,13 @@ void conference_event_mod_channel_handler(const char *event_channel, cJSON *json
 		addobj = array;
 		
 	} else if (!strcasecmp(action, "send-notify")) {
-		cJSON *j_member_id;
 		int member_id = 0;
 
 		conference_obj_t *conference;
 
  		if ((conference = conference_find(conference_name, NULL))) {
 
-			if ((j_member_id = cJSON_GetObjectItem(data, "memberID"))) {
-				if (j_member_id->valueint) {
-					member_id = j_member_id->valueint;
-				} else if (j_member_id->valuedouble) {
-					member_id = (int) j_member_id->valuedouble;
-				} else if (j_member_id->valuestring) {
-					member_id = atoi(j_member_id->valuestring);
-				}
-				if (member_id < 0) member_id = 0;
-			}
+			member_id = atoi(cid);
 
 			if (member_id) {
 				conference_member_t *member;
@@ -254,15 +246,14 @@ void conference_event_mod_channel_handler(const char *event_channel, cJSON *json
 				if ((member = conference_member_get(conference, member_id))) {
 					const char *cookie = switch_channel_get_variable(member->channel, "event_channel_cookie");
 					cJSON *nmsg, *jndata;
-					cJSON *nd = cJSON_GetObjectItem(data, "notifyData");
 				
 					nmsg = cJSON_CreateObject();
-					jndata = json_add_child_obj(msg, "data", NULL);
-				
-					cJSON_AddItemToObject(nmsg, "eventChannel", cJSON_CreateString(event_channel));
+					jndata = json_add_child_obj(nmsg, "pvtData", NULL);
+					
+					cJSON_AddItemToObject(nmsg, "eventChannel", cJSON_CreateString(cookie));
 					cJSON_AddItemToObject(jndata, "action", cJSON_CreateString("notify"));
-					if (nd) {
-						cJSON_AddItemToObject(jndata, "notifyData", cJSON_Duplicate(nd, 1));
+					if (jvalue) {
+						cJSON_AddItemToObject(jndata, "notifyData", cJSON_Duplicate(jvalue, 1));
 					}
 
 					switch_event_channel_broadcast(cookie, &nmsg, __FILE__, conference_globals.event_channel_id);
@@ -362,7 +353,7 @@ void conference_event_mod_channel_handler(const char *event_channel, cJSON *json
 		cJSON_AddItemToObject(jdata, "error", cJSON_CreateString("Invalid Command"));
 	}
 
-	switch_event_channel_broadcast(event_channel, &msg, __FILE__, conference_globals.event_channel_id);
+	switch_event_channel_broadcast(replyto, &msg, __FILE__, conference_globals.event_channel_id);
 
 
 	switch_safe_free(stream.data);

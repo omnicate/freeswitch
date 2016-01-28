@@ -554,7 +554,7 @@
                 if (data.params) {
                     key = data.params.eventChannel;
                 }
-
+		
                 if (key) {
                     list = verto.eventSUBS[key];
 
@@ -1487,6 +1487,8 @@
             var canvas_in_set_id = "canvas_in_set_" + x;
             var canvas_out_set_id = "canvas_out_set_" + x;
 
+            var growl_id = "growl_" + x;
+
             var layer_set_id = "layer_set_" + x;
             var layer_next_id = "layer_next_" + x;
             var layer_prev_id = "layer_prev_" + x;
@@ -1514,7 +1516,8 @@
                 "<button class='ctlbtn' id='" + gaindn_id + "'>Gain +</button>" +
                 "<button class='ctlbtn' id='" + voldn_id + "'>Vol -</button>" +
                 "<button class='ctlbtn' id='" + volup_id + "'>Vol +</button>" +
-                "<button class='ctlbtn' id='" + transfer_id + "'>Transfer</button>";
+                "<button class='ctlbtn' id='" + transfer_id + "'>Transfer</button>" +
+                "<button class='ctlbtn' id='" + growl_id + "'>Send Growl</button>";
 		
 	    if (confMan.params.hasVid) {
 		html += "<br><br><b>Video Controls</b><hr noshade>";
@@ -1658,6 +1661,15 @@
             $("#" + voldn_id).click(function() {
                 confMan.modCommand("volume_out", x, "down");
             });
+
+
+            $("#" + growl_id).click(function() {
+                var cid = prompt("Please enter text", "");
+		if (cid) {
+                    confMan.modCommand("send-notify", x, {"text": cid });
+		}
+	    });
+
 
             return html;
         }
