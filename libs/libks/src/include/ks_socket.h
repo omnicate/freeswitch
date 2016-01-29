@@ -102,6 +102,7 @@ KS_DECLARE(ks_socket_t) ks_socket_connect(int type, int protocol, ks_sockaddr_t 
 KS_DECLARE(ks_status_t) ks_addr_bind(ks_socket_t server_sock, ks_sockaddr_t *addr);
 KS_DECLARE(const char *) ks_addr_get_host(ks_sockaddr_t *addr);
 KS_DECLARE(ks_port_t) ks_addr_get_port(ks_sockaddr_t *addr);
+KS_DECLARE(int) ks_addr_cmp(ks_sockaddr_t *sa1, ks_sockaddr_t *sa2);
 KS_DECLARE(ks_status_t) ks_addr_set(ks_sockaddr_t *addr, const char *host, ks_port_t port, int family);
 KS_DECLARE(ks_status_t) ks_listen(const char *host, ks_port_t port, int family, int backlog, ks_listen_callback_t callback, void *user_data);
 KS_DECLARE(ks_status_t) ks_socket_shutdown(ks_socket_t sock, int how);

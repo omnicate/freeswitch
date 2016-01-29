@@ -261,6 +261,41 @@ KS_DECLARE(ks_port_t) ks_addr_get_port(ks_sockaddr_t *addr)
 	return addr->port;
 }
 
+KS_DECLARE(int) ks_addr_cmp(ks_sockaddr_t *sa1, ks_sockaddr_t *sa2)
+{
+
+	if (!(sa1 && sa2)) {
+		return 0;
+	}
+
+	if (sa1->family != sa2->family) {
+		return 0;
+	}
+
+	switch (sa1->family) {
+	case AF_INET:
+		return (sa1->v.v4.sin_addr.s_addr == sa2->v.v4.sin_addr.s_addr && sa1->v.v4.sin_port == sa2->v.v4.sin_port);
+	case AF_INET6:
+		{
+			int i;
+
+			if (sa1->v.v6.sin6_port != sa2->v.v6.sin6_port) {
+				return 0;
+			}
+
+			for (i = 0; i < 4; i++) {
+				if (*((int32_t *) &sa1->v.v6.sin6_addr + i) != *((int32_t *) &sa2->v.v6.sin6_addr + i)) {
+					return 0;
+				}
+			}
+
+			return 1;
+		}
+	}
+
+	return 0;
+}
+
 KS_DECLARE(ks_status_t) ks_addr_set(ks_sockaddr_t *addr, const char *host, ks_port_t port, int family)
 {
 	ks_status_t status = KS_STATUS_SUCCESS;

@@ -59,6 +59,60 @@ static void *tcp_sock_server(ks_thread_t *thread, void *thread_data)
 	return NULL;
 }
 
+static int test_addr(int v)
+{
+	ks_sockaddr_t addr1, addr2, addr3, addr4;
+
+	printf("TESTING ADDR v%d\n", v);
+
+	if (v == 4) {
+		if (ks_addr_set(&addr1, "10.100.200.5", 2467, AF_INET) != KS_STATUS_SUCCESS) {
+			return 0;
+		}
+
+		if (ks_addr_set(&addr2, "10.100.200.5", 2467, AF_INET) != KS_STATUS_SUCCESS) {
+			return 0;
+		}
+
+		if (ks_addr_set(&addr3, "10.100.200.5", 1234, AF_INET) != KS_STATUS_SUCCESS) {
+			return 0;
+		}
+
+		if (ks_addr_set(&addr4, "10.199.200.5", 2467, AF_INET) != KS_STATUS_SUCCESS) {
+			return 0;
+		}
+	} else {
+		if (ks_addr_set(&addr1, "1607:f418:1210::1", 2467, AF_INET6) != KS_STATUS_SUCCESS) {
+			return 0;
+		}
+
+		if (ks_addr_set(&addr2, "1607:f418:1210::1", 2467, AF_INET6) != KS_STATUS_SUCCESS) {
+			return 0;
+		}
+
+		if (ks_addr_set(&addr3, "1607:f418:1210::1", 1234, AF_INET6) != KS_STATUS_SUCCESS) {
+			return 0;
+		}
+
+		if (ks_addr_set(&addr4, "1337:a118:1306::1", 2467, AF_INET6) != KS_STATUS_SUCCESS) {
+			return 0;
+		}
+	}
+
+	if (!ks_addr_cmp(&addr1, &addr2)) {
+		return 0;
+	}
+
+	if (ks_addr_cmp(&addr1, &addr3)) {
+		return 0;
+	}
+
+	if (ks_addr_cmp(&addr1, &addr4)) {
+		return 0;
+	}
+
+	return 1;
+}
 
 static int test_tcp(char *ip)
 {
@@ -307,18 +361,20 @@ int main(void)
 	have_v4 = zstr_buf(v4) ? 0 : 1;
 	have_v6 = zstr_buf(v6) ? 0 : 1;
 
-	plan((have_v4 * 2) + (have_v6 * 2) + 1);
+	plan((have_v4 * 3) + (have_v6 * 3) + 1);
 
 	ok(have_v4 || have_v6);
 
 	if (have_v4) {
 		ok(test_tcp(v4));
 		ok(test_udp(v4));
+		ok(test_addr(4));
 	}
 
 	if (have_v6) {
 		ok(test_tcp(v6));
 		ok(test_udp(v6));
+		ok(test_addr(6));
 	}
 
 	ks_shutdown();
