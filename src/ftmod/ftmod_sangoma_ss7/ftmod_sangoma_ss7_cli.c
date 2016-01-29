@@ -1717,7 +1717,7 @@ static ftdm_status_t handle_show_status(ftdm_stream_handle_t *stream, int span, 
 	int				 			lspan;
 	int				 			lchan;
 	ftdm_signaling_status_t		sigstatus = FTDM_SIG_STATE_DOWN;
-	sng_isup_ckt_t				*ckt;
+	sng_isup_ckt_t				*ckt = NULL;
 	int							idx = 1;
 
 	x = ftmod_ss7_get_circuit_start_range(g_ftdm_sngss7_data.cfg.procId);

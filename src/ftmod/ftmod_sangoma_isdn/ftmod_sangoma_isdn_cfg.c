@@ -286,6 +286,14 @@ ftdm_status_t ftmod_isdn_parse_cfg(ftdm_conf_parameter_t *ftdm_parameters, ftdm_
 		signal_data->facility_ie_decode = SNGISDN_OPT_DEFAULT;
 		signal_data->ignore_cause_value = SNGISDN_OPT_DEFAULT;
 		signal_data->timer_t3 = 8;
+		/* For BRI by default timer_tCon value is 0 and for PRI
+		 * tCon value is 35 seconds */
+		if (FTDM_SPAN_IS_BRI(span)) {
+			signal_data->timer_tCon = 0;
+		} else {
+			signal_data->timer_tCon = 35;
+		}
+
 		signal_data->restart_opt = SNGISDN_OPT_DEFAULT;
 		signal_data->link_id = span->span_id;
 		signal_data->transfer_timeout = 20000;
@@ -543,6 +551,8 @@ ftdm_status_t ftmod_isdn_parse_cfg(ftdm_conf_parameter_t *ftdm_parameters, ftdm_
 			parse_timer(val, &signal_data->timer_t319);
 		} else if (!strcasecmp(var, "timer-t322")) {
 			parse_timer(val, &signal_data->timer_t322);
+		} else if (!strcasecmp(var, "timer-tCon")) {
+			parse_timer(val, &signal_data->timer_tCon);
 		} else {
 			ftdm_log(FTDM_LOG_WARNING, "Ignoring unknown parameter %s\n", ftdm_parameters[paramindex].var);
 		}

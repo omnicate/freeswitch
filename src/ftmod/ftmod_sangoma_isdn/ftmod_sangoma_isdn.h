@@ -298,6 +298,7 @@ typedef struct sngisdn_span_data {
 	int32_t			timer_t318;
 	int32_t			timer_t319;
 	int32_t			timer_t322;
+	int32_t			timer_tCon;
 	
 	char*			local_numbers[SNGISDN_NUM_LOCAL_NUMBERS];
 	ftdm_timer_id_t timers[SNGISDN_NUM_SPAN_TIMERS];
