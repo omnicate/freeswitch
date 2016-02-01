@@ -96,6 +96,7 @@ static struct {
 	uint8_t crash_on_assert;
 	uint8_t fail_on_error;
 	uint8_t config_error;
+	int io_timer_offset;
 } globals;
 
 /* private data attached to each fs session */
@@ -746,7 +747,6 @@ static switch_status_t channel_read_frame(switch_core_session_t *session, switch
 	int chunk, do_break = 0;
 	uint32_t span_id, chan_id;
 	const char *name = NULL;
-	int offset = 1;
 
 	channel = switch_core_session_get_channel(session);
 	assert(channel != NULL);
@@ -771,9 +771,8 @@ static switch_status_t channel_read_frame(switch_core_session_t *session, switch
 	   Yes, we support digium cards, ain't we nice.......
 	   6 double length intervals should compensate */
 	chunk = ftdm_channel_get_io_interval(tech_pvt->ftdmchan) * 2;
-	/* Get the offset in order to increse timeout interval */
-	offset = ftdm_channel_get_io_timer_offset(tech_pvt->ftdmchan);
-	total_to = chunk * 6 * offset;
+	/* Get timeout depending upon the offset value */
+	total_to = chunk * 6 * globals.io_timer_offset;
 
  top:
 
@@ -4396,7 +4395,12 @@ static switch_status_t load_config(int reload)
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "open of %s failed\n", cf);
 		return SWITCH_STATUS_TERM;
 	}
-	
+
+	/* Setting offset timer to default value as 1 */
+	if (globals.io_timer_offset <= 0) {
+		globals.io_timer_offset = 1;
+	}
+
 	if ((settings = switch_xml_child(cfg, "settings"))) {
 		for (param = switch_xml_child(settings, "param"); param; param = param->next) {
 			char *var = (char *) switch_xml_attr_soft(param, "name");
@@ -4414,6 +4418,13 @@ static switch_status_t load_config(int reload)
 				globals.sip_headers = switch_true(val);
 			} else if (!strcasecmp(var, "enable-analog-option")) {
 				globals.analog_options = enable_analog_option(val, globals.analog_options);
+			} else if (!strcasecmp(var, "io-timer-offset")) {
+				globals.io_timer_offset = atoi(val);
+				if (globals.io_timer_offset <= 0) {
+					ftdm_log(FTDM_LOG_WARNING, "Invalid value. Channel io timer offset can not be set to zero!\n");
+					globals.io_timer_offset = 1;
+					continue;
+				}
 			}
 		}
 	}

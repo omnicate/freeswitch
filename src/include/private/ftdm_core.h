@@ -484,7 +484,6 @@ struct ftdm_channel {
 	ftdm_usrmsg_t *usrmsg;
 	ftdm_time_t last_state_change_time;
 	uint8_t forward_collect_digit_dtmf;
-	uint32_t io_timer_offset;
 };
 
 struct ftdm_span {
