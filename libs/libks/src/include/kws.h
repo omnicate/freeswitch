@@ -82,7 +82,7 @@ KS_DECLARE(ks_status_t) kws_get_buffer(kws_t *kws, char **bufP, ks_size_t *bufle
 
 
 
-#ifndef _MSC_VER
+#if 0
 static inline uint64_t get_unaligned_uint64(const void *p)
 {   
     const struct { uint64_t d; } __attribute__((packed)) *pp = p;

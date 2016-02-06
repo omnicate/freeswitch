@@ -261,7 +261,7 @@ KS_DECLARE(ks_port_t) ks_addr_get_port(ks_sockaddr_t *addr)
 	return addr->port;
 }
 
-KS_DECLARE(int) ks_addr_cmp(ks_sockaddr_t *sa1, ks_sockaddr_t *sa2)
+KS_DECLARE(int) ks_addr_cmp(const ks_sockaddr_t *sa1, const ks_sockaddr_t *sa2)
 {
 
 	if (!(sa1 && sa2)) {
