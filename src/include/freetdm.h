@@ -510,7 +510,6 @@ typedef struct ftdm_channel_config {
 	int prebuffer_size;
 	uint8_t iostats;
 	uint8_t forward_collect_digit_dtmf;
-	int io_timer_offset;
 } ftdm_channel_config_t;
 
 /*!
@@ -1216,15 +1215,6 @@ FT_DECLARE(uint32_t) ftdm_channel_get_token_count(const ftdm_channel_t *ftdmchan
  * \retval The interval in milliseconds
  */
 FT_DECLARE(uint32_t) ftdm_channel_get_io_interval(const ftdm_channel_t *ftdmchan);
-
-/*!
- * \brief Get the I/O read/write offset
- *
- * \param ftdmchan The channel to get the offset from
- *
- * \retval The offset in milliseconds
- */
-FT_DECLARE(uint32_t) ftdm_channel_get_io_timer_offset(const ftdm_channel_t *ftdmchan);
 
 /*! 
  * \brief Get the I/O read/write packet length per interval
