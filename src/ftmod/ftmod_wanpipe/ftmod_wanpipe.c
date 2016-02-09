@@ -1712,6 +1712,12 @@ static __inline__ ftdm_status_t wanpipe_channel_process_event(ftdm_channel_t *fc
 			if (tdm_api->wp_tdm_cmd.event.wp_api_event_alarm) {
 				ftdm_log_chan(fchan, FTDM_LOG_DEBUG, "Got wanpipe alarm (0x%x): %s\n", tdm_api->wp_tdm_cmd.event.wp_api_event_alarm,
 						DECODE_WAN_ALARM(tdm_api->wp_tdm_cmd.event.wp_api_event_alarm));
+
+				/* Check if channel is already in alarm then there is no need to send TRAP again */
+			        if (fchan->alarm_flags != FTDM_ALARM_NONE) {
+					break;
+				}
+
 				/* Check if "OPEN CIRCUIT" Alarm, If yes then ignore that one */
 				if (tdm_api->wp_tdm_cmd.event.wp_api_event_alarm == WAN_TE_BIT_ALARM_LIU_OC) {
 					ftdm_log_chan_msg(fchan, FTDM_LOG_DEBUG, "Ignored Open Circuit Alarm \n");
