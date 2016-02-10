@@ -164,7 +164,7 @@ switch_status_t mod_amqp_producer_create(char *name, switch_xml_t cfg)
 {
 	mod_amqp_producer_profile_t *profile = NULL;
 	int arg = 0, i = 0;
-	char  *argv[SWITCH_EVENT_ALL];
+	char  *argv[SWITCH_EVENT_ALL]; /* ONLY TO BE USED FOR EVENT FILTERS. USED IN 2 SEPARATE BLOCKS. */
 	switch_xml_t params, param, connections, connection;
 	switch_threadattr_t *thd_attr = NULL;
 	char *exchange = NULL, *exchange_type = NULL, *content_type = NULL;
@@ -267,7 +267,8 @@ switch_status_t mod_amqp_producer_create(char *name, switch_xml_t cfg)
 				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "Found %d subscriptions\n", profile->event_subscriptions);
 
 				for (arg = 0; arg < profile->event_subscriptions; arg++) {
-					if (switch_name_event(argv[arg], &(profile->event_ids[arg])) != SWITCH_STATUS_SUCCESS) {
+					if (switch_name_event(argv[arg], &(profile->event_ids[arg])) != SWITCH_STATUS_SUCCESS &&
+						switch_strstr(argv[arg], "SWITCH_EVENT_CUSTOM::") ) {
 						switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "The switch event %s was not recognised.\n", argv[arg]);
 					}
 				}
@@ -354,15 +355,28 @@ switch_status_t mod_amqp_producer_create(char *name, switch_xml_t cfg)
 
 	/* Subscribe events */
 	for (i = 0; i < profile->event_subscriptions; i++) {
-		if (switch_event_bind_removable("AMQP",
-										profile->event_ids[i],
-										SWITCH_EVENT_SUBCLASS_ANY,
-										mod_amqp_producer_event_handler,
-										profile,
-										&(profile->event_nodes[i])) != SWITCH_STATUS_SUCCESS) {
+		if ( switch_strstr(argv[i], "SWITCH_EVENT_CUSTOM::")) {
+			if (switch_event_bind_removable("AMQP",
+											SWITCH_EVENT_CUSTOM,
+											argv[i] + strlen("SWITCH_EVENT_CUSTOM::"),
+											mod_amqp_producer_event_handler,
+											profile,
+											&(profile->event_nodes[i])) != SWITCH_STATUS_SUCCESS) {
 
-			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Cannot bind to event handler %d!\n",(int)profile->event_ids[i]);
-			goto err;
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Cannot bind to event handler %d!\n",(int)profile->event_ids[i]);
+				goto err;
+			}
+		} else {
+			if (switch_event_bind_removable("AMQP",
+											profile->event_ids[i],
+											SWITCH_EVENT_SUBCLASS_ANY,
+											mod_amqp_producer_event_handler,
+											profile,
+											&(profile->event_nodes[i])) != SWITCH_STATUS_SUCCESS) {
+
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Cannot bind to event handler %d!\n",(int)profile->event_ids[i]);
+				goto err;
+			}
 		}
 	}
 
