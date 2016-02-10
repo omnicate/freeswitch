@@ -132,7 +132,31 @@ switch_status_t mod_amqp_command_create(char *name, switch_xml_t cfg)
 	/* Handle defaults of string types */
 	profile->exchange = exchange ? exchange : switch_core_strdup(profile->pool, "TAP.Commands");
 	profile->queue = queue ? queue : NULL;
-	profile->binding_key = binding_key ? binding_key : switch_core_strdup(profile->pool, "commandBindingKey");
+	profile->binding_key = binding_key ? binding_key : switch_core_strdup(profile->pool, "#commandBindingKey");
+
+	/* Evaluate the binding_key to replace key sections not prefixed with # by their global variable value(if it exists) */
+	if (profile->binding_key) {
+		char *orig_key = strdup(profile->binding_key);
+		char *argv[1024] = { 0 }, *new_key = NULL;
+		int argc = 0, x = 0;
+
+		argc = switch_separate_string(orig_key, ',', argv, (sizeof(argv) / sizeof(argv[0])));
+		argc++; /* Increment count because this was the number of separators not the number of valid fields */
+		for ( x = 0; x < argc; x++) {
+			char *str_val = NULL, *str_tmp = NULL;
+			if ( argv[x][0] == '#' ) {
+				str_val = argv[x] + 1;
+			} else {
+				str_val = switch_core_get_variable_dup(argv[x]);
+			}
+			str_tmp = switch_mprintf("%s%s%s", new_key ? new_key : "", new_key ? "." : "", str_val);
+			switch_safe_free(new_key);
+			new_key = str_tmp;
+			str_tmp = NULL;
+		}
+		profile->binding_key = new_key;
+		switch_safe_free(orig_key);
+	}
 
 	if ((connections = switch_xml_child(cfg, "connections")) != NULL) {
 		for (connection = switch_xml_child(connections, "connection"); connection; connection = connection->next) {
