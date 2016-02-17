@@ -176,7 +176,9 @@ struct ooh323_private {
 	switch_payload_t recv_te;
 	switch_payload_t bte;
 
-	switch_payload_t video_pt; // to be improved
+	switch_payload_t video_recv_pt;
+	switch_payload_t video_send_pt;
+	switch_payload_t video_recv_br;
 
 	ooCallData *h323_call;
 	char *h323_callToken;

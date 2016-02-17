@@ -211,9 +211,10 @@ static int startVideoReceiveChannel(ooCallData *call, ooLogicalChannel *pChannel
 			cap->dir,ooGetCapTypeText(cap->cap), cap->cap, cap->capType);
 		if (cap->cap == OO_H264VIDEO && cap->params) {
 			OOH264CapParams *params = cap->params;
-			if (params->pt) {
-				tech_pvt->video_pt = params->pt;
-				// switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "H264 pt: %d\n", params->pt);
+			if (params->recv_pt) {
+				tech_pvt->video_recv_pt = params->recv_pt;
+				tech_pvt->video_recv_br = params->maxBitRate;
+				// switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "H264 pt: %d, maxBitRate: %d\n", params->recv_pt, params->maxBitRate);
 			}
 		}
 		cap = cap->next;
@@ -240,11 +241,11 @@ static int startVideoTransmitChannel (ooCallData *call, ooLogicalChannel *pChann
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Channel Caps: dir=%d, cap=%s(%d), capType=%d\n",
 			cap->dir,ooGetCapTypeText(cap->cap), cap->cap, cap->capType);
 
-		if (cap->cap == OO_H264VIDEO && cap->params) { // TODO: figure out cap->params is always NULL
+		if (cap->cap == OO_H264VIDEO && cap->params) {
 			OOH264CapParams *params = cap->params;
-			if (params->pt) {
-				tech_pvt->video_pt = params->pt;
-				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "H264 pt: %d\n", params->pt);
+			// switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "WTF send_pt: %d\n", params->send_pt);
+			if (params->send_pt) {
+				tech_pvt->video_send_pt = params->send_pt;
 			}
 		}
 
@@ -526,6 +527,7 @@ static int onIncomingCall (ooCallData* call)
 	switch_core_media_choose_port(tech_pvt->session, SWITCH_MEDIA_TYPE_AUDIO, 0);
 	switch_core_media_choose_port(tech_pvt->session, SWITCH_MEDIA_TYPE_VIDEO, 0);
 	/* ? We should use SDP_TYPE_RESPONSE here but it doesn't generate multiple codecs */
+	// switch_core_media_gen_local_sdp(session, SDP_TYPE_RESPONSE, NULL, 0, NULL, 0);
 	switch_core_media_gen_local_sdp(session, SDP_TYPE_REQUEST, NULL, 0, NULL, 0);
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "H323 Local SDP:\n%s\n", tech_pvt->mparams.local_sdp_str);
 
@@ -773,6 +775,13 @@ static int onReceivedVideoFastUpdate(ooCallData *call, int channelNo)
 	if (nsession) {
 		switch_core_session_request_video_refresh(nsession);
 		switch_core_session_rwunlock(nsession);
+	} else {
+		switch_channel_t *channel = switch_core_session_get_channel(session);
+
+		if (switch_channel_test_flag(channel, CF_VIDEO_ECHO)) {
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Send videoFastUpdate %s channelNo=%d\n", call->callToken, channelNo);
+			switch_core_session_request_video_refresh(session);
+		}
 	}
 
 	return OO_OK;
@@ -1216,7 +1225,7 @@ switch_status_t ep_add_codec_capability(char *codec_string)
 		} else if (!strcasecmp("H264", codec)) {
 			OOH264CapParams params = { 0 };
 			params.maxBitRate = VIDEO_MAX_BIT_RATE;
-			// params.pt = 109;
+			params.send_pt = 109;
 
 			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Add EP CAP [%s]\n", codec);
 
@@ -1296,7 +1305,7 @@ switch_status_t ooh323_set_call_capability(ooCallData *call, char *codec_string,
 		} else if (!strcasecmp("H264", codec)) {
 			OOH264CapParams params = { 0 };
 			params.maxBitRate = VIDEO_MAX_BIT_RATE;
-			// params.pt = 109;
+			params.send_pt = 106;
 
 			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Add Call CAP [%s]\n", codec);
 			ret |= ooCallAddH264VideoCapability(call, OO_H264VIDEO, &params, OORXANDTX,
@@ -1543,10 +1552,12 @@ void ooh323_gen_remote_sdp(switch_core_session_t *session)
 			case OO_H264VIDEO:
 				{
 					OOH264CapParams *params = (OOH264CapParams *)cap->params;
-					if (params && params->pt) {
-						video_codecs[num_vcodecs].pt = params->pt;
-					} else if (tech_pvt->video_pt) {
-						video_codecs[num_vcodecs].pt = tech_pvt->video_pt;
+					if (params && params->recv_pt) {
+						video_codecs[num_vcodecs].pt = params->recv_pt;
+					} else if (tech_pvt->video_recv_pt) {
+						video_codecs[num_vcodecs].pt = tech_pvt->video_recv_pt;
+					} else if (tech_pvt->video_send_pt) {
+						video_codecs[num_vcodecs].pt = tech_pvt->video_send_pt;
 					} else {
 						video_codecs[num_vcodecs].pt = 109;
 					}
