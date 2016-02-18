@@ -32,7 +32,7 @@
 
 #ifndef MOD_OOH323_H___
 #define MOD_OOH323_H___
-
+#include <switch.h>
 #include "mod_ooh323.h"
 #include "oochannels.h"
 #include "ooh323ep.h"
@@ -42,7 +42,7 @@
 #include "ooTimer.h"
 #include "ooUtils.h"
 #include "ooh245.h"
-#include <switch.h>
+
 
 /* Default values */
 #define DEFAULT_CONTEXT         "default"

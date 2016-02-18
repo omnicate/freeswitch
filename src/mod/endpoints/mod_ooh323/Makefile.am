@@ -1,6 +1,6 @@
 include $(top_srcdir)/build/modmake.rulesam
 MODNAME=mod_ooh323
-OOH323C=ooh323c-0.1
+OOH323C=ooh323-0.1
 OOH323C_DIR=$(switch_srcdir)/libs/$(OOH323C)
 OOH323C_BUILDDIR=$(switch_builddir)/libs/$(OOH323C)
 
