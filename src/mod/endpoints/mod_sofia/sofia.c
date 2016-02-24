@@ -3943,7 +3943,7 @@ static void config_sofia_profile_urls(sofia_profile_t * profile)
 									profile->contact_user, ipv6 ? "[" : "", profile->extsipip, ipv6 ? "]" : "", profile->tls_sip_port);
 			profile->tls_bindurl =
 				switch_core_sprintf(profile->pool,
-									"%s:%s@%s%s%s:%d;maddr=%s", proto,
+									"sips:%s@%s%s%s:%d;maddr=%s",
 									profile->contact_user,
 									ipv6 ? "[" : "", profile->extsipip, ipv6 ? "]" : "", profile->tls_sip_port, profile->sipip);
 		} else {
@@ -3958,7 +3958,7 @@ static void config_sofia_profile_urls(sofia_profile_t * profile)
 									profile->contact_user, ipv6 ? "[" : "", profile->sipip, ipv6 ? "]" : "", profile->tls_sip_port);
 			profile->tls_bindurl =
 				switch_core_sprintf(profile->pool,
-									"%s:%s@%s%s%s:%d", proto,
+									"sips:%s@%s%s%s:%d",
 									profile->contact_user, ipv6 ? "[" : "", profile->sipip, ipv6 ? "]" : "", profile->tls_sip_port);
 		}
 
