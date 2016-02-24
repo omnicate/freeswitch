@@ -47,6 +47,7 @@ static struct {
 	switch_memory_pool_t *pool;
 	switch_event_node_t *node;
 	switch_mutex_t *mutex;
+	switch_thread_rwlock_t *rwlock;
 	uint32_t shutdown;
 } globals;
 
@@ -389,7 +390,7 @@ static switch_status_t my_on_reporting_cb(switch_core_session_t *session, cdr_pr
 		   switch_curl_easy_setopt(curl_handle, CURLOPT_FOLLOWLOCATION, 1); // 302 recursion level
 		 */
 
-		for (cur_try = 0; cur_try < profile->retries; cur_try++) {
+		for (cur_try = 0; cur_try < profile->retries && ! globals.shutdown; cur_try++) {
 			if (cur_try > 0) {
 				switch_yield(profile->delay * 1000000);
 			}
@@ -513,6 +514,8 @@ static switch_status_t my_on_reporting(switch_core_session_t *session)
 
 	status = SWITCH_STATUS_SUCCESS;
 
+	switch_thread_rwlock_rdlock(globals.rwlock);
+
 	for (hi = switch_core_hash_first(globals.profile_hash); hi; hi = switch_core_hash_next(&hi)) {
 		cdr_profile_t *profile;
 		switch_core_hash_this(hi, NULL, NULL, &val);
@@ -523,6 +526,8 @@ static switch_status_t my_on_reporting(switch_core_session_t *session)
 			status = tmpstatus;
 		}
 	}
+
+	switch_thread_rwlock_unlock(globals.rwlock);
 
 	return status;
 }
@@ -535,6 +540,8 @@ static void event_handler(switch_event_t *event)
 
 	const char *sig = switch_event_get_header(event, "Trapped-Signal");
 
+	switch_thread_rwlock_rdlock(globals.rwlock);
+
 	if (sig && !strcmp(sig, "HUP")) {
 		for (hi = switch_core_hash_first(globals.profile_hash); hi; hi = switch_core_hash_next(&hi)) {
 			cdr_profile_t *profile;
@@ -546,6 +553,8 @@ static void event_handler(switch_event_t *event)
 			}
 		}
 	}
+
+	switch_thread_rwlock_unlock(globals.rwlock);
 }
 
 static switch_state_handler_table_t state_handlers = {
@@ -752,7 +761,8 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_format_cdr_load)
 	globals.pool = pool;
 
 	switch_mutex_init(&globals.mutex, SWITCH_MUTEX_NESTED, globals.pool);
-    switch_core_hash_init(&globals.profile_hash);
+	switch_thread_rwlock_create(&globals.rwlock, globals.pool);
+	switch_core_hash_init(&globals.profile_hash);
 
 	/* parse the config */
 	if (!(xml = switch_xml_open_cfg(cf, &cfg, NULL))) {
@@ -802,6 +812,8 @@ SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_format_cdr_shutdown)
 
 	globals.shutdown = 1;
 
+	switch_thread_rwlock_wrlock(globals.rwlock);
+
 	switch_event_unbind(&globals.node);
 	switch_core_remove_state_handler(&state_handlers);
 
@@ -816,6 +828,9 @@ SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_format_cdr_shutdown)
 	}
 
 	switch_core_hash_destroy(&globals.profile_hash);
+
+	switch_thread_rwlock_unlock(globals.rwlock);
+	switch_thread_rwlock_destroy(globals.rwlock);
 
 	return SWITCH_STATUS_SUCCESS;
 }
