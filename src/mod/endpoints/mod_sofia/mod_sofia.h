@@ -756,6 +756,7 @@ struct sofia_profile {
 	ka_type_t keepalive;
 	int bind_attempts;
 	int bind_attempt_interval;
+	switch_bool_t tls_use_sips_in_uri;
 };
 
 

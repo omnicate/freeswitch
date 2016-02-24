@@ -924,8 +924,13 @@ switch_status_t sofia_glue_do_invite(switch_core_session_t *session)
 				ipv6 = strchr(ip_addr, ':');
 
 				if (sofia_glue_transport_has_tls(tech_pvt->transport)) {
-					tech_pvt->invite_contact = switch_core_session_sprintf(session, "sips:%s@%s%s%s:%d", contact,
-																		   ipv6 ? "[" : "", ip_addr, ipv6 ? "]" : "", tech_pvt->profile->tls_sip_port);
+					if (tech_pvt->profile->tls_use_sips_in_uri) {
+						tech_pvt->invite_contact = switch_core_session_sprintf(session, "sips:%s@%s%s%s:%d", contact,
+																			   ipv6 ? "[" : "", ip_addr, ipv6 ? "]" : "", tech_pvt->profile->tls_sip_port);
+					} else {
+						tech_pvt->invite_contact = switch_core_session_sprintf(session, "sip:%s@%s%s%s:%d", contact,
+																			   ipv6 ? "[" : "", ip_addr, ipv6 ? "]" : "", tech_pvt->profile->tls_sip_port);
+					}
 				} else {
 					tech_pvt->invite_contact = switch_core_session_sprintf(session, "sip:%s@%s%s%s:%d", contact,
 																		   ipv6 ? "[" : "", ip_addr, ipv6 ? "]" : "", tech_pvt->profile->extsipport);
@@ -2707,7 +2712,9 @@ switch_status_t sofia_glue_send_notify(sofia_profile_t *profile, const char *use
 			case SOFIA_TRANSPORT_TCP_TLS:
 				contact_str = sofia_test_pflag(profile, PFLAG_TLS) ?
 					profile->tls_public_contact : profile->tcp_public_contact;
-				proto = "sips";
+				if (profile->tls_use_sips_in_uri) {
+					proto = "sips";
+				}
 				break;
 			default:
 				contact_str = profile->public_url;
@@ -2732,7 +2739,9 @@ switch_status_t sofia_glue_send_notify(sofia_profile_t *profile, const char *use
 			case SOFIA_TRANSPORT_TCP_TLS:
 				contact_str = sofia_test_pflag(profile, PFLAG_TLS) ?
 					profile->tls_contact : profile->tcp_contact;
-				proto = "sips";
+				if (profile->tls_use_sips_in_uri) {
+					proto = "sips";
+				}
 				break;
 			default:
 				contact_str = profile->url;
@@ -3002,7 +3011,7 @@ char *sofia_glue_gen_contact_str(sofia_profile_t *profile, sip_t const *sip, nua
 			tp = "udp";
 		}
 
-		if ((transport = sofia_glue_str2transport( tp )) == SOFIA_TRANSPORT_TCP_TLS) {
+		if ((transport = sofia_glue_str2transport( tp )) == SOFIA_TRANSPORT_TCP_TLS && profile->tls_use_sips_in_uri) {
 			proto = "sips";
 		}
 

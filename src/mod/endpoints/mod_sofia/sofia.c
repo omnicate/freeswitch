@@ -3920,33 +3920,45 @@ static void config_sofia_profile_urls(sofia_profile_t * profile)
 		}
 
 		if (profile->extsipip) {
+			char *proto = "sip";
 			char *ipv6 = strchr(profile->extsipip, ':');
+			if (profile->tls_use_sips_in_uri) {
+				proto = "sips";
+			}
 			profile->tls_public_url = switch_core_sprintf(profile->pool,
-														  "sips:%s@%s%s%s:%d",
+														  "%s:%s@%s%s%s:%d", proto,
 														  profile->contact_user,
 														  ipv6 ? "[" : "", profile->extsipip, ipv6 ? "]" : "", profile->tls_sip_port);
 		}
 
 		if (profile->extsipip && !sofia_test_pflag(profile, PFLAG_AUTO_NAT)) {
+			char *proto = "sip";
 			char *ipv6 = strchr(profile->extsipip, ':');
+			if (profile->tls_use_sips_in_uri) {
+				proto = "sips";
+			}
 			profile->tls_url =
 				switch_core_sprintf(profile->pool,
-									"sips:%s@%s%s%s:%d",
+									"%s:%s@%s%s%s:%d", proto,
 									profile->contact_user, ipv6 ? "[" : "", profile->extsipip, ipv6 ? "]" : "", profile->tls_sip_port);
 			profile->tls_bindurl =
 				switch_core_sprintf(profile->pool,
-									"sips:%s@%s%s%s:%d;maddr=%s",
+									"%s:%s@%s%s%s:%d;maddr=%s", proto,
 									profile->contact_user,
 									ipv6 ? "[" : "", profile->extsipip, ipv6 ? "]" : "", profile->tls_sip_port, profile->sipip);
 		} else {
+			char *proto = "sip";
 			char *ipv6 = strchr(profile->sipip, ':');
+			if (profile->tls_use_sips_in_uri) {
+				proto = "sips";
+			}
 			profile->tls_url =
 				switch_core_sprintf(profile->pool,
-									"sips:%s@%s%s%s:%d",
+									"%s:%s@%s%s%s:%d", proto,
 									profile->contact_user, ipv6 ? "[" : "", profile->sipip, ipv6 ? "]" : "", profile->tls_sip_port);
 			profile->tls_bindurl =
 				switch_core_sprintf(profile->pool,
-									"sips:%s@%s%s%s:%d",
+									"%s:%s@%s%s%s:%d", proto,
 									profile->contact_user, ipv6 ? "[" : "", profile->sipip, ipv6 ? "]" : "", profile->tls_sip_port);
 		}
 
@@ -5324,6 +5336,8 @@ switch_status_t config_sofia(sofia_config_t reload, char *profile_name)
 						} else {
 							profile->tls_bind_params = switch_core_sprintf(profile->pool, "%s;transport=tls", val);
 						}
+					} else if (!strcasecmp(var, "tls-use-sips-in-uri")) {
+						profile->tls_use_sips_in_uri = switch_true(val);
 					} else if (!strcasecmp(var, "tls-only")) {
 						profile->tls_only = switch_true(val);
 					} else if (!strcasecmp(var, "tls-verify-date")) {
