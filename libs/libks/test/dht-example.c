@@ -17,7 +17,7 @@
 #include <netdb.h>
 #include <sys/signal.h>
 
-#include "dht.h"
+#include "ks_dht.h"
 
 #define MAX_BOOTSTRAP_NODES 20
 static struct sockaddr_storage bootstrap_nodes[MAX_BOOTSTRAP_NODES];
@@ -76,11 +76,7 @@ const unsigned char hash[20] = {
 /* The call-back function is called by the DHT whenever something
    interesting happens.  Right now, it only happens when we get a new value or
    when a search completes, but this may be extended in future versions. */
-static void
-callback(void *closure,
-         int event,
-         const unsigned char *info_hash,
-         const void *data, size_t data_len)
+static void callback(void *closure, ks_dht_event_t event, const unsigned char *info_hash, const void *data, size_t data_len)
 {
     if(event == KS_DHT_EVENT_SEARCH_DONE)
         printf("Search done.\n");
@@ -101,7 +97,7 @@ main(int argc, char **argv)
     time_t tosleep = 0;
     char *id_file = "dht-example.id";
     int opt;
-    int quiet = 0, ipv4 = 1, ipv6 = 1;
+    int ipv4 = 1, ipv6 = 1;
     struct sockaddr_in sin;
     struct sockaddr_in6 sin6;
     struct sockaddr_storage from;
@@ -121,7 +117,6 @@ main(int argc, char **argv)
             break;
 
         switch(opt) {
-        case 'q': quiet = 1; break;
         case '4': ipv6 = 0; break;
         case '6': ipv4 = 0; break;
         case 'b': {
@@ -236,11 +231,6 @@ main(int argc, char **argv)
 
         i++;
     }
-
-    /* If you set dht_debug to a stream, every action taken by the DHT will
-       be logged. */
-    if(!quiet)
-        dht_debug = stdout;
 
     /* We need an IPv4 and an IPv6 socket, bound to a stable port.  Rumour
        has it that uTorrent works better when it is the same as your
