@@ -316,6 +316,8 @@ main(int argc, char **argv)
         usleep(random() % 100000);
     }
 
+	/* TODO: Move this event run loop into a ks_thread, then replace the main thread with a CLI loop */
+
     while(1) {
         struct timeval tv;
         fd_set readfds;
