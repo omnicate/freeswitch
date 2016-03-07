@@ -78,10 +78,13 @@ const unsigned char hash[20] = {
    when a search completes, but this may be extended in future versions. */
 static void callback(void *closure, ks_dht_event_t event, const unsigned char *info_hash, const void *data, size_t data_len)
 {
-    if(event == KS_DHT_EVENT_SEARCH_DONE)
-        printf("Search done.\n");
-    else if(event == KS_DHT_EVENT_VALUES)
-        printf("Received %d values.\n", (int)(data_len / 6));
+  if(event == KS_DHT_EVENT_SEARCH_DONE) {
+    printf("Search done.\n");
+  } else if(event == KS_DHT_EVENT_VALUES) {
+    printf("Received %d values.\n", (int)(data_len / 6));
+  } else {
+    printf("Unhandled event %d\n", event);
+  }
 }
 
 static dht_handle_t *h;
@@ -109,7 +112,7 @@ main(int argc, char **argv)
     memset(&sin6, 0, sizeof(sin6));
     sin6.sin6_family = AF_INET6;
 
-
+    ks_global_set_default_logger(7);
 
     while(1) {
         opt = getopt(argc, argv, "q46b:i:");
@@ -214,7 +217,9 @@ main(int argc, char **argv)
         if(rc != 0) {
             fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rc));
             exit(1);
-        }
+        } else {
+	  fprintf(stderr, "Bootstrapping with node %s:%s\n", argv[i], argv[i+1]);
+	}
 
         i++;
         if(i >= argc)
