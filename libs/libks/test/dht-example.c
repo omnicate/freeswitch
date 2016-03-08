@@ -18,60 +18,11 @@
 #include <sys/signal.h>
 
 #include "ks_dht.h"
+#include "histedit.h"
 
 #define MAX_BOOTSTRAP_NODES 20
 static struct sockaddr_storage bootstrap_nodes[MAX_BOOTSTRAP_NODES];
 static int num_bootstrap_nodes = 0;
-
-static volatile sig_atomic_t dumping = 0, searching = 0, exiting = 0;
-
-static void
-sigdump(int signo)
-{
-    dumping = 1;
-}
-
-static void
-sigtest(int signo)
-{
-    searching = 1;
-}
-
-static void
-sigexit(int signo)
-{
-    exiting = 1;
-}
-
-static void
-init_signals(void)
-{
-    struct sigaction sa;
-    sigset_t ss;
-
-    sigemptyset(&ss);
-    sa.sa_handler = sigdump;
-    sa.sa_mask = ss;
-    sa.sa_flags = 0;
-    sigaction(SIGUSR1, &sa, NULL);
-
-    sigemptyset(&ss);
-    sa.sa_handler = sigtest;
-    sa.sa_mask = ss;
-    sa.sa_flags = 0;
-    sigaction(SIGUSR2, &sa, NULL);
-
-    sigemptyset(&ss);
-    sa.sa_handler = sigexit;
-    sa.sa_mask = ss;
-    sa.sa_flags = 0;
-    sigaction(SIGINT, &sa, NULL);
-}
-
-const unsigned char hash[20] = {
-    0x54, 0x57, 0x87, 0x89, 0xdf, 0xc4, 0x23, 0xee, 0xf6, 0x03,
-    0x1f, 0x81, 0x94, 0xa9, 0x3a, 0x16, 0x98, 0x8b, 0x72, 0x7b
-};
 
 /* The call-back function is called by the DHT whenever something
    interesting happens.  Right now, it only happens when we get a new value or
@@ -87,24 +38,112 @@ static void callback(void *closure, ks_dht_event_t event, const unsigned char *i
   }
 }
 
+static char * prompt(EditLine *e) {
+  return "dht> ";
+}
+
 static dht_handle_t *h;
 static unsigned char buf[4096];
+
+typedef struct dht_globals_s {
+  int s;
+  int s6;
+  int port;
+  int exiting;
+} dht_globals_t;
+
+void *dht_event_thread(ks_thread_t *thread, void *data)
+{
+  time_t tosleep = 0;
+  int rc = 0;
+  socklen_t fromlen;
+  struct sockaddr_storage from;
+  dht_globals_t *globals = data;
+  
+  while(!globals->exiting) {
+        struct timeval tv;
+        fd_set readfds;
+        tv.tv_sec = tosleep;
+        tv.tv_usec = random() % 1000000;
+
+        FD_ZERO(&readfds);
+        if(globals->s >= 0)
+            FD_SET(globals->s, &readfds);
+        if(globals->s6 >= 0)
+            FD_SET(globals->s6, &readfds);
+        rc = select(globals->s > globals->s6 ? globals->s + 1 : globals->s6 + 1, &readfds, NULL, NULL, &tv);
+        if(rc < 0) {
+            if(errno != EINTR) {
+                perror("select");
+                sleep(1);
+            }
+        }
+        
+        if(rc > 0) {
+            fromlen = sizeof(from);
+            if(globals->s >= 0 && FD_ISSET(globals->s, &readfds))
+                rc = recvfrom(globals->s, buf, sizeof(buf) - 1, 0,
+                              (struct sockaddr*)&from, &fromlen);
+            else if(globals->s6 >= 0 && FD_ISSET(globals->s6, &readfds))
+                rc = recvfrom(globals->s6, buf, sizeof(buf) - 1, 0,
+                              (struct sockaddr*)&from, &fromlen);
+            else
+                abort();
+        }
+
+        if(rc > 0) {
+            buf[rc] = '\0';
+            rc = dht_periodic(h, buf, rc, (struct sockaddr*)&from, fromlen,
+                              &tosleep, callback, NULL);
+        } else {
+            rc = dht_periodic(h, NULL, 0, NULL, 0, &tosleep, callback, NULL);
+        }
+        if(rc < 0) {
+            if(errno == EINTR) {
+                continue;
+            } else {
+                perror("dht_periodic");
+                if(rc == EINVAL || rc == EFAULT)
+                    abort();
+                tosleep = 1;
+            }
+        }
+    }
+      return NULL;
+}
 
 int
 main(int argc, char **argv)
 {
+  dht_globals_t globals = {0};
     int i, rc, fd;
-    int s = -1, s6 = -1, port;
     int have_id = 0;
     unsigned char myid[20];
-    time_t tosleep = 0;
     char *id_file = "dht-example.id";
     int opt;
     int ipv4 = 1, ipv6 = 1;
     struct sockaddr_in sin;
     struct sockaddr_in6 sin6;
-    struct sockaddr_storage from;
-    socklen_t fromlen;
+    EditLine *el;
+    History *myhistory;
+    int count;
+    const char *line;
+    HistEvent ev;
+    ks_status_t status;
+    static ks_thread_t *threads[1]; /* Main dht event thread */
+    ks_pool_t *pool;
+
+    globals.s = -1;
+    globals.s6 = -1;
+    globals.exiting = 0;
+    
+    el = el_init("test", stdin, stdout, stderr);
+    el_set(el, EL_PROMPT, &prompt);
+    el_set(el, EL_EDITOR, "emacs");
+    myhistory = history_init();
+    history(myhistory, &ev, H_SETSIZE, 800);
+    el_set(el, EL_HIST, history, myhistory);
+    
 
     memset(&sin, 0, sizeof(sin));
     sin.sin_family = AF_INET;
@@ -199,8 +238,8 @@ main(int argc, char **argv)
     if(argc < i + 1)
         goto usage;
 
-    port = atoi(argv[i++]);
-    if(port <= 0 || port >= 0x10000)
+    globals.port = atoi(argv[i++]);
+    if(globals.port <= 0 || globals.port >= 0x10000)
         goto usage;
 
     while(i < argc) {
@@ -241,39 +280,39 @@ main(int argc, char **argv)
        has it that uTorrent works better when it is the same as your
        Bittorrent port. */
     if(ipv4) {
-        s = socket(PF_INET, SOCK_DGRAM, 0);
-        if(s < 0) {
+        globals.s = socket(PF_INET, SOCK_DGRAM, 0);
+        if(globals.s < 0) {
             perror("socket(IPv4)");
         }
     }
 
     if(ipv6) {
-        s6 = socket(PF_INET6, SOCK_DGRAM, 0);
-        if(s6 < 0) {
+      globals.s6 = socket(PF_INET6, SOCK_DGRAM, 0);
+        if(globals.s6 < 0) {
             perror("socket(IPv6)");
         }
     }
 
-    if(s < 0 && s6 < 0) {
+    if(globals.s < 0 && globals.s6 < 0) {
         fprintf(stderr, "Eek!");
         exit(1);
     }
 
 
-    if(s >= 0) {
-        sin.sin_port = htons(port);
-        rc = bind(s, (struct sockaddr*)&sin, sizeof(sin));
+    if(globals.s >= 0) {
+        sin.sin_port = htons(globals.port);
+        rc = bind(globals.s, (struct sockaddr*)&sin, sizeof(sin));
         if(rc < 0) {
             perror("bind(IPv4)");
             exit(1);
         }
     }
 
-    if(s6 >= 0) {
+    if(globals.s6 >= 0) {
         int rc;
         int val = 1;
 
-        rc = setsockopt(s6, IPPROTO_IPV6, IPV6_V6ONLY,
+        rc = setsockopt(globals.s6, IPPROTO_IPV6, IPV6_V6ONLY,
                         (char *)&val, sizeof(val));
         if(rc < 0) {
             perror("setsockopt(IPV6_V6ONLY)");
@@ -284,8 +323,8 @@ main(int argc, char **argv)
            global IPv6 addresses.  In this simple example, this only
            happens if the user used the -b flag. */
 
-        sin6.sin6_port = htons(port);
-        rc = bind(s6, (struct sockaddr*)&sin6, sizeof(sin6));
+        sin6.sin6_port = htons(globals.port);
+        rc = bind(globals.s6, (struct sockaddr*)&sin6, sizeof(sin6));
         if(rc < 0) {
             perror("bind(IPv6)");
             exit(1);
@@ -293,13 +332,19 @@ main(int argc, char **argv)
     }
 
     /* Init the dht.  This sets the socket into non-blocking mode. */
-    rc = dht_init(&h, s, s6, myid, (unsigned char*)"JC\0\0");
+    rc = dht_init(&h, globals.s, globals.s6, myid, (unsigned char*)"JC\0\0");
     if(rc < 0) {
         perror("dht_init");
         exit(1);
     }
 
-    init_signals();
+    ks_pool_open(&pool);
+    status = ks_thread_create_ex(&threads[0], dht_event_thread, &globals, KS_THREAD_FLAG_DETATCHED, KS_THREAD_DEFAULT_STACK, KS_PRI_NORMAL, pool);
+
+    if ( status != KS_STATUS_SUCCESS) {
+      printf("Failed to start DHT event thread\n");
+      exit(1);
+    }
 
     /* For bootstrapping, we need an initial list of nodes.  This could be
        hard-wired, but can also be obtained from the nodes key of a torrent
@@ -315,78 +360,69 @@ main(int argc, char **argv)
                       sizeof(bootstrap_nodes[i]));
         usleep(random() % 100000);
     }
+    while ( !globals.exiting ) {
+      line = el_gets(el, &count);
+      
+      if (count > 0) {
+	int line_len = (int)strlen(line) - 1;
+	history(myhistory, &ev, H_ENTER, line);
 
-	/* TODO: Move this event run loop into a ks_thread, then replace the main thread with a CLI loop */
+	if (!strncmp(line, "quit", 4)) {
+	  globals.exiting = 1;
+	} else if ( line_len < 2 ) {
+	  /* NOOP */
+	} else if (!strncmp(line, "loglevel", 8)) {
+	  ks_global_set_default_logger(atoi(line + 9));
+	} else if (!strncmp(line, "search", 6)) {
+	  if ( line_len == 27 ) {
+	    unsigned char hash[20];
+	    memcpy(hash, line + 7, 20);
 
-    while(1) {
-        struct timeval tv;
-        fd_set readfds;
-        tv.tv_sec = tosleep;
-        tv.tv_usec = random() % 1000000;
+	    if(globals.s >= 0) {
+	      dht_search(h, hash, 0, AF_INET, callback, NULL);
+	    }
+	  } else {
+	    printf("Your search string isn't a valid 20 character hash. You entered [%.*s]\n", line_len - 7, line + 7);
+	  }	  
+	} else if (!strncmp(line, "announce", 8)) {
+	  if ( line_len == 29 ) {
+	    unsigned char hash[20];
+	    memcpy(hash, line + 9, 20);
 
-        FD_ZERO(&readfds);
-        if(s >= 0)
-            FD_SET(s, &readfds);
-        if(s6 >= 0)
-            FD_SET(s6, &readfds);
-        rc = select(s > s6 ? s + 1 : s6 + 1, &readfds, NULL, NULL, &tv);
-        if(rc < 0) {
-            if(errno != EINTR) {
-                perror("select");
-                sleep(1);
-            }
-        }
-        
-        if(exiting)
-            break;
-
-        if(rc > 0) {
-            fromlen = sizeof(from);
-            if(s >= 0 && FD_ISSET(s, &readfds))
-                rc = recvfrom(s, buf, sizeof(buf) - 1, 0,
-                              (struct sockaddr*)&from, &fromlen);
-            else if(s6 >= 0 && FD_ISSET(s6, &readfds))
-                rc = recvfrom(s6, buf, sizeof(buf) - 1, 0,
-                              (struct sockaddr*)&from, &fromlen);
-            else
-                abort();
-        }
-
-        if(rc > 0) {
-            buf[rc] = '\0';
-            rc = dht_periodic(h, buf, rc, (struct sockaddr*)&from, fromlen,
-                              &tosleep, callback, NULL);
-        } else {
-            rc = dht_periodic(h, NULL, 0, NULL, 0, &tosleep, callback, NULL);
-        }
-        if(rc < 0) {
-            if(errno == EINTR) {
-                continue;
-            } else {
-                perror("dht_periodic");
-                if(rc == EINVAL || rc == EFAULT)
-                    abort();
-                tosleep = 1;
-            }
-        }
+	    if(globals.s >= 0) {
+	      dht_search(h, hash, globals.port, AF_INET, callback, NULL);
+	    }
+	  } else {
+	    printf("Your search string isn't a valid 20 character hash. You entered [%.*s]\n", line_len - 7, line + 7);
+	  }	  
+	} else {
+	  printf("Unknown command entered[%.*s]\n", line_len, line);
+	}
 
         /* This is how you trigger a search for a torrent hash.  If port
            (the second argument) is non-zero, it also performs an announce.
            Since peers expire announced data after 30 minutes, it's a good
            idea to reannounce every 28 minutes or so. */
-        if(searching) {
+
+	/*
+	if(searching) {
             if(s >= 0)
                 dht_search(h, hash, 0, AF_INET, callback, NULL);
             if(s6 >= 0)
                 dht_search(h, hash, 0, AF_INET6, callback, NULL);
             searching = 0;
-        }
+	    } */
 
         /* For debugging, or idle curiosity. */
+	/* 
         if(dumping) {
             dht_dump_tables(h, stdout);
             dumping = 0;
         }
+	*/
+
+
+      }
     }
 
     {
@@ -398,6 +434,9 @@ main(int argc, char **argv)
         printf("Found %d (%d + %d) good nodes.\n", i, num, num6);
     }
 
+
+    history_end(myhistory);
+    el_end(el);
     dht_uninit(&h);
     return 0;
     
