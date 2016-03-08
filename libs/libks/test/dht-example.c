@@ -373,6 +373,8 @@ main(int argc, char **argv)
 	  /* NOOP */
 	} else if (!strncmp(line, "loglevel", 8)) {
 	  ks_global_set_default_logger(atoi(line + 9));
+	} else if (!strncmp(line, "peer_dump", 9)) {
+            dht_dump_tables(h, stdout);
 	} else if (!strncmp(line, "search", 6)) {
 	  if ( line_len == 27 ) {
 	    unsigned char hash[20];
@@ -398,30 +400,6 @@ main(int argc, char **argv)
 	} else {
 	  printf("Unknown command entered[%.*s]\n", line_len, line);
 	}
-
-        /* This is how you trigger a search for a torrent hash.  If port
-           (the second argument) is non-zero, it also performs an announce.
-           Since peers expire announced data after 30 minutes, it's a good
-           idea to reannounce every 28 minutes or so. */
-
-	/*
-	if(searching) {
-            if(s >= 0)
-                dht_search(h, hash, 0, AF_INET, callback, NULL);
-            if(s6 >= 0)
-                dht_search(h, hash, 0, AF_INET6, callback, NULL);
-            searching = 0;
-	    } */
-
-        /* For debugging, or idle curiosity. */
-	/* 
-        if(dumping) {
-            dht_dump_tables(h, stdout);
-            dumping = 0;
-        }
-	*/
-
-
       }
     }
 
