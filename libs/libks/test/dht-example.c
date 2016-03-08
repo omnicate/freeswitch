@@ -363,14 +363,12 @@ main(int argc, char **argv)
     while ( !globals.exiting ) {
       line = el_gets(el, &count);
       
-      if (count > 0) {
+      if (count > 1) {
 	int line_len = (int)strlen(line) - 1;
 	history(myhistory, &ev, H_ENTER, line);
 
 	if (!strncmp(line, "quit", 4)) {
 	  globals.exiting = 1;
-	} else if ( line_len < 2 ) {
-	  /* NOOP */
 	} else if (!strncmp(line, "loglevel", 8)) {
 	  ks_global_set_default_logger(atoi(line + 9));
 	} else if (!strncmp(line, "peer_dump", 9)) {
