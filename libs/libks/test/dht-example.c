@@ -32,7 +32,11 @@ static void callback(void *closure, ks_dht_event_t event, const unsigned char *i
   if(event == KS_DHT_EVENT_SEARCH_DONE) {
     printf("Search done.\n");
   } else if(event == KS_DHT_EVENT_VALUES) {
+    const uint8_t *bits_8 = data;
+    const uint16_t *bits_16 = data;
+    
     printf("Received %d values.\n", (int)(data_len / 6));
+    printf("Recieved %u.%u.%u.%u:%u\n", bits_8[0], bits_8[1], bits_8[2], bits_8[3], ntohs(bits_16[2]));
   } else {
     printf("Unhandled event %d\n", event);
   }
