@@ -378,7 +378,7 @@ main(int argc, char **argv)
 	} else if (!strncmp(line, "peer_dump", 9)) {
             dht_dump_tables(h, stdout);
 	} else if (!strncmp(line, "search", 6)) {
-	  if ( line_len == 27 ) {
+	  if ( line_len > 7 ) {
 	    unsigned char hash[20];
 	    memcpy(hash, line + 7, 20);
 
@@ -386,7 +386,7 @@ main(int argc, char **argv)
 	      dht_search(h, hash, 0, AF_INET, callback, NULL);
 	    }
 	  } else {
-	    printf("Your search string isn't a valid 20 character hash. You entered [%.*s]\n", line_len - 7, line + 7);
+	    printf("Your search string isn't a valid 20 character hash. You entered [%.*s] of length %d\n", line_len - 7, line + 7, line_len - 7);
 	  }	  
 	} else if (!strncmp(line, "announce", 8)) {
 	  if ( line_len == 29 ) {
