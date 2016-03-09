@@ -1177,7 +1177,7 @@ static void insert_search_bucket(dht_handle_t *h, struct bucket *b, struct searc
 
 /* Start a search.  If port is non-zero, perform an announce when the
    search is complete. */
-int dht_search(dht_handle_t *h, const unsigned char *id, int port, int af, dht_callback *callback, void *closure)
+KS_DECLARE(int) dht_search(dht_handle_t *h, const unsigned char *id, int port, int af, dht_callback *callback, void *closure)
 {
     struct search *sr;
     struct storage *st;
@@ -1469,7 +1469,7 @@ static int token_match(dht_handle_t *h, const unsigned char *token, int token_le
     return 0;
 }
 
-int dht_nodes(dht_handle_t *h, int af, int *good_return, int *dubious_return, int *cached_return, int *incoming_return)
+KS_DECLARE(int) dht_nodes(dht_handle_t *h, int af, int *good_return, int *dubious_return, int *cached_return, int *incoming_return)
 {
     int good = 0, dubious = 0, cached = 0, incoming = 0;
     struct bucket *b = af == AF_INET ? h->buckets : h->buckets6;
@@ -1566,7 +1566,7 @@ static void dump_bucket(dht_handle_t *h, FILE *f, struct bucket *b)
 
 }
 
-void dht_dump_tables(dht_handle_t *h, FILE *f)
+KS_DECLARE(void) dht_dump_tables(dht_handle_t *h, FILE *f)
 {
     int i;
     struct bucket *b;
@@ -1636,7 +1636,7 @@ void dht_dump_tables(dht_handle_t *h, FILE *f)
     fflush(f);
 }
 
-int dht_init(dht_handle_t **handle, int s, int s6, const unsigned char *id, const unsigned char *v)
+KS_DECLARE(int) dht_init(dht_handle_t **handle, int s, int s6, const unsigned char *id, const unsigned char *v)
 {
     int rc;
 	dht_handle_t *h;
@@ -1721,7 +1721,7 @@ int dht_init(dht_handle_t **handle, int s, int s6, const unsigned char *id, cons
     return -1;
 }
 
-int dht_uninit(dht_handle_t **handle)
+KS_DECLARE(int) dht_uninit(dht_handle_t **handle)
 {
 	dht_handle_t *h = *handle;
 	*handle = NULL;
@@ -1906,7 +1906,7 @@ static int bucket_maintenance(dht_handle_t *h, int af)
     return 0;
 }
 
-int dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, const struct sockaddr *from, int fromlen,
+KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, const struct sockaddr *from, int fromlen,
              time_t *tosleep, dht_callback *callback, void *closure)
 {
 	unsigned char *logmsg = NULL;
@@ -2206,7 +2206,7 @@ int dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, const struct s
     return 1;
 }
 
-int dht_get_nodes(dht_handle_t *h, struct sockaddr_in *sin, int *num,
+KS_DECLARE(int) dht_get_nodes(dht_handle_t *h, struct sockaddr_in *sin, int *num,
               struct sockaddr_in6 *sin6, int *num6)
 {
     int i, j;
@@ -2286,7 +2286,7 @@ int dht_get_nodes(dht_handle_t *h, struct sockaddr_in *sin, int *num,
     return i + j;
 }
 
-int dht_insert_node(dht_handle_t *h, const unsigned char *id, struct sockaddr *sa, int salen)
+KS_DECLARE(int) dht_insert_node(dht_handle_t *h, const unsigned char *id, struct sockaddr *sa, int salen)
 {
     struct node *n;
 
@@ -2299,7 +2299,7 @@ int dht_insert_node(dht_handle_t *h, const unsigned char *id, struct sockaddr *s
     return !!n;
 }
 
-int dht_ping_node(dht_handle_t *h, struct sockaddr *sa, int salen)
+KS_DECLARE(int) dht_ping_node(dht_handle_t *h, struct sockaddr *sa, int salen)
 {
     unsigned char tid[4];
 

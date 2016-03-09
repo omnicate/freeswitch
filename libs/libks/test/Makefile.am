@@ -42,7 +42,7 @@ testwebsock_LDADD = $(TEST_LDADD)
 check_PROGRAMS += dht_example
 dht_example_SOURCES = dht-example.c
 dht_example_CFLAGS = $(AM_CFLAGS)
-dht_example_LDADD = $(abs_top_builddir)/.libs/libks.a $(openssl_LIBS) -ledit -lpthread
+dht_example_LDADD = $(abs_top_builddir)/libks.la $(openssl_LIBS) -ledit -lpthread
 
 TESTS=$(check_PROGRAMS)
 

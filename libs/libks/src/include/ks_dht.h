@@ -39,16 +39,16 @@ typedef void dht_callback(void *closure, ks_dht_event_t event, const unsigned ch
 
 typedef struct dht_handle_s dht_handle_t;
 
-int dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, const struct sockaddr *from, int fromlen,
+KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, const struct sockaddr *from, int fromlen,
 				 time_t *tosleep, dht_callback *callback, void *closure);
-int dht_init(dht_handle_t **h, int s, int s6, const unsigned char *id, const unsigned char *v);
-int dht_insert_node(dht_handle_t *h, const unsigned char *id, struct sockaddr *sa, int salen);
-int dht_ping_node(dht_handle_t *h, struct sockaddr *sa, int salen);
-int dht_search(dht_handle_t *h, const unsigned char *id, int port, int af, dht_callback *callback, void *closure);
-int dht_nodes(dht_handle_t *h, int af, int *good_return, int *dubious_return, int *cached_return, int *incoming_return);
-void dht_dump_tables(dht_handle_t *h, FILE *f);
-int dht_get_nodes(dht_handle_t *h, struct sockaddr_in *sin, int *num, struct sockaddr_in6 *sin6, int *num6);
-int dht_uninit(dht_handle_t **h);
+KS_DECLARE(int) dht_init(dht_handle_t **h, int s, int s6, const unsigned char *id, const unsigned char *v);
+KS_DECLARE(int) dht_insert_node(dht_handle_t *h, const unsigned char *id, struct sockaddr *sa, int salen);
+KS_DECLARE(int) dht_ping_node(dht_handle_t *h, struct sockaddr *sa, int salen);
+KS_DECLARE(int) dht_search(dht_handle_t *h, const unsigned char *id, int port, int af, dht_callback *callback, void *closure);
+KS_DECLARE(int) dht_nodes(dht_handle_t *h, int af, int *good_return, int *dubious_return, int *cached_return, int *incoming_return);
+KS_DECLARE(void) dht_dump_tables(dht_handle_t *h, FILE *f);
+KS_DECLARE(int) dht_get_nodes(dht_handle_t *h, struct sockaddr_in *sin, int *num, struct sockaddr_in6 *sin6, int *num6);
+KS_DECLARE(int) dht_uninit(dht_handle_t **h);
 
 /* This must be provided by the user. */
 int dht_blacklisted(const struct sockaddr *sa, int salen);
