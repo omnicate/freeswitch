@@ -1412,7 +1412,7 @@ static void our_sofia_event_callback(nua_event_t event,
 		}
 	}
 
-	if (sofia_test_pflag(profile, PFLAG_AUTH_ALL) && tech_pvt && tech_pvt->key && sip && (event < nua_r_set_params || event > nua_r_authenticate)) {
+	if (sofia_test_pflag(profile, PFLAG_AUTH_ALL) && sip && (event < nua_r_set_params || event > nua_r_authenticate)) {
 		sip_authorization_t const *authorization = NULL;
 
 		if (sip->sip_authorization) {
@@ -1425,9 +1425,16 @@ static void our_sofia_event_callback(nua_event_t event,
 			char network_ip[80];
 			int network_port;
 			sofia_glue_get_addr(de->data->e_msg, network_ip, sizeof(network_ip), &network_port);
-			auth_res = sofia_reg_parse_auth(profile, authorization, sip, de,
-											(char *) sip->sip_request->rq_method_name, tech_pvt->key, strlen(tech_pvt->key), network_ip, network_port, NULL, 0,
-											REG_INVITE, NULL, NULL, NULL, NULL);
+			if (tech_pvt && tech_pvt->key) {
+				auth_res = sofia_reg_parse_auth(profile, authorization, sip, de, (char *) sip->sip_request->rq_method_name,
+												tech_pvt->key, strlen(tech_pvt->key), network_ip, network_port, NULL, 0,
+												REG_INVITE, NULL, NULL, NULL, NULL);
+			} else {
+				char key[128] = "";
+				auth_res = sofia_reg_parse_auth(profile, authorization, sip, de, (char *) sip->sip_request->rq_method_name,
+												key, sizeof(key), network_ip, network_port, NULL, 0,
+												REG_INVITE, NULL, NULL, NULL, NULL);
+			}
 		}
 
 		if ((auth_res != AUTH_OK && auth_res != AUTH_RENEWED)) {
