@@ -255,7 +255,7 @@ freeswitch_raspbian_source() {
 
 }
 
-# install_prereqs
+install_prereqs
 welcome_screen
 fs_ver_select
 get_network_settings
