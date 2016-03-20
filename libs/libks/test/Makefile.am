@@ -44,6 +44,18 @@ dht_example_SOURCES = dht-example.c
 dht_example_CFLAGS = $(AM_CFLAGS)
 dht_example_LDADD = $(abs_top_builddir)/libks.la $(openssl_LIBS) -ledit -lpthread
 
+check_PROGRAMS += libtorrent_example
+libtorrent_example_SOURCES = libtorrent-example.c
+libtorrent_example_CFLAGS = $(AM_CFLAGS) 
+libtorrent_example_LDADD = $(abs_top_builddir)/libks.la $(abs_top_builddir)/test/libtorrent.so /usr/lib/x86_64-linux-gnu/libboost_system.a $(openssl_LIBS) -ledit -lpthread -ltorrent-rasterbar -lstdc++
+
 TESTS=$(check_PROGRAMS)
 
 tests: $(check_PROGRAMS)
+
+$(abs_top_builddir)/test/libtorrent.so: $(abs_top_builddir)/test/libtorrent.o
+	g++ -shared -o $(abs_top_builddir)/test/libtorrent.so $(abs_top_builddir)/test/libtorrent.o
+
+$(abs_top_builddir)/test/libtorrent.o: $(abs_top_builddir)/test/libtorrent.cpp
+	g++ -c -fPIC -o $(abs_top_builddir)/test/libtorrent.o -I$(abs_top_builddir)/test/ $(abs_top_builddir)/test/libtorrent.cpp
+

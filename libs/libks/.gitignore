@@ -8,3 +8,4 @@ build/ltversion.m4
 build/lt~obsolete.m4
 dht-example.id
 test/dht_example
+test/libtorrent_example
