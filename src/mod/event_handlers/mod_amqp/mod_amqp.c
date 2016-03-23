@@ -42,6 +42,8 @@ SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_amqp_shutdown);
 SWITCH_MODULE_LOAD_FUNCTION(mod_amqp_load);
 SWITCH_MODULE_DEFINITION(mod_amqp, mod_amqp_load, mod_amqp_shutdown, NULL);
 
+mod_amqp_globals_t mod_amqp_globals;
+
 SWITCH_STANDARD_API(amqp_reload)
 {
   return mod_amqp_do_config(SWITCH_TRUE);
