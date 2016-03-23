@@ -219,7 +219,7 @@ static void mod_amqp_command_response(mod_amqp_command_profile_t *profile, char 
 
 	switch_safe_free(json_output);
 
-	if (status < 0) {
+	if (status != AMQP_STATUS_OK) {
 		const char *errstr = amqp_error_string2(-status);
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "Profile[%s] failed to send event on connection[%s]: %s\n",
 						  profile->name, profile->conn_active->name, errstr);
