@@ -618,7 +618,11 @@ static switch_status_t channel_on_hangup(switch_core_session_t *session)
 				 * so pick this value for releasing call */
 				var = switch_channel_get_variable(channel, "sip_term_cause");
 				if (var) {
-					ftdm_usrmsg_add_var(&usrmsg, "ss7_rel_cause", var);
+					/* convert sip cause to isup cause */
+					int isup_cause = switch_channel_cause_q850(atoi(var));
+					char ss7_rel_cause[12] = {0};
+					sprintf(ss7_rel_cause,"%d",isup_cause);
+					ftdm_usrmsg_add_var(&usrmsg, "ss7_rel_cause", ss7_rel_cause);
 				}
 			}
 			var = switch_channel_get_variable(channel, "ss7_rel_loc");
