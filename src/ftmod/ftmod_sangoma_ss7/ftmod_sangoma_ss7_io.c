@@ -79,9 +79,6 @@ int ftmod_ss7_get_start_cic_value_by_span_id(int span_id)
 	if (idx < start_range) {
 		SS7_WARN("Unable to retrieve start CIC value for span %d!\n", span_id);
 		idx = 0;
-	} else {
-		SS7_DEBUG("ISUP circuit start from CIC %d for span %d\n",
-			  idx, span_id);
 	}
 
 	return idx;
@@ -1075,7 +1072,6 @@ int ftmod_ss7_get_isup_intf_id_by_span_id(int span_id)
 			(g_ftdm_sngss7_data.cfg.isupIntf[idx].flags & SNGSS7_CONFIGURED)) {
 			if (isup_intf_id == g_ftdm_sngss7_data.cfg.isupIntf[idx].id) {
 				isup_intf_idx = idx;
-				SS7_DEBUG("Found matching ISUP Interface at index %d\n", idx);
 				break;
 			}
 		}
@@ -1085,8 +1081,6 @@ int ftmod_ss7_get_isup_intf_id_by_span_id(int span_id)
 done:
 	if (!isup_intf_idx) {
 		SS7_ERROR("No Isup Interface found for span %d\n", span_id);
-	} else {
-		SS7_DEVEL_DEBUG("Found ISUP Interface %d map to span %d\n", isup_intf_id, span_id);
 	}
 
 	return isup_intf_idx;
@@ -1115,7 +1109,6 @@ int ftmod_ss7_get_cc_span_id_by_span_id(int span_id)
 		if (g_ftdm_sngss7_data.cfg.isupCkt[idx].span == span_id) {
 			if (g_ftdm_sngss7_data.cfg.isupCkt[idx].ccSpanId) {
 				cc_span_id = g_ftdm_sngss7_data.cfg.isupCkt[idx].ccSpanId;
-				SS7_DEBUG("Found matching CC Span at ISUP Interface index %d\n", idx);
 				break;
 			}
 		}
@@ -1130,8 +1123,6 @@ done:
 			SS7_DEBUG("All Circuits already cleared for voice span %d\n", span_id);
 			ftmod_ss7_clear_cc_span_info_by_span_id(span_id);
 		}
-	} else {
-		SS7_DEBUG("Found CC Span %d for span %d\n", cc_span_id, span_id);
 	}
 
 	return cc_span_id;
@@ -1264,7 +1255,6 @@ int ftmod_ss7_get_isap_id_by_isup_intf_id(int isup_intf_idx)
 			(g_ftdm_sngss7_data.cfg.isap[idx].flags & SNGSS7_CONFIGURED)) {
 
 			if (isap_id == g_ftdm_sngss7_data.cfg.isap[idx].id) {
-				SS7_DEBUG("Found matching ISAP at index %d\n", idx);
 				isap_idx = idx;
 				break;
 			}
@@ -1274,9 +1264,6 @@ int ftmod_ss7_get_isap_id_by_isup_intf_id(int isup_intf_idx)
 
 	if (!isap_idx) {
 		SS7_ERROR("No route map found map to ISUP interface %d\n", g_ftdm_sngss7_data.cfg.isupIntf[isup_intf_idx].id);
-	} else {
-		SS7_DEBUG("Found ISAP %d map to ISUP interface %d\n",
-			  isap_id, g_ftdm_sngss7_data.cfg.isupIntf[isup_intf_idx].id);
 	}
 
 done:
@@ -1310,10 +1297,6 @@ done:
 		SS7_ERROR("No ISAP found mapped to isup interface %d and span %d!\n",
 			  g_ftdm_sngss7_data.cfg.isupIntf[isup_intf_idx].id, span_id);
 	} else {
-		SS7_INFO("Found ISAP %d mapped to span %d with isup interface %d\n",
-			 g_ftdm_sngss7_data.cfg.isap[isap_idx].id,
-			 g_ftdm_sngss7_data.cfg.isupIntf[isup_intf_idx].id,
-			 span_id);
 		return g_ftdm_sngss7_data.cfg.isap[isap_idx].spId;
 	}
 
