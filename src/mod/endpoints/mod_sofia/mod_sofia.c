@@ -1556,6 +1556,12 @@ static switch_status_t sofia_receive_message(switch_core_session_t *session, swi
 				}
 			}
 
+			/* switch_core_media_set_sdp_codec_string() assumes r_sdp is not NULL */
+			if (!r_sdp) {
+				switch_channel_set_variable(channel, SWITCH_ENDPOINT_DISPOSITION_VARIABLE, "CODEC NEGOTIATION ERROR");
+				status = SWITCH_STATUS_FALSE;
+				goto end_lock;
+			}
 
 			switch_core_media_set_sdp_codec_string(tech_pvt->session, r_sdp, SDP_TYPE_RESPONSE);
 			switch_channel_set_variable(tech_pvt->channel, "absolute_codec_string", switch_channel_get_variable(tech_pvt->channel, "ep_codec_string"));

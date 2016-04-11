@@ -9973,7 +9973,7 @@ SWITCH_DECLARE(void) switch_core_media_set_sdp_codec_string(switch_core_session_
 
 	switch_assert(session);
 
-	if (!(smh = session->media_handle)) {
+	if (!(smh = session->media_handle) || !r_sdp) {
 		return;
 	}
 
