@@ -866,7 +866,7 @@ static ftdm_status_t ftmod_m3ua_network_config(int id)
     SS7_INFO("\n\n\t\tM3UA NWK %d configuring with id = %d,  ssf = %d, dpcLen = %d, slsLen = %d \n"
             "\t\tsuSwtch = %d,  su2Swtch = %d, appearance = %s \n\n",
             id, c->nwkId, c->ssf, c->dpcLen, c->slsLen,
-            c->suSwtch, c->su2Swtch, c->nwkApp);
+            c->suSwtch, c->su2Swtch, (char *)c->nwkApp);
 
     ret = sng_cfg_m3ua(&pst, &cfg);
     if (ret==0) {
@@ -954,8 +954,7 @@ static ftdm_status_t ftmod_m3ua_sctsap_config(int sct_sap_id, int sctp_id)
             "\t\tsrcAddrLst[0] = %d, \n",
             c->suId, c->srcPort, c->tmrPrim.val,
             c->tmrSta.val, c->procId, c->inst, c->spId, c->srcAddrLst.nmb,
-            c->srcAddrLst.nAddr[0].u.ipv4NetAddr
-            );
+            (int)c->srcAddrLst.nAddr[0].u.ipv4NetAddr);
 
     ret = sng_cfg_m3ua(&pst, &cfg);
     if (ret==0) {
@@ -1175,19 +1174,19 @@ static ftdm_status_t ftmod_m3ua_psp_config(int id)
 #endif
 
     SS7_INFO("\n\n\t\tM3UA PSP %d configuring with: pspId = %d, pspType = %d, ipspMode = %d, nwkId = %d, \n"
-            "\t\t dynRegRkallwd = %d, nwkAppIncl = %d, rxTxAspId = %d, selfAspId[0] = %d,\n"
+            "\t\t dynRegRkallwd = %d, nwkAppIncl = %d, rxTxAspId = %d, selfAspId[0] = %ld,\n"
             "\t\t assocCfg.priDstAddr = %d, assocCfg.dstPort = %d, assocCfg.locOutStrms = %d, tos = %d\n"
             "\t\t rcIsMand = %d, modRegRkallwd = %d, assocCfg.dstAddrLst.nmb = %d\n",
             id, c->pspId, c->pspType, c->ipspMode, c->nwkId,
             c->dynRegRkallwd, c->nwkAppIncl, c->rxTxAspId, c->selfAspId[0],
-            c->assocCfg.priDstAddr.u.ipv4NetAddr, c->assocCfg.dstPort, c->assocCfg.locOutStrms, c->assocCfg.tos,
+            (int)c->assocCfg.priDstAddr.u.ipv4NetAddr, c->assocCfg.dstPort, c->assocCfg.locOutStrms, c->assocCfg.tos,
             c->rcIsMand, c->modRegRkallwd, c->assocCfg.dstAddrLst.nmb);
 
     for (i=0; i<c->assocCfg.dstAddrLst.nmb; i++) {
         if (i==c->assocCfg.dstAddrLst.nmb-1) {
-            SS7_INFO("\n\t\tdstAddrLst = %x \n\n", c->assocCfg.dstAddrLst.nAddr[i].u.ipv4NetAddr);
+            SS7_INFO("\n\t\tdstAddrLst = %d \n\n", (int)c->assocCfg.dstAddrLst.nAddr[i].u.ipv4NetAddr);
         } else {
-            SS7_INFO("\n\t\tdstAddrLst = %x \n", c->assocCfg.dstAddrLst.nAddr[i].u.ipv4NetAddr);
+            SS7_INFO("\n\t\tdstAddrLst = %d \n", (int)c->assocCfg.dstAddrLst.nAddr[i].u.ipv4NetAddr);
         }
     }
 
@@ -1258,8 +1257,8 @@ static ftdm_status_t ftmod_m3ua_ps_config(int id)
     SS7_INFO("\n\n\t\tM3UA PS %d configuring with: psId = %d, nwkId = %d, nmbPsp = %d, \n"
             "\t\troutCtx = %d, lclFlag = %d, mode = %d, loadShareMode = %d, \n"
             "\t\treqAvail = %d, nmbActPspReqd = %d \n",
-            id, c->psId, c->nwkId, c->nmbPsp,
-            c->routCtx, c->lclFlag, c->mode, c->loadShareMode,
+            id, (int)c->psId, c->nwkId, c->nmbPsp,
+            (int)c->routCtx, c->lclFlag, c->mode, c->loadShareMode,
             c->reqAvail, c->nmbActPspReqd);
 
     for (i = 0; i < c->nmbPsp; i++) {
@@ -1345,11 +1344,11 @@ static ftdm_status_t ftmod_m3ua_route_config(int id, int nsap_id, ftdm_sngss7_op
             "\t\trtFilter.sls = %d, rtFilter.sio = %d, rtFilter.sioMask = %x, \n"
             "\t\trtFilter.includeCic = %d, rtFilter.cicStart = %d, rtFilter.cicEnd = %d, \n"
             "\t\trtFilter.includeSsn = %d, rtFilter.ssn = %d, rtFilter.includeTrid = %d, rtFilter.tridStart = %d, rtFilter.tridEnd = %d\n\n",
-            id, c->nwkId, c->rtType, c->psId, c->nSapIdPres,
-            c->nSapId, c->noStatus, c->rtFilter.dpc, c->rtFilter.dpcMask, c->rtFilter.opc, c->rtFilter.opcMask,
+            id, c->nwkId, c->rtType, (int)c->psId, c->nSapIdPres,
+            c->nSapId, c->noStatus, (int)c->rtFilter.dpc, (int)c->rtFilter.dpcMask, (int)c->rtFilter.opc, (int)c->rtFilter.opcMask,
             c->rtFilter.sls, c->rtFilter.sio, c->rtFilter.sioMask,
             c->rtFilter.includeCic, c->rtFilter.cicStart, c->rtFilter.cicEnd,
-            c->rtFilter.includeSsn, c->rtFilter.ssn, c->rtFilter.includeTrid, c->rtFilter.tridStart, c->rtFilter.tridEnd);
+            c->rtFilter.includeSsn, c->rtFilter.ssn, (int)c->rtFilter.includeTrid, (int)c->rtFilter.tridStart, (int)c->rtFilter.tridEnd);
 
     ret = sng_cfg_m3ua(&pst, &cfg);
     if (ret==0) {
@@ -1480,7 +1479,7 @@ void ftdm_m3ua_start_timer(sng_m3ua_tmr_evt_types_e evt_type , int id)
                 &sched->tmr_id)) {
         SS7_ERROR ("Unable to schedule M3UA timer[%s]\n", &timer_name[0]);
     } else {
-        SS7_INFO (" Timer[%s] started with timer-id[%d] for 1000 ms for ID[%d] \n",&timer_name[0], sched->tmr_id, id);
+        SS7_INFO (" Timer[%s] started with timer-id[%d] for 1000 ms for ID[%d] \n",&timer_name[0], (int)sched->tmr_id, id);
     }
 
     return;

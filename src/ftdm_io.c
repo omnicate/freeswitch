@@ -4553,7 +4553,7 @@ FT_DECLARE(ftdm_status_t) ftdm_channel_process_media(ftdm_channel_t *ftdmchan, v
 					char digit_str[2] = { 0 };
 
 					digit_str[0] = digit_char;
-					if (!ftdmchan->span->sig_dtmf || (ftdmchan->span->sig_dtmf(ftdmchan, (const char*)digit_str) != FTDM_BREAK)) {
+					if (!ftdmchan->span->sig_queue_dtmf || (ftdmchan->span->sig_queue_dtmf(ftdmchan, (const char*)digit_str) != FTDM_BREAK)) {
 						ftdm_channel_queue_dtmf(ftdmchan, digit_str);
 					}
 
@@ -6871,7 +6871,7 @@ static void ftdm_group_add(ftdm_group_t *group)
 	} else {
 		globals.groups = group;
 	}
-	hashtable_insert(globals.group_hash, (void *)group->name, group, HASHTABLE_FLAG_FREE_KEY | HASHTABLE_FLAG_FREE_VALUE);
+	hashtable_insert(globals.group_hash, (void *)group->name, group, HASHTABLE_FLAG_NONE);
 
 	ftdm_mutex_unlock(globals.group_mutex);
 }

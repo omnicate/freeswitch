@@ -2427,7 +2427,6 @@ static ftdm_status_t handle_tx_grs(ftdm_stream_handle_t *stream, int span, int c
 {
 	sngss7_chan_data_t *sngss7_info = NULL;
 	ftdm_channel_t *ftdmchan = NULL;
-	sngss7_span_data_t *sngss7_span = NULL;
 	int x = 0;
 	int basefound = 0;
 	int idx = 0;
@@ -2458,7 +2457,6 @@ static ftdm_status_t handle_tx_grs(ftdm_stream_handle_t *stream, int span, int c
 
 				sngss7_info = (sngss7_chan_data_t *)g_ftdm_sngss7_data.cfg.isupCkt[x].obj;
 				ftdmchan = sngss7_info->ftdmchan;
-				sngss7_span = ftdmchan->span->signal_data;
 
 				if ((ftdmchan->physical_span_id == span) &&
 					((ftdmchan->physical_chan_id >= chan) && (ftdmchan->physical_chan_id < (chan+range)))) {
@@ -2519,7 +2517,6 @@ static ftdm_status_t handle_tx_grs(ftdm_stream_handle_t *stream, int span, int c
 
 				sngss7_info = (sngss7_chan_data_t *)g_ftdm_sngss7_data.cfg.isupCkt[x].obj;
 				ftdmchan = sngss7_info->ftdmchan;
-				sngss7_span = ftdmchan->span->signal_data;
 
 				if ((ftdmchan->physical_span_id == span) &&
 					((ftdmchan->physical_chan_id >= chan) && (ftdmchan->physical_chan_id < (chan+range)))) {
@@ -3102,13 +3099,11 @@ static ftdm_status_t handle_status_isup_ckt(ftdm_stream_handle_t *stream, char *
 }
 static ftdm_status_t handle_status_isup_ckt_with_id(ftdm_stream_handle_t *stream, int id)
 {
-	sng_isup_ckt_t				*ckt;
-	sngss7_chan_data_t  		*ss7_info;
-	ftdm_channel_t	  			*ftdmchan;
-	uint8_t						state = 0;
-	uint8_t						bits_ab = 0;
-	uint8_t						bits_cd = 0;	
-	uint8_t						bits_ef = 0;
+	sng_isup_ckt_t		*ckt;
+	uint8_t			state = 0;
+	uint8_t			bits_ab = 0;
+	uint8_t			bits_cd = 0;
+	uint8_t			bits_ef = 0;
 
 
 	/* extract the global config circuit structure */
@@ -3125,10 +3120,6 @@ static ftdm_status_t handle_status_isup_ckt_with_id(ftdm_stream_handle_t *stream
 		stream->write_function(stream, "Requested ckt is a sig link/hole and can not be queried (%d)\n", id);
 		return FTDM_FAIL;
 	}
-
-	/* extract the global structure */
-	ss7_info = (sngss7_chan_data_t *)g_ftdm_sngss7_data.cfg.isupCkt[id].obj;
-	ftdmchan = ss7_info->ftdmchan;
 
 	/* query the isup stack for the state of the ckt */
 	if (ftmod_ss7_isup_ckt_sta(ckt->id, &state)) {

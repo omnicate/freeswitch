@@ -79,7 +79,7 @@ static void *ftdm_sangoma_ss7_run_mtp2_api(ftdm_thread_t * me, void *obj)
 
 	/* TODO: Need to add this to ftdm_sangoma_ss7_run_mtp2 as well!! */
 	if (ftdm_queue_get_interrupt(ftdmspan->pendingsignals, &ftdm_sangoma_ss7_int[2]) != FTDM_SUCCESS) {
-		ftdm_log(FTDM_LOG_CRIT, "%s:Failed to get a signal interrupt for span = %s!\n", ftdmspan->name);
+		ftdm_log(FTDM_LOG_CRIT, "%s:Failed to get a signal interrupt for span!\n", ftdmspan->name);
 		goto ftdm_sangoma_ss7_run_exit;
 	}
 
@@ -668,13 +668,13 @@ void sngss7_mtp2api_dat_ind(int16_t suId, void *data, int16_t len)
 	ftdm_sigmsg_t	sig;
 	ftdm_channel_t *ftdmchan = NULL;	
 	
-	SS7_FUNC_TRACE_ENTER(__FUNCTION__);
+	SS7_FUNC_TRACE_ENTER(__FTDM_FUNC__);
 
 	ftdm_assert(len > 0, "Received data with invalid length\n");
 
 	if (!(g_ftdm_sngss7_data.cfg.mtp3LiLink[suId].flags & SNGSS7_CONFIGURED)) {
 		ftdm_log(FTDM_LOG_CRIT, "Received CON CFM on unconfigued MTP3 LI LINK\n");
-		SS7_FUNC_TRACE_EXIT(__FUNCTION__);
+		SS7_FUNC_TRACE_EXIT(__FTDM_FUNC__);
 		return;
 	}
 
@@ -698,7 +698,7 @@ void sngss7_mtp2api_dat_ind(int16_t suId, void *data, int16_t len)
 		ftdm_log_chan_msg(ftdmchan, FTDM_LOG_CRIT, "Failed to send event to user \n");
 	}
 
-	SS7_FUNC_TRACE_EXIT(__FUNCTION__);
+	SS7_FUNC_TRACE_EXIT(__FTDM_FUNC__);
 	return;
 }
 /******************************************************************************/
@@ -718,13 +718,13 @@ void sngss7_mtp2api_dat_cfm(int16_t suId, void *data, int16_t len, MtpStatus sta
 	ftdm_sigmsg_t	sig;
 	ftdm_channel_t *ftdmchan = NULL;
 	
-	SS7_FUNC_TRACE_ENTER(__FUNCTION__);
+	SS7_FUNC_TRACE_ENTER(__FTDM_FUNC__);
 
 	ftdm_assert(len > 0, "Received data with invalid length\n");
 
 	if (!(g_ftdm_sngss7_data.cfg.mtp3LiLink[suId].flags & SNGSS7_CONFIGURED)) {
 		ftdm_log(FTDM_LOG_CRIT, "Received CON CFM on unconfigued MTP3 LI LINK\n");
-		SS7_FUNC_TRACE_EXIT(__FUNCTION__);
+		SS7_FUNC_TRACE_EXIT(__FTDM_FUNC__);
 		return;
 	}
 
@@ -754,7 +754,7 @@ void sngss7_mtp2api_dat_cfm(int16_t suId, void *data, int16_t len, MtpStatus sta
 		ftdm_log_chan_msg(ftdmchan, FTDM_LOG_CRIT, "Failed to send event to user \n");
 	}
 
-	SS7_FUNC_TRACE_EXIT(__FUNCTION__);
+	SS7_FUNC_TRACE_EXIT(__FTDM_FUNC__);
 	return;
 }
 
@@ -764,13 +764,13 @@ void sngss7_mtp2api_con_cfm(int16_t suId)
 {
 	sngss7_chan_data_t *sngss7_info = NULL;
 	
-	SS7_FUNC_TRACE_ENTER(__FUNCTION__);
+	SS7_FUNC_TRACE_ENTER(__FTDM_FUNC__);
 	/* This function informs upper layer that the connection
 	 * has succeeded and that the link is now connected */
 
 	if (!(g_ftdm_sngss7_data.cfg.mtp3LiLink[suId].flags & SNGSS7_CONFIGURED)) {
 		ftdm_log(FTDM_LOG_CRIT, "Received CON CFM on unconfigued MTP3 LI LINK\n");
-		SS7_FUNC_TRACE_EXIT(__FUNCTION__);
+		SS7_FUNC_TRACE_EXIT(__FTDM_FUNC__);
 		return;
 	}
 
@@ -781,7 +781,7 @@ void sngss7_mtp2api_con_cfm(int16_t suId)
 	
 	sngss7_set_sig_status(sngss7_info, FTDM_SIG_STATE_UP, 0);
 	
-	SS7_FUNC_TRACE_EXIT(__FUNCTION__);
+	SS7_FUNC_TRACE_EXIT(__FTDM_FUNC__);
 	return;
 }
 
@@ -792,13 +792,13 @@ void sngss7_mtp2api_disc_ind(uint16_t suId, Reason reason)
 	uint8_t user_reason = 0;
 	sngss7_chan_data_t *sngss7_info = NULL;
 	
-	SS7_FUNC_TRACE_ENTER(__FUNCTION__);
+	SS7_FUNC_TRACE_ENTER(__FTDM_FUNC__);
 	/* This function informs upper layer that the MTP2 Layer connection
 	* has failed */
 
 	if (!(g_ftdm_sngss7_data.cfg.mtp3LiLink[suId].flags & SNGSS7_CONFIGURED)) {
 		ftdm_log(FTDM_LOG_CRIT, "Received DISC IND on unconfigued MTP3 LI LINK\n");
-		SS7_FUNC_TRACE_EXIT(__FUNCTION__);
+		SS7_FUNC_TRACE_EXIT(__FTDM_FUNC__);
 		return;
 	}
 
@@ -876,7 +876,7 @@ void sngss7_mtp2api_disc_ind(uint16_t suId, Reason reason)
 	/* Max possible value for reason is 27 */
 	sngss7_set_sig_status(sngss7_info, FTDM_SIG_STATE_DOWN, user_reason);
 	
-	SS7_FUNC_TRACE_EXIT(__FUNCTION__);
+	SS7_FUNC_TRACE_EXIT(__FTDM_FUNC__);
 	return;
 }
 
@@ -888,7 +888,7 @@ void sngss7_mtp2api_sta_ind(uint16_t suId, MtpStatus status)
 	ftdm_signaling_status_t sigstatus = FTDM_SIG_STATE_DOWN;
 	uint8_t user_reason = 0;
 	
-	SS7_FUNC_TRACE_ENTER(__FUNCTION__);
+	SS7_FUNC_TRACE_ENTER(__FTDM_FUNC__);
 	/* Description:
 	* MTP2 invokes this function to indicate the status of the remote signalling point.
 	*
@@ -898,7 +898,7 @@ void sngss7_mtp2api_sta_ind(uint16_t suId, MtpStatus status)
 
 	if (!(g_ftdm_sngss7_data.cfg.mtp3LiLink[suId].flags & SNGSS7_CONFIGURED)) {
 		ftdm_log(FTDM_LOG_CRIT, "Received DISC IND on unconfigued MTP3 LI LINK\n");
-		SS7_FUNC_TRACE_EXIT(__FUNCTION__);
+		SS7_FUNC_TRACE_EXIT(__FTDM_FUNC__);
 		return;
 	}
 
@@ -919,7 +919,7 @@ void sngss7_mtp2api_sta_ind(uint16_t suId, MtpStatus status)
 
 	}
 	sngss7_set_sig_status(sngss7_info, sigstatus, user_reason);
-	SS7_FUNC_TRACE_EXIT(__FUNCTION__);
+	SS7_FUNC_TRACE_EXIT(__FTDM_FUNC__);
 	return;
 }
 
@@ -932,10 +932,10 @@ void sngss7_mtp2api_sta_cfm(uint16_t suId, Action action, SeqU24 status)
 	sngss7_chan_data_t *sngss7_info = NULL;
 	ftdm_signaling_status_t sigstatus = FTDM_SIG_STATE_DOWN;
 	
-	SS7_FUNC_TRACE_ENTER(__FUNCTION__);
+	SS7_FUNC_TRACE_ENTER(__FTDM_FUNC__);
 	if (!(g_ftdm_sngss7_data.cfg.mtp3LiLink[suId].flags & SNGSS7_CONFIGURED)) {
 		ftdm_log(FTDM_LOG_CRIT, "Received DISC IND on unconfigued MTP3 LI LINK\n");
-		SS7_FUNC_TRACE_EXIT(__FUNCTION__);
+		SS7_FUNC_TRACE_EXIT(__FTDM_FUNC__);
 		return;
 	}
 
@@ -999,7 +999,7 @@ void sngss7_mtp2api_sta_cfm(uint16_t suId, Action action, SeqU24 status)
 					user_reason = SNGSS7_REASON_END_FLC;
 					break;
 				default:
-					ftdm_log_chan(ftdmchan, FTDM_LOG_CRIT, "Received invalid STA CFM FLC status %d\n", status);
+					ftdm_log_chan(ftdmchan, FTDM_LOG_CRIT, "Received invalid STA CFM FLC status %d\n", (int)status);
 					return;
 			}
 			sngss7_set_sig_status(sngss7_info, sigstatus, user_reason);
@@ -1009,7 +1009,7 @@ void sngss7_mtp2api_sta_cfm(uint16_t suId, Action action, SeqU24 status)
 			break;
 
 	}
-	SS7_FUNC_TRACE_EXIT(__FUNCTION__);
+	SS7_FUNC_TRACE_EXIT(__FTDM_FUNC__);
 	return;
 }
 
@@ -1021,11 +1021,11 @@ void sngss7_mtp2api_flc_ind(uint16_t suId, Action action)
 	ftdm_signaling_status_t sigstatus = FTDM_SIG_STATE_DOWN;
 	uint8_t user_reason = 0;
 	
-	SS7_FUNC_TRACE_ENTER(__FUNCTION__);
+	SS7_FUNC_TRACE_ENTER(__FTDM_FUNC__);
 
 	if (!(g_ftdm_sngss7_data.cfg.mtp3LiLink[suId].flags & SNGSS7_CONFIGURED)) {
 		ftdm_log(FTDM_LOG_CRIT, "Received DISC IND on unconfigued MTP3 LI LINK\n");
-		SS7_FUNC_TRACE_EXIT(__FUNCTION__);
+		SS7_FUNC_TRACE_EXIT(__FTDM_FUNC__);
 		return;
 	}
 
@@ -1046,7 +1046,7 @@ void sngss7_mtp2api_flc_ind(uint16_t suId, Action action)
 
 	}
 	sngss7_set_sig_status(sngss7_info, sigstatus, user_reason);
-	SS7_FUNC_TRACE_EXIT(__FUNCTION__);
+	SS7_FUNC_TRACE_EXIT(__FTDM_FUNC__);
 	return;
 }
 
@@ -1058,7 +1058,7 @@ ftdm_status_t ftmod_sangoma_ss7_mtp2_set_sig_status(ftdm_channel_t *ftdmchan, ft
 	sngss7_chan_data_t *sngss7_info;
 	
 	SuId suId;
-	SS7_FUNC_TRACE_ENTER(__FUNCTION__);
+	SS7_FUNC_TRACE_ENTER(__FTDM_FUNC__);
 	sngss7_info = (sngss7_chan_data_t*) ftdmchan->call_data;
 	suId = sngss7_info->api_data.mtp2_id;
 
@@ -1099,7 +1099,7 @@ ftdm_status_t ftmod_sangoma_ss7_mtp2_set_sig_status(ftdm_channel_t *ftdmchan, ft
 			ret = FTDM_FAIL;
 	}
 	
-	SS7_FUNC_TRACE_EXIT(__FUNCTION__);
+	SS7_FUNC_TRACE_EXIT(__FTDM_FUNC__);
 	return ret;
 }
 
@@ -1110,12 +1110,12 @@ ftdm_status_t ftmod_sangoma_ss7_mtp2_transmit(ftdm_channel_t *ftdmchan, void *da
 	sngss7_chan_data_t *sngss7_info;
 	
 	SuId suId;
-	SS7_FUNC_TRACE_ENTER(__FUNCTION__);
+	SS7_FUNC_TRACE_ENTER(__FTDM_FUNC__);
 	sngss7_info = (sngss7_chan_data_t*) ftdmchan->call_data;
 	suId = sngss7_info->api_data.mtp2_id;
 
 	sng_ss7_ap_dat_req(suId, data, size);
-	SS7_FUNC_TRACE_EXIT(__FUNCTION__);
+	SS7_FUNC_TRACE_EXIT(__FTDM_FUNC__);
 	return FTDM_BREAK;
 }
 
@@ -1130,7 +1130,7 @@ ftdm_status_t ftmod_sangoma_ss7_mtp2_indicate(ftdm_channel_t *ftdmchan)
 	MtpStatus status = 0;
 	int16_t ret = 0;
 	
-	SS7_FUNC_TRACE_ENTER(__FUNCTION__);
+	SS7_FUNC_TRACE_ENTER(__FTDM_FUNC__);
 
 	ss7_info = (sngss7_chan_data_t*)ftdmchan->call_data;	
 	suId = ss7_info->api_data.mtp2_id;
@@ -1173,7 +1173,7 @@ ftdm_status_t ftmod_sangoma_ss7_mtp2_indicate(ftdm_channel_t *ftdmchan)
 	}
 
 	ret = sng_ss7_ap_sta_req(suId, action, status);
-	SS7_FUNC_TRACE_EXIT(__FUNCTION__);
+	SS7_FUNC_TRACE_EXIT(__FTDM_FUNC__);
 	if (!ret) {
 		return FTDM_SUCCESS;
 	} else {

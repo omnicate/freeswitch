@@ -379,13 +379,13 @@ ftdm_status_t copy_chargeNum_from_sngss7(ftdm_channel_t *ftdmchan,  SiChargeNum 
 
 	if (chargeNum->natAddr.pres == PRSNT_NODEF) {
 		sprintf(var, "%d", chargeNum->natAddr.val);
-		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found natAddr.val %d\n", var);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found natAddr.val %s\n", var);
 		sngss7_add_var(sngss7_info, "ss7_chargenum_nadi", var);
 	}
 
 	if (chargeNum->numPlan.pres == PRSNT_NODEF) {
 		sprintf(var, "%d", chargeNum->numPlan.val);
-		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found chargeNum numbering plan %d\n", var);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found chargeNum numbering plan %s\n", var);
 		sngss7_add_var(sngss7_info, "ss7_chargenum_plan", var);
 	}
 
@@ -1705,7 +1705,7 @@ ftdm_status_t copy_access_transport_from_sngss7(ftdm_channel_t *ftdmchan, SiAccT
 		unsigned char *ie = &accTrnspt->infoElmts.val[i];
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Found IE 0x%X of length %d, type=0x%X\n", ie[0], ie[1], ie[2]);
 		if (ie[1] <= 0) {
-			ftdm_log_chan(ftdmchan, FTDM_LOG_ERROR, "w00t!\n", ie[1]);
+			ftdm_log_chan(ftdmchan, FTDM_LOG_ERROR, "w00t %c!\n", ie[1]);
 			break;
 		}
 		switch (ie[0]) {
@@ -2007,7 +2007,7 @@ static void bcd_decode(ftdm_channel_t *ftdmchan, unsigned char *bcdbuf, int bcd_
 			break;
 		}
 		if (i < 0 || i > 9) {
-			ftdm_log_chan(ftdmchan, FTDM_LOG_ERROR, "Invalid BCD value %d at nibble %d\n", nib);
+			ftdm_log_chan(ftdmchan, FTDM_LOG_ERROR, "Invalid BCD value %d at nibble %d\n", i, nib);
 			break;
 		}
 		dstbuf[c] = ('0' + i); /* integer to ascii */
@@ -4740,13 +4740,11 @@ ftdm_status_t check_for_reconfig_flag(ftdm_span_t *ftdmspan, ftdm_sngss7_operati
 	ftdm_channel_t		*ftdmchan = NULL;
 	sngss7_chan_data_t	*sngss7_info = NULL;
 	sng_isup_inf_t		*sngss7_intf = NULL;
-	uint8_t				state;
-	uint8_t				bits_ab = 0;
-	uint8_t				bits_cd = 0;	
-	uint8_t				bits_ef = 0;
-	int 				x;
-	int					ret;
-	ret=0;
+	uint8_t			state;
+	uint8_t			bits_ab = 0;
+	uint8_t			bits_cd = 0;	
+	uint8_t			bits_ef = 0;
+	int 			x;
 
 	for (x = 1; x < (ftdmspan->chan_count + 1); x++) {
 	/**************************************************************************/
@@ -5204,7 +5202,7 @@ ftdm_status_t sngss7_save_iam(ftdm_channel_t *ftdmchan, SiConEvnt *siConEvnt)
 		goto done;
 	}
 
-	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Compressed IAM size:%d\n", len);
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Compressed IAM size:%lu\n", len);
 
 	/* Worst case: size will triple after url encode */
 	url_encoded_iam = ftdm_malloc(3*sizeof(*siConEvnt));

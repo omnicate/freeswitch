@@ -258,11 +258,13 @@ ftdm_status_t sngisdn_activate_trace(ftdm_span_t *span, sngisdn_tracetype_t trac
 	if (span) {
 		signal_data = sngisdn_dchan((sngisdn_span_data_t*)span->signal_data);
 	} else {
-		ftdm_log(FTDM_LOG_ERROR, "Invalid span passed\n");
-		return FTDM_FAIL;
+		if ((trace_opt != SNGISDN_STACK_TRACE_ENABLE) && (trace_opt != SNGISDN_STACK_TRACE_DISABLE)) {
+			ftdm_log(FTDM_LOG_ERROR, "Invalid span passed\n");
+			return FTDM_FAIL;
+		}
 	}
 
-	if (!signal_data) {
+	if ((!signal_data) && (trace_opt != SNGISDN_STACK_TRACE_ENABLE) && (trace_opt != SNGISDN_STACK_TRACE_DISABLE)) {
 		ftdm_log(FTDM_LOG_ERROR, "%s:Span is not used by signalling module\n", span->name);
 		return FTDM_FAIL;
 	}
@@ -309,12 +311,12 @@ ftdm_status_t sngisdn_activate_trace(ftdm_span_t *span, sngisdn_tracetype_t trac
 
 		case SNGISDN_STACK_TRACE_ENABLE:
 				if (sngisdn_debug_q931(AENA, SADBG) != FTDM_SUCCESS) {
-					ftdm_log(FTDM_LOG_ERROR, "%s:Failed to enable q931 trace\n", signal_data->ftdm_span->name);
+					ftdm_log(FTDM_LOG_ERROR, "Failed to enable q931 trace\n");
 				} else {
 					ftdm_log(FTDM_LOG_INFO, "ISDN q931 stack trace enable\n");
 				}
 				if (sngisdn_debug_q921(AENA, SADBG) != FTDM_SUCCESS) {
-					ftdm_log(FTDM_LOG_ERROR, "%s:Failed to enable q921 trace\n", signal_data->ftdm_span->name);
+					ftdm_log(FTDM_LOG_ERROR, "Failed to enable q921 trace\n");
 				} else {
 					ftdm_log(FTDM_LOG_INFO, "ISDN q921 stack trace enable\n");
 				}
@@ -322,12 +324,12 @@ ftdm_status_t sngisdn_activate_trace(ftdm_span_t *span, sngisdn_tracetype_t trac
 
 		case SNGISDN_STACK_TRACE_DISABLE:
 				if (sngisdn_debug_q931(ADISIMM, SADBG) != FTDM_SUCCESS) {
-					ftdm_log(FTDM_LOG_ERROR, "%s:Failed to enable q931 trace\n", signal_data->ftdm_span->name);
+					ftdm_log(FTDM_LOG_ERROR, "Failed to enable q931 trace\n");
 				} else {
 					ftdm_log(FTDM_LOG_INFO, "ISDN q931 stack trace disable\n");
 				}
 				if (sngisdn_debug_q921(ADISIMM, SADBG) != FTDM_SUCCESS) {
-					ftdm_log(FTDM_LOG_ERROR, "%s:Failed to enable q921 trace\n", signal_data->ftdm_span->name);
+					ftdm_log(FTDM_LOG_ERROR, "Failed to enable q921 trace\n");
 				} else {
 					ftdm_log(FTDM_LOG_INFO, "ISDN q921 stack trace disable\n");
 				}

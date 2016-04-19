@@ -101,7 +101,7 @@ ftdm_status_t sangoma_isdn_bidir_tap_generate_invite(sngisdn_tap_t *tap, passive
 			ftdm_channel_close(&pchan);
 
 			ftdm_log_chan(peerfchan, FTDM_LOG_NOTICE,
-						  "[%s:%d Callref- %d] Channel moving to down state when SETUP received!\n",
+						  "[%s:%d Callref- %d] Channel moving to down state from state[%s] when SETUP received!\n",
 						  peertap->span->name, pcall->chanId, crv, ftdm_channel_state2str(peerfchan->state));
 		}
 		ftdm_clear_flag(peerfchan, FTDM_CHANNEL_INUSE);
@@ -160,7 +160,7 @@ ftdm_status_t sangoma_isdn_bidir_tap_handle_event_con(sngisdn_tap_t *tap, uint8_
 		}
 
 		/* Add the call inforamtion in to call hash list based on call reference value if it is not present */
-		ftdm_log(FTDM_LOG_DEBUG, "[%s Callref- %d] Inserting peercall in hash list\n", tap->span->name, crv, SNG_DECODE_ISDN_EVENT(msgType));
+		ftdm_log(FTDM_LOG_DEBUG, "[%s Callref- %d] Inserting peercall in hash list for %s received\n", tap->span->name, crv, SNG_DECODE_ISDN_EVENT(msgType));
 		call_info = ftdm_calloc(sizeof(*call_info), 1);
 		if (!call_info) {
 			ftdm_log(FTDM_LOG_ERROR, "Unable to allocate memory with crv = %d in peer tap call list for span %s\n", crv, tap->span->name);

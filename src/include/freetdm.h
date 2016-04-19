@@ -1156,8 +1156,8 @@ FT_DECLARE(ftdm_bool_t) ftdm_channel_call_check_done(const ftdm_channel_t *ftdmc
 FT_DECLARE(ftdm_bool_t) ftdm_channel_call_check_hold(const ftdm_channel_t *ftdmchan);
 
 /*! \brief Set the channel signaling status */
-#define ftdm_channel_set_sig_status(ftdmchan, sigstatus) _ftdm_channel_set_sig_status(__FILE__, __FUNCTION__, __LINE__, (ftdmchan), (sigstatus), NULL)
-#define ftdm_channel_set_sig_status_ex(ftdmchan, sigstatus, usrmsg) _ftdm_channel_set_sig_status(__FILE__, __FUNCTION__, __LINE__, (ftdmchan), (sigstatus), usrmsg)
+#define ftdm_channel_set_sig_status(ftdmchan, sigstatus) _ftdm_channel_set_sig_status(__FILE__, __FTDM_FUNC__, __LINE__, (ftdmchan), (sigstatus), NULL)
+#define ftdm_channel_set_sig_status_ex(ftdmchan, sigstatus, usrmsg) _ftdm_channel_set_sig_status(__FILE__, __FTDM_FUNC__, __LINE__, (ftdmchan), (sigstatus), usrmsg)
 /*! \brief Set channel signaling status (ie: put specific circuit down) only if supported by the signaling (see ftdm_channel_set_sig_stauts for an easy to use macro)
  *  *  \note 
  *   */

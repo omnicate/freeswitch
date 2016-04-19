@@ -1486,7 +1486,7 @@ void ftdm_m2ua_start_timer(sng_m2ua_tmr_evt_types_e evt_type , int peer_id)
 
     if (peer->tmr_running) {
         SS7_INFO (" Timer[%s] already running with timer-id[%d]\n",
-                SNG_M2UA_PRINT_TIMER(peer->tmr_event), sched->tmr_id);
+                SNG_M2UA_PRINT_TIMER(peer->tmr_event), (int)sched->tmr_id);
         return;
     }
 
@@ -1524,7 +1524,7 @@ void ftdm_m2ua_start_timer(sng_m2ua_tmr_evt_types_e evt_type , int peer_id)
         SS7_ERROR ("Unable to schedule %s timer\n", &timer_name[0]);
     }else{
         SS7_INFO ("Timer[%s] started with timer-id[%d] for 100 ms for peer[%d]\n",
-                &timer_name[0], sched->tmr_id,peer->id);
+                &timer_name[0], (int)sched->tmr_id,peer->id);
         peer->tmr_running = 0x01;
     }
 

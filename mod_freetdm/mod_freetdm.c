@@ -4573,7 +4573,7 @@ static switch_status_t load_config(int reload)
 		parse_gsm_spans(cfg, spans);
 	}
 
-	switch_core_hash_init(&globals.ss7_configs, module_pool);
+	switch_core_hash_init(&globals.ss7_configs);
 	if ((spans = switch_xml_child(cfg, "sangoma_ss7_spans"))) {
 		parse_ss7_spans(cfg, spans, reload);
 	}
@@ -6494,9 +6494,11 @@ static ftdm_cli_entry_t ftdm_cli_options[] =
 	{ "list", "", "", NULL, ftdm_cmd_list, NULL },
 	{ "start", "<span_id|span_name>", "", NULL, ftdm_cmd_start_stop, NULL },
 	{ "stop", "<span_id|span_name>", "", NULL, ftdm_cmd_start_stop, NULL },
+	{ "destroy", "<span_id|span_name>", "", NULL, ftdm_cmd_destroy, NULL },
 	{ "reset", "<span_id|span_name> [<chan_id>]", "", NULL, ftdm_cmd_reset, NULL },
 	{ "alarms", "<span_id> <chan_id>", "", NULL, ftdm_cmd_alarms, NULL },
 	{ "dump", "<span_id|span_name> [<chan_id>]", "", NULL, ftdm_cmd_dump, NULL },
+	{ "xmlstatus", "<span_id|span_name>", "", NULL, ftdm_cmd_xml_status, NULL },
 	{ "sigstatus", "get|set <span_id|span_name> [<chan_id>] [<sigstatus>]", "::[set:get", NULL, ftdm_cmd_sigstatus, NULL },
 	{ "trace", "<path> <span_id|span_name> [<chan_id>]", "", NULL, ftdm_cmd_trace, NULL },
 	{ "notrace", "<span_id|span_name> [<chan_id>]", "", NULL, ftdm_cmd_notrace, NULL },
@@ -6516,7 +6518,7 @@ static ftdm_cli_entry_t ftdm_cli_options[] =
 	{ "core flag", "[!]<flag-int-value|flag-name> [<span_id|span_name>] [<chan_id>]", "", NULL, NULL, NULL },
 	{ "core spanflag", "[!]<flag-int-value|flag-name> [<span_id|span_name>]", "", NULL, NULL, NULL },
 	{ "core calls", "", "", NULL, NULL, NULL },
-	{ "reload", "", "", ftdm_cmd_reload, NULL },
+	{ "reload", "", "", NULL, ftdm_cmd_reload, NULL },
 };
 
 static void print_usage(switch_stream_handle_t *stream, ftdm_cli_entry_t *cli)

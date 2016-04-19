@@ -227,7 +227,7 @@ void handle_route_t30(void *userdata)
 		SS7_DEBUG("NSG-ACC: Restarting T-29 & T-30 timers as still DPC[%d] has congestion level of [%d]\n", sngss7_rmt_cong->dpc, sngss7_rmt_cong->sngss7_rmtCongLvl);
 		/* This should never happen but in order to handle error properly check is required */
 		if (sngss7_rmt_cong->t29.tmr_id) {
-			SS7_DEBUG("NSG-ACC: Starting T29 Timer %d is already running donot start it\n", sngss7_rmt_cong->t29.tmr_id);
+			SS7_DEBUG("NSG-ACC: Starting T29 Timer %d is already running donot start it\n", (int)sngss7_rmt_cong->t29.tmr_id);
 			goto start_t30;
 		}
 
@@ -240,13 +240,13 @@ void handle_route_t30(void *userdata)
 			SS7_ERROR ("NSG-ACC: Unable to schedule timer T29\n");
 			goto end;
 		} else {
-			SS7_DEBUG("NSG-ACC: T29 Timer is re-started for [%d]msec with timer-id[%d] for dpc[%d]\n", sngss7_rmt_cong->t29.beat, sngss7_rmt_cong->t29.tmr_id, sngss7_rmt_cong->dpc);
+			SS7_DEBUG("NSG-ACC: T29 Timer is re-started for [%d]msec with timer-id[%d] for dpc[%d]\n", sngss7_rmt_cong->t29.beat, (int)sngss7_rmt_cong->t29.tmr_id, sngss7_rmt_cong->dpc);
 		}
 
 start_t30:
 		/* This should never happen but in order to handle error properly check is required */
 		if (sngss7_rmt_cong->t30.tmr_id) {
-			SS7_DEBUG("NSG-ACC: Starting T30 Timer %d is already running donot start it\n", sngss7_rmt_cong->t30.tmr_id);
+			SS7_DEBUG("NSG-ACC: Starting T30 Timer %d is already running donot start it\n", (int)sngss7_rmt_cong->t30.tmr_id);
 			goto end;
 		}
 		if (ftdm_sched_timer (sngss7_rmt_cong->t30.tmr_sched,
@@ -266,7 +266,7 @@ start_t30:
 				}
 			}
 		} else {
-			SS7_DEBUG("NSG-ACC: T30 Timer started for [%d]msec with timer-id[%d] for dpc[%d]\n", sngss7_rmt_cong->t30.beat, sngss7_rmt_cong->t30.tmr_id, sngss7_rmt_cong->dpc);
+			SS7_DEBUG("NSG-ACC: T30 Timer started for [%d]msec with timer-id[%d] for dpc[%d]\n", sngss7_rmt_cong->t30.beat, (int)sngss7_rmt_cong->t30.tmr_id, sngss7_rmt_cong->dpc);
 		}
 	} else {
 		/* Start Releasing traffic normally i.e. empty SS7 Call Queue */

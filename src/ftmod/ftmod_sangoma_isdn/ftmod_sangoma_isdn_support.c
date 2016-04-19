@@ -563,7 +563,7 @@ ftdm_status_t get_user_to_user(ftdm_channel_t *ftdmchan, UsrUsr *usrUsr)
 	sngisdn_span_data_t *signal_data = (sngisdn_span_data_t*) ftdmchan->span->signal_data;
 
 	if (usrUsr->eh.pres != PRSNT_NODEF) {
-		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "User-User IE not present\n", usrUsr->usrInfo.pres);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "User-User IE not present %s\n", "");
 		return FTDM_FAIL;
 	}
 	memset(val, 0, sizeof(val));
@@ -591,7 +591,7 @@ ftdm_status_t get_user_to_user(ftdm_channel_t *ftdmchan, UsrUsr *usrUsr)
 		asn_dec_rval_t rval;
 		rval = ber_decode(0, &asn_DEF_LawfulInterceptionData, (void **)&dec_li_data, usrUsr->usrInfo.val, usrUsr->usrInfo.len);
 		if (rval.code != RC_OK) {
-			ftdm_log_chan(ftdmchan, FTDM_LOG_ERROR, "LI-decode error at byte %ld\n", rval.consumed);
+			ftdm_log_chan(ftdmchan, FTDM_LOG_ERROR, "LI-decode error at byte %ld\n", (long int)rval.consumed);
 			goto done;
 		}
 		#define set_li_element(element, var) \
@@ -599,7 +599,7 @@ ftdm_status_t get_user_to_user(ftdm_channel_t *ftdmchan, UsrUsr *usrUsr)
 			strbuf[(element)->size] = 0; \
 			sngisdn_add_var(chandata, var, strbuf);
 
-		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "LI-decoded %ld bytes\n", rval.consumed);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "LI-decoded %ld bytes\n", (long int)rval.consumed);
 
 		set_li_element(&dec_li_data->lawfullInterceptionIdentifier, "li.id");
 
@@ -1196,26 +1196,6 @@ ftdm_status_t set_user_user_ie(ftdm_channel_t *ftdmchan, UsrUsr *usrUsr)
 			usrUsr->protocolDisc.pres = PRSNT_NODEF;
 			usrUsr->protocolDisc.val = atoi(val);
 		}
-	}
-	return FTDM_SUCCESS;
-}
-
-ftdm_status_t set_called_subaddr(ftdm_channel_t *ftdmchan, CdPtySad *cdPtySad)
-{
-	const char* cld_subaddr = NULL;
-	cld_subaddr = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "isdn.called_subaddr");
-	if (!ftdm_strlen_zero(cld_subaddr)) {
-		unsigned len = strlen (cld_subaddr);
-		cdPtySad->eh.pres = PRSNT_NODEF;
-		cdPtySad->typeSad.pres = 1;
-		cdPtySad->typeSad.val = 0; /* NSAP */
-		cdPtySad->oddEvenInd.pres = 1;
-		cdPtySad->oddEvenInd.val = 0;
-
-		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Sending Called Party Subaddress:%s\n", cld_subaddr);
-		cdPtySad->sadInfo.pres = 1;
-		cdPtySad->sadInfo.len = len;
-		memcpy(cdPtySad->sadInfo.val, cld_subaddr, len);
 	}
 	return FTDM_SUCCESS;
 }
@@ -1916,7 +1896,7 @@ ftdm_status_t sngisdn_show_span_status(ftdm_stream_handle_t *stream, ftdm_span_t
 			span->name, alarmbits ? "ALARMED" : "OK",
 			ftdm_signaling_status2str(sigstatus));
 
-	fchan = sngisdn_dchan(signal_data)->link_id;
+	fchan = signal_data->dchan;;
 
 	if (fchan) {
 		ftdm_channel_get_alarms(fchan, &alarmbits);

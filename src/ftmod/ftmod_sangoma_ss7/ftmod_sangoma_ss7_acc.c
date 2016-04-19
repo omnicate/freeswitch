@@ -421,7 +421,7 @@ ftdm_status_t ftdm_check_acc(sngss7_chan_data_t *sngss7_info, SiRelEvnt *siRelEv
 
 			/* Restart T29/T30 if we received REL in congested state */
 			if (sngss7_rmt_cong->t29.tmr_id) {
-				SS7_INFO_CHAN(ftdmchan,"NSG-ACC: Starting T29 Timer %d is already running donot start it\n", sngss7_rmt_cong->t29.tmr_id);
+				SS7_INFO_CHAN(ftdmchan,"NSG-ACC: Starting T29 Timer %d is already running donot start it\n", (int)sngss7_rmt_cong->t29.tmr_id);
 				goto start_t30;
 			}
 
@@ -437,12 +437,12 @@ ftdm_status_t ftdm_check_acc(sngss7_chan_data_t *sngss7_info, SiRelEvnt *siRelEv
 				SS7_ERROR ("NSG-ACC: Unable to schedule timer T29\n");
 				return FTDM_SUCCESS;
 			} else {
-				SS7_INFO_CHAN(ftdmchan,"NSG-ACC: T29 Timer started with timer-id[%d] for dpc[%d]\n", sngss7_rmt_cong->t29.tmr_id, sngss7_rmt_cong->dpc);
+				SS7_INFO_CHAN(ftdmchan,"NSG-ACC: T29 Timer started with timer-id[%d] for dpc[%d]\n", (int)sngss7_rmt_cong->t29.tmr_id, sngss7_rmt_cong->dpc);
 			}
 
 start_t30:
 			if (sngss7_rmt_cong->t30.tmr_id) {
-				SS7_INFO_CHAN(ftdmchan,"NSG-ACC: Starting T30 Timer %d is already running donot start it\n", sngss7_rmt_cong->t30.tmr_id);
+				SS7_INFO_CHAN(ftdmchan,"NSG-ACC: Starting T30 Timer %d is already running donot start it\n", (int)sngss7_rmt_cong->t30.tmr_id);
 				goto done;
 			}
 
@@ -464,7 +464,7 @@ start_t30:
 					}
 				}
 			} else {
-				SS7_INFO_CHAN(ftdmchan,"NSG-ACC: T30 Timer started with timer-id[%d] for dpc[%d]\n", sngss7_rmt_cong->t30.tmr_id, sngss7_rmt_cong->dpc);
+				SS7_INFO_CHAN(ftdmchan,"NSG-ACC: T30 Timer started with timer-id[%d] for dpc[%d]\n", (int)sngss7_rmt_cong->t30.tmr_id, sngss7_rmt_cong->dpc);
 			}
 		}
 done:

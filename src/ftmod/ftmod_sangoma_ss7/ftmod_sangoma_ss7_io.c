@@ -1062,7 +1062,7 @@ int ftmod_ss7_get_isup_intf_id_by_span_id(int span_id)
 	}
 
 	if (!isup_intf_id) {
-		SS7_ERROR("No Configured ISUP Interface found in global ISUP circuits list!\n", span_id);
+		SS7_ERROR("No Configured ISUP Interface found in global ISUP circuits list for span %d!\n", span_id);
 		goto done;
 	}
 
@@ -2624,7 +2624,6 @@ ftdm_status_t ftmod_ss7_validate_mtp3_reconfig_changes(int span_id, int span_lis
 	ftdm_status_t ret         = FTDM_FAIL;
 	sng_mtp3_link_t *mtp3Link = NULL;
 	int reconfig_val          = 0;
-	int nsap_cfg_idx          = 0;
 	int span_no 		  = 0;
 	int cfg_val               = 0;
 	int idx                   = 1;
@@ -2669,9 +2668,6 @@ ftdm_status_t ftmod_ss7_validate_mtp3_reconfig_changes(int span_id, int span_lis
 						ret = FTDM_FAIL;
 						goto end;
 					}
-
-					/* get nsap index mapped to this mtp3 link */
-					nsap_cfg_idx = ftmod_ss7_get_nsap_id_by_mtp3_id(idx);
 
 					/* check lnkType */
 					cfg_val = g_ftdm_sngss7_data.cfg.mtp3Link[idx].linkType;

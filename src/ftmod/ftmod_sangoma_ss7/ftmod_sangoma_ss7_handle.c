@@ -130,7 +130,7 @@ ftdm_status_t handle_con_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 		}
 	} else {
 		SS7_ERROR("Wrong circuit type. circuit = %d\n", circuit);
-		SS7_FUNC_TRACE_EXIT(__FUNCTION__);
+		SS7_FUNC_TRACE_EXIT(__FTDM_FUNC__);
 		return FTDM_FAIL;
 	}
 
@@ -535,10 +535,10 @@ ftdm_status_t handle_con_sta(uint32_t suInstId, uint32_t spInstId, uint32_t circ
 					const char *val = NULL;
 					val = ftdm_usrmsg_get_var(ftdmchan->usrmsg, "ss7_force_early_media");
 					if (!ftdm_strlen_zero(val) && ftdm_true(val)) {
-						SS7_WARN_CHAN(ftdmchan, "ss7_force_early_media set..moving to PROGRESS_MEDIA state \n", sngss7_info->circuit->cic);
+						SS7_WARN_CHAN(ftdmchan, "ss7_force_early_media set..moving to PROGRESS_MEDIA state for CIC %d\n", sngss7_info->circuit->cic);
 						next_state = FTDM_CHANNEL_STATE_PROGRESS_MEDIA;
 					} else if (g_ftdm_sngss7_data.cfg.force_early_media) {
-						SS7_WARN_CHAN(ftdmchan, "force_early_media configured..moving to PROGRESS_MEDIA state \n", sngss7_info->circuit->cic);
+						SS7_WARN_CHAN(ftdmchan, "force_early_media configured..moving to PROGRESS_MEDIA state for CIC %d\n", sngss7_info->circuit->cic);
 						/* forcefully moving to progress media */
 						next_state = FTDM_CHANNEL_STATE_PROGRESS_MEDIA;
 					}

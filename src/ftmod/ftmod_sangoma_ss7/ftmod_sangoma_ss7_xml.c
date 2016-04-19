@@ -4481,7 +4481,7 @@ static int ftmod_ss7_fill_in_circuits(sng_span_t *sngSpan, ftdm_sngss7_operating
 	int 			trans_idx = 0;
 	int			flag;
 	int			i;
-	int			x;
+	int			x = 0;
 
 	/* go through all the channels on ftdm span */
 	for (i = 1; i < (ftdmspan->chan_count+1); i++) {
@@ -4532,7 +4532,7 @@ static int ftmod_ss7_fill_in_circuits(sng_span_t *sngSpan, ftdm_sngss7_operating
 					}
 				}
 
-				SS7_INFO_CHAN(ftdmchan, "Skipping this channel in CIC configuration as this is a tranparent channel!\n","");
+				SS7_INFO_CHAN(ftdmchan, "Skipping this channel in CIC configuration as this is a tranparent channel! %s\n","");
 				x++;
 				chan_skip = FTDM_TRUE;
 				continue;
@@ -4981,7 +4981,7 @@ static int ftmod_ss7_fill_in_acc_timer(sng_route_t *mtp3_route, ftdm_span_t *spa
 		ftdm_safe_free(sngss7_rmt_cong);
 		return FTDM_SUCCESS;
 	} else {
-		SS7_DEBUG("NSG-ACC: ss7_active_calls hash list successfully created for dpc[%d]\n", dpc);
+		SS7_DEBUG("NSG-ACC: ss7_active_calls hash list successfully created for dpc[%s]\n", dpc);
 	}
 
 	/* Create mutex */
@@ -5099,7 +5099,7 @@ static int ftmod_ss7_fill_in_acc_timer(sng_route_t *mtp3_route, ftdm_span_t *spa
 					&sngss7_rmt_cong->acc_call_rate.tmr_id)) {
 			SS7_ERROR ("NSG-ACC: Unable to schedule ACC Call Rate Timer\n");
 		} else {
-			SS7_INFO("NSG-ACC: ACC Call Rate Timer started with timer-id[%d] for dpc[%d]\n", sngss7_rmt_cong->t29.tmr_id, sngss7_rmt_cong->dpc);
+			SS7_INFO("NSG-ACC: ACC Call Rate Timer started with timer-id[%d] for dpc[%d]\n", (int)sngss7_rmt_cong->t29.tmr_id, sngss7_rmt_cong->dpc);
 		}
 	}
 	return FTDM_SUCCESS;
@@ -5298,7 +5298,7 @@ static ftdm_status_t ftmod_ss7_parse_sng_gen_on_reload(ftdm_conf_node_t *sng_gen
 			}
 		} else if (!strcasecmp(parm->var, "max-cpu-usage")) {
 			if (g_ftdm_sngss7_data.cfg.max_cpu_usage != atoi(parm->val)) {
-				SS7_DEBUG("[Reload] Reconfiguring maximum cpu usage limit from %d to %d\n", g_ftdm_sngss7_data.cfg.max_cpu_usage);
+				SS7_DEBUG("[Reload] Reconfiguring maximum cpu usage limit from %d to %s\n", g_ftdm_sngss7_data.cfg.max_cpu_usage, parm->val);
 				g_ftdm_sngss7_data.cfg.max_cpu_usage = atoi(parm->val);
 			}
 		} else if (!strcasecmp(parm->var, "auto-congestion-control")) {
@@ -6245,7 +6245,6 @@ end:
 static ftdm_status_t ftmod_ss7_copy_cc_span_reconfig_changes()
 {
 	sng_isup_ckt_t *isupCkt 	= NULL;
-	ftdm_bool_t reload 		= FTDM_FALSE;
 	ftdm_status_t ret 		= FTDM_FAIL;
 	int idx 			= 1;
 
@@ -6254,7 +6253,6 @@ static ftdm_status_t ftmod_ss7_copy_cc_span_reconfig_changes()
 		if ((g_ftdm_sngss7_data.cfg.isupCkt[idx].id != 0) ||
 		    (g_ftdm_sngss7_data.cfg_reload.isupCkt[idx].id != 0)) {
 
-			reload = FTDM_FALSE;
 			isupCkt = &g_ftdm_sngss7_data.cfg_reload.isupCkt[idx];
 
 			if (g_ftdm_sngss7_data.cfg_reload.transCkt[idx - 1].ccSpan_id) {

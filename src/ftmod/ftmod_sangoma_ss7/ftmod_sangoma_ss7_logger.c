@@ -926,7 +926,7 @@ void handle_sng_m2ua_alarm(Pst *pst, MwMgmt *sta)
 			}
 		case LMW_EVENT_ASPM:
 			{
-				ftdm_log(FTDM_LOG_INFO," M2UA : LMW_EVENT_ASPM Event raised with peerId (%d), aspId (%d),"
+				ftdm_log(FTDM_LOG_INFO," M2UA : LMW_EVENT_ASPM Event raised with peerId (%d)"
 						" msgType (%d)\n\n",sta->t.usta.s.peerId,
 						sta->t.usta.t.aspm.msgType); 
 				break;
@@ -940,7 +940,7 @@ void handle_sng_m2ua_alarm(Pst *pst, MwMgmt *sta)
 			}
 		case LMW_EVENT_NOTIFY:
 			{
-				ftdm_log(FTDM_LOG_INFO," M2UA : LMW_EVENT_NOTIFY: peerId (%d), aspId (%d), ntfy status type (%d),"
+				ftdm_log(FTDM_LOG_INFO," M2UA : LMW_EVENT_NOTIFY: peerId (%d), aspId (%ld), ntfy status type (%d),"
 						" ntfy status id (%d)\n\n", sta->t.usta.s.peerId,
 						sta->t.usta.t.ntfy.aspId, sta->t.usta.t.ntfy.stType,
 						sta->t.usta.t.ntfy.stId);
@@ -962,7 +962,7 @@ void handle_sng_m2ua_alarm(Pst *pst, MwMgmt *sta)
 
 		case LMW_EVENT_M2UA_PROTO_ERROR:
 			{
-				ftdm_log(FTDM_LOG_ERROR, " M2UA : LMW_EVENT_M2UA_PROTO_ERROR with errorCode (%d)\n\n",
+				ftdm_log(FTDM_LOG_ERROR, " M2UA : LMW_EVENT_M2UA_PROTO_ERROR with errorCode (%ld)\n\n",
 						sta->t.usta.t.error.errCode);
 				break;
 			}
@@ -1006,17 +1006,17 @@ void handle_sng_m3ua_alarm(Pst *pst, ItMgmt *sta)
         case STITPS:
             {
                 ftdm_log(FTDM_LOG_INFO," STITPS: psId (%d) \n\n",
-                        sta->t.usta.s.psId);
+                        (int)sta->t.usta.s.psId);
                 break;
             }
 	case STITAPC:
 	    {
 		    if (sta->t.usta.alarm.event == LIT_EVENT_PC_CONGESTED) {
 			    ftdm_log(FTDM_LOG_INFO," STITAPC: Affected Point Code[%d] with congLevel[%d]\n\n",
-					    sta->t.usta.t.dpcEvt.aPc, sta->t.usta.t.dpcEvt.p.congLevel);
+					    (int)sta->t.usta.t.dpcEvt.aPc, sta->t.usta.t.dpcEvt.p.congLevel);
 		    } else {
 			    ftdm_log(FTDM_LOG_INFO," STITAPC: Affected Point Code[%d] with SrvInd[%d]\n\n",
-					    sta->t.usta.t.dpcEvt.aPc, sta->t.usta.t.dpcEvt.p.servInd);
+					    (int)sta->t.usta.t.dpcEvt.aPc, sta->t.usta.t.dpcEvt.p.servInd);
 		    }
 		    break;
 	    }

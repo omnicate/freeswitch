@@ -98,7 +98,7 @@ static ftdm_status_t parse_switchtype(const char* switch_name, ftdm_span_t *span
 	}else {
 
 		if(get_switch_type(switch_name,span,&switchtype) != FTDM_SUCCESS) {
-			ftdm_log(FTDM_LOG_ERROR, "%s: Error getting switch type\n", span->name, SNGISDN_NUM_LOCAL_NUMBERS);
+			ftdm_log(FTDM_LOG_ERROR, "%s: Error getting switch type\n", span->name);
 			return FTDM_FAIL;
 		}
 	}
@@ -122,8 +122,6 @@ static ftdm_status_t parse_switchtype(const char* switch_name, ftdm_span_t *span
 		/* add this span to its ent_cc */
 		signal_data->cc_id = i;
 
-		dchan_data->spans[signal_data->link_id] = signal_data;
-
 		/* add this span to its ent_cc */
 		signal_data->cc_id = i;
 		g_sngisdn_data.spans[signal_data->link_id] = signal_data;
@@ -131,9 +129,6 @@ static ftdm_status_t parse_switchtype(const char* switch_name, ftdm_span_t *span
 	} else {
 		return ret;
 	}
-
-
-	ftdm_log(FTDM_LOG_DEBUG, "%s: cc_id:%d dchan_id:%d span_id:%d link_id:%d\n", span->name, signal_data->cc_id, signal_data->dchan_id, signal_data->span_id, signal_data->link_id);
 
 	chaniter = ftdm_span_get_chan_iterator(span, NULL);
 	for (curr = chaniter; curr; curr = ftdm_iterator_next(curr)) {
@@ -151,6 +146,9 @@ static ftdm_status_t parse_switchtype(const char* switch_name, ftdm_span_t *span
 		}
 	}
 	ftdm_iterator_free(chaniter);
+
+	ftdm_log(FTDM_LOG_DEBUG, "%s: cc_id:%d dchan_id:%d span_id:%d link_id:%d\n", span->name, signal_data->cc_id, sngisdn_dchan(signal_data)->link_id, span->span_id, signal_data->link_id);
+
 	return FTDM_SUCCESS;
 }
 
@@ -757,7 +755,7 @@ ftdm_status_t ftmod_isdn_validate_switch_type_reconfig ( const char* switch_name
 	int	idx=0;
 
 	if(get_switch_type(switch_name, span , switchtype) != FTDM_SUCCESS) {
-		ftdm_log(FTDM_LOG_ERROR, "%s: Error getting switch type\n", span->name, SNGISDN_NUM_LOCAL_NUMBERS);
+		ftdm_log(FTDM_LOG_ERROR, "%s: Error getting switch type\n", span->name);
 		return FTDM_FAIL;
 	}
 
@@ -858,7 +856,7 @@ ftdm_status_t get_switch_type(const char* switch_name,ftdm_span_t *span ,int *sw
 			/* can be > 1 for some BRI variants */
 			break;
 		default:
-			ftdm_log(FTDM_LOG_ERROR, "%s:Unsupported trunktype:%s\n", span->name, switch_name, ftdm_trunk_type2str(span->trunk_type));
+			ftdm_log(FTDM_LOG_ERROR, "%s:Unsupported trunktype:%s\n", span->name, ftdm_trunk_type2str(span->trunk_type));
 			return FTDM_FAIL;
 	}
 

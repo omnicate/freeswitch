@@ -85,7 +85,7 @@ void sngisdn_snd_setup(ftdm_channel_t *ftdmchan)
 
 	set_user_user_ie(ftdmchan, &conEvnt.usrUsr);
 
-	ftdm_log_chan(ftdmchan, FTDM_LOG_INFO, "Sending SETUP (suId:%d suInstId:%u spInstId:%u dchan:%d ces:%d)\n", signal_data->cc_id, sngisdn_info->suInstId, sngisdn_info->spInstId, signal_data->dchan_id, sngisdn_info->ces);
+	ftdm_log_chan(ftdmchan, FTDM_LOG_INFO, "Sending SETUP (suId:%d suInstId:%u spInstId:%u dchan:%d ces:%d)\n", signal_data->cc_id, sngisdn_info->suInstId, sngisdn_info->spInstId, sngisdn_dchan(signal_data)->link_id, sngisdn_info->ces);
 
 	if (sng_isdn_con_request(signal_data->cc_id, sngisdn_info->suInstId, &conEvnt, sngisdn_dchan(signal_data)->link_id, sngisdn_info->ces)) {
 		ftdm_log_chan_msg(ftdmchan, FTDM_LOG_CRIT, "stack refused SETUP request\n");

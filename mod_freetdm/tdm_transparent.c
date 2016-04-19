@@ -202,7 +202,7 @@ static ftdm_status_t tchan_insert_sock_list(ftdm_span_t *span, tchan_info_t *tch
 			goto done;
 		}
 
-		switch_core_hash_init(&SPAN_CONFIG[span_id].sock_list, global_pool);
+		switch_core_hash_init(&SPAN_CONFIG[span_id].sock_list);
 
 		if (!SPAN_CONFIG[span_id].sock_list) {
 			ftdm_log(FTDM_LOG_ERROR, "Failed to create span %d socket hash list\n", span_id);
@@ -372,7 +372,7 @@ static ftdm_status_t tchan_insert_hash_list(ftdm_span_t *span, uint32_t chan_id,
 	}
 
 	if ((status = tchan_insert_sock_list(span, tchan_info)) != FTDM_SUCCESS) {
-		ftdm_log_tchan_msg(tchan_info->ftdmchan, FTDM_LOG_ERROR, "Failed to insert socket %d in to socket hash list per span basis!\n");
+		ftdm_log_tchan_msg(tchan_info->ftdmchan, FTDM_LOG_ERROR, "Failed to insert socket in to socket hash list per span basis!\n");
 		if (tchan_info->pool) {
 			switch_core_destroy_memory_pool(&tchan_info->pool);
 		}
@@ -420,8 +420,8 @@ ftdm_status_t tchan_get_sock_status(tchan_info_t *chan_info)
 	/* Iterate through all socket present in span socket hash list and if socket is already present for
 	 * local ip:port & remote ip:port then assign the same to the new transparent channel that has to be
 	 * inserted in the hash list */
-	for (idx = switch_hash_first(NULL, SPAN_CONFIG[span_id].sock_list); idx; idx = switch_hash_next(idx)) {
-		switch_hash_this(idx, &key, NULL, &val);
+	for (idx = switch_core_hash_first(SPAN_CONFIG[span_id].sock_list); idx; idx = switch_core_hash_next(&idx)) {
+		switch_core_hash_this(idx, &key, NULL, &val);
 		if (!key || !val) {
 			break;
 		}
@@ -510,8 +510,8 @@ static uint32_t tchan_get_span_chan_list(ftdm_span_t *ftdmspan, ftdm_channel_t *
 	void *val = NULL;
 
 	switch_assert(ftdmspan != NULL);
-	for (idx = switch_hash_first(NULL, tchan_list); idx; idx = switch_hash_next(idx)) {
-		switch_hash_this(idx, &key, NULL, &val);
+	for (idx = switch_core_hash_first(tchan_list); idx; idx = switch_core_hash_next(&idx)) {
+		switch_core_hash_this(idx, &key, NULL, &val);
 		if (!key || !val) {
 			break;
 		}
@@ -789,7 +789,7 @@ static ftdm_status_t tchan_gen_config(switch_xml_t general)
 		if (!strcasecmp(var, "chunk-size")) {
 			tchan_gen_cfg.chunk_size = atoi(val);
 			if (!tchan_gen_cfg.chunk_size) {
-				ftdm_log(FTDM_LOG_INFO, "Invalid chunck size %d value for transparent channels. Thus, setting it to default i.e. 10\n",
+				ftdm_log(FTDM_LOG_INFO, "Invalid chunck size %s value for transparent channels. Thus, setting it to default i.e. 10\n",
 						var);
 				tchan_gen_cfg.chunk_size = 10;
 			}
@@ -863,7 +863,7 @@ static ftdm_status_t tchan_config(ftdm_span_t *span, switch_xml_t mychan)
 	/* Create Transparent channel hash list if it is not present at all*/
 	if (tchan_list == NULL) {
 		switch_core_new_memory_pool(&global_pool);
-		switch_core_hash_init(&tchan_list, global_pool);
+		switch_core_hash_init(&tchan_list);
 
 		if (!tchan_list) {
 			ftdm_log(FTDM_LOG_ERROR, "Failed to create transparent channel hash list\n");
@@ -894,7 +894,7 @@ static ftdm_status_t tchan_config(ftdm_span_t *span, switch_xml_t mychan)
 		} else if (!strcasecmp(var, "local-port")) {
 			parse_info->local_port = val;
 		} else {
-			ftdm_log(FTDM_LOG_ERROR, "Invalid configuration parameter %s present for channel %d!\n", var, span_id, chan_id);
+			ftdm_log(FTDM_LOG_ERROR, "Invalid configuration parameter %s present for span %d channel %d!\n", var, span_id, chan_id);
 			goto done;
 		}
 	}
@@ -1126,21 +1126,21 @@ static void tchan_destroy_hash_list(uint32_t span_id)
 		return;
 	}
 
-	for (idx = switch_hash_first(NULL, SPAN_CONFIG[span_id].sock_list); idx; idx = switch_hash_next(idx)) {
-		switch_hash_this(idx, &key, NULL, &val);
+	for (idx = switch_core_hash_first(SPAN_CONFIG[span_id].sock_list); idx; idx = switch_core_hash_next(&idx)) {
+		switch_core_hash_this(idx, &key, NULL, &val);
 		if (!key || !val) {
 			break;
 		}
 
 		tchan_info = (tchan_info_t*)val;
 		if (!tchan_info->ftdmchan) {
-			ftdm_log(FTDM_LOG_ERROR, "Invalid entry found at index %d in socket hash list!\n", idx);
+			ftdm_log(FTDM_LOG_ERROR, "Invalid entry found at index %d in socket hash list!\n", (int)idx);
 			break;
 		}
 
 		chan_id = tchan_info->chan_id;
 		if (!chan_id) {
-			ftdm_log(FTDM_LOG_ERROR, "[s%dc%d] [%d:%d] Invalid channel ID %d found for span %d!\n", span_id, chan_id, span_id, chan_id);
+			ftdm_log(FTDM_LOG_ERROR, "[s%dc%d] [%d:%d] Invalid channel ID found for span!\n", span_id, chan_id, span_id, chan_id);
 			break;
 		}
 

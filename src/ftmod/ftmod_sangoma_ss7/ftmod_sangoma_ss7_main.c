@@ -2690,13 +2690,10 @@ static ftdm_status_t ftdm_sangoma_ss7_start(ftdm_span_t * span)
 {
 	ftdm_channel_t		*ftdmchan = NULL;
 	sngss7_chan_data_t	*sngss7_info = NULL;
-	sngss7_span_data_t 	*sngss7_span = NULL;
 	sng_isup_inf_t		*sngss7_intf = NULL;
 	int 			x;
-	int			first_channel;
+/*	int			first_channel;*/
 	ftdm_sngss7_operating_modes_e opr_mode = SNG_SS7_OPR_MODE_NONE;
-
-	first_channel=0;
 
 	if(!ftdm_span_test_reconfig_flag(span)){
 		SS7_INFO ("[Reload] Starting span %s:%u after reconfiguration.\n", span->name, span->span_id);
@@ -2734,7 +2731,6 @@ static ftdm_status_t ftdm_sangoma_ss7_start(ftdm_span_t * span)
 		if (ftdmchan->call_data == NULL) continue;
 
 		sngss7_info = ftdmchan->call_data;
-		sngss7_span = ftdmchan->span->signal_data;
 		sngss7_intf = &g_ftdm_sngss7_data.cfg.isupIntf[sngss7_info->circuit->infId];
 
 		/* flag the circuit as active so we can receieve events on it */
