@@ -2769,7 +2769,7 @@ static dht_msg_type_t parse_message(const unsigned char *buf, int buflen,
 		}
 
 		if ( ( b_tmp = ben_dict_get_by_str(bencode_p, "y") ) ) {
-			if ( ben_cmp_with_str(b_tmp, "q") ) {
+			if ( !ben_cmp_with_str(b_tmp, "q") ) {
 				struct bencode *b_query = NULL;
 				const char *val = ben_str_val(b_tmp);
 				ks_log(KS_LOG_DEBUG, "Message Query [%s]\n", val);
@@ -2785,10 +2785,10 @@ static dht_msg_type_t parse_message(const unsigned char *buf, int buflen,
 					}
 				}
 				
-			} else if ( ben_cmp_with_str(b_tmp, "r") ) {
+			} else if ( !ben_cmp_with_str(b_tmp, "r") ) {
 				const char *val = ben_str_val(b_tmp);
 				ks_log(KS_LOG_DEBUG, "Message Response [%s]\n", val);
-			} else if ( ben_cmp_with_str(b_tmp, "e") ) {
+			} else if ( !ben_cmp_with_str(b_tmp, "e") ) {
 				const char *val = ben_str_val(b_tmp);
 				ks_log(KS_LOG_DEBUG, "Message Error [%s]\n", val);
 			} else {
