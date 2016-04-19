@@ -124,6 +124,7 @@ KS_DECLARE(int) ks_cpu_count(void);
 #include "simclist.h"
 #include "ks_ssl.h"
 #include "kws.h"
+#include "ks_bencode.h"
 //#include "ks_rng.h"
 
 KS_END_EXTERN_C

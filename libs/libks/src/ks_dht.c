@@ -2743,6 +2743,8 @@ static dht_msg_type_t parse_message(const unsigned char *buf, int buflen,
 									int *want_return)
 {
     const unsigned char *p;
+	struct bencode *bencode_p = NULL;
+	struct bencode *b_tmp = NULL;
 
     /* This code will happily crash if the buffer is not NUL-terminated. */
     if (buf[buflen] != '\0') {
@@ -2752,6 +2754,64 @@ static dht_msg_type_t parse_message(const unsigned char *buf, int buflen,
 
 #define CHECK(ptr, len) if (((unsigned char*)ptr) + (len) > (buf) + (buflen)) goto overflow;
 
+	ks_log(KS_LOG_DEBUG, "Starting Bencode decode of DHT message\n");	
+
+	bencode_p = ben_decode((const void *) buf, buflen);
+	
+	ks_log(KS_LOG_DEBUG, "decoded: %s \n", ben_print(bencode_p));
+
+	if ( ben_dict_get_by_str(bencode_p, "y") && ben_dict_get_by_str(bencode_p, "t") ){
+		/* This message is a KRPC message(aka DHT message) */
+		b_tmp = ben_dict_get_by_str(bencode_p, "t");
+		if ( b_tmp ) {
+			const char *val = ben_str_val(b_tmp);
+			ks_log(KS_LOG_DEBUG, "Message transaction [%s]\n", val);
+		}
+
+		if ( ( b_tmp = ben_dict_get_by_str(bencode_p, "y") ) ) {
+			if ( ben_cmp_with_str(b_tmp, "q") ) {
+				const char *val = ben_str_val(b_tmp);
+				ks_log(KS_LOG_DEBUG, "Message Query [%s]\n", val);
+			} else if ( ben_cmp_with_str(b_tmp, "r") ) {
+				const char *val = ben_str_val(b_tmp);
+				ks_log(KS_LOG_DEBUG, "Message Response [%s]\n", val);
+			} else if ( ben_cmp_with_str(b_tmp, "e") ) {
+				const char *val = ben_str_val(b_tmp);
+				ks_log(KS_LOG_DEBUG, "Message Error [%s]\n", val);
+			} else {
+				ks_log(KS_LOG_DEBUG, "Message Type Unknown!!!\n");
+			}
+		}
+		
+		/* 
+		   Decode the request or response 
+		   (b_tmp = ben_dict_get_by_str(bencode_p, "y"))) {
+		   ks_log(KS_LOG_DEBUG, "query value: %s\n", ben_print(b_tmp));
+		*/
+	} else {
+		ks_log(KS_LOG_DEBUG, "Message not a remote DHT request nor query\n");
+	}
+	/*
+    if (dht_memmem(buf, buflen, "1:q4:ping", 9)) {
+        return DHT_MSG_PING;
+	}
+
+    if (dht_memmem(buf, buflen, "1:q9:find_node", 14)) {
+       return DHT_MSG_FIND_NODE;
+	}
+
+    if (dht_memmem(buf, buflen, "1:q9:get_peers", 14)) {
+        return DHT_MSG_GET_PEERS;
+	}
+
+    if (dht_memmem(buf, buflen, "1:q13:announce_peer", 19)) {
+       return DHT_MSG_ANNOUNCE_PEER;
+	}
+
+	char *val = ben_str_val(b_tmp);
+
+	*/
+	
     if (tid_return) {
         p = dht_memmem(buf, buflen, "1:t", 3);
         if (p) {

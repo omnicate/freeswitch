@@ -4,22 +4,8 @@
  * Written by Heikki Orsila <heikki.orsila@iki.fi> and
  * Janne Kulmala <janne.t.kulmala@tut.fi> in 2011.
  */
-/*
-Copyright (C) 2002-2005 Bram Cohen and Ross Cohen
 
-All rights reserved.
-
-Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
-
-* Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
-* Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
-* Neither the name of Codeville nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
-
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
- */
-
-#include <ks.h>
+#include <bencodetools/bencode.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -29,8 +15,8 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 #include <ctype.h>
 #include <stdarg.h>
 
-#define die(fmt, ...) /*fprintf(stderr, "bencode: fatal error: " fmt, __VA_ARGS__ ); abort()*/ abort()
-#define warn(fmt, ...) /*fprintf(stderr, "bencode: warning: " fmt, __VA_ARGS__ )*/
+#define die(fmt, args...) do { fprintf(stderr, "bencode: fatal error: " fmt, ## args); abort(); } while (0)
+#define warn(fmt, args...) do { fprintf(stderr, "bencode: warning: " fmt, ## args); } while (0)
 
 #define MAX_ALLOC (((size_t) -1) / sizeof(struct bencode *) / 2)
 #define DICT_MAX_ALLOC (((size_t) -1) / sizeof(struct bencode_dict_node) / 2)
@@ -631,7 +617,7 @@ static struct bencode *decode_dict(struct ben_decode_ctx *ctx)
 
 	d = alloc(BENCODE_DICT);
 	if (d == NULL) {
-		//warn("Not enough memory for dict\n");
+		warn("Not enough memory for dict\n");
 		return ben_oom_ptr(ctx);
 	}
 
@@ -645,7 +631,7 @@ static struct bencode *decode_dict(struct ben_decode_ctx *ctx)
 			ben_free(key);
 			key = NULL;
 			ctx->error = BEN_INVALID;
-			//warn("Invalid dict key type\n");
+			warn("Invalid dict key type\n");
 			goto error;
 		}
 
@@ -1404,7 +1390,7 @@ static int print(struct ben_encode_ctx *ctx, const struct bencode *b)
 
 		pairs = ben_dict_ordered_items(b);
 		if (pairs == NULL) {
-			//warn("No memory for dict serialization\n");
+			warn("No memory for dict serialization\n");
 			return -1;
 		}
 
@@ -1564,7 +1550,7 @@ int ben_ctx_encode(struct ben_encode_ctx *ctx, const struct bencode *b)
 
 		pairs = ben_dict_ordered_items(b);
 		if (pairs == NULL) {
-			//warn("No memory for dict serialization\n");
+			warn("No memory for dict serialization\n");
 			return -1;
 		}
 
@@ -1670,7 +1656,7 @@ void *ben_encode(size_t *len, const struct bencode *b)
 	void *data = malloc(size);
 	struct ben_encode_ctx ctx = {.data = data, .size = size};
 	if (data == NULL) {
-		//warn("No memory to encode\n");
+		warn("No memory to encode\n");
 		return NULL;
 	}
 	if (ben_ctx_encode(&ctx, b)) {
@@ -2095,7 +2081,7 @@ char *ben_print(const struct bencode *b)
 	char *data = malloc(size + 1);
 	struct ben_encode_ctx ctx = {.data = data, .size = size, .pos = 0};
 	if (data == NULL) {
-		//warn("No memory to print\n");
+		warn("No memory to print\n");
 		return NULL;
 	}
 	if (print(&ctx, b)) {
