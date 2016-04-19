@@ -2769,23 +2769,72 @@ static dht_msg_type_t parse_message(const unsigned char *buf, int buflen,
 		}
 
 		if ( ( b_tmp = ben_dict_get_by_str(bencode_p, "y") ) ) {
-			if ( !ben_cmp_with_str(b_tmp, "q") ) {
+			if ( !ben_cmp_with_str(b_tmp, "q") ) { /* Inbound queries */
 				struct bencode *b_query = NULL;
 				const char *val = ben_str_val(b_tmp);
+				struct bencode *b_args = ben_dict_get_by_str(bencode_p, "a");
 				ks_log(KS_LOG_DEBUG, "Message Query [%s]\n", val);
 
 				if ( !( b_query = ben_dict_get_by_str(bencode_p, "q") ) ) {
 					ks_log(KS_LOG_DEBUG, "Unable to locate query type field\n");
 				} else { /* Has a query type */
 					const char *query_type = ben_str_val(b_query);
-					if (!ben_cmp_with_str(b_tmp, "asdf")) {
-						ks_log(KS_LOG_DEBUG, "asdf\n");
+					if (!ben_cmp_with_str(b_query, "get_peers")) {
+						struct bencode *b_id = b_args ? ben_dict_get_by_str( b_args, "id") : NULL;
+						const char *id = b_id ? ben_str_val(b_id) : NULL;
+						struct bencode *b_infohash = b_args ? ben_dict_get_by_str( b_args, "info_hash") : NULL;
+						const char *infohash = b_infohash ? ben_str_val(b_infohash) : NULL;
+						/*
+						  {
+						    'a': {
+							      'id': '~\x12*\xe6L3\xba\x83\xafT\xe3\x02\x93\x0e\xae\xbd\xf8\xe1\x98\x87', 
+							      'info_hash': 'w"E\x85\xdd97\xd1\xfe\x13Q\xfa\xdae\x9d\x8f\x86\xddN9'
+							     }, 
+							'q': 'get_peers', 
+							't': '?\xf1', 
+							'v': 'LT\x01\x00', 
+							'y': 'q'
+						  }
+						 */
+						
+						ks_log(KS_LOG_DEBUG, "get_peers query recieved for info hash [%s] from client with id [%s]\n", infohash, id);
+					} else if (!ben_cmp_with_str(b_query, "ping")) {
+						struct bencode *b_id = b_args ? ben_dict_get_by_str( b_args, "id") : NULL;
+						const char *id = b_id ? ben_str_val(b_id) : NULL;
+						/* 
+						   {'a': {
+						          'id': 'T\x1cd2\xc1\x85\xf4>?\x84#\xa8)\xd0`\x19y\xcf;\xda'
+								 }, 
+							'q': 'ping', 
+							't': 'pn\x00\x00', 
+							'v': 'JC\x00\x00', 
+							'y': 'q'
+						   }
+						*/
+						ks_log(KS_LOG_DEBUG, "ping query recieved from client with id [%s]\n", id);
+					} else if (!ben_cmp_with_str(b_query, "ping")) {
+						struct bencode *b_id = b_args ? ben_dict_get_by_str( b_args, "id") : NULL;
+						const char *id = b_id ? ben_str_val(b_id) : NULL;
+						struct bencode *b_target = b_args ? ben_dict_get_by_str( b_args, "target") : NULL;
+						const char *target = b_target ? ben_str_val(b_target) : NULL;
+						/*
+						  {'a': {
+						         'id': 'T\x1cq\x7f\xa9^\xf2\x97S\xceE\xad\xc9S\x9b\xa1\x1cCX\x8d',
+								 'target': 'T\x1cq\x7f\xa9C{\x83\xf9\xf6i&\x8b\x87*\xa2\xad\xad\x1a\xdd'
+								},
+						   'q': 'find_node',
+						   't': '\x915\xbe\xfb',
+						   'v': 'UTu\x13',
+						   'y': 'q'
+						  }
+						*/
+						ks_log(KS_LOG_DEBUG, "find_node query recieved from client with id [%s] for target [%s]\n", id, target);
 					} else {
 						ks_log(KS_LOG_DEBUG, "Unknown query type field [%s]\n", query_type);
 					}
 				}
 				
-			} else if ( !ben_cmp_with_str(b_tmp, "r") ) {
+			} else if ( !ben_cmp_with_str(b_tmp, "r") ) { /* Responses */
 				const char *val = ben_str_val(b_tmp);
 				ks_log(KS_LOG_DEBUG, "Message Response [%s]\n", val);
 			} else if ( !ben_cmp_with_str(b_tmp, "e") ) {
