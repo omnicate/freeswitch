@@ -29,6 +29,10 @@
  * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Contributors:
+ * 		Kapil Gupta <kgupta@sangoma.com>
+ * 		Pushkar Singh <psingh@sangoma.com>
  */
 
 /* INCLUDE ********************************************************************/
@@ -465,7 +469,8 @@ void sngss7_sta_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circuit, uint
 	ftdm_channel_t		*ftdmchan = NULL;
 	sngss7_event_data_t	*sngss7_event = NULL;
 	uint32_t			intfId;
-	int 				x;
+	int					x;
+	int					idx = 0;
 
 
 
@@ -487,39 +492,49 @@ void sngss7_sta_ind(uint32_t suInstId, uint32_t spInstId, uint32_t circuit, uint
 						g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic);
 		}
 
-		x = (g_ftdm_sngss7_data.cfg.procId * MAX_CIC_MAP_LENGTH) + 1;
-		while ((g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0) &&
-			   (g_ftdm_sngss7_data.cfg.isupCkt[x].id < ((g_ftdm_sngss7_data.cfg.procId + 1) * MAX_CIC_MAP_LENGTH))) {
-			/**********************************************************************/
-			/* confirm this is a voice channel and not a gap/sig (no ftdmchan there) */
-			if (g_ftdm_sngss7_data.cfg.isupCkt[x].type == SNG_CKT_VOICE) {
-				/* compare the intfIds */
-				if (g_ftdm_sngss7_data.cfg.isupCkt[x].infId == intfId) {
-					/* we have a match, setup the pointers to the correct values */
-					circuit = x;
+		x = ftmod_ss7_get_circuit_start_range(g_ftdm_sngss7_data.cfg.procId);
 
-					/* confirm that the circuit is active on our side otherwise move to the next circuit */
-					if (!sngss7_test_flag(&g_ftdm_sngss7_data.cfg.isupCkt[circuit], SNGSS7_ACTIVE)) {
-						SS7_DEBUG("[CIC:%d]Rx %s but circuit is not active yet, skipping!\n",
-									g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic,
-									DECODE_LCC_EVENT(evntType));
-						x++;
-						continue;
-					}
-
-					if (extract_chan_data(circuit, &sngss7_info, &ftdmchan)) {
-						SS7_ERROR("Failed to extract channel data for circuit = %d!\n", circuit);
-						SS7_FUNC_TRACE_EXIT(__FTDM_FUNC__);
-						return;
-					}
-
-					/* bounce out of the loop */
-					break;
-				}
+		for (idx = 1; idx < MAX_ISUP_INFS; idx++) {
+			if (g_ftdm_sngss7_data.cfg.isupCc[idx].span_id) {
+				x = g_ftdm_sngss7_data.cfg.isupCc[idx].ckt_start_val;
+			} else {
+				continue;
 			}
 
-			x++;
-			/**********************************************************************/
+			while ((g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0) &&
+				(g_ftdm_sngss7_data.cfg.isupCc[idx].span_id == g_ftdm_sngss7_data.cfg.isupCkt[x].span) &&
+				(g_ftdm_sngss7_data.cfg.isupCkt[x].id < ((g_ftdm_sngss7_data.cfg.procId + 1) * MAX_CIC_MAP_LENGTH))) {
+				/**********************************************************************/
+				/* confirm this is a voice channel and not a gap/sig (no ftdmchan there) */
+				if (g_ftdm_sngss7_data.cfg.isupCkt[x].type == SNG_CKT_VOICE) {
+					/* compare the intfIds */
+					if (g_ftdm_sngss7_data.cfg.isupCkt[x].infId == intfId) {
+						/* we have a match, setup the pointers to the correct values */
+						circuit = x;
+
+						/* confirm that the circuit is active on our side otherwise move to the next circuit */
+						if (!sngss7_test_flag(&g_ftdm_sngss7_data.cfg.isupCkt[circuit], SNGSS7_ACTIVE)) {
+							SS7_DEBUG("[CIC:%d]Rx %s but circuit is not active yet, skipping!\n",
+									g_ftdm_sngss7_data.cfg.isupCkt[circuit].cic,
+									DECODE_LCC_EVENT(evntType));
+							x++;
+							continue;
+						}
+
+						if (extract_chan_data(circuit, &sngss7_info, &ftdmchan)) {
+							SS7_ERROR("Failed to extract channel data for circuit = %d!\n", circuit);
+							SS7_FUNC_TRACE_EXIT(__FTDM_FUNC__);
+							return;
+						}
+
+						/* bounce out of the loop */
+						break;
+					}
+				}
+
+				x++;
+				/**********************************************************************/
+			}
 		}
 
 		/* check if we found any circuits that are on the intfId, drop the message

@@ -29,6 +29,10 @@
  * LIABILITY|WHETHER IN CONTRACT|STRICT LIABILITY|OR TORT (INCLUDING
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE|EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Contributors:
+ * 		Kapil Gupta <kgupta@sangoma.com>
+ * 		Pushkar Singh <psingh@sangoma.com>
  */
 
 /* INCLUDE ********************************************************************/
@@ -128,7 +132,7 @@ ftdm_status_t disable_all_ckts_for_relay(void)
 
 	SS7_INFO("Disabling all ckts becuase of Relay loss\n");
 
-	x = (g_ftdm_sngss7_data.cfg.procId * 1000) + 1;
+	x = ftmod_ss7_get_circuit_start_range(g_ftdm_sngss7_data.cfg.procId);
 	while (g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0) {
 	/**********************************************************************/
 		/* make sure this is voice channel */
@@ -167,7 +171,7 @@ ftdm_status_t enable_all_ckts_for_relay(void)
 
 	SS7_INFO("Enabling all ckts becuase of Relay connection\n");
 
-	x = (g_ftdm_sngss7_data.cfg.procId * 1000) + 1;
+	x = ftmod_ss7_get_circuit_start_range(g_ftdm_sngss7_data.cfg.procId);
 	while (g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0) {
 	/**********************************************************************/
 		/* make sure this is voice channel */
@@ -212,7 +216,7 @@ ftdm_status_t reconfig_all_ckts_for_relay(void)
 	sngss7_chan_data_t	*sngss7_info = NULL;
 
 	/* go through all the circuits on our ProcId */
-	x = (g_ftdm_sngss7_data.cfg.procId * 1000) + 1;
+	x = ftmod_ss7_get_circuit_start_range(g_ftdm_sngss7_data.cfg.procId);
 	while (g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0) {
 	/**************************************************************************/
 		if ( g_ftdm_sngss7_data.cfg.isupCkt[x].type == SNG_CKT_VOICE) {
@@ -241,7 +245,7 @@ ftdm_status_t block_all_ckts_for_relay(uint32_t procId)
 	int ret;
 
 	/* we just lost connection to this procId, send out a block for all these circuits */
-	x = (procId * 1000) + 1;
+	x = ftmod_ss7_get_circuit_start_range(g_ftdm_sngss7_data.cfg.procId);
 	while (g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0) {
 	/**************************************************************************/
 		if (g_ftdm_sngss7_data.cfg.isupCkt[x].type == SNG_CKT_VOICE) {
@@ -302,7 +306,7 @@ static ftdm_status_t unblock_all_ckts_for_relay(uint32_t procId)
 	/* we just got connection to this procId, send out a unblock for all these circuits
 	 * since we blocked them when we lost the connection	
  	 */
-	x = (procId * 1000) + 1;
+	x = ftmod_ss7_get_circuit_start_range(g_ftdm_sngss7_data.cfg.procId);;
 	while (g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0) {
 	/**************************************************************************/
 		if (g_ftdm_sngss7_data.cfg.isupCkt[x].type == SNG_CKT_VOICE) {

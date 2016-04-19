@@ -40,6 +40,8 @@
 #ifndef FREETDM_H
 #define FREETDM_H
 
+#define RECONFIG_DBG 1
+
 #include "ftdm_declare.h"
 #include "ftdm_call_utils.h"
 
@@ -336,9 +338,10 @@ typedef enum {
 	FTDM_CPC_DATA,
 	FTDM_CPC_TEST,
 	FTDM_CPC_PAYPHONE,
+	FTDM_CPC_CHINA,
 	FTDM_CPC_INVALID
 } ftdm_calling_party_category_t;
-#define CALLING_PARTY_CATEGORY_STRINGS "unknown", "operator", "operator-french", "operator-english", "operator-german", "operator-russian", "operator-spanish", "ordinary", "priority", "data-call", "test-call", "payphone", "invalid"
+#define CALLING_PARTY_CATEGORY_STRINGS "unknown", "operator", "operator-french", "operator-english", "operator-german", "operator-russian", "operator-spanish", "ordinary", "priority", "data-call", "test-call", "payphone", "china", "invalid"
 FTDM_STR2ENUM_P(ftdm_str2ftdm_calling_party_category, ftdm_calling_party_category2str, ftdm_calling_party_category_t)
 
 /*! Network responses to transfer requests */
@@ -450,6 +453,7 @@ typedef struct {
 		ftdm_group_hunt_t group;
 		ftdm_chan_hunt_t chan;
 	} mode_data;
+	ftdm_bool_t even_only; /* Only hunt even channels */
 	ftdm_hunt_result_cb_t result_cb; 
 } ftdm_hunting_scheme_t;
 
@@ -468,6 +472,7 @@ typedef enum {
 	FTDM_SIGEVENT_FLASH, /*!< Flash event  (typically on-hook/off-hook for analog devices) */
 	FTDM_SIGEVENT_PROCEED, /*!< Outgoing call got an initial positive response from the other end */
 	FTDM_SIGEVENT_RINGING, /*!< Remote side is in ringing state */
+	FTDM_SIGEVENT_ALERTING, /*!< Remote side is back to ringing state from media available state */
 	FTDM_SIGEVENT_PROGRESS, /*!< Outgoing call is making progress */
 	FTDM_SIGEVENT_PROGRESS_MEDIA, /*!< Outgoing call is making progress and there is media available */
 	FTDM_SIGEVENT_ALARM_TRAP, /*!< Hardware alarm ON */
@@ -483,12 +488,14 @@ typedef enum {
 	FTDM_SIGEVENT_DIALING, /*!< Outgoing call just started */
 	FTDM_SIGEVENT_TRANSFER_COMPLETED, /*!< Transfer request is completed */
 	FTDM_SIGEVENT_SMS,
+	FTDM_SIGEVENT_IO_INDATA, /*!< Incoming data received */
+	FTDM_SIGEVENT_RAW, /*!< Signalling specific event */
 	FTDM_SIGEVENT_INVALID, /*!<Invalid */
 } ftdm_signal_event_t;
-#define SIGNAL_STRINGS "START", "STOP", "RELEASED", "UP", "FLASH", "PROCEED", "RINGING", "PROGRESS", \
+#define SIGNAL_STRINGS "START", "STOP", "RELEASED", "UP", "FLASH", "PROCEED", "RINGING", "ALERTING", "PROGRESS", \
 		"PROGRESS_MEDIA", "ALARM_TRAP", "ALARM_CLEAR", \
 		"COLLECTED_DIGIT", "ADD_CALL", "RESTART", "SIGSTATUS_CHANGED", "FACILITY", \
-		"TRACE", "TRACE_RAW", "INDICATION_COMPLETED", "DIALING", "TRANSFER_COMPLETED", "SMS", "INVALID"
+		"TRACE", "TRACE_RAW", "INDICATION_COMPLETED", "DIALING", "TRANSFER_COMPLETED", "SMS", "IO_INDATA", "RAW", "INVALID"
 /*! \brief Move from string to ftdm_signal_event_t and viceversa */
 FTDM_STR2ENUM_P(ftdm_str2ftdm_signal_event, ftdm_signal_event2str, ftdm_signal_event_t)
 
@@ -535,7 +542,9 @@ typedef struct ftdm_channel_config {
 	uint32_t dtmfdetect_ms;
 	uint32_t dtmf_time_on;
 	uint32_t dtmf_time_off;
+	int prebuffer_size;
 	uint8_t iostats;
+	uint8_t forward_collect_digit_dtmf;
 } ftdm_channel_config_t;
 
 /*!
@@ -560,6 +569,7 @@ FTDM_STR2ENUM_P(ftdm_str2ftdm_signaling_status, ftdm_signaling_status2str, ftdm_
 
 typedef struct {
 	ftdm_signaling_status_t status;
+	uint8_t raw_reason; /* Signalling specific */
 } ftdm_event_sigstatus_t;
 
 typedef enum {
@@ -610,9 +620,11 @@ typedef enum {
 	FTDM_CHANNEL_INDICATE_ANSWER,
 	FTDM_CHANNEL_INDICATE_FACILITY,
 	FTDM_CHANNEL_INDICATE_TRANSFER,
+	/* Signalling specific indications */
+	FTDM_CHANNEL_INDICATE_RAW,
 	FTDM_CHANNEL_INDICATE_INVALID,
 } ftdm_channel_indication_t;
-#define INDICATION_STRINGS "NONE", "RINGING", "PROCEED", "PROGRESS", "PROGRESS_MEDIA", "BUSY", "ANSWER", "FACILITY", "TRANSFER", "INVALID"
+#define INDICATION_STRINGS "NONE", "RINGING", "PROCEED", "PROGRESS", "PROGRESS_MEDIA", "BUSY", "ANSWER", "FACILITY", "TRANSFER", "RAW", "INVALID"
 
 /*! \brief Move from string to ftdm_channel_indication_t and viceversa */
 FTDM_STR2ENUM_P(ftdm_str2ftdm_channel_indication, ftdm_channel_indication2str, ftdm_channel_indication_t)
@@ -650,6 +662,7 @@ struct ftdm_sigmsg {
 		ftdm_event_collected_t collected; /*!< valid if event_id is FTDM_SIGEVENT_COLLECTED_DIGIT */
 		ftdm_event_indication_completed_t indication_completed; /*!< valid if the event_id is FTDM_SIGEVENT_INDICATION_COMPLETED */
 		ftdm_event_transfer_completed_t transfer_completed;
+		uint8_t raw_id; /*!<Signalling specific event - used for FTDM_SIGEVENT_RAW*/
 	} ev_data;
 	ftdm_raw_data_t raw;
 };
@@ -657,6 +670,7 @@ struct ftdm_sigmsg {
 /*! \brief Generic user message sent to the stack */
 struct ftdm_usrmsg {
 	ftdm_variable_container_t variables;
+	uint8_t raw_id; /* Signalling specific event - used for FTDM_INDICATE_RAW */
 	ftdm_raw_data_t raw;
 };
 
@@ -815,6 +829,7 @@ struct ftdm_memory_handler {
 #define FIO_SPAN_DESTROY_ARGS (ftdm_span_t *span)
 #define FIO_COMMAND_ARGS (ftdm_channel_t *ftdmchan, ftdm_command_t command, void *obj)
 #define FIO_WAIT_ARGS (ftdm_channel_t *ftdmchan, ftdm_wait_flag_t *flags, int32_t to)
+#define FIO_WAIT_MULTIPLE_ARGS (ftdm_channel_t *ftdmchan[], ftdm_wait_flag_t poll_events[], uint32_t num_chans,  uint32_t ms)
 #define FIO_GET_ALARMS_ARGS (ftdm_channel_t *ftdmchan)
 #define FIO_READ_ARGS (ftdm_channel_t *ftdmchan, void *data, ftdm_size_t *datalen)
 #define FIO_WRITE_ARGS (ftdm_channel_t *ftdmchan, void *data, ftdm_size_t *datalen)
@@ -864,6 +879,7 @@ typedef ftdm_status_t (*fio_span_destroy_t) FIO_SPAN_DESTROY_ARGS ;
 typedef ftdm_status_t (*fio_get_alarms_t) FIO_GET_ALARMS_ARGS ;
 typedef ftdm_status_t (*fio_command_t) FIO_COMMAND_ARGS ;
 typedef ftdm_status_t (*fio_wait_t) FIO_WAIT_ARGS ;
+typedef ftdm_status_t (*fio_wait_multiple_t) FIO_WAIT_MULTIPLE_ARGS ;
 typedef ftdm_status_t (*fio_read_t) FIO_READ_ARGS ;
 typedef ftdm_status_t (*fio_write_t) FIO_WRITE_ARGS ;
 typedef ftdm_status_t (*fio_io_load_t) FIO_IO_LOAD_ARGS ;
@@ -900,6 +916,7 @@ typedef ftdm_status_t (*fio_span_stop_t) FIO_SPAN_STOP_ARGS ;
 #define FIO_GET_ALARMS_FUNCTION(name) ftdm_status_t name FIO_GET_ALARMS_ARGS
 #define FIO_COMMAND_FUNCTION(name) ftdm_status_t name FIO_COMMAND_ARGS
 #define FIO_WAIT_FUNCTION(name) ftdm_status_t name FIO_WAIT_ARGS
+#define FIO_WAIT_MULTIPLE_FUNCTION(name) ftdm_status_t name FIO_WAIT_MULTIPLE_ARGS
 #define FIO_READ_FUNCTION(name) ftdm_status_t name FIO_READ_ARGS
 #define FIO_WRITE_FUNCTION(name) ftdm_status_t name FIO_WRITE_ARGS
 #define FIO_IO_LOAD_FUNCTION(name) ftdm_status_t name FIO_IO_LOAD_ARGS
@@ -925,6 +942,7 @@ struct ftdm_io_interface {
 	fio_get_alarms_t get_alarms; /*!< Get hardware alarms */
 	fio_command_t command; /*!< Execute an I/O command on the channel */
 	fio_wait_t wait; /*!< Wait for events on the channel */
+	fio_wait_multiple_t wait_multiple; /*!<Waiti/Poll for events on multiple channels */
 	fio_read_t read; /*!< Read data from the channel */
 	fio_write_t write; /*!< Write data to the channel */
 	fio_span_poll_event_t poll_event; /*!< Poll for events on the whole span */
@@ -1137,8 +1155,13 @@ FT_DECLARE(ftdm_bool_t) ftdm_channel_call_check_done(const ftdm_channel_t *ftdmc
 /*! \brief Check if the call is in hold */
 FT_DECLARE(ftdm_bool_t) ftdm_channel_call_check_hold(const ftdm_channel_t *ftdmchan);
 
-/*! \brief Set channel signaling status (ie: put specific circuit down) only if supported by the signaling */
-FT_DECLARE(ftdm_status_t) ftdm_channel_set_sig_status(ftdm_channel_t *ftdmchan, ftdm_signaling_status_t status);
+/*! \brief Set the channel signaling status */
+#define ftdm_channel_set_sig_status(ftdmchan, sigstatus) _ftdm_channel_set_sig_status(__FILE__, __FUNCTION__, __LINE__, (ftdmchan), (sigstatus), NULL)
+#define ftdm_channel_set_sig_status_ex(ftdmchan, sigstatus, usrmsg) _ftdm_channel_set_sig_status(__FILE__, __FUNCTION__, __LINE__, (ftdmchan), (sigstatus), usrmsg)
+/*! \brief Set channel signaling status (ie: put specific circuit down) only if supported by the signaling (see ftdm_channel_set_sig_stauts for an easy to use macro)
+ *  *  \note 
+ *   */
+FT_DECLARE(ftdm_status_t) _ftdm_channel_set_sig_status(const char *file, const char *func, int line, ftdm_channel_t *ftdmchan, ftdm_signaling_status_t status, ftdm_usrmsg_t *usrmsg);
 
 /*! \brief Get channel signaling status (ie: whether protocol layer is up or down) */
 FT_DECLARE(ftdm_status_t) ftdm_channel_get_sig_status(ftdm_channel_t *ftdmchan, ftdm_signaling_status_t *status);
@@ -1149,8 +1172,15 @@ FT_DECLARE(ftdm_status_t) ftdm_span_set_sig_status(ftdm_span_t *span, ftdm_signa
 /*! \brief Get span signaling status (ie: whether protocol layer is up or down) */
 FT_DECLARE(ftdm_status_t) ftdm_span_get_sig_status(ftdm_span_t *span, ftdm_signaling_status_t *status);
 
+/*!
+ * \brief Get span runnning status i.e. whether span is in start state or not
+ *
+ * \param ftdmspan for which need to check is span is already started
+ *
+ */
+FT_DECLARE(ftdm_status_t) ftdm_get_span_running_status(ftdm_span_t *ftdmspan);
 
-/*! 
+/*!
  * \brief Set user private data in the channel
  *
  * \param ftdmchan The channel where the private data will be stored
@@ -1405,6 +1435,16 @@ FT_DECLARE(ftdm_status_t) ftdm_group_channel_use_count(ftdm_group_t *group, uint
 FT_DECLARE(uint32_t) ftdm_group_get_id(const ftdm_group_t *group);
 
 /*! 
+ * \brief Open a channel specifying the chan id (required before placing a call on the channel)
+ *
+ * \param ftdmchan Pointer to store the channel once is open
+ *
+ * \retval FTDM_SUCCESS success (the channel was found and is available)
+ * \retval FTDM_FAIL failure (channel was not found or not available)
+ */
+FT_DECLARE(ftdm_status_t) ftdm_channel_open_chan(ftdm_channel_t *ftdmchan);
+
+/*!
  * \brief Open a channel specifying the span id and chan id (required before placing a call on the channel)
  *
  * \warning Try using ftdm_call_place instead if you plan to place a call after opening the channel
@@ -1513,6 +1553,21 @@ FT_DECLARE(ftdm_status_t) ftdm_channel_command(ftdm_channel_t *ftdmchan, ftdm_co
  * \retval FTDM_FAIL failure (no suitable channel was found available)
  */
 FT_DECLARE(ftdm_status_t) ftdm_channel_wait(ftdm_channel_t *ftdmchan, ftdm_wait_flag_t *flags, int32_t timeout);
+
+/*!
+ * \brief Wait for an event for mutiple channels
+ *
+ * \param ftdmchan The channels to wait events for
+ * \param poll_events Array of events to poll for, for each channel
+ * \param num_chans Number of channel on which events needs to be checked
+ * \param ms Timeout in milli seconds
+ *
+ * \retval FTDM_SUCCESS success (at least one event available)
+ * \retval FTDM_TIMEOUT Timed out waiting for events
+ * \retval FTDM_FAIL failure
+ * \retval FTDM_BREAK if in case read event is not present
+ */
+FT_DECLARE(ftdm_status_t) ftdm_channel_wait_multiple(ftdm_channel_t *ftdmchan[], ftdm_wait_flag_t poll_events[], uint32_t num_chans, uint32_t ms);
 
 /*! 
  * \brief Read data from a channel
@@ -1716,6 +1771,20 @@ FT_DECLARE(ftdm_status_t) ftdm_span_start(ftdm_span_t *span);
 FT_DECLARE(ftdm_status_t) ftdm_span_stop(ftdm_span_t *span);
 
 /*! 
+ * \brief delete span from freetdm
+ * delete span from global span hash table 
+ * frees all ftdm resources associated with span
+ * invoke signaling cb "ftdm_span_stop" to stop signaling
+ *
+ * \param span The span to stop
+ *
+ * \retval FTDM_SUCCESS success 
+ * \retval FTDM_FAIL failure 
+ */
+FT_DECLARE(ftdm_status_t) ftdm_span_delete(ftdm_span_t *span);
+
+
+/*! 
  * \brief Register a custom I/O interface with the FreeTDM core
  *
  * \param io_interface the Interface to register
@@ -1766,6 +1835,17 @@ FT_DECLARE(ftdm_iterator_t *) ftdm_get_span_iterator(ftdm_iterator_t *iter);
 FT_DECLARE(char *) ftdm_api_execute(const char *cmd);
 
 /*! 
+ * \brief get all span details buffer
+ *
+ * \param input buffer which will be filled by ftdm with span details 
+ *
+ * \retval FTDM_SUCCESS success 
+ * \retval FTDM_FAIL failure 
+ */
+FT_DECLARE(int ) ftdm_get_all_span_list(char *buffer);
+
+
+/*! 
  * \brief Create a configuration node
  *
  * \param name The name of the configuration node
@@ -1814,7 +1894,7 @@ FT_DECLARE(ftdm_status_t) ftdm_configure_span_channels(ftdm_span_t *span, const 
 
 /*! 
  * \brief Set the trunk type for a span
- *        This must be called before configuring any channels within the span
+ * \This must be called before configuring any channels within the span
  *
  * \param span The span 
  * \param type The trunk type
@@ -1823,6 +1903,29 @@ FT_DECLARE(ftdm_status_t) ftdm_configure_span_channels(ftdm_span_t *span, const 
 FT_DECLARE(void) ftdm_span_set_trunk_type(ftdm_span_t *span, ftdm_trunk_type_t type);
 
 /*! 
+ * \brief Set the reconfiguration state for a span
+ * \This must be called in case already existing span needs to be reconfigured
+ *
+ * \param span The span
+ * \param reconfig The reconfig state i.e. whether spans needs to be reconfigure or not
+ *
+ */
+FT_DECLARE(ftdm_status_t) ftdm_span_set_reconfig_flag(ftdm_span_t *span);
+
+
+/*!
+ * \brief Get the reconfiguration state for a span
+ * \This function return FTDM_SPAN_RECONFIG flag status
+ * \it return FTDM_SUCEESS (0) in case flag is set and
+ * \else return FTDM_FAIL (1)
+ */
+FT_DECLARE(ftdm_status_t) ftdm_span_test_reconfig_flag(ftdm_span_t *span);
+
+/*! \brief Clear the reconfiguration state for a span */
+FT_DECLARE(ftdm_status_t) ftdm_span_clear_reconfig_flag(ftdm_span_t *span);
+
+
+/*!
  * \brief Get the trunk type for a span
  *
  * \param span The span 
@@ -1897,6 +2000,9 @@ FT_DECLARE(const char *) ftdm_channel_get_state_str(const ftdm_channel_t *channe
 /*! \brief For display debugging purposes you can display this string which describes the last channel internal state */
 FT_DECLARE(const char *) ftdm_channel_get_last_state_str(const ftdm_channel_t *channel);
 
+/*! \brief Get the current cpu usage */
+FT_DECLARE(int) ftdm_get_cpu_usage(void);
+
 /*! \brief For display debugging purposes you can display this string which describes the history of the channel 
  *  \param channel The channel to get the history from
  *  \return History string for the channel. You must free the string with ftdm_free
@@ -1911,6 +2017,10 @@ FT_DECLARE(ftdm_status_t) ftdm_global_init(void);
 
 /*! \brief Create spans and channels reading the freetdm.conf file */
 FT_DECLARE(ftdm_status_t) ftdm_global_configuration(void);
+
+/*! \brief reading freetdm.conf file and create spans and channels , 
+ * skip already created spans*/
+FT_DECLARE(ftdm_status_t) ftdm_global_reconfiguration(void);
 
 /*! \brief Shutdown the library */
 FT_DECLARE(ftdm_status_t) ftdm_global_destroy(void);

@@ -33,6 +33,7 @@ ACLOCAL_AMFLAGS  = -I build
 AUTOMAKE_OPTIONS = foreign
 
 SRC = src
+SAMPLES = sample
 
 moddir = @modinstdir@
 libdir = @libdir@
@@ -101,7 +102,7 @@ core-install: install-libLTLIBRARIES
 #
 # tools & test programs
 #
-noinst_PROGRAMS  = testtones detect_tones detect_dtmf testpri testr2 testanalog testapp testcid
+noinst_PROGRAMS  = testtones detect_tones detect_dtmf testpri testr2 testanalog testapp testcid run_mtp2
 
 testapp_SOURCES = $(SRC)/testapp.c
 testapp_LDADD   = libfreetdm.la
@@ -139,6 +140,12 @@ testanalog_SOURCES = $(SRC)/testanalog.c
 testanalog_LDADD   = libfreetdm.la
 testanalog_CFLAGS  = $(FTDM_CFLAGS) $(AM_CFLAGS)
 
+run_mtp2_SOURCES = $(SAMPLES)/run_mtp2/run_mtp2.c $(SAMPLES)/run_mtp2/run_mtp2_test.c
+run_mtp2_LDADD   = libfreetdm.la
+run_mtp2_LDFLAGS = -lxml2 -lpthread
+run_mtp2_CFLAGS  = $(AM_CFLAGS) $(FTDM_CFLAGS) -I/usr/include/libxml2
+
+
 #
 # ftmod modules
 #
@@ -170,8 +177,8 @@ ftmod_wanpipe_la_SOURCES = $(SRC)/ftmod/ftmod_wanpipe/ftmod_wanpipe.c
 # some structures within Wanpipe drivers are not c99 compatible, so we need to compile ftmod_wanpipe
 # without c99 flags, use FTDM_COMPAT_CFLAGS instead
 ftmod_wanpipe_la_CFLAGS  = $(FTDM_COMPAT_CFLAGS) $(AM_CFLAGS) -D__LINUX__ -I/usr/include/wanpipe
-ftmod_wanpipe_la_LDFLAGS = -shared -module -avoid-version
-ftmod_wanpipe_la_LIBADD  = libfreetdm.la -lsangoma
+ftmod_wanpipe_la_LDFLAGS = -shared -module -avoid-version -lsangoma
+ftmod_wanpipe_la_LIBADD  = libfreetdm.la
 endif
 
 if HAVE_LIBISDN
@@ -194,9 +201,28 @@ if HAVE_PRITAP
 mod_LTLIBRARIES += ftmod_pritap.la
 ftmod_pritap_la_SOURCES = $(SRC)/ftmod/ftmod_pritap/ftmod_pritap.c 
 ftmod_pritap_la_CFLAGS  = $(FTDM_CFLAGS) $(AM_CFLAGS)
-ftmod_pritap_la_LDFLAGS = -shared -module -avoid-version
-ftmod_pritap_la_LIBADD  = libfreetdm.la -lpri
+ftmod_pritap_la_LDFLAGS = -shared -module -avoid-version -lpri
+ftmod_pritap_la_LIBADD  = libfreetdm.la
 endif
+
+if HAVE_SNG_ISDNTAP
+mod_LTLIBRARIES += ftmod_sangoma_isdn_tap.la
+ftmod_sangoma_isdn_tap_la_SOURCES = \
+	$(SRC)/ftmod/ftmod_sangoma_isdn_tap/ftmod_sangoma_isdn_tap.c \
+	$(SRC)/ftmod/ftmod_sangoma_isdn_tap/ftmod_sangoma_isdn_bidir_tap.c
+ftmod_sangoma_isdn_tap_la_CFLAGS  = $(FTDM_CFLAGS) $(AM_CFLAGS) -I/usr/include/sng_decoder
+ftmod_sangoma_isdn_tap_la_LDFLAGS = -shared -module -avoid-version -lsng_decoder
+ftmod_sangoma_isdn_tap_la_LIBADD  = libfreetdm.la
+endif
+
+if HAVE_SNG_ISUPTAP
+mod_LTLIBRARIES += ftmod_sangoma_isup_tap.la
+ftmod_sangoma_isup_tap_la_SOURCES = $(SRC)/ftmod/ftmod_sangoma_isup_tap/ftmod_sangoma_isup_tap.c
+ftmod_sangoma_isup_tap_la_CFLAGS  = $(FTDM_CFLAGS) $(AM_CFLAGS) -I/usr/include/sng_decoder -I/usr/include/wanpipe
+ftmod_sangoma_isup_tap_la_LDFLAGS = -shared -module -avoid-version -lsng_decoder
+ftmod_sangoma_isup_tap_la_LIBADD  = libfreetdm.la
+endif
+
 
 if HAVE_SNG_SS7
 mod_LTLIBRARIES += ftmod_sangoma_ss7.la
@@ -216,11 +242,18 @@ ftmod_sangoma_ss7_la_SOURCES = \
 	$(SRC)/ftmod/ftmod_sangoma_ss7/ftmod_sangoma_ss7_logger.c \
 	$(SRC)/ftmod/ftmod_sangoma_ss7/ftmod_sangoma_ss7_m2ua_xml.c \
 	$(SRC)/ftmod/ftmod_sangoma_ss7/ftmod_sangoma_ss7_m2ua.c \
-	$(SRC)/ftmod/ftmod_sangoma_ss7/ftmod_sangoma_ss7_relay.c
+	$(SRC)/ftmod/ftmod_sangoma_ss7/ftmod_sangoma_ss7_m3ua_xml.c \
+	$(SRC)/ftmod/ftmod_sangoma_ss7/ftmod_sangoma_ss7_m3ua.c \
+	$(SRC)/ftmod/ftmod_sangoma_ss7/ftmod_sangoma_ss7_sctp.c \
+	$(SRC)/ftmod/ftmod_sangoma_ss7/ftmod_sangoma_ss7_relay.c\
+	$(SRC)/ftmod/ftmod_sangoma_ss7/ftmod_sangoma_ss7_mtp2api.c \
+	$(SRC)/ftmod/ftmod_sangoma_ss7/ftmod_sangoma_ss7_acc.c \
+	$(SRC)/ftmod/ftmod_sangoma_ss7/ftmod_sangoma_ss7_io.c
+
 
 ftmod_sangoma_ss7_la_CFLAGS  = $(FTDM_CFLAGS) $(AM_CFLAGS) -D_GNU_SOURCE
-ftmod_sangoma_ss7_la_LDFLAGS = -shared -module -avoid-version
-ftmod_sangoma_ss7_la_LIBADD  = libfreetdm.la -lsng_ss7
+ftmod_sangoma_ss7_la_LDFLAGS = -shared -module -avoid-version -lsng_ss7
+ftmod_sangoma_ss7_la_LIBADD  = libfreetdm.la
 endif
 
 if HAVE_SNG_ISDN
@@ -238,25 +271,61 @@ ftmod_sangoma_isdn_la_SOURCES = \
 	$(SRC)/ftmod/ftmod_sangoma_isdn/ftmod_sangoma_isdn_stack_hndl.c \
 	$(SRC)/ftmod/ftmod_sangoma_isdn/ftmod_sangoma_isdn_stack_out.c
 
-ftmod_sangoma_isdn_la_CFLAGS  = $(FTDM_CFLAGS) $(AM_CFLAGS) -D_GNU_SOURCE
-ftmod_sangoma_isdn_la_LDFLAGS = -shared -module -avoid-version
-ftmod_sangoma_isdn_la_LIBADD  = libfreetdm.la -lsng_isdn
+ftmod_sangoma_isdn_la_SOURCES += \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/asn_codecs_prim.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/ber_decoder.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/ber_tlv_length.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/ber_tlv_tag.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/BIT_STRING.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/CC-Link-Identifier.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/CommunicationIdentifier.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/constraints.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/constr_CHOICE.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/constr_SEQUENCE.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/constr_SET.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/constr_TYPE.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/der_encoder.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/Direction-Indication.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/IA5String.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/INTEGER.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/IPAddress.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/IP-value.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/LawfulInterceptionData.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/LawfulInterceptionIdentifier.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/NativeEnumerated.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/NativeInteger.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/Network-Element-Identifier.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/Network-Identifier.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/OBJECT_IDENTIFIER.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/OCTET_STRING.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/per_decoder.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/per_encoder.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/per_opentype.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/per_support.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/Service-Information.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/xer_decoder.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/xer_encoder.c \
+	 $(SRC)/ftmod/ftmod_sangoma_isdn/asn/xer_support.c
+
+ftmod_sangoma_isdn_la_CFLAGS  = $(FTDM_CFLAGS) $(AM_CFLAGS) -D_GNU_SOURCE -I$(SRC)/ftmod/ftmod_sangoma_isdn/asn/
+ftmod_sangoma_isdn_la_LDFLAGS = -shared -module -avoid-version -lsng_isdn
+ftmod_sangoma_isdn_la_LIBADD  = libfreetdm.la
 endif
 
 if HAVE_OPENR2
 mod_LTLIBRARIES += ftmod_r2.la
 ftmod_r2_la_SOURCES = $(SRC)/ftmod/ftmod_r2/ftmod_r2.c  $(SRC)/ftmod/ftmod_r2/ftmod_r2_io_mf_lib.c
 ftmod_r2_la_CFLAGS  = $(FTDM_CFLAGS) $(AM_CFLAGS)
-ftmod_r2_la_LDFLAGS = -shared -module -avoid-version
-ftmod_r2_la_LIBADD  = libfreetdm.la -lopenr2
+ftmod_r2_la_LDFLAGS = -shared -module -avoid-version -lopenr2
+ftmod_r2_la_LIBADD  = libfreetdm.la
 endif
 
 if HAVE_WAT
 mod_LTLIBRARIES += ftmod_gsm.la
 ftmod_gsm_la_SOURCES = $(SRC)/ftmod/ftmod_gsm/ftmod_gsm.c 
 ftmod_gsm_la_CFLAGS  = $(FTDM_CFLAGS) $(AM_CFLAGS)
-ftmod_gsm_la_LDFLAGS = -shared -module -avoid-version
-ftmod_gsm_la_LIBADD  = libfreetdm.la -lwat
+ftmod_gsm_la_LDFLAGS = -shared -module -avoid-version -lwat
+ftmod_gsm_la_LIBADD  = libfreetdm.la
 endif
 
 if HAVE_MISDN
@@ -270,16 +339,16 @@ endif
 dox doxygen:
 	doxygen $(FT_SRCDIR)/docs/Doxygen.conf
 
-mod_freetdm/mod_freetdm.so: libfreetdm.la mod_freetdm/mod_freetdm.c
+mod_freetdm/mod_freetdm.$(DYNAMIC_LIB_EXTEN): libfreetdm.la mod_freetdm/mod_freetdm.c
 	$(MAKE) -C mod_freetdm
 
-mod_freetdm: mod_freetdm/mod_freetdm.so
+mod_freetdm: mod_freetdm/mod_freetdm.$(DYNAMIC_LIB_EXTEN)
 
 mod_freetdm-install: mod_freetdm
 	$(MAKE) -C mod_freetdm install
 
 mod_freetdm-clean:
-	@if [ -f mod_freetdm/mod_freetdm.so ] ; then \
+	@if [ -f mod_freetdm/mod_freetdm.$(DYNAMIC_LIB_EXTEN) ] ; then \
 		$(MAKE) -C mod_freetdm clean ; \
 	fi
 

@@ -106,7 +106,7 @@ extern "C" {
 #ifndef strncasecmp
 #define strncasecmp(s1, s2, n) _strnicmp(s1, s2, n)
 #endif
-#if _MSC_VER < 1900
+#ifndef snprintf
 #define snprintf _snprintf
 #endif
 #ifndef S_IRUSR
@@ -239,6 +239,9 @@ typedef enum {
 	FTDM_EINVAL, /*!< Invalid argument */
 	FTDM_ECANCELED, /*!< Operation cancelled */
 	FTDM_EBUSY, /*!< Device busy */
+
+	FTDM_EAGAIN, /*!< Span required to be stop first and then apply the new configiuration and then start mainly
+			  used for in order to configure span dynamically */
 } ftdm_status_t;
 
 /*! \brief FreeTDM bool type. */

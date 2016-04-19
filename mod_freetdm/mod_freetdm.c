@@ -28,14 +28,28 @@
  * David Yat Sin <dyatsin@sangoma.com>
  * James Zhang <jzhang@sangoma.com>
  * Gideon Sadan <gsadan@sangoma.com>
+ * Kapil Gupta <kgupta@sangoma.com>
+ * Pushkar Singh <psingh@sangoma.com>
  *
  * mod_freetdm.c -- FreeTDM Endpoint Module
  *
  */
-#include <switch.h>
-#include "freetdm.h"
+#include "mod_freetdm.h"
+
+//#define CUDATEL_DEBUG
+#ifdef CUDATEL_DEBUG
+#ifndef _BSD_SOURCE
+#define _BSD_SOURCE
+#endif
+#include <execinfo.h>
+#include <syscall.h>
+#endif
 
 //#define BACKTRACE_DEBUG
+
+#ifndef __FUNCTION__
+#define __FUNCTION__ __SWITCH_FUNC__
+#endif
 
 #define FREETDM_LIMIT_REALM "__freetdm"
 #define FREETDM_VAR_PREFIX "freetdm_"
@@ -53,17 +67,6 @@ SWITCH_MODULE_DEFINITION(mod_freetdm, mod_freetdm_load, mod_freetdm_shutdown, NU
 switch_endpoint_interface_t *freetdm_endpoint_interface;
 
 static switch_memory_pool_t *module_pool = NULL;
-
-typedef enum {
-	ANALOG_OPTION_NONE = 0,
-	ANALOG_OPTION_3WAY = (1 << 0),
-	ANALOG_OPTION_CALL_SWAP = (1 << 1)
-} analog_option_t;
-
-typedef enum {
-	FTDM_LIMIT_RESET_ON_TIMEOUT = 0,
-	FTDM_LIMIT_RESET_ON_ANSWER = 1
-} limit_reset_event_t;
 
 typedef enum {
 	TFLAG_IO = (1 << 0),
@@ -95,6 +98,7 @@ static struct {
 	uint8_t crash_on_assert;
 	uint8_t fail_on_error;
 	uint8_t config_error;
+	int io_timer_offset;
 } globals;
 
 /* private data attached to each fs session */
@@ -119,34 +123,9 @@ struct private_object {
 	char network_peer_uuid[SWITCH_UUID_FORMATTED_LENGTH + 1];
 };
 
-/* private data attached to FTDM channels (only FXS for now) */
-typedef struct chan_pvt {
-	unsigned int flags;
-} chan_pvt_t;
-
 typedef struct private_object private_t;
 
-struct span_config {
-	ftdm_span_t *span;
-	char dialplan[80];
-	char context[80];
-	char dial_regex[256];
-	char fail_dial_regex[256];
-	char hold_music[256];
-	char type[256];
-	analog_option_t analog_options;
-	const char *limit_backend;
-	int limit_calls;
-	int limit_seconds;
-	limit_reset_event_t limit_reset_event;
-	/* digital codec and digital sampling rate are used to configure the codec
-	 * when bearer capability is set to unrestricted digital */
-	const char *digital_codec;
-	int digital_sampling_rate;
-	chan_pvt_t pvts[FTDM_MAX_CHANNELS_SPAN];
-};
-
-static struct span_config SPAN_CONFIG[FTDM_MAX_SPANS_INTERFACE] = {{0}};
+struct span_config SPAN_CONFIG[FTDM_MAX_SPANS_INTERFACE] = {{0}};
 
 static switch_status_t channel_on_init(switch_core_session_t *session);
 static switch_status_t channel_on_hangup(switch_core_session_t *session);
@@ -166,9 +145,9 @@ static const char* channel_get_variable(switch_core_session_t *session, switch_e
 ftdm_status_t ftdm_channel_from_event(ftdm_sigmsg_t *sigmsg, switch_core_session_t **sp);
 void dump_chan(ftdm_span_t *span, uint32_t chan_id, switch_stream_handle_t *stream);
 void dump_chan_xml(ftdm_span_t *span, uint32_t chan_id, switch_stream_handle_t *stream);
-#if 0
+
 void ctdm_init(switch_loadable_module_interface_t *module_interface);
-#endif
+
 
 static switch_core_session_t *ftdm_channel_get_session(ftdm_channel_t *channel, int32_t id)
 {
@@ -564,7 +543,7 @@ static switch_status_t channel_on_hangup(switch_core_session_t *session)
 	}
 
 	if (!uuid_found) {
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Device [%d:%d] is no longer attached to %s\n", span_id, chan_id, name);
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Device [%d:%d] is no longer attached to %s. Nothing to do.\n", span_id, chan_id, name);
 		goto end;
 	}
 
@@ -577,6 +556,52 @@ static switch_status_t channel_on_hangup(switch_core_session_t *session)
 		ftdm_backtrace_walk(&debug_trace, &trace_data);
 	}
 #endif
+
+#ifdef CUDATEL_DEBUG
+	{
+		pid_t tid = 0;
+		size_t size = 0;
+		char **symbols = NULL;
+		void *stacktrace[50];
+		int si = 0;
+		size = backtrace(stacktrace, ftdm_array_len(stacktrace));
+		symbols = backtrace_symbols(stacktrace, size);
+		tid = syscall(SYS_gettid);
+		for (si = 0; si < size; si++) {
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "[%d:%d][tid:%d] %s -> %s\n",
+					span_id, chan_id, tid, name, symbols[si]);
+		}
+		free(symbols);
+	}
+#endif
+
+	name = switch_channel_get_name(channel);
+
+	span_id = tech_pvt->ftdmchan ? ftdm_channel_get_span_id(tech_pvt->ftdmchan) : 0;
+	chan_id = tech_pvt->ftdmchan ? ftdm_channel_get_id(tech_pvt->ftdmchan) : 0;
+
+
+	/* Now verify the device is still attached to this call :-)
+	 * Sometimes the FS core takes too long (more than 3 seconds) in calling
+	 * channel_on_hangup() and the FreeTDM core decides to take the brute
+	 * force approach and hangup and detach themselves from the call. Later
+	 * when FS finally comes around, we might end up hanging up the device
+	 * attached to another call, this verification avoids that. */
+	uuid = switch_core_session_get_uuid(session);
+	tokencnt = ftdm_channel_get_token_count(tech_pvt->ftdmchan);
+	for (t = 0; t < tokencnt; t++) {
+		token = ftdm_channel_get_token(tech_pvt->ftdmchan, t);
+		if (!zstr(token) && !strcasecmp(uuid, token)) {
+			uuid_found = 1;
+			break;
+		}
+	}
+
+	if (!uuid_found) {
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Device [%d:%d] is no longer attached to %s. Nothing to do.\n", span_id, chan_id, name);
+		goto end;
+	}
+
 
 	ftdm_channel_clear_token(tech_pvt->ftdmchan, switch_core_session_get_uuid(session));
 
@@ -604,18 +629,42 @@ static switch_status_t channel_on_hangup(switch_core_session_t *session)
 	case FTDM_CHAN_TYPE_B:
 		{
 			const char *var = NULL;
+			ftdm_usrmsg_t usrmsg;
 			switch_call_cause_t ccause = switch_channel_get_cause_q850(channel);
 			ftdm_call_cause_t hcause;
+			memset(&usrmsg, 0, sizeof(ftdm_usrmsg_t));
 			if (ccause  < 1 || ccause > 127) {
 				hcause = FTDM_CAUSE_DESTINATION_OUT_OF_ORDER;
 			} else {
 				hcause = (ftdm_call_cause_t)ccause;
 			}
+
+			/* release cause from dialplan is highest priority..*/
+			var   = switch_channel_get_variable(channel, "ss7_rel_cause");
+			if (var) {
+				ftdm_usrmsg_add_var(&usrmsg, "ss7_rel_cause", var);
+			} else {
+				/* sip_term_cause will be set based on reason header,
+				 * so pick this value for releasing call */
+				var = switch_channel_get_variable(channel, "sip_term_cause");
+				if (var) {
+					/* convert sip cause to isup cause */
+					int isup_cause = switch_channel_cause_q850(atoi(var));
+					char ss7_rel_cause[12] = {0};
+					sprintf(ss7_rel_cause,"%d",isup_cause);
+					ftdm_usrmsg_add_var(&usrmsg, "ss7_rel_cause", ss7_rel_cause);
+				}
+			}
 			var = switch_channel_get_variable(channel, "ss7_rel_loc");
 			if (var) {
-				ftdm_usrmsg_t usrmsg;
-				memset(&usrmsg, 0, sizeof(ftdm_usrmsg_t));
 				ftdm_usrmsg_add_var(&usrmsg, "ss7_rel_loc", var);
+			}
+			var = switch_channel_get_variable(channel, "ss7_redirect_number");
+			if (var ) {
+				ftdm_usrmsg_add_var(&usrmsg, "ss7_redirect_number", var);
+			}
+
+			if (usrmsg.variables) {
 				ftdm_channel_call_hangup_with_cause_ex(tech_pvt->ftdmchan, hcause, &usrmsg);
 			} else {
 				ftdm_channel_call_hangup_with_cause(tech_pvt->ftdmchan, hcause);
@@ -683,7 +732,7 @@ static switch_status_t channel_on_soft_execute(switch_core_session_t *session)
 static switch_status_t channel_send_dtmf(switch_core_session_t *session, const switch_dtmf_t *dtmf)
 {
 	private_t *tech_pvt = NULL;
-	char tmp[2] = "";
+	char tmp[100] = "";
 
 	tech_pvt = switch_core_session_get_private(session);
 	assert(tech_pvt != NULL);
@@ -693,8 +742,29 @@ static switch_status_t channel_send_dtmf(switch_core_session_t *session, const s
 		return SWITCH_STATUS_FALSE;
 	}
 
-	tmp[0] = dtmf->digit;
-	ftdm_channel_command(tech_pvt->ftdmchan, FTDM_COMMAND_SEND_DTMF, tmp);
+	if (dtmf->digit == 'X' || dtmf->digit == 'Q') {
+		int x = 0;
+		switch_channel_t *channel = switch_core_session_get_channel(session);
+		const char *regenerate_oob_tones = NULL;
+		assert(channel != NULL);
+		regenerate_oob_tones = switch_channel_get_variable(channel, "fax_regenerate_oob_tones");
+		// FAX out of band tones, force echo canceller to be disabled....
+		ftdm_channel_command(tech_pvt->ftdmchan, FTDM_COMMAND_DISABLE_ECHOCANCEL, &x);
+		ftdm_channel_command(tech_pvt->ftdmchan, FTDM_COMMAND_DISABLE_ECHOTRAIN, &x);
+		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "Echo Canceller Disabled\n");
+		// check if we're asked to regenerate them...
+		if (switch_true(regenerate_oob_tones)) {
+			snprintf (tmp, sizeof(tmp), "(%u)%c", dtmf->duration, dtmf->digit);
+		} else {
+			tmp[0] = '\0';
+		}
+	} else {
+		tmp[0] = dtmf->digit;
+	}
+
+	if (tmp[0] != '\0') {
+		ftdm_channel_command(tech_pvt->ftdmchan, FTDM_COMMAND_SEND_DTMF, tmp);
+	}
 
 	return SWITCH_STATUS_SUCCESS;
 }
@@ -735,7 +805,8 @@ static switch_status_t channel_read_frame(switch_core_session_t *session, switch
 	   Yes, we support digium cards, ain't we nice.......
 	   6 double length intervals should compensate */
 	chunk = ftdm_channel_get_io_interval(tech_pvt->ftdmchan) * 2;
-	total_to = chunk * 6;
+	/* Get timeout depending upon the offset value */
+	total_to = chunk * 6 * globals.io_timer_offset;
 
  top:
 
@@ -799,7 +870,6 @@ static switch_status_t channel_read_frame(switch_core_session_t *session, switch
 			switch_log_printf(SWITCH_CHANNEL_CHANNEL_LOG(channel), SWITCH_LOG_ERROR, "too many I/O read errors on channel %s device %d:%d!\n", name, span_id, chan_id);
 			goto fail;
 		}
-
 	} else {
 		tech_pvt->read_error = 0;
 	}
@@ -827,7 +897,9 @@ static switch_status_t channel_read_frame(switch_core_session_t *session, switch
 	return SWITCH_STATUS_SUCCESS;
 
 fail:
-	switch_log_printf(SWITCH_CHANNEL_CHANNEL_LOG(channel), SWITCH_LOG_ERROR, "clearing IO in channel %s device %d:%d!\n", name, span_id, chan_id);
+	if (switch_test_flag(tech_pvt, TFLAG_IO)) {
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "clearing IO in channel %s device %d:%d!\n", name, span_id, chan_id);
+	}
 normal_failure:
 	switch_clear_flag_locked(tech_pvt, TFLAG_IO);
 	return SWITCH_STATUS_GENERR;
@@ -960,8 +1032,9 @@ static switch_status_t channel_receive_message_cas(switch_core_session_t *sessio
 
 static switch_status_t channel_receive_message_b(switch_core_session_t *session, switch_core_session_message_t *msg)
 {
-	switch_channel_t *channel;
-	private_t *tech_pvt;
+	switch_channel_t *channel = NULL;
+	private_t *tech_pvt = NULL;
+	uint32_t phy_id = 0;
 
 	channel = switch_core_session_get_channel(session);
 	assert(channel != NULL);
@@ -982,10 +1055,24 @@ static switch_status_t channel_receive_message_b(switch_core_session_t *session,
 		return SWITCH_STATUS_SUCCESS;
 	}
 
+	phy_id = ftdm_channel_get_ph_id(tech_pvt->ftdmchan);
+
 	switch (msg->message_id) {
 	case SWITCH_MESSAGE_INDICATE_RINGING:
 		{
-			ftdm_channel_call_indicate(tech_pvt->ftdmchan, FTDM_CHANNEL_INDICATE_RINGING);
+			/* fill ISUP - ACM related dialplan variables */
+			const char *var = NULL;
+			ftdm_usrmsg_t usrmsg;
+			memset(&usrmsg, 0, sizeof(usrmsg));
+			var = switch_channel_get_variable(channel, "acm_bi_cpc");
+			if (var) {
+				ftdm_usrmsg_add_var(&usrmsg, "acm_bi_cpc", var);
+			}
+			var   = switch_channel_get_variable(channel, "acm_bi_iup");
+			if (var) {
+				ftdm_usrmsg_add_var(&usrmsg, "acm_bi_iup", var);
+			}
+			ftdm_channel_call_indicate_ex(tech_pvt->ftdmchan, FTDM_CHANNEL_INDICATE_RINGING, &usrmsg);
 		}
 		break;
 	case SWITCH_MESSAGE_INDICATE_PROGRESS:
@@ -1018,6 +1105,13 @@ static switch_status_t channel_receive_message_b(switch_core_session_t *session,
 				switch_yield(100000);
 			}
 		}
+	case SWITCH_MESSAGE_INDICATE_BRIDGE:
+	case SWITCH_MESSAGE_INDICATE_AUDIO_SYNC:
+		{
+			ftdm_log(FTDM_LOG_DEBUG, "Got Freeswitch message BRIDGE/AUDIO SYNC  channel %d [%d]\n", phy_id, msg->message_id);
+			ftdm_channel_command(tech_pvt->ftdmchan, FTDM_COMMAND_FLUSH_BUFFERS, NULL);
+		}
+		break;
 	default:
 		break;
 	}
@@ -1412,6 +1506,8 @@ static switch_call_cause_t channel_outgoing_channel(switch_core_session_t *sessi
 				sipvar++;
 			}
 			ftdm_set_string(caller_data.cid_num.digits, sipvar);
+		} else {
+			ftdm_set_string(caller_data.cid_num.digits, switch_str_nil(outbound_profile->caller_id_number));
 		}
 
 		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-ANI");
@@ -1450,6 +1546,21 @@ static switch_call_cause_t channel_outgoing_channel(switch_core_session_t *sessi
 			ftdm_set_string(caller_data.loc.digits, sipvar);
 		}
 
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-ChargeNum");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_chargenum", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-ChargeNum-NADI");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_chargenum_nadi", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-ChargeNum-Plan");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_chargenum_plan", sipvar);
+		}
+		
 		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-Access-Transport-URLENC");
 		if (sipvar) {
 			ftdm_usrmsg_add_var(&usrmsg, "ss7_access_transport_urlenc", sipvar);
@@ -1557,6 +1668,16 @@ static switch_call_cause_t channel_outgoing_channel(switch_core_session_t *sessi
 			ftdm_usrmsg_add_var(&usrmsg, "ss7_pres_ind", sipvar);
 		}
 
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-NFCI-CLI-BlockingInd");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_nfci_cli_blocking_ind", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-NFCI-NwTransAddr-Ind");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_nfci_nw_trans_addr_ind", sipvar);
+		}
+
 		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-CPC");
 		if (sipvar) {
 			ftdm_set_calling_party_category(sipvar, (uint8_t *)&caller_data.cpc);
@@ -1610,6 +1731,169 @@ static switch_call_cause_t channel_outgoing_channel(switch_core_session_t *sessi
 		if (sipvar) {
 			ftdm_usrmsg_add_var(&usrmsg, "ss7_iam_nature_connection_hex", sipvar);
 		}
+
+		/* for ftmod_sangoma_ss7 use only in order to set hopCounter as recieved */
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-hopCounter");
+		if (sipvar) {
+			ftdm_log(FTDM_LOG_INFO, "Got hop counter value as [%s] recieved in X-header\n", sipvar);
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_hopCounter_val", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-UUI");
+		if (sipvar) {
+			ftdm_log(FTDM_LOG_INFO, "Got user to user information value as [%s] recieved in X-header\n", sipvar);
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_usr2UsrInfo_val", sipvar);
+		}
+
+		/********** SS7-UK : Presentation Number Begin  *********/
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-PresNumber");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_pres_num_digits", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-PresNumber-NADI");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_pres_num_nadi", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-PresNumber-Screen");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_pres_num_screen_ind", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-PresNumber-PresInd");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_pres_num_pres_ind", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-PresNumber-Plan");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_pres_num_npi", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-PresNumber-PrefInd");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_pres_num_pref_plan_ind", sipvar);
+		}
+
+		/********** SS7-UK : Presentation Number End *********/
+
+		/********** SS7-UK : Link-By-Link Begin  *********/
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-LxL_RCI");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_fci_lxl_rci", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-LxL_ISI");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_fci_lxl_isi", sipvar);
+		}
+
+		/********** SS7-UK : Link-By-Link End  *********/
+
+		/********** SS7-UK : ACC Priority Field  *********/
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-IAM-Priority");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_iam_priority", sipvar);
+		}
+		/********** SS7-UK : ACC Priority Field  *********/
+
+
+		/********** SS7-UK : Divert line id Begin  *********/
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-DivertLineId");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_divertlineid_digits", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-DivertLineId-NADI");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_divertlineid_nadi", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-DivertLineId-Screen");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_divertlineid_screen_ind", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-DivertLineId-PresInd");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_divertlineid_pres_ind", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-DivertLineId-Plan");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_divertlineid_plan", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-DivertLineId-IncInd");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "ss7_divertlineid_incomp_ind", sipvar);
+		}
+
+		/********** SS7-UK : Divert line id End  *********/
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-User-User");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "isdn.user-user", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_X-FreeTDM-User-User-PD");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "isdn.user-user-pd", sipvar);
+		}
+
+		/* Lawful Interception Information */
+		sipvar = switch_channel_get_variable(channel, "sip_h_P-LI-LIID");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "li.id", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_P-LI-CIN");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "li.communication_identity_number", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_P-LI-CCLID");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "li.cc_link_identifier", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_P-LI-Direction");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "li.direction", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_P-LI-OPID");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "li.operator_id", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_P-LI-TMR");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "li.tmr", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_P-LI-BC");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "li.bc", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_P-LI-HLC");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "li.hlc", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_P-LI-MBSC");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "li.mbsc", sipvar);
+		}
+
+		sipvar = switch_channel_get_variable(channel, "sip_h_P-LI-MTSC");
+		if (sipvar) {
+			ftdm_usrmsg_add_var(&usrmsg, "li.mtsc", sipvar);
+		}
 	}
 
 	if (switch_test_flag(outbound_profile, SWITCH_CPF_SCREEN)) {
@@ -1654,6 +1938,9 @@ static switch_call_cause_t channel_outgoing_channel(switch_core_session_t *sessi
 
 	if ((var = channel_get_variable(session, var_event, "freetdm_calling_party_category"))) {
 		ftdm_set_calling_party_category(var, (uint8_t *)&caller_data.cpc);
+	} else if (FTDM_CPC_UNKNOWN == caller_data.cpc) {
+		/* If not specified by user or x-headers then default to ORDINARY */
+		caller_data.cpc = FTDM_CPC_ORDINARY;
 	}
 
 	if (!zstr(dest)) {
@@ -1673,6 +1960,12 @@ static switch_call_cause_t channel_outgoing_channel(switch_core_session_t *sessi
 	ftdm_set_string(caller_data.cid_num.digits, switch_str_nil(callerid_num));
 
 	memset(&hunting, 0, sizeof(hunting));
+	hunting.even_only = FTDM_FALSE;
+	if ((var = channel_get_variable(session, var_event, "freetdm_hunt_even_only")) && switch_true(var)) {
+		hunting.even_only = FTDM_TRUE;
+
+		ftdm_log(FTDM_LOG_DEBUG, "hunting.even_only TRUE \n");
+	}
 
 	if (group_id >= 0) {
 		hunting.mode = FTDM_HUNT_GROUP;
@@ -1910,8 +2203,6 @@ ftdm_status_t ftdm_channel_from_event(ftdm_sigmsg_t *sigmsg, switch_core_session
 	if (globals.sip_headers) {
 		switch_channel_set_variable(channel, "sip_h_X-FreeTDM-SpanName", ftdm_channel_get_span_name(sigmsg->channel));
 		switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-SpanNumber", "%d", spanid);
-		switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-TransUUID", "%s",switch_core_session_get_uuid(session));
-		switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-SpanNumber", "%d", spanid);
 		switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-ChanNumber", "%d", chanid);
 
 		switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-CallerName", "%s", channel_caller_data->cid_name);
@@ -1931,6 +2222,18 @@ ftdm_status_t ftdm_channel_from_event(ftdm_sigmsg_t *sigmsg, switch_core_session
 		switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-RDNIS-Plan", "%d", channel_caller_data->rdnis.plan);
 		switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-CPC", "%s", ftdm_calling_party_category2str(channel_caller_data->cpc));
 
+		var_value = ftdm_sigmsg_get_var(sigmsg, "isdn_tap_peer_span");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-ISDNTAP-PeerSpan", "%s", var_value);
+		} else {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-TransUUID", "%s",switch_core_session_get_uuid(session));
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "isdn_tap_peer_chan");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-ISDNTAP-PeerChan", "%s", var_value);
+		}
+	
 		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_iam_nature_connection_hex");
 		if (!ftdm_strlen_zero(var_value)) {
 			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-IAM-NATURE-CONN-HEX", "%s", var_value);
@@ -2041,9 +2344,34 @@ ftdm_status_t ftdm_channel_from_event(ftdm_sigmsg_t *sigmsg, switch_core_session
 			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-OPC", "%s", var_value);
 		}
 
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_nfci_cli_blocking_ind");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-NFCI-CLI-BlockingInd", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_nfci_nw_trans_addr_ind");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-NFCI-NwTransAddr-Ind", "%s", var_value);
+		}
+
 		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_loc_digits");
 		if (!ftdm_strlen_zero(var_value)) {
 			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-LOC", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_chargenum");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-ChargeNum", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_chargenum_nadi");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-ChargeNum-NADI", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_chargenum_plan");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-ChargeNum-Plan", "%s", var_value);
 		}
 
 		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_loc_screen_ind");
@@ -2080,6 +2408,176 @@ ftdm_status_t ftdm_channel_from_event(ftdm_sigmsg_t *sigmsg, switch_core_session
 		if (!ftdm_strlen_zero(var_value)) {
 			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-OCN-Presentation", "%s", var_value);
 		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_num_port_fwd_info_status_ind");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-NmbPortFwdInfo_Ind", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_num_port_fwd_info_status_ext");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-NmbPortFwdInfo_Ext", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_hopCounter_val");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-hopCounter", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_usr2UsrInfo_val");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-UUI", "%s", var_value);
+		}
+
+		/********** SS7-UK : Presentation Number Begin  *********/
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_pres_num_digits");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-PresNumber", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_pres_num_nadi");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-PresNumber-NADI", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_pres_num_screen_ind");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-PresNumber-Screen", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_pres_num_pres_ind");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-PresNumber-PresInd", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_pres_num_npi");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-PresNumber-Plan", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_pres_num_pref_plan_ind");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-PresNumber-PrefInd", "%s", var_value);
+		}
+
+		/********** SS7-UK : Presentation Number End *********/
+
+		/********** SS7-UK : Link-By-Link Begin  *********/
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_fci_lxl_rci");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-LxL_RCI", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_fci_lxl_isi");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-LxL_ISI", "%s", var_value);
+		}
+		/********** SS7-UK : Link-By-Link End  *********/
+
+		/********** SS7-UK : ACC Priority Field  *********/
+		var_value = switch_channel_get_variable(channel, "ss7_iam_priority");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-IAM-Priority", var_value); 
+		}
+		/********** SS7-UK : ACC Priority Field  *********/
+
+		/********** SS7-UK : Divert line id Begin  *********/
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_divertlineid_digits");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-DivertLineId", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_divertlineid_nadi");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-DivertLineId-NADI", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_divertlineid_screen_ind");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-DivertLineId-Screen", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_divertlineid_pres_ind");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-DivertLineId-PresInd", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_divertlineid_plan");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-DivertLineId-Plan", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "ss7_divertlineid_incomp_ind");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-DivertLineId-IncInd", "%s", var_value);
+		}
+		/********** SS7-UK : Divert line id End  *********/
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "isdn.calling_subaddr_addr_url");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-CgPty-SubAddr", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "isdn.calling_subaddr_type");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-CgPty-SubAddr-Type", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "isdn.calling_subaddr_oe_ind");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-CgPty-SubAdr-OEIndicator", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "isdn.called_subaddr_addr_url");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-CdPty-SubAddr", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "isdn.called_subaddr_type");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-CdPty-SubAddr-Type", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "isdn.called_subaddr_oe_ind");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-CdPty-SubAddr-OEIndicator", "%s", var_value);
+		}
+
+		var_value = ftdm_sigmsg_get_var(sigmsg, "isdn.user-user");
+		if (!ftdm_strlen_zero(var_value)) {
+			switch_channel_set_variable_printf(channel, "sip_h_X-FreeTDM-User-User", "%s", var_value);
+		}
+
+		/* Lawful Interception Information */
+		{
+			int i = 0;
+			struct sip_tdm_varmap {
+				const char *isdnvar;
+				const char *sipvar;
+			};
+			struct sip_tdm_varmap isdn_varmap[] = {
+				{ "li.id", "sip_h_P-LI-LIID" },
+				{ "li.communication_identity_number", "sip_h_P-LI-CIN" },
+				{ "li.cc_link_identifier", "sip_h_P-LI-CCLID" },
+				{ "li.direction", "sip_h_P-LI-Direction" },
+				{ "li.operator_id", "sip_h_P-LI-OPID" },
+				{ "li.tmr", "sip_h_P-LI-TMR" },
+				{ "li.bc", "sip_h_P-LI-BC" },
+				{ "li.hlc", "sip_h_P-LI-HLC" },
+				{ "li.mbsc", "sip_h_P-LI-MBSC" },
+				{ "li.mtsc", "sip_h_P-LI-MTSC" },
+			};
+
+			for (i = 0; i < ftdm_array_len(isdn_varmap); i++) {
+				var_value = ftdm_sigmsg_get_var(sigmsg, isdn_varmap[i].isdnvar);
+				if (!ftdm_strlen_zero(var_value)) {
+					switch_channel_set_variable_printf(channel, isdn_varmap[i].sipvar, "%s", var_value);
+				}
+			}
+		}
 	}
 
 	/* Add any call variable to the dial plan */
@@ -2096,7 +2594,7 @@ ftdm_status_t ftdm_channel_from_event(ftdm_sigmsg_t *sigmsg, switch_core_session
 		}
 	}
 	ftdm_iterator_free(iter);
-
+	
 	switch_channel_set_state(channel, CS_INIT);
 	if (switch_core_session_thread_launch(session) != SWITCH_STATUS_SUCCESS) {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "Error spawning thread\n");
@@ -2152,8 +2650,10 @@ static FIO_SIGNAL_CB_FUNCTION(on_common_signal)
 				return FTDM_FAIL;
 			}
 			if (sigmsg->event_id == FTDM_SIGEVENT_ALARM_CLEAR) {
+				ftdm_log(FTDM_LOG_NOTICE, "Alarm cleared on channel %d:%d\n", spanid, chanid);
 				switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "condition", "ftdm-alarm-clear");
 			} else {
+				ftdm_log(FTDM_LOG_NOTICE, "Alarm raised on channel %d:%d\n", spanid, chanid);
 				switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "condition", "ftdm-alarm-trap");
 			}
 		}
@@ -2592,7 +3092,8 @@ static FIO_SIGNAL_CB_FUNCTION(on_r2_signal)
 	}
 
 	switch (sigmsg->event_id) {
-	case FTDM_SIGEVENT_STOP:	/* on_call_disconnect from the R2 side */
+	/* on_call_disconnect from the R2 side */
+	case FTDM_SIGEVENT_STOP:
 		{
 			private_t *tech_pvt = NULL;
 			while ((session = ftdm_channel_get_session(sigmsg->channel, 0))) {
@@ -2604,12 +3105,14 @@ static FIO_SIGNAL_CB_FUNCTION(on_r2_signal)
 			}
 		}
 		break;
-	case FTDM_SIGEVENT_START:	/* on_call_offered from the R2 side */
+	/* on_call_offered from the R2 side */
+	case FTDM_SIGEVENT_START:
 		{
 			status = ftdm_channel_from_event(sigmsg, &session);
 		}
 		break;
-	case FTDM_SIGEVENT_COLLECTED_DIGIT:	/* on DNIS received from the R2 forward side, return status == FTDM_BREAK to stop requesting DNIS */
+	/* on DNIS received from the R2 forward side, return status == FTDM_BREAK to stop requesting DNIS */
+	case FTDM_SIGEVENT_COLLECTED_DIGIT:
 		{
 			ftdm_caller_data_t *caller_data = ftdm_channel_get_caller_data(sigmsg->channel);
 			int span_id = ftdm_channel_get_span_id(sigmsg->channel);
@@ -2726,6 +3229,13 @@ static FIO_SIGNAL_CB_FUNCTION(on_clear_channel_signal)
 				tech_pvt = switch_core_session_get_private(session);
 				switch_set_flag_locked(tech_pvt, TFLAG_DEAD);
 				channel = switch_core_session_get_channel(session);
+				{
+					char ct[10]={0};
+					sprintf(ct,"%d",caller_data->hangup_cause);
+					switch_channel_set_variable_partner(channel, "q850_term_cause", ct);
+				}
+
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "hangup_cause=%d\n", caller_data->hangup_cause);
 				switch_channel_hangup(channel, caller_data->hangup_cause);
 				switch_core_session_rwunlock(session);
 			}
@@ -2774,6 +3284,24 @@ static FIO_SIGNAL_CB_FUNCTION(on_clear_channel_signal)
 					spanid, chanid, (uuid) ? uuid : "N/A");
 			}
 		}
+		break;	
+	case FTDM_SIGEVENT_ALERTING:
+		{
+			switch_core_session_t *partner_session = NULL;
+			switch_core_session_message_t *msg = NULL;
+
+			if ((session = ftdm_channel_get_session(sigmsg->channel, 0))) {
+				if (switch_core_session_get_partner(session, &partner_session) == SWITCH_STATUS_SUCCESS) {
+					msg = switch_core_session_alloc(partner_session, sizeof(*msg));
+					msg->message_id = SWITCH_MESSAGE_INDICATE_ALERTING;
+					msg->from = (char*)__FILE__;
+					switch_core_session_queue_message(partner_session, msg);
+					switch_core_session_rwunlock(partner_session);
+				}
+				switch_core_session_rwunlock(session);
+			}
+		}
+
 		break;
 	case FTDM_SIGEVENT_SIGSTATUS_CHANGED:
 		{
@@ -2999,12 +3527,51 @@ static int add_config_nodes(switch_xml_t swnode, ftdm_conf_node_t *rootnode,
 	return 0;
 }
 
+#define ftdm_set_operating_mode(_operating_mode, _is_isup, _is_m2ua_sg, _is_m2ua_asp, _is_mtp2_api, _is_m3ua_sg, _is_m3ua_asp) \
+{                                                                                                                   \
+    if (_operating_mode && ('\0' != _operating_mode[0])) {                                                          \
+	_is_isup = _is_m2ua_sg = _is_m2ua_asp = _is_mtp2_api = _is_m3ua_sg = _is_m3ua_asp = 0x00;											    \
+        if (!strcasecmp(_operating_mode, "ISUP")) {                                                                 \
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Setting Operating mode to ISUP \n");            \
+            _is_isup = 0x01;                                                                                        \
+        } else if (!strcasecmp(_operating_mode, "M2UA_SG")) {                                                       \
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Setting Operating mode to M2UA SG \n");         \
+            _is_m2ua_sg = 0x01;                                                                                     \
+        } else if (!strcasecmp(_operating_mode, "M2UA_ASP")) {                                                      \
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Setting Operating mode to M2UA ASP \n");        \
+            _is_m2ua_asp = 0x01;                                                                                    \
+        } else if (!strcasecmp(_operating_mode, "MTP2_API")) {                                                      \
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Setting Operating mode to MTP2 API \n");        \
+            _is_mtp2_api = 0x01;                                                                                    \
+	} else if (!strcasecmp(_operating_mode, "M3UA_SG")) {                                                       \
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Setting Operating mode to M3UA SG \n");         \
+            _is_m3ua_sg = 0x01;                                                                                     \
+        } else if (!strcasecmp(_operating_mode, "M3UA_ASP")) {                                                      \
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Setting Operating mode to M3UA ASP \n");        \
+            _is_m3ua_asp = 0x01;                                                                                    \
+        } else {                                                                                                    \
+            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,                                                 \
+            "Invalid operating Mode[%s] \n", operating_mode);                                                       \
+            ftdm_conf_node_destroy(rootnode);                                                                       \
+            return NULL;                                                                                            \
+        }                                                                                                           \
+    } else if (!_is_isup && !_is_m2ua_sg && !_is_m2ua_asp && !_is_mtp2_api && !_is_m3ua_sg && !_is_m3ua_asp) {      \
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Default operating mode to ISUP \n"); \
+        _is_isup = 0x01;                                                                                             \
+    }                                                                                                               \
+}
+
 static ftdm_conf_node_t *_get_ss7_config_node(switch_xml_t cfg, const char *confname, const char *operating_mode)
 {
 	switch_xml_t signode, ss7configs, isup, gen, param;
 	ftdm_conf_node_t *rootnode, *list;
 	char *var, *val;
 	int is_isup = 0x00;
+	int is_m2ua_sg = 0x00;
+	int is_m2ua_asp = 0x00;
+	int is_mtp2_api = 0x00;
+	int is_m3ua_sg = 0x00;
+	int is_m3ua_asp = 0x00;
 
 	/* try to find the conf in the hash first */
 	rootnode = switch_core_hash_find(globals.ss7_configs, confname);
@@ -3064,23 +3631,6 @@ static ftdm_conf_node_t *_get_ss7_config_node(switch_xml_t cfg, const char *conf
 		return NULL;
 	}
 
-	/* operating mode , M2UA or ISUP */
-	if (operating_mode && ('\0' != operating_mode[0])) {
-		if (!strcasecmp(operating_mode, "ISUP")) {
-			is_isup = 0x01;
-		}
-		else if (!strcasecmp(operating_mode, "M2UA_SG")) {
-			is_isup = 0x00;
-		} else {
-			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Invalid operating Mode[%s] \n", operating_mode);
-			ftdm_conf_node_destroy(rootnode);
-			return NULL;
-		}
-	} else {
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Operating mode not specified, default to ISUP \n");
-		is_isup = 0x01;
-	}
-
 	/* add sng_gen */
 	gen = switch_xml_child(isup, "sng_gen");
 	if (gen == NULL) {
@@ -3099,7 +3649,17 @@ static ftdm_conf_node_t *_get_ss7_config_node(switch_xml_t cfg, const char *conf
 		var = (char *) switch_xml_attr_soft(param, "name");
 		val = (char *) switch_xml_attr_soft(param, "value");
 		ftdm_conf_node_add_param(list, var, val);
+        if (!strcasecmp("operating_mode", var)) {
+            ftdm_set_operating_mode(val, is_isup, is_m2ua_sg, is_m2ua_asp, is_mtp2_api, is_m3ua_sg, is_m3ua_asp);
+        }
 	}
+
+    /* opertating-mode field should be part of sng_ss7 (global ss7 config) */
+    /* for backward support - keeping operating_mode field in span also for now, 
+     * but soon it will be removed from span configuration .*/
+
+    /* span defined operating mode has to take priority */
+    ftdm_set_operating_mode(operating_mode, is_isup, is_m2ua_sg, is_m2ua_asp, is_mtp2_api, is_m3ua_sg, is_m3ua_asp);
 
 	/* add relay channels */
 	if (add_config_list_nodes(isup, rootnode, "sng_relay", "relay_channel", NULL, NULL)) {
@@ -3108,41 +3668,47 @@ static ftdm_conf_node_t *_get_ss7_config_node(switch_xml_t cfg, const char *conf
 		return NULL;
 	}
 
-	/* add mtp1 links */
-	if (add_config_list_nodes(isup, rootnode, "mtp1_links", "mtp1_link", NULL, NULL)) {
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "failed to process mtp1_links for sng_isup config %s\n", confname);
-		ftdm_conf_node_destroy(rootnode);
-		return NULL;
+	if (is_isup || is_m2ua_sg || is_m3ua_sg) {
+		/* add mtp1 links */
+		if (add_config_list_nodes(isup, rootnode, "mtp1_links", "mtp1_link", NULL, NULL)) {
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "failed to process mtp1_links for sng_isup config %s\n", confname);
+			ftdm_conf_node_destroy(rootnode);
+			return NULL;
+		}
+
+		/* add mtp2 links */
+		if (add_config_list_nodes(isup, rootnode, "mtp2_links", "mtp2_link", NULL, NULL)) {
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "failed to process mtp2_links for sng_isup config %s\n", confname);
+			ftdm_conf_node_destroy(rootnode);
+			return NULL;
+		}
 	}
 
-	/* add mtp2 links */
-	if (add_config_list_nodes(isup, rootnode, "mtp2_links", "mtp2_link", NULL, NULL)) {
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "failed to process mtp2_links for sng_isup config %s\n", confname);
-		ftdm_conf_node_destroy(rootnode);
-		return NULL;
-	}
+    if (is_mtp2_api) goto done;
 
-	if (is_isup) {
-		/* add mtp3 links */
-		if (add_config_list_nodes(isup, rootnode, "mtp3_links", "mtp3_link", NULL, NULL)) {
-			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "failed to process mtp3_links for sng_isup config %s\n", confname);
-			ftdm_conf_node_destroy(rootnode);
-			return NULL;
-		}
+    if (is_isup || is_m2ua_asp || is_m3ua_sg ) {
+	    /* add mtp3 links */
+	    if (add_config_list_nodes(isup, rootnode, "mtp3_links", "mtp3_link", NULL, NULL)) {
+		    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "failed to process mtp3_links for sng_isup config %s\n", confname);
+		    ftdm_conf_node_destroy(rootnode);
+		    return NULL;
+	    }
 
-		/* add mtp linksets */
-		if (add_config_list_nodes(isup, rootnode, "mtp_linksets", "mtp_linkset", NULL, NULL)) {
-			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "failed to process mtp_linksets for sng_isup config %s\n", confname);
-			ftdm_conf_node_destroy(rootnode);
-			return NULL;
-		}
+	    /* add mtp linksets */
+	    if (add_config_list_nodes(isup, rootnode, "mtp_linksets", "mtp_linkset", NULL, NULL)) {
+		    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "failed to process mtp_linksets for sng_isup config %s\n", confname);
+		    ftdm_conf_node_destroy(rootnode);
+		    return NULL;
+	    }
 
-		/* add mtp routes */
-		if (add_config_list_nodes(isup, rootnode, "mtp_routes", "mtp_route", "linksets", "linkset")) {
-			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "failed to process mtp_routes for sng_isup config %s\n", confname);
-			ftdm_conf_node_destroy(rootnode);
-			return NULL;
-		}
+	    /* add mtp routes */
+	    if (add_config_list_nodes(isup, rootnode, "mtp_routes", "mtp_route", "linksets", "linkset")) {
+		    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "failed to process mtp_routes for sng_isup config %s\n", confname);
+		    ftdm_conf_node_destroy(rootnode);
+		    return NULL;
+	    }
+    }
+	if (is_isup || is_m2ua_asp || is_m3ua_asp) {
 
 		/* add isup interfaces */
 		if (add_config_list_nodes(isup, rootnode, "isup_interfaces", "isup_interface", NULL, NULL)) {
@@ -3157,20 +3723,18 @@ static ftdm_conf_node_t *_get_ss7_config_node(switch_xml_t cfg, const char *conf
 			ftdm_conf_node_destroy(rootnode);
 			return NULL;
 		}
-	} else {
+	} 
+
+	if (is_m2ua_sg || is_m2ua_asp || is_m3ua_sg || is_m3ua_asp) {
 		/* add sctp links */
 		if (add_config_nodes(isup, rootnode, "sng_sctp_interfaces", "sng_sctp_interface",  "sng_source_addresses")) {
 			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "failed to process sng_sctp_interface for sng_isup config %s\n", confname);
 			ftdm_conf_node_destroy(rootnode);
 			return NULL;
 		}
+	}
 
-		if (add_config_list_nodes(isup, rootnode, "sng_nif_interfaces", "sng_nif_interface", NULL, NULL)) {
-			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "failed to process sng_nif_interfaces for sng_isup config %s\n", confname);
-			ftdm_conf_node_destroy(rootnode);
-			return NULL;
-		}
-
+	if (is_m2ua_sg || is_m2ua_asp) {
 		if (add_config_list_nodes(isup, rootnode, "sng_m2ua_interfaces", "sng_m2ua_interface", NULL, NULL)) {
 			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "failed to process sng_m2ua_interfaces for sng_isup config %s\n", confname);
 			ftdm_conf_node_destroy(rootnode);
@@ -3190,6 +3754,64 @@ static ftdm_conf_node_t *_get_ss7_config_node(switch_xml_t cfg, const char *conf
 		}
 	}
 
+	if (is_m2ua_sg) {
+		if (add_config_list_nodes(isup, rootnode, "sng_nif_interfaces", "sng_nif_interface", NULL, NULL)) {
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "failed to process sng_nif_interfaces for sng_isup config %s\n", confname);
+			ftdm_conf_node_destroy(rootnode);
+			return NULL;
+		}
+	}
+	if (is_m3ua_sg || is_m3ua_asp) {
+		if (add_config_list_nodes(isup, rootnode, "sng_m3ua_network_interfaces", "sng_m3ua_network_interface", NULL, NULL)) {
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,
+					"failed to process sng_m3ua_network_interfaces for sng_isup config %s\n", confname);
+			ftdm_conf_node_destroy(rootnode);
+			return NULL;
+		}
+
+		if (add_config_nodes(isup, rootnode, "sng_m3ua_peer_server_interfaces", "sng_m3ua_peer_server_interface", "sng_m3ua_psps")) {
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,
+					"failed to process sng_m3ua_peer_server_interface for sng_isup config %s\n", confname);
+			ftdm_conf_node_destroy(rootnode);
+			return NULL;
+		}
+
+		if (add_config_nodes(isup, rootnode, "sng_m3ua_peer_server_process_interfaces",
+					"sng_m3ua_peer_server_process_interface", "sng_destination_addresses")) {
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,
+					"failed to process sng_m3ua_peer_server_process_interface for sng_isup config %s\n", confname);
+			ftdm_conf_node_destroy(rootnode);
+			return NULL;
+		}
+
+		if (is_m3ua_asp) {
+			if (add_config_list_nodes(isup, rootnode, "sng_m3ua_user_interfaces", "sng_m3ua_user_interface", NULL, NULL)) {
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,
+						"failed to process sng_m3ua_user_interfaces for sng_isup config %s\n", confname);
+				ftdm_conf_node_destroy(rootnode);
+				return NULL;
+			}
+		}
+
+		if (is_m3ua_sg) {
+			if (add_config_list_nodes(isup, rootnode, "sng_m3ua_nif_interfaces", "sng_m3ua_nif_interface", NULL, NULL)) {
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,
+						"failed to process sng_m3ua_nif_interfaces for sng_isup config %s\n", confname);
+				ftdm_conf_node_destroy(rootnode);
+				return NULL;
+			}
+		}
+
+		if (add_config_list_nodes(isup, rootnode, "sng_m3ua_route_interfaces", "sng_m3ua_route_interface", NULL, NULL)) {
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,
+					"failed to process sng_m3ua_route_interfaces for sng_isup config %s\n", confname);
+			ftdm_conf_node_destroy(rootnode);
+			return NULL;
+		}
+	} /* M3UA SG */
+
+
+done:
 	switch_core_hash_insert(globals.ss7_configs, confname, rootnode);
 
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Added SS7 node configuration %s\n", confname);
@@ -3328,7 +3950,214 @@ static void parse_gsm_spans(switch_xml_t cfg, switch_xml_t spans)
 	}
 }
 
-static void parse_bri_pri_spans(switch_xml_t cfg, switch_xml_t spans)
+static void parse_ss7_spans(switch_xml_t cfg, switch_xml_t spans, int reload)
+{
+	int sp_list[FTDM_MAX_SPANS_INTERFACE] = { 0 };
+	ftdm_conf_node_t *ss7confnode = NULL;
+	char *last_operating_mode = NULL;
+	switch_xml_t myspan, param;
+	int span_idx = 0;
+	int idx = 0;
+	int reconfig = 0;
+
+start:
+	for (myspan = switch_xml_child(spans, "span"); myspan; myspan = myspan->next) {
+		ftdm_status_t zstatus = FTDM_FAIL;
+		const char *context = "default";
+		const char *dialplan = "XML";
+		ftdm_conf_parameter_t spanparameters[FTDM_MAX_SIG_PARAMETERS];
+		char *id = (char *) switch_xml_attr(myspan, "id");
+		char *name = (char *) switch_xml_attr(myspan, "name");
+		char *configname = (char *) switch_xml_attr(myspan, "cfgprofile");
+		char *operating_mode = (char *) switch_xml_attr(myspan, "operating_mode");
+		ftdm_span_t *span = NULL;
+		uint32_t span_id = 0;
+		unsigned paramindex = 0;
+		uint32_t b_span_found = 0;
+		ftdm_conf_node_t *tmp_node = NULL;
+
+		if (!name && !id) {
+			LOAD_ERROR("ss7 span missing required attribute 'id' or 'name', skipping ...\n");
+			continue;
+		}
+		if (!configname) {
+			LOAD_ERROR("ss7 span missing required attribute, skipping ...\n");
+			continue;
+		}
+
+		if (name) {
+			zstatus = ftdm_span_find_by_name(name, &span);
+		} else {
+			if (switch_is_number(id)) {
+				span_id = atoi(id);
+				zstatus = ftdm_span_find(span_id, &span);
+			}
+
+			if (zstatus != FTDM_SUCCESS) {
+				zstatus = ftdm_span_find_by_name(id, &span);
+			}
+		}
+
+		if (zstatus != FTDM_SUCCESS) {
+			LOAD_ERROR("Error finding FreeTDM span id:%s name:%s\n", switch_str_nil(id), switch_str_nil(name));
+			continue;
+		}
+
+		if (!span_id) {
+			span_id = ftdm_span_get_id(span);
+		}
+
+		/* There are scenarios where we need to reconfigure span and start span after reconfiguration
+		 * Scenarios for e.g.:Span 4 needs to be configured as a result of dynamic configuration
+		 * request where Span 3 is already configured and is up and running in such a case when both
+		 * span shares the same linkset/route during reconfiguration of new span Old span needs to be
+		 * stopped as it is a part of reconfiguration and there we need to be sure that all spans are
+		 * configured and are running in case of dynamic reconfiguration request */
+		if (reconfig) {
+			if (ftdm_get_span_running_status(span)) {
+				ftdm_log(FTDM_LOG_NOTICE, "[Reload]: Found span %s(%d) that needs to be configured and started\n",
+					 name , span_id);
+			} else {
+				continue;
+			}
+		}
+
+		if (reload ) {
+			b_span_found = 0;
+			for (idx = 0; idx < FTDM_MAX_SPANS_INTERFACE; idx++) {
+				if (SPAN_CONFIG[idx].span) {
+					if (!strcasecmp(name, ftdm_span_get_name(SPAN_CONFIG[idx].span))) {
+						b_span_found = 1;
+						break;
+					}
+				}
+			}
+
+			if (b_span_found) {
+				ftdm_span_set_reconfig_flag(span);
+			}
+
+			tmp_node = switch_core_hash_find(globals.ss7_configs, configname);
+			if (tmp_node) {
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "ss7 config %s was found. Deleting current hash entry.\n", configname);
+				switch_core_hash_delete(globals.ss7_configs, configname);
+			}
+		} /* reload */
+
+		/* check if the last operating mode is same as that of current parsed span operating mode then
+		 * please get the already existing configuration and remove it from global hash list */
+		if ((last_operating_mode) && (operating_mode) && (strcasecmp(last_operating_mode, operating_mode))) {
+			tmp_node = switch_core_hash_find(globals.ss7_configs, configname);
+			if (tmp_node) {
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "ss7 config %s was found for operating mode %s. Deleting current hash entry.\n",
+						last_operating_mode, configname);
+				switch_core_hash_delete(globals.ss7_configs, configname);
+			}
+		}
+
+		if (operating_mode) {
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "creating ss7 config node for operating mode %s!\n", operating_mode);
+		}
+
+		ss7confnode = _get_ss7_config_node(cfg, configname, operating_mode);
+		if (!ss7confnode) {
+			LOAD_ERROR("Error finding ss7config '%s' for FreeTDM span id: %s\n", configname, switch_str_nil(id));
+			continue;
+		}
+
+		memset(spanparameters, 0, sizeof(spanparameters));
+		paramindex = 0;
+
+		if (operating_mode) {
+			spanparameters[paramindex].var = "operating-mode";
+			spanparameters[paramindex].val = operating_mode;
+			paramindex++;
+			last_operating_mode = operating_mode;
+		}
+
+		spanparameters[paramindex].var = "confnode";
+		spanparameters[paramindex].ptr = ss7confnode;
+		paramindex++;
+		for (param = switch_xml_child(myspan, "param"); param; param = param->next) {
+			char *var = (char *) switch_xml_attr_soft(param, "name");
+			char *val = (char *) switch_xml_attr_soft(param, "value");
+
+			if (ftdm_array_len(spanparameters) - 1 == paramindex) {
+				LOAD_ERROR("Too many parameters for ss7 span, ignoring any parameter after %s\n", var);
+				break;
+			}
+
+			if (!strcasecmp(var, "context")) {
+				context = val;
+			} else if (!strcasecmp(var, "dialplan")) {
+				dialplan = val;
+			} else {
+				spanparameters[paramindex].var = var;
+				spanparameters[paramindex].val = val;
+				paramindex++;
+			}
+		}
+
+		/* There is scenarios where we need to reload span which we have stopped due to dynamic reconfiguration
+		* Example : suppose we are running span 1 as a signalling span  and  2 is pure voice span on NSG , now due to dynamic configuration we have stoppped span 2 because
+		* of signaling span 1 has reconfiguration request  , now we need to recheck voice span corresponding to their signaling span  */
+		if ((reload) && (reconfig)) {
+			ftdm_span_set_reconfig_flag(span);
+		}
+
+		if (ftdm_configure_span_signaling(span,
+					"sangoma_ss7",
+					on_clear_channel_signal,
+					spanparameters) != FTDM_SUCCESS) {
+			if ((!ftdm_span_test_reconfig_flag(span)) && (reload)) {
+				ftdm_span_clear_reconfig_flag(span);
+				sp_list[span_idx] = span_id;
+				span_idx++;
+				ftdm_log(FTDM_LOG_WARNING, "Unable to reconfigure ss7 FreeTDM span %d!\n", span_id);
+			} else {
+				LOAD_ERROR("Error %s configuring ss7 FreeTDM span %d\n",
+						b_span_found == 1 ? "Reconfiguring" : "configuring",
+						span_id);
+			}
+			continue;
+		}
+
+		sp_list[span_idx] = span_id;
+		span_idx++;
+		if ((b_span_found) && ((!ftdm_span_test_reconfig_flag(span)))) {
+			/* remove reconfig flag */
+			ftdm_span_clear_reconfig_flag(span);
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "ss7 config %s was found in the hash already. Thus, reconfiguring it.\n", configname);
+			continue;
+		} else {
+			/* remove reconfig flag */  // DONE
+			ftdm_span_clear_reconfig_flag(span);
+		}
+
+		SPAN_CONFIG[span_id].span = span;
+		switch_copy_string(SPAN_CONFIG[span_id].context, context, sizeof(SPAN_CONFIG[span_id].context));
+		switch_copy_string(SPAN_CONFIG[span_id].dialplan, dialplan, sizeof(SPAN_CONFIG[span_id].dialplan));
+		switch_copy_string(SPAN_CONFIG[span_id].type, "Sangoma (SS7)", sizeof(SPAN_CONFIG[span_id].type));
+		ftdm_log(FTDM_LOG_DEBUG, "Configured ss7 FreeTDM span %d with config node %s\n", span_id, configname);
+		if(FTDM_SUCCESS != ftdm_span_start(span)){
+			LOAD_ERROR("Error Starting ss7 FreeTDM span %d\n", span_id);
+			continue;
+		}
+	}
+
+	/* If configuration is done check if there is any specific SS7 span which is not started due to reconfiguration
+	 * request, so please start that SPAN */
+	/* Example : suppose we are running span 1 and  2  and both span have signaling link which has the same
+	* configuration e.g OPC,DPC, Linkset etc.Now due to dynamic configuration if we have to reload span 1 then we
+	* also neet to stop and reload span 2 due to same Linkset */
+	if ( (!reconfig) && (reload) ) {
+		reconfig = 1;
+		goto start;
+	}
+
+}
+
+static void parse_isdn_tap_spans(switch_xml_t cfg, switch_xml_t spans)
 {
 	switch_xml_t myspan, param;
 
@@ -3370,6 +4199,161 @@ static void parse_bri_pri_spans(switch_xml_t cfg, switch_xml_t spans)
 		if (!span_id) {
 			span_id = ftdm_span_get_id(span);
 		}
+
+		memset(spanparameters, 0, sizeof(spanparameters));
+		paramindex = 0;
+
+		if (configname) {
+			paramindex = add_profile_parameters(cfg, configname, spanparameters, ftdm_array_len(spanparameters));
+			if (paramindex) {
+				ftdm_log(FTDM_LOG_DEBUG, "Added %d parameters from profile %s for span %d\n", paramindex, configname, span_id);
+			}
+		}
+
+		/* some defaults first */
+		SPAN_CONFIG[span_id].limit_backend = "hash";
+		SPAN_CONFIG[span_id].limit_reset_event = FTDM_LIMIT_RESET_ON_TIMEOUT;
+		SPAN_CONFIG[span_id].digital_sampling_rate = 8000;
+
+		for (param = switch_xml_child(myspan, "param"); param; param = param->next) {
+			char *var = (char *) switch_xml_attr_soft(param, "name");
+			char *val = (char *) switch_xml_attr_soft(param, "value");
+
+			if (ftdm_array_len(spanparameters) - 1 == paramindex) {
+				LOAD_ERROR("Too many parameters for ss7 span, ignoring any parameter after %s\n", var);
+				break;
+			}
+
+			if (!strcasecmp(var, "context")) {
+				context = val;
+			} else if (!strcasecmp(var, "dialplan")) {
+				dialplan = val;
+			} else if (!strcasecmp(var, "unrestricted-digital-codec")) {
+				const switch_codec_implementation_t *codec = NULL;
+				int num_codecs;
+				num_codecs = switch_loadable_module_get_codecs_sorted(&codec, 1, &val, 1);
+				if (num_codecs != 1 || !codec) {
+					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR,
+					"Failed finding codec %s for unrestricted digital calls\n", val);
+				} else {
+					SPAN_CONFIG[span_id].digital_codec = switch_core_strdup(module_pool, codec->iananame);
+					SPAN_CONFIG[span_id].digital_sampling_rate = codec->samples_per_second;
+					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG,
+						"Unrestricted digital codec is %s at %dhz for span %d\n",
+						SPAN_CONFIG[span_id].digital_codec, SPAN_CONFIG[span_id].digital_sampling_rate, span_id);
+				}
+			} else if (!strcasecmp(var, "call_limit_backend")) {
+				SPAN_CONFIG[span_id].limit_backend = val;
+				ftdm_log(FTDM_LOG_DEBUG, "Using limit backend %s for span %d\n", SPAN_CONFIG[span_id].limit_backend, span_id);
+			} else if (!strcasecmp(var, "call_limit_rate")) {
+				int calls;
+				int seconds;
+				if (sscanf(val, "%d/%d", &calls, &seconds) != 2) {
+					LOAD_ERROR("Invalid %s parameter, format example: 3/1 for 3 calls per second\n", var);
+				} else {
+					if (calls < 1 || seconds < 1) {
+						LOAD_ERROR("Invalid %s parameter value, minimum call limit must be 1 per second\n", var);
+					} else {
+						SPAN_CONFIG[span_id].limit_calls = calls;
+						SPAN_CONFIG[span_id].limit_seconds = seconds;
+					}
+				}
+			} else if (!strcasecmp(var, "call_limit_reset_event")) {
+				if (!strcasecmp(val, "answer")) {
+					SPAN_CONFIG[span_id].limit_reset_event = FTDM_LIMIT_RESET_ON_ANSWER;
+				} else {
+					LOAD_ERROR("Invalid %s parameter value, only accepted event is 'answer'\n", var);
+				}
+			} else {
+				spanparameters[paramindex].var = var;
+				spanparameters[paramindex].val = val;
+				paramindex++;
+			}
+		}
+
+		if (ftdm_configure_span_signaling(span,
+						  "sangoma_isdn_tap",
+						  on_clear_channel_signal,
+						  spanparameters) != FTDM_SUCCESS) {
+			LOAD_ERROR("Error configuring Sangoma ISDN TAPPING FreeTDM span %d\n", span_id);
+			continue;
+		}
+
+		SPAN_CONFIG[span_id].span = span;
+		switch_copy_string(SPAN_CONFIG[span_id].context, context, sizeof(SPAN_CONFIG[span_id].context));
+		switch_copy_string(SPAN_CONFIG[span_id].dialplan, dialplan, sizeof(SPAN_CONFIG[span_id].dialplan));
+		switch_copy_string(SPAN_CONFIG[span_id].type, "Sangoma (ISDN)", sizeof(SPAN_CONFIG[span_id].type));
+		ftdm_log(FTDM_LOG_DEBUG, "Configured Sangoma ISDN Tapping FreeTDM span %d\n", span_id);
+		ftdm_span_start(span);
+	}
+}
+
+static void parse_isup_tap_spans(switch_xml_t cfg, switch_xml_t spans)
+{
+}
+
+static void parse_bri_pri_spans(switch_xml_t cfg, switch_xml_t spans , int reload)
+{
+	switch_xml_t myspan, param;
+        int idx = 0;
+
+	for (myspan = switch_xml_child(spans, "span"); myspan; myspan = myspan->next) {
+		ftdm_status_t zstatus = FTDM_FAIL;
+		const char *context = "default";
+		const char *dialplan = "XML";
+		ftdm_conf_parameter_t spanparameters[FTDM_MAX_SIG_PARAMETERS];
+		char *id = (char *) switch_xml_attr(myspan, "id");
+		char *name = (char *) switch_xml_attr(myspan, "name");
+		char *configname = (char *) switch_xml_attr(myspan, "cfgprofile");
+		ftdm_span_t *span = NULL;
+		uint32_t span_id = 0;
+		uint32_t b_span_found = 0;
+		unsigned paramindex = 0;
+
+		if (!name && !id) {
+			LOAD_ERROR("sangoma isdn span missing required attribute 'id' or 'name', skipping ...\n");
+			continue;
+		}
+
+		if (name) {
+			zstatus = ftdm_span_find_by_name(name, &span);
+		} else {
+			if (switch_is_number(id)) {
+				span_id = atoi(id);
+				zstatus = ftdm_span_find(span_id, &span);
+			}
+
+			if (zstatus != FTDM_SUCCESS) {
+				zstatus = ftdm_span_find_by_name(id, &span);
+			}
+		}
+
+		if (zstatus != FTDM_SUCCESS) {
+			LOAD_ERROR("Error finding FreeTDM span id:%s name:%s\n", switch_str_nil(id), switch_str_nil(name));
+			continue;
+		}
+
+		if (!span_id) {
+			span_id = ftdm_span_get_id(span);
+		}
+
+		if (reload ) {
+			b_span_found = 0;
+
+			for (idx = 0; idx < FTDM_MAX_SPANS_INTERFACE; idx++) {
+				if (SPAN_CONFIG[idx].span) {
+					if (!strcasecmp(name, ftdm_span_get_name(SPAN_CONFIG[idx].span))) {
+						b_span_found = 1;
+						break;
+					}
+				}
+			}
+
+			if (b_span_found) {
+				ftdm_span_set_reconfig_flag(span);
+			}
+
+		} /* reload */
 
 		memset(spanparameters, 0, sizeof(spanparameters));
 		paramindex = 0;
@@ -3447,7 +4431,21 @@ static void parse_bri_pri_spans(switch_xml_t cfg, switch_xml_t spans)
 						  "sangoma_isdn",
 						  on_clear_channel_signal,
 						  spanparameters) != FTDM_SUCCESS) {
-			LOAD_ERROR("Error configuring Sangoma ISDN FreeTDM span %d\n", span_id);
+			if ((!ftdm_span_test_reconfig_flag(span)) && (reload)) {
+                                ftdm_span_clear_reconfig_flag(span);
+                                ftdm_log(FTDM_LOG_WARNING, "Unable to reconfigure sangoma_isdn  FreeTDM span %d!\n", span_id);
+                        } else {
+                                LOAD_ERROR("Error %s configuring Sangoma ISDN FreeTDM span %d\n",
+                                                b_span_found == 1 ? "Reconfiguring" : "configuring",
+                                                span_id);
+                        }
+			continue;
+		}
+
+		ftdm_span_clear_reconfig_flag(span);
+
+		if ((b_span_found) && ((!ftdm_span_test_reconfig_flag(span)))) {
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, " Sangoma ISDN config %s was found in the hash already. Thus, reconfiguring it.\n", configname);
 			continue;
 		}
 
@@ -3461,11 +4459,10 @@ static void parse_bri_pri_spans(switch_xml_t cfg, switch_xml_t spans)
 	}
 }
 
-static switch_status_t load_config(void)
+static switch_status_t load_config(int reload)
 {
 	const char *cf = "freetdm.conf";
 	switch_xml_t cfg, xml, settings, param, spans, myspan;
-	ftdm_conf_node_t *ss7confnode = NULL;
 	unsigned int i = 0;
 	ftdm_channel_t *fchan = NULL;
 	ftdm_iterator_t *chaniter = NULL;
@@ -3477,6 +4474,11 @@ static switch_status_t load_config(void)
 	if (!(xml = switch_xml_open_cfg(cf, &cfg, NULL))) {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "open of %s failed\n", cf);
 		return SWITCH_STATUS_TERM;
+	}
+
+	/* Setting offset timer to default value as 1 */
+	if (globals.io_timer_offset <= 0) {
+		globals.io_timer_offset = 1;
 	}
 
 	if ((settings = switch_xml_child(cfg, "settings"))) {
@@ -3496,126 +4498,84 @@ static switch_status_t load_config(void)
 				globals.sip_headers = switch_true(val);
 			} else if (!strcasecmp(var, "enable-analog-option")) {
 				globals.analog_options = enable_analog_option(val, globals.analog_options);
+			} else if (!strcasecmp(var, "io-timer-offset")) {
+				globals.io_timer_offset = atoi(val);
+				if (globals.io_timer_offset <= 0) {
+					ftdm_log(FTDM_LOG_WARNING, "Invalid value. Channel io timer offset can not be set to zero!\n");
+					globals.io_timer_offset = 1;
+					continue;
+				}
 			}
 		}
 	}
 
+	/*
+	 * If this is a reconfiguration request then below points are valid
+	 * 1) In case when span is deleted as a result of reconfiguration
+	 *    update SPAN_CONFIG span list as present in mod_freetdm
+	 * 2) In case of addtion of new span due to reconfiguration include
+	 *    it in SPAN_CONFIG list
+	 * 3) In case when already existing span is reconfigure then first
+	 *    delete span from SPAN_CONFIG list and again include it as a
+	 *    newly configured span
+	 */
+	if (reload) {
+		ftdm_status_t status = FTDM_FAIL;
+		ftdm_span_t   *span  = NULL;
+		int 	      idx    = 0;
+		for (idx = 0; idx < FTDM_MAX_SPANS_INTERFACE; idx++) {
+			if (SPAN_CONFIG[idx].span) {
+				status = ftdm_span_find(idx, &span);
+
+				if ((status != FTDM_SUCCESS) || (!ftdm_span_test_reconfig_flag(span))) {
+					ftdm_log(FTDM_LOG_DEBUG, "Deleting span %d from mod freetdm span list!\n", idx);
+					SPAN_CONFIG[idx].span = NULL;
+					memset(&SPAN_CONFIG[idx], 0, sizeof(SPAN_CONFIG[idx]));
+					/* clear reconfig flag as this must be configured as new
+					 * a new configuration request */
+					ftdm_span_clear_reconfig_flag(span);
+				}
+			}
+		}
+	}
+
+	/* Configure transparent span if present */
+	/* NOTE: Transparent span must be configured before all other spans &
+	 * transparent must be open before configuring any signalling module,
+	 * as transparent channels cannot be part of any other signalling module.
+	 * It is the responsibility of each signalling module to skip transparent
+	 * channel while configuration, if the channel is already in open state
+	 */
+	if ((spans = switch_xml_child(cfg, "transparent_spans"))) {
+		if (parse_transparent_spans(cfg, spans) != FTDM_SUCCESS) {
+			LOAD_ERROR("Failed configuring transparent spans!\n");
+			goto end;
+		}
+	}
+
+	if ((spans = switch_xml_child(cfg, "sangoma_isdn_tap_spans"))) {
+		parse_isdn_tap_spans(cfg, spans);
+	}
+
+	if ((spans = switch_xml_child(cfg, "sangoma_isup_tap_spans"))) {
+		parse_isup_tap_spans(cfg, spans);
+	}
+
 	if ((spans = switch_xml_child(cfg, "sangoma_pri_spans"))) {
-		parse_bri_pri_spans(cfg, spans);
+		parse_bri_pri_spans(cfg, spans, reload);
 	}
 
 	if ((spans = switch_xml_child(cfg, "sangoma_bri_spans"))) {
-		parse_bri_pri_spans(cfg, spans);
+		parse_bri_pri_spans(cfg, spans, reload);
 	}
 
 	if ((spans = switch_xml_child(cfg, "gsm_spans"))) {
 		parse_gsm_spans(cfg, spans);
 	}
 
-	switch_core_hash_init(&globals.ss7_configs);
+	switch_core_hash_init(&globals.ss7_configs, module_pool);
 	if ((spans = switch_xml_child(cfg, "sangoma_ss7_spans"))) {
-		for (myspan = switch_xml_child(spans, "span"); myspan; myspan = myspan->next) {
-			ftdm_status_t zstatus = FTDM_FAIL;
-			const char *context = "default";
-			const char *dialplan = "XML";
-			ftdm_conf_parameter_t spanparameters[FTDM_MAX_SIG_PARAMETERS];
-			char *id = (char *) switch_xml_attr(myspan, "id");
-			char *name = (char *) switch_xml_attr(myspan, "name");
-			char *configname = (char *) switch_xml_attr(myspan, "cfgprofile");
-			char *operating_mode = (char *) switch_xml_attr(myspan, "operating_mode");
-			ftdm_span_t *span = NULL;
-			uint32_t span_id = 0;
-			unsigned paramindex = 0;
-			if (!name && !id) {
-				LOAD_ERROR("ss7 span missing required attribute 'id' or 'name', skipping ...\n");
-				continue;
-			}
-			if (!configname) {
-				LOAD_ERROR("ss7 span missing required attribute, skipping ...\n");
-				continue;
-			}
-			if (name) {
-				zstatus = ftdm_span_find_by_name(name, &span);
-			} else {
-				if (switch_is_number(id)) {
-					span_id = atoi(id);
-					zstatus = ftdm_span_find(span_id, &span);
-				}
-
-				if (zstatus != FTDM_SUCCESS) {
-					zstatus = ftdm_span_find_by_name(id, &span);
-				}
-			}
-
-			if (zstatus != FTDM_SUCCESS) {
-				LOAD_ERROR("Error finding FreeTDM span id:%s name:%s\n", switch_str_nil(id), switch_str_nil(name));
-				continue;
-			}
-
-			if (!span_id) {
-				span_id = ftdm_span_get_id(span);
-			}
-
-			ss7confnode = _get_ss7_config_node(cfg, configname, operating_mode);
-			if (!ss7confnode) {
-				LOAD_ERROR("Error finding ss7config '%s' for FreeTDM span id: %s\n", configname, switch_str_nil(id));
-				continue;
-			}
-
-			memset(spanparameters, 0, sizeof(spanparameters));
-			paramindex = 0;
-
-			if (operating_mode) {
-				spanparameters[paramindex].var = "operating-mode";
-				spanparameters[paramindex].val = operating_mode;
-				paramindex++;
-			}
-
-			spanparameters[paramindex].var = "confnode";
-			spanparameters[paramindex].ptr = ss7confnode;
-			paramindex++;
-
-			for (param = switch_xml_child(myspan, "param"); param; param = param->next) {
-				char *var = (char *) switch_xml_attr_soft(param, "name");
-				char *val = (char *) switch_xml_attr_soft(param, "value");
-
-				if (ftdm_array_len(spanparameters) - 1 == paramindex) {
-					LOAD_ERROR("Too many parameters for ss7 span, ignoring any parameter after %s\n", var);
-					break;
-				}
-
-				if (!strcasecmp(var, "context")) {
-					context = val;
-				} else if (!strcasecmp(var, "dialplan")) {
-					dialplan = val;
-				} else {
-					spanparameters[paramindex].var = var;
-					spanparameters[paramindex].val = val;
-					paramindex++;
-				}
-			}
-
-			if (ftdm_configure_span_signaling(span,
-						          "sangoma_ss7",
-						          on_clear_channel_signal,
-							  spanparameters) != FTDM_SUCCESS) {
-				LOAD_ERROR("Error configuring ss7 FreeTDM span %d\n", span_id);
-				continue;
-			}
-
-			SPAN_CONFIG[span_id].span = span;
-
-			switch_copy_string(SPAN_CONFIG[span_id].context, context, sizeof(SPAN_CONFIG[span_id].context));
-			switch_copy_string(SPAN_CONFIG[span_id].dialplan, dialplan, sizeof(SPAN_CONFIG[span_id].dialplan));
-			switch_copy_string(SPAN_CONFIG[span_id].type, "Sangoma (SS7)", sizeof(SPAN_CONFIG[span_id].type));
-
-			ftdm_log(FTDM_LOG_DEBUG, "Configured ss7 FreeTDM span %d with config node %s\n", span_id, configname);
-
-			if (FTDM_SUCCESS != ftdm_span_start(span)) {
-				LOAD_ERROR("Error Starting ss7 FreeTDM span %d\n", span_id);
-				continue;
-			}
-		}
+		parse_ss7_spans(cfg, spans, reload);
 	}
 
 	if ((spans = switch_xml_child(cfg, "analog_spans"))) {
@@ -4086,7 +5046,6 @@ static switch_status_t load_config(void)
 		}
 	}
 
-
 	if ((spans = switch_xml_child(cfg, "libpri_spans"))) {
 		for (myspan = switch_xml_child(spans, "span"); myspan; myspan = myspan->next) {
 			char *name = (char *) switch_xml_attr(myspan, "name");
@@ -4234,6 +5193,18 @@ static switch_status_t load_config(void)
 		}
 	}
 
+	/* Start transparent span */
+	/* NOTE: If in case the span is not part of any other signalling module then
+	 * start the span as tranparent span can be a part of another signalling
+	 * module */
+	if ((spans = switch_xml_child(cfg, "transparent_spans"))) {
+		if (transparent_span_start(cfg, spans) != FTDM_SUCCESS) {
+			LOAD_ERROR("Failed to start transparent spans!\n");
+			goto end;
+		}
+	}
+
+end:
 	if (globals.crash_on_assert) {
 		ftdm_log(FTDM_LOG_WARNING, "Crash on assert enabled\n");
 		ftdm_global_set_crash_policy(FTDM_CRASH_ON_ASSERT);
@@ -4242,7 +5213,11 @@ static switch_status_t load_config(void)
 	switch_xml_free(xml);
 
 	if (globals.fail_on_error && globals.config_error) {
-		ftdm_log(FTDM_LOG_ERROR, "Refusing to load module with errors\n");
+		if (!reload) {
+			ftdm_log(FTDM_LOG_ERROR, "Refusing to load module with errors\n");
+		} else {
+			ftdm_log(FTDM_LOG_ERROR, "[Reload]: Refusing to load reconfigure module with invalid re-configuration\n");
+		}
 		return SWITCH_STATUS_TERM;
 	}
 
@@ -4657,6 +5632,31 @@ FTDM_CLI_DECLARE(ftdm_cmd_list)
 	return SWITCH_STATUS_SUCCESS;
 }
 
+FTDM_CLI_DECLARE(ftdm_cmd_destroy)
+{
+	char *span_name = argv[1];
+	ftdm_span_t *span = NULL;
+	ftdm_status_t status;
+
+	if (argc < 2) {
+		print_usage(stream, cli);
+		goto end;
+	}
+
+	ftdm_span_find_by_name(span_name, &span);
+	if (!span) {
+		stream->write_function(stream, "-ERR span %s not found\n", span_name);
+		goto end;
+	}
+	
+    SPAN_CONFIG[ftdm_span_get_id(span)].span = NULL;
+    status = ftdm_span_delete(span);
+
+	stream->write_function(stream, status == FTDM_SUCCESS ? "+OK\n" : "-ERR failure\n");
+end:
+	return SWITCH_STATUS_SUCCESS;
+}
+
 FTDM_CLI_DECLARE(ftdm_cmd_start_stop)
 {
 	char *span_name = argv[1];
@@ -4734,6 +5734,51 @@ end:
 	return SWITCH_STATUS_SUCCESS;
 }
 
+FTDM_CLI_DECLARE(ftdm_cmd_reload)
+{
+    if (FTDM_SUCCESS != ftdm_global_reconfiguration()) {
+        ftdm_log (FTDM_LOG_ERROR, "Freetdm span reconfiguration failed \n");
+        return SWITCH_STATUS_FALSE;
+    }
+
+    if (SWITCH_STATUS_SUCCESS !=  load_config(0x01) ) {
+        ftdm_log (FTDM_LOG_ERROR, "Freetdm Signalling reconfiguration failed \n");
+        return SWITCH_STATUS_FALSE;
+    }
+
+    ftdm_log (FTDM_LOG_DEBUG, "Successfully reloaded freetdm Signalling configuration. \n");
+
+    return SWITCH_STATUS_SUCCESS;
+}
+
+FTDM_CLI_DECLARE(ftdm_cmd_xml_status)
+{
+	ftdm_span_t *span;
+    /* this cli command as of now only shows if span is 
+     * present in freetdm or not */
+
+	if (argc < 2) {
+		print_usage(stream, cli);
+		goto end;
+	}
+
+	ftdm_span_find_by_name(argv[1], &span);
+
+    stream->write_function(stream, "<span>\n");
+
+    if (!span) {
+        stream->write_function(stream, "<status> NOT_PRESENT </status>\n");
+        stream->write_function(stream, "</span>\n");
+        goto end;
+    }
+
+    stream->write_function(stream, "<status> PRESENT </status>\n");
+    stream->write_function(stream, "</span>\n");
+
+end:
+	return SWITCH_STATUS_SUCCESS;
+}
+
 FTDM_CLI_DECLARE(ftdm_cmd_dump)
 {
 	ftdm_iterator_t *chaniter = NULL;
@@ -4741,6 +5786,19 @@ FTDM_CLI_DECLARE(ftdm_cmd_dump)
 	uint32_t chan_id = 0;
 	ftdm_span_t *span;
 	char *as = NULL;
+	char buffer[1024*20];
+
+	memset(&buffer,0,sizeof(buffer));
+
+	if (argc == 1) {
+		/* list all present spans */
+		if (ftdm_get_all_span_list(&buffer[0])) {
+			stream->write_function(stream, "%s\n", &buffer[0]);
+		} else {
+			stream->write_function(stream, "-ERR getting span details\n");
+		}
+		goto end;
+	}
 
 	if (argc < 2) {
 		print_usage(stream, cli);
@@ -5458,6 +6516,7 @@ static ftdm_cli_entry_t ftdm_cli_options[] =
 	{ "core flag", "[!]<flag-int-value|flag-name> [<span_id|span_name>] [<chan_id>]", "", NULL, NULL, NULL },
 	{ "core spanflag", "[!]<flag-int-value|flag-name> [<span_id|span_name>]", "", NULL, NULL, NULL },
 	{ "core calls", "", "", NULL, NULL, NULL },
+	{ "reload", "", "", ftdm_cmd_reload, NULL },
 };
 
 static void print_usage(switch_stream_handle_t *stream, ftdm_cli_entry_t *cli)
@@ -5612,7 +6671,7 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_freetdm_load)
 		return SWITCH_STATUS_TERM;
 	}
 
-	if (load_config() != SWITCH_STATUS_SUCCESS) {
+	if (load_config(0x00) != SWITCH_STATUS_SUCCESS) {
 		ftdm_global_destroy();
 		return SWITCH_STATUS_TERM;
 	}
@@ -5641,9 +6700,9 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_freetdm_load)
 	SWITCH_ADD_APP(app_interface, "disable_ec", "Disable Echo Canceller", "Disable Echo Canceller", disable_ec_function, "", SAF_NONE);
 	SWITCH_ADD_APP(app_interface, "disable_dtmf", "Disable DTMF Detection", "Disable DTMF Detection", disable_dtmf_function, "", SAF_NONE);
 	SWITCH_ADD_APP(app_interface, "enable_dtmf", "Enable DTMF Detection", "Enable DTMF Detection", enable_dtmf_function, "", SAF_NONE);
-#if 0
+
 	ctdm_init(*module_interface);
-#endif
+
 	/* indicate that the module should continue to be loaded */
 	return SWITCH_STATUS_SUCCESS;
 }

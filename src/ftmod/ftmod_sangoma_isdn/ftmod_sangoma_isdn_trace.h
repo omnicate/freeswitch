@@ -30,7 +30,12 @@
  * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Contributors:
+ * 		Kapil Gupta <kgupta@sangoma.com>
+ * 		Pushkar Singh <psingh@sangoma.com>
  */
+
 #ifndef __FTMOD_SANGOMA_ISDN_TRACE_H__
 #define __FTMOD_SANGOMA_ISDN_TRACE_H__
 
@@ -597,3 +602,16 @@ struct code2str dcodQ931NotificationIndTable[] = {
 	{ -1,   "Invalid"},
 };
 #endif /* __FTMOD_SANGOMA_ISDN_TRACE_H__ */
+
+/* For Emacs:
+ * Local Variables:
+ * mode:c
+ * indent-tabs-mode:t
+ * tab-width:4
+ * c-basic-offset:4
+ * End:
+ * For VIM:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
+ */ 
+
+/******************************************************************************/

@@ -157,10 +157,15 @@ typedef struct ftdm_r2_span_pvt_s {
 	openr2_context_t *r2context; /* r2 context allocated for this span */
 	ftdm_hash_t *r2calls; /* hash table of allocated call data per channel for this span */
 	ftdm_sched_t *sched; /* schedule for the span */
+	ftdm_span_t *span;
 } ftdm_r2_span_pvt_t;
 
 /* span monitor thread */
 static void *ftdm_r2_run(ftdm_thread_t *me, void *obj);
+
+ftdm_status_t r2_show_calls_span(ftdm_stream_handle_t *stream, ftdm_span_t *span, uint8_t xml);
+ftdm_status_t r2_show_calls(ftdm_stream_handle_t *stream, uint8_t xml);
+
 
 /* hash of all the private span allocations
    we need to keep track of them to destroy them when unloading the module 
@@ -447,6 +452,7 @@ static __inline openr2_calling_party_category_t ftdm_r2_ftdm_cpc_to_openr2_cpc(f
 		return OR2_CALLING_PARTY_CATEGORY_COLLECT_CALL;
 
 	case FTDM_CPC_INVALID:
+	case FTDM_CPC_CHINA:
 		return OR2_CALLING_PARTY_CATEGORY_UNKNOWN;
 	}
 	return OR2_CALLING_PARTY_CATEGORY_UNKNOWN;
@@ -1152,18 +1158,18 @@ static int ftdm_r2_io_write(openr2_chan_t *r2chan, const void *buf, int size)
 {
 	ftdm_channel_t *ftdm_chan = openr2_chan_get_fd(r2chan);
 	ftdm_size_t outsize = size;
-	ftdm_status_t status = ftdm_channel_write(ftdm_chan, (void *)buf, size, &outsize);
+	ftdm_status_t status = ftdm_channel_raw_write(ftdm_chan, (void *)buf, &outsize);
 	if (FTDM_FAIL == status) {
 		return -1;
 	}
-	return (int)outsize;
+	return (int)size;
 }
 
 static int ftdm_r2_io_read(openr2_chan_t *r2chan, const void *buf, int size)
 {
 	ftdm_channel_t *ftdm_chan = openr2_chan_get_fd(r2chan);
 	ftdm_size_t outsize = size;
-	ftdm_status_t status = ftdm_channel_read(ftdm_chan, (void *)buf, &outsize);
+	ftdm_status_t status = ftdm_channel_raw_read(ftdm_chan, (void *)buf, &outsize);
 	if (FTDM_FAIL == status) {
 		return -1;
 	}
@@ -1714,6 +1720,7 @@ static FIO_CONFIGURE_SPAN_SIGNALING_FUNCTION(ftdm_r2_configure_span_signaling)
 	r2data->charge_calls = r2conf.charge_calls;
 	r2data->forced_release = r2conf.forced_release;
 	spanpvt->r2context = r2data->r2context;
+	spanpvt->span = span;
 
 	/* just the value must be freed by the hash */
 	hashtable_insert(g_mod_data_hash, (void *)span->name, spanpvt, HASHTABLE_FLAG_FREE_VALUE);
@@ -2149,10 +2156,51 @@ static void __inline__ unblock_channel(ftdm_channel_t *fchan, ftdm_stream_handle
 	ftdm_mutex_unlock(fchan->mutex);
 }
 
+
+ftdm_status_t r2_show_calls_span(ftdm_stream_handle_t *stream, ftdm_span_t *span, uint8_t xml)
+{
+	ftdm_channel_t *ftdmchan = NULL;
+	ftdm_iterator_t *chaniter = NULL;
+	ftdm_iterator_t *curr = NULL;
+
+	stream->write_function(stream, "<span name=\"%s\">\n", span->name);
+	chaniter = ftdm_span_get_chan_iterator(span, NULL);
+	for (curr = chaniter; curr; curr = ftdm_iterator_next(curr)) {
+		ftdmchan = (ftdm_channel_t*)ftdm_iterator_current(curr);
+
+		stream->write_function(stream, "\t<chan number=\"%d\" call=\"%s\"/>\n", ftdmchan->physical_chan_id,
+					(ftdmchan->state != FTDM_CHANNEL_STATE_DOWN) ? "yes" : "no");
+	}
+	ftdm_iterator_free(chaniter);
+
+	stream->write_function(stream, "</span>\n");
+
+	return FTDM_SUCCESS;
+}
+
+ftdm_status_t r2_show_calls(ftdm_stream_handle_t *stream, uint8_t xml)
+{
+
+	ftdm_hash_iterator_t *i = NULL;
+	ftdm_r2_span_pvt_t *spanpvt = NULL;
+	const void *key = NULL;
+	void *val = NULL;
+	for (i = hashtable_first(g_mod_data_hash); i; i = hashtable_next(i)) {
+		hashtable_this(i, &key, NULL, &val);
+		if (key && val) {
+			spanpvt = val;
+			r2_show_calls_span(stream, spanpvt->span, xml);
+		}
+	}
+	hashtable_destroy(g_mod_data_hash);
+	return FTDM_SUCCESS;
+}
+
 #define FT_SYNTAX "USAGE:\n" \
 "--------------------------------------------------------------------------------\n" \
 "ftdm r2 status <span_id|span_name>\n" \
 "ftdm r2 loopstats <span_id|span_name>\n" \
+"ftdm r2 show_calls_xml <span_id|span_name>\n" \
 "ftdm r2 block|unblock <span_id|span_name> [<chan_id>]\n" \
 "ftdm r2 version\n" \
 "ftdm r2 variants\n" \
@@ -2169,6 +2217,7 @@ static FIO_API_FUNCTION(ftdm_r2_api)
 	openr2_chan_t *r2chan = NULL;
 	openr2_context_t *r2context = NULL;
 	openr2_variant_t r2variant;
+	ftdm_status_t status = FTDM_SUCCESS;
 
 	if (data) {
 		mycmd = ftdm_strdup(data);
@@ -2183,6 +2232,7 @@ static FIO_API_FUNCTION(ftdm_r2_api)
 
 				if (span->start != ftdm_r2_start) {
 					stream->write_function(stream, "-ERR invalid span.\n");
+				status = FTDM_FAIL;
 					goto done;
 				}
 
@@ -2192,6 +2242,8 @@ static FIO_API_FUNCTION(ftdm_r2_api)
 						block_channel(span->channels[chan_id], stream);
 					} else {
 						stream->write_function(stream, "-ERR invalid chan %d.\n", chan_id);
+						status = FTDM_FAIL;
+						goto done;
 					}
 				} else {
 					for (i = 1; i <= span->chan_count; i++) {
@@ -2202,6 +2254,7 @@ static FIO_API_FUNCTION(ftdm_r2_api)
 				goto done;
 			} else {
 				stream->write_function(stream, "-ERR invalid span.\n");
+				status = FTDM_FAIL;
 				goto done;
 			}
 		}
@@ -2221,6 +2274,8 @@ static FIO_API_FUNCTION(ftdm_r2_api)
 						unblock_channel(span->channels[chan_id], stream);
 					} else {
 						stream->write_function(stream, "-ERR invalid chan %d.\n", chan_id);
+						status = FTDM_FAIL;
+						goto done;
 					}
 				} else {
 					for (i = 1; i <= span->chan_count; i++) {
@@ -2232,6 +2287,7 @@ static FIO_API_FUNCTION(ftdm_r2_api)
 				goto done;
 			} else {
 				stream->write_function(stream, "-ERR invalid span.\n");
+				status = FTDM_FAIL;
 				goto done;
 			}
 
@@ -2244,10 +2300,12 @@ static FIO_API_FUNCTION(ftdm_r2_api)
 			if (ftdm_span_find_by_name(argv[1], &span) == FTDM_SUCCESS || ftdm_span_find(span_id, &span) == FTDM_SUCCESS) {
 				if (span->start != ftdm_r2_start) {
 					stream->write_function(stream, "-ERR not an R2 span.\n");
+					status = FTDM_FAIL;
 					goto done;
 				}
 				if (!(r2data =  span->signal_data)) {
 					stream->write_function(stream, "-ERR invalid span. No R2 signal data in span.\n");
+					status = FTDM_FAIL;
 					goto done;
 				}
 				r2context = r2data->r2context;
@@ -2283,6 +2341,7 @@ static FIO_API_FUNCTION(ftdm_r2_api)
 				goto done;
 			} else {
 				stream->write_function(stream, "-ERR invalid span.\n");
+				status = FTDM_FAIL;
 				goto done;
 			}
 		}
@@ -2333,9 +2392,34 @@ static FIO_API_FUNCTION(ftdm_r2_api)
 				goto done;
 			} else {
 				stream->write_function(stream, "-ERR invalid span.\n");
+				status = FTDM_FAIL;
 				goto done;
 			}
 		}
+		
+		if (!strcasecmp(argv[0], "show_calls_xml")) {
+			ftdm_span_t *span = NULL;
+			if (argc == 2) {
+				status = ftdm_span_find_by_name(argv[1], &span);
+				if (FTDM_SUCCESS != status) {
+					stream->write_function(stream, "-ERR failed to find span with name %s\n", argv[1]);
+
+					stream->write_function(stream, "Usage: %s\n", FT_SYNTAX);
+					status = FTDM_FAIL;
+					goto done;
+				}
+				if (span->signal_type != FTDM_SIGTYPE_R2) {
+					stream->write_function(stream, "-ERR %s: is not a R2 span\n", argv[1]);
+					status = FTDM_FAIL;
+					goto done;
+				}
+				status = r2_show_calls_span(stream, span, 1);
+				goto done;
+			}
+			status = r2_show_calls(stream, 1);
+			goto done;
+		}
+
 
 	}
 

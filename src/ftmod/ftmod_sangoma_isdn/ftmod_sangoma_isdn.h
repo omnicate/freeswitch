@@ -2,6 +2,8 @@
  * Copyright (c) 2010, Sangoma Technologies 
  * David Yat Sin <davidy@sangoma.com>
  * Moises Silva <moy@sangoma.com>
+ * Kapil Gupta <kgupta@sangoma.com>
+ * Pushkar Singh <psingh@sangoma.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -67,9 +69,7 @@
 #define SNGISDN_EVENT_POLL_RATE		100
 #define SNGISDN_NUM_LOCAL_NUMBERS	8
 #define SNGISDN_DCHAN_QUEUE_LEN		200
-#define MAX_NFAS_GROUP_NAME			50
-
-#define NSG
+#define MAX_NFAS_GROUP_NAME		50
 
 #ifndef MI_NOTIFY
 #define MI_NOTIFY 0x14
@@ -118,6 +118,8 @@ typedef enum {
 	SNGISDN_TRACE_DISABLE = 0,
 	SNGISDN_TRACE_Q921 = 1,
 	SNGISDN_TRACE_Q931 = 2,
+	SNGISDN_STACK_TRACE_ENABLE = 3,
+	SNGISDN_STACK_TRACE_DISABLE = 4,
 } sngisdn_tracetype_t;
 
 typedef enum {
@@ -263,13 +265,14 @@ typedef struct sngisdn_span_data {
 	uint8_t 		switchtype;
 	uint8_t			signalling;		/* SNGISDN_SIGNALING_CPE or SNGISDN_SIGNALING_NET */
 	uint8_t 		cc_id;
-	ftdm_signaling_status_t		sigstatus;
+	ftdm_signaling_status_t	sigstatus;
 
 	uint8_t			tei;
 	uint8_t			min_digits;
 	uint8_t			trace_flags;		/* TODO change to bit map of sngisdn_tracetype_t */
 	uint8_t			early_media_flags;	/* bit map of ftdm_sngisdn_early_media_opt_t */
 	uint8_t			overlap_dial;
+	uint8_t			overlap_dial_gentone;
 	uint8_t			setup_arb;
 	uint8_t			facility_ie_decode;
 	uint8_t			facility;
@@ -287,10 +290,11 @@ typedef struct sngisdn_span_data {
 	uint8_t			restart_timeout;
 	uint8_t			force_sending_complete;
 	uint8_t			cid_name_method;
-	uint8_t			send_cid_name;	
+	uint8_t			send_cid_name;
 	uint8_t 		send_connect_ack;
 	uint8_t                 dl_request_pending; /* Whether we have a DL request pending */
-
+	uint8_t			lawful_interception_user_info;
+	ftdm_channel_t 		*phy_channels[NUM_E1_CHANNELS_PER_SPAN]; /* Channels ordered by physical channel id */
 
 	int32_t			timer_t301;
 	int32_t			timer_t302;
@@ -308,10 +312,12 @@ typedef struct sngisdn_span_data {
 	int32_t			timer_t318;
 	int32_t			timer_t319;
 	int32_t			timer_t322;
+	int32_t			timer_tCon;
+	
 	char*			local_numbers[SNGISDN_NUM_LOCAL_NUMBERS];
-	ftdm_timer_id_t timers[SNGISDN_NUM_SPAN_TIMERS];
-	ftdm_sched_t 	*sched;
-	ftdm_queue_t 	*event_queue;
+	ftdm_timer_id_t 	timers[SNGISDN_NUM_SPAN_TIMERS];
+	ftdm_sched_t 		*sched;
+	ftdm_queue_t 		*event_queue;
 
 	struct nfas_info {
 		sngisdn_nfas_data_t *trunk;
@@ -383,8 +389,8 @@ typedef struct sngisdn_cc {
 /* Global sngisdn data */
 typedef struct ftdm_sngisdn_data {
 	uint8_t	gen_config_done;
-	uint8_t num_cc;						/* 1 ent per switchtype */	
-	struct sngisdn_cc ccs[MAX_VARIANTS+1];	
+	uint8_t num_cc;						/* 1 ent per switchtype */
+	struct sngisdn_cc ccs[MAX_VARIANTS+1];
 	uint8_t num_nfas;
 	sngisdn_nfas_data_t nfass[MAX_NFAS_GROUPS+1];
 	sngisdn_span_data_t *spans[MAX_L1_LINKS+1]; /* spans are indexed by link_id */
@@ -410,7 +416,7 @@ typedef struct ftdm2trillium
 extern ftdm_sngisdn_data_t	g_sngisdn_data;
 
 /* Configuration functions */
-ftdm_status_t ftmod_isdn_parse_cfg(ftdm_conf_parameter_t *ftdm_parameters, ftdm_span_t *span);
+ftdm_status_t ftmod_isdn_parse_cfg(ftdm_conf_parameter_t *ftdm_parameters, ftdm_span_t *span, int reload);
 
 /* Support functions */
 uint32_t get_unique_suInstId(int16_t cc_id);
@@ -418,6 +424,8 @@ void clear_call_data(sngisdn_chan_data_t *sngisdn_info);
 void clear_call_glare_data(sngisdn_chan_data_t *sngisdn_info);
 ftdm_status_t get_ftdmchan_by_suInstId(int16_t cc_id, uint32_t suInstId, sngisdn_chan_data_t **sngisdn_data);
 ftdm_status_t get_ftdmchan_by_spInstId(int16_t cc_id, uint32_t spInstId, sngisdn_chan_data_t **sngisdn_data);
+ftdm_status_t ftmod_isdn_validate_switch_type_reconfig(const char* switch_name, ftdm_span_t *span, int *switchtype);
+ftdm_status_t ftmod_isdn_validate_signal_type_reconfig ( const char* signalling, ftdm_span_t *span);
 
 ftdm_status_t sngisdn_set_span_avail_rate(ftdm_span_t *span, sngisdn_avail_t avail);
 ftdm_status_t sngisdn_set_chan_avail_rate(ftdm_channel_t *chan, sngisdn_avail_t avail);
@@ -448,6 +456,8 @@ void sngisdn_snd_status_enq(ftdm_channel_t *ftdmchan);
 void sngisdn_snd_restart(ftdm_channel_t *ftdmchan);
 void sngisdn_snd_data(ftdm_channel_t *dchan, uint8_t *data, ftdm_size_t len);
 void sngisdn_snd_event(sngisdn_span_data_t *signal_data, ftdm_oob_event_t event);
+/* send service request message */
+ftdm_status_t sngisdn_snd_srv_req(ftdm_channel_t *ftdmchan, char *str);
 
 /* Inbound Call Control functions */
 void sngisdn_rcv_con_ind(int16_t suId, uint32_t suInstId, uint32_t spInstId, ConEvnt *conEvnt, int16_t dChan, uint8_t ces);
@@ -519,6 +529,8 @@ ftdm_status_t get_called_num(ftdm_channel_t *ftdmchan, CdPtyNmb *cdPtyNmb);
 ftdm_status_t get_redir_num(ftdm_channel_t *ftdmchan, RedirNmb *redirNmb);
 ftdm_status_t get_calling_name(ftdm_channel_t *ftdmchan, ConEvnt *conEvnt);
 ftdm_status_t get_calling_subaddr(ftdm_channel_t *ftdmchan, CgPtySad *cgPtySad);
+ftdm_status_t get_called_subaddr(ftdm_channel_t *ftdmchan, CdPtySad *cdPtySad);
+ftdm_status_t get_user_to_user(ftdm_channel_t *ftdmchan, UsrUsr *usrUsr);  
 ftdm_status_t get_prog_ind_ie(ftdm_channel_t *ftdmchan, ProgInd *progInd);
 ftdm_status_t get_facility_ie(ftdm_channel_t *ftdmchan, FacilityStr *facilityStr);
 ftdm_status_t get_facility_ie_str(ftdm_channel_t *ftdmchan, uint8_t *data, uint8_t data_len);
@@ -529,6 +541,7 @@ ftdm_status_t set_calling_num2(ftdm_channel_t *ftdmchan, CgPtyNmb *cgPtyNmb);
 ftdm_status_t set_called_num(ftdm_channel_t *ftdmchan, CdPtyNmb *cdPtyNmb);
 ftdm_status_t set_redir_num(ftdm_channel_t *ftdmchan, RedirNmb *redirNmb);
 ftdm_status_t set_calling_name(ftdm_channel_t *ftdmchan, ConEvnt *conEvnt);
+ftdm_status_t set_lawful_interception(ftdm_channel_t *ftdmchan, ConEvnt *conEvnt);
 ftdm_status_t set_calling_subaddr(ftdm_channel_t *ftdmchan, CgPtySad *cgPtySad);
 ftdm_status_t set_called_subaddr(ftdm_channel_t *ftdmchan, CdPtySad *cdPtySad);
 ftdm_status_t set_prog_ind_ie(ftdm_channel_t *ftdmchan, ProgInd *progInd, ftdm_sngisdn_progind_t prog_ind);
@@ -537,6 +550,7 @@ ftdm_status_t set_network_specific_fac(ftdm_channel_t *ftdmchan, NetFac *netFac)
 ftdm_status_t set_chan_id_ie(ftdm_channel_t *ftdmchan, ChanId *chanId);
 ftdm_status_t set_restart_ind_ie(ftdm_channel_t *ftdmchan, RstInd *rstInd);
 ftdm_status_t set_facility_ie(ftdm_channel_t *ftdmchan, FacilityStr *facilityStr);
+ftdm_status_t set_user_user_ie(ftdm_channel_t *ftdmchan, UsrUsr *usrUser);
 ftdm_status_t set_facility_ie_str(ftdm_channel_t *ftdmchan, uint8_t *data, uint8_t *data_len);
 ftdm_status_t set_user_to_user_ie(ftdm_channel_t *ftdmchan, UsrUsr *usrUsr);
 ftdm_status_t set_cause_ie(ftdm_channel_t *ftdmchan, CauseDgn *causeDgn);
@@ -594,8 +608,12 @@ ftdm_status_t sngisdn_wake_up_phy(ftdm_span_t *span);
 sngisdn_span_data_t *sngisdn_dchan(sngisdn_span_data_t *signal_data);
 
 ftdm_status_t sngisdn_show_l1_stats(ftdm_stream_handle_t *stream, ftdm_span_t *span);
-ftdm_status_t sngisdn_show_spans(ftdm_stream_handle_t *stream);
-ftdm_status_t sngisdn_show_span(ftdm_stream_handle_t *stream, ftdm_span_t *span);
+ftdm_status_t sngisdn_show_spans(ftdm_stream_handle_t *stream, uint8_t xml);
+ftdm_status_t sngisdn_show_span(ftdm_stream_handle_t *stream, ftdm_span_t *span, uint8_t xml);
+ftdm_status_t sngisdn_show_span_status(ftdm_stream_handle_t *stream, ftdm_span_t *span);
+ftdm_status_t sngisdn_show_span_all_status(ftdm_stream_handle_t *stream, ftdm_span_t *span);
+ftdm_status_t sngisdn_show_calls(ftdm_stream_handle_t *stream, uint8_t xml);
+ftdm_status_t sngisdn_show_calls_span(ftdm_stream_handle_t *stream, ftdm_span_t *span, uint8_t xml);
 
 #endif /* __FTMOD_SNG_ISDN_H__ */
 

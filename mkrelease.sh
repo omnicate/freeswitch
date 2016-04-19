@@ -35,7 +35,7 @@ arch=$(uname -m)
 LIBSNG_ISDN_URL=ftp://ftp.sangoma.com/linux/libsng_isdn
 LIBSNG_ISDN_NAME=libsng_isdn-7-current
 LIBSNG_SS7_URL=ftp://ftp.sangoma.com/linux/libsng_ss7
-LIBSNG_SS7_NAME=libsng_ss7-3-current
+LIBSNG_SS7_NAME=libsng_ss7-4-current
 LIBSNG_ISDN_DIR="$LIBSNG_ISDN_NAME.$arch"
 LIBSNG_SS7_DIR="$LIBSNG_SS7_NAME.$arch"
 

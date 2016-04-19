@@ -90,6 +90,7 @@
 	(expr && ( !strcasecmp(expr, "yes") ||		\
 			   !strcasecmp(expr, "on") ||		\
 			   !strcasecmp(expr, "true") ||		\
+			   !strcasecmp(expr, "enable") ||	\
 			   !strcasecmp(expr, "enabled") ||	\
 			   !strcasecmp(expr, "active") ||	\
 			   atoi(expr))) ? FTDM_TRUE : FTDM_FALSE
@@ -102,6 +103,10 @@
 #include <time.h>
 #ifndef __WINDOWS__
 #include <sys/time.h>
+#endif
+
+#ifdef __linux__
+#include <execinfo.h>
 #endif
 
 #include <stdio.h>
@@ -429,6 +434,7 @@ struct ftdm_channel {
 	uint32_t skip_read_frames;
 	ftdm_buffer_t *dtmf_buffer;
 	ftdm_buffer_t *gen_dtmf_buffer;
+	int prebuffer_size_opt;
 	ftdm_buffer_t *pre_buffer;
 	ftdm_buffer_t *digit_buffer;
 	ftdm_buffer_t *fsk_buffer;
@@ -478,6 +484,7 @@ struct ftdm_channel {
 	ftdm_usrmsg_t *usrmsg;
 	ftdm_time_t last_state_change_time;
 	ftdm_time_t last_release_time;
+	uint8_t forward_collect_digit_dtmf;
 };
 
 struct ftdm_span {
@@ -527,6 +534,7 @@ struct ftdm_span {
 	ftdm_caller_data_t default_caller_data;
 	ftdm_queue_t *pendingchans; /*!< Channels pending of state processing */
 	ftdm_queue_t *pendingsignals; /*!< Signals pending from being delivered to the user */
+	uint8_t dtmf_filter_abcd;
 	struct ftdm_span *next;
 };
 
@@ -600,7 +608,6 @@ FT_DECLARE(int) ftdm_load_module_assume(const char *name);
 FT_DECLARE(int) ftdm_vasprintf(char **ret, const char *fmt, va_list ap);
 
 FT_DECLARE(ftdm_status_t) ftdm_span_close_all(void);
-FT_DECLARE(ftdm_status_t) ftdm_channel_open_chan(ftdm_channel_t *ftdmchan);
 FT_DECLARE(void) ftdm_ack_indication(ftdm_channel_t *ftdmchan, ftdm_channel_indication_t indication, ftdm_status_t status);
 
 
@@ -608,8 +615,8 @@ FT_DECLARE(ftdm_iterator_t *) ftdm_get_iterator(ftdm_iterator_type_t type, ftdm_
 
 FT_DECLARE(ftdm_status_t) ftdm_channel_process_media(ftdm_channel_t *ftdmchan, void *data, ftdm_size_t *datalen);
 
-FT_DECLARE(ftdm_status_t) ftdm_raw_read (ftdm_channel_t *ftdmchan, void *data, ftdm_size_t *datalen);
-FT_DECLARE(ftdm_status_t) ftdm_raw_write (ftdm_channel_t *ftdmchan, void *data, ftdm_size_t *datalen);
+FT_DECLARE(ftdm_status_t) ftdm_channel_raw_read (ftdm_channel_t *ftdmchan, void *data, ftdm_size_t *datalen);
+FT_DECLARE(ftdm_status_t) ftdm_channel_raw_write (ftdm_channel_t *ftdmchan, void *data, ftdm_size_t *datalen);
 
 /*! 
  * \brief Retrieves an event from the span
@@ -734,12 +741,17 @@ FT_DECLARE(ftdm_status_t) ftdm_get_channel_from_string(const char *string_id, ft
 #define ftdm_channel_lock(chan) ftdm_mutex_lock((chan)->mutex)
 #define ftdm_channel_unlock(chan) ftdm_mutex_unlock((chan)->mutex)
 
+#define FTDM_THROTTLE_LOG_INTERVAL 1000
+extern ftdm_time_t time_last_throttle_log;
+
 #define ftdm_log_throttle(level, ...) \
-	time_current_throttle_log = ftdm_current_time_in_ms(); \
-	if (time_current_throttle_log - time_last_throttle_log > FTDM_THROTTLE_LOG_INTERVAL) {\
-		ftdm_log(level, __VA_ARGS__); \
-		time_last_throttle_log = time_current_throttle_log; \
-	} 
+	do { \
+		ftdm_time_t time_current_throttle_log = ftdm_current_time_in_ms(); \
+		if (time_current_throttle_log - time_last_throttle_log > FTDM_THROTTLE_LOG_INTERVAL) {\
+			ftdm_log(level, __VA_ARGS__); \
+			time_last_throttle_log = time_current_throttle_log; \
+		} \
+	} while (0);
 
 #define ftdm_log_chan_ex(fchan, file, func, line, level, format, ...) ftdm_log(file, func, line, level, "[s%dc%d][%d:%d] " format, fchan->span_id, fchan->chan_id, fchan->physical_span_id, fchan->physical_chan_id, __VA_ARGS__)
 

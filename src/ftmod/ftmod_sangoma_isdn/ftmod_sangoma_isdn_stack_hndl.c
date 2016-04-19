@@ -30,6 +30,10 @@
  * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Contributors:
+ * 		Kapil Gupta <kgupta@sangoma.com>
+ * 		Pushkar Singh <psingh@sangoma.com>
  */
 
 #include "ftmod_sangoma_isdn.h"
@@ -144,7 +148,13 @@ void sngisdn_process_con_ind (sngisdn_event_data_t *sngisdn_event)
 			get_calling_num2(ftdmchan, &conEvnt->cgPtyNmb2);
 			get_called_num(ftdmchan, &conEvnt->cdPtyNmb);
 			get_redir_num(ftdmchan, &conEvnt->redirNmb);
+
+			//get_calling_subaddr(ftdmchan, &conEvnt->cgPtySad1);
 			get_calling_subaddr(ftdmchan, &conEvnt->cgPtySad);
+			get_called_subaddr(ftdmchan, &conEvnt->cdPtySad);
+
+			get_user_to_user(ftdmchan, &conEvnt->usrUsr);
+
 			get_prog_ind_ie(ftdmchan, &conEvnt->progInd);
 			get_facility_ie(ftdmchan, &conEvnt->facilityStr);
 			get_calling_name(ftdmchan, conEvnt);
@@ -321,6 +331,7 @@ void sngisdn_process_con_cfm (sngisdn_event_data_t *sngisdn_event)
 #endif
 				get_prog_ind_ie(ftdmchan, &cnStEvnt->progInd);
 				get_facility_ie(ftdmchan, &cnStEvnt->facilityStr);
+				get_user_to_user(ftdmchan, &cnStEvnt->usrUsr);
 				ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_UP);
 				break;
 			case FTDM_CHANNEL_STATE_HANGUP_COMPLETE:
@@ -399,6 +410,7 @@ void sngisdn_process_cnst_ind (sngisdn_event_data_t *sngisdn_event)
 #endif
 			get_prog_ind_ie(ftdmchan, &cnStEvnt->progInd);
 			get_facility_ie(ftdmchan, &cnStEvnt->facilityStr);
+			get_user_to_user(ftdmchan, &cnStEvnt->usrUsr);
 
 			if (sngisdn_cause_val_requires_disconnect(ftdmchan, &cnStEvnt->causeDgn[0]) == FTDM_SUCCESS) {
 				ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Cause requires disconnect (cause:%d)\n", cnStEvnt->causeDgn[0].causeVal.val);
@@ -443,7 +455,7 @@ void sngisdn_process_cnst_ind (sngisdn_event_data_t *sngisdn_event)
 								ftdm_log_chan_msg(ftdmchan, FTDM_LOG_DEBUG, "Early media override on alert\n");
 								sngisdn_set_flag(sngisdn_info, FLAG_MEDIA_READY);
 							}
-							if (ftdmchan->state == FTDM_CHANNEL_STATE_PROCEED) {
+							if ((ftdmchan->state == FTDM_CHANNEL_STATE_PROCEED) || (ftdmchan->state == FTDM_CHANNEL_STATE_DIALING)) {
 								ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_RINGING);
 							}
 							break;
@@ -563,6 +575,7 @@ void sngisdn_process_disc_ind (sngisdn_event_data_t *sngisdn_event)
 		case FTDM_CHANNEL_STATE_PROGRESS_MEDIA:
 		case FTDM_CHANNEL_STATE_UP:
 			get_facility_ie(ftdmchan, &discEvnt->facilityStr);
+			get_user_to_user(ftdmchan, &discEvnt->usrUsr);
 
 			if (discEvnt->causeDgn[0].eh.pres && discEvnt->causeDgn[0].causeVal.pres) {
 				ftdmchan->caller_data.hangup_cause = discEvnt->causeDgn[0].causeVal.val;
@@ -658,6 +671,7 @@ void sngisdn_process_rel_ind (sngisdn_event_data_t *sngisdn_event)
 									((sngisdn_chan_data_t*)ftdmchan->call_data)->spInstId == spInstId) {
 
 				get_facility_ie(ftdmchan, &relEvnt->facilityStr);
+				get_user_to_user(ftdmchan, &relEvnt->usrUsr);
 				
 				if (relEvnt->causeDgn[0].eh.pres && relEvnt->causeDgn[0].causeVal.pres) {
 					ftdmchan->caller_data.hangup_cause = relEvnt->causeDgn[0].causeVal.val;
@@ -1111,7 +1125,7 @@ void sngisdn_process_sta_cfm (sngisdn_event_data_t *sngisdn_event)
 				}
 				break;
 			default:
-				ftdm_log_chan(ftdmchan, FTDM_LOG_CRIT, "Don't know how to handle incompatible state. remote call state:%d our state:%s\n", call_state, ftdm_channel_state2str(ftdmchan->state));
+				ftdm_log_chan(ftdmchan, FTDM_LOG_INFO, "Don't know how to handle incompatible state. remote call state:%d our state:%s\n", call_state, ftdm_channel_state2str(ftdmchan->state));
 						//ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_RESTART);
 				break;
 		}
@@ -1435,3 +1449,15 @@ static ftdm_status_t sngisdn_cause_val_requires_disconnect(ftdm_channel_t *ftdmc
 	}
 	return FTDM_FAIL;
 }
+
+/* For Emacs:
+ * Local Variables:
+ * mode:c
+ * indent-tabs-mode:t
+ * tab-width:4
+ * c-basic-offset:4
+ * End:
+ * For VIM:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
+ */
+/******************************************************************************/

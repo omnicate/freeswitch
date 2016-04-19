@@ -37,6 +37,8 @@
  * Nenad Corbic <ncorbic@sangoma.com>
  * Arnaldo Pereira <arnaldo@sangoma.com>
  * Gideon Sadan <gsadan@sangoma.com>
+ * Kapil Gupta <kgupta@sangoma.com>
+ * Pushkar Singh <psingh@sangoma.com>
  *
  */ 
 #ifdef WP_DEBUG_IO
@@ -57,6 +59,7 @@
 #include <sys/socket.h>
 #endif
 #include "libsangoma.h"
+#include "ftmod_wanpipe_defines.h"
 
 #if defined(__WINDOWS__)
 /*! Backward compatible defines - current code is all using the old names*/ 
@@ -123,6 +126,8 @@ typedef struct {
 FIO_SPAN_POLL_EVENT_FUNCTION(wanpipe_poll_event);
 FIO_SPAN_NEXT_EVENT_FUNCTION(wanpipe_span_next_event);
 FIO_CHANNEL_NEXT_EVENT_FUNCTION(wanpipe_channel_next_event);
+
+static void wanpipe_read_stats(ftdm_channel_t *ftdmchan, wp_tdm_api_rx_hdr_t *rx_stats);
 
 static void wp_swap16(char *data, int datalen)
 {
@@ -772,8 +777,13 @@ static FIO_COMMAND_FUNCTION(wanpipe_command)
 		break;
 	case FTDM_COMMAND_ENABLE_DTMF_REMOVAL:
 		{
-#ifdef WP_API_FEATURE_DTMF_REMOVAL
+#ifdef WP_API_FEATURE_LIBSNG_HWEC_DTMF_REMOVAL
 			int return_code = 0;
+			if (!ftdm_channel_test_feature(ftdmchan, FTDM_CHANNEL_FEATURE_HWEC)) {
+				ftdm_log_chan_msg(ftdmchan, FTDM_LOG_ERROR, "Wanpipe device does not have HW EC\n");
+				return FTDM_NOTIMPL;
+			}
+
 			err = sangoma_hwec_set_hwdtmf_removal(ftdmchan->sockfd, ftdmchan->physical_chan_id, &return_code, 1, 0);
 			if (return_code) {
 				ftdm_log_chan_msg(ftdmchan, FTDM_LOG_ERROR, "Wanpipe failed to Enable HW-DTMF removal\n");
@@ -783,8 +793,13 @@ static FIO_COMMAND_FUNCTION(wanpipe_command)
 		break;
 	case FTDM_COMMAND_DISABLE_DTMF_REMOVAL:
 		{
-#ifdef WP_API_FEATURE_DTMF_REMOVAL
+#ifdef WP_API_FEATURE_LIBSNG_HWEC_DTMF_REMOVAL
 			int return_code = 0;
+			if (!ftdm_channel_test_feature(ftdmchan, FTDM_CHANNEL_FEATURE_HWEC)) {
+				ftdm_log_chan_msg(ftdmchan, FTDM_LOG_ERROR, "Wanpipe device does not have HW EC\n");
+				return FTDM_NOTIMPL;
+			}
+			
 			err = sangoma_hwec_set_hwdtmf_removal(ftdmchan->sockfd, ftdmchan->physical_chan_id, &return_code, 0, 0);
 			if (return_code) {
 				ftdm_log_chan_msg(ftdmchan, FTDM_LOG_ERROR, "Wanpipe failed to Disable HW-DTMF removal\n");
@@ -862,16 +877,19 @@ static FIO_COMMAND_FUNCTION(wanpipe_command)
 		break;
 	case FTDM_COMMAND_FLUSH_BUFFERS:
 		{
+			ftdm_log_chan_msg(ftdmchan, FTDM_LOG_DEBUG, "Flushing all buffers\n");
 			err = sangoma_flush_bufs(ftdmchan->sockfd, &tdm_api);
 		}
 		break;
 	case FTDM_COMMAND_FLUSH_RX_BUFFERS:
 		{
+			ftdm_log_chan_msg(ftdmchan, FTDM_LOG_DEBUG, "Flushing Rx buffer\n");
 			err = sangoma_flush_rx_bufs(ftdmchan->sockfd, &tdm_api);
 		}
 		break;
 	case FTDM_COMMAND_FLUSH_TX_BUFFERS:
 		{
+			ftdm_log_chan_msg(ftdmchan, FTDM_LOG_DEBUG, "Flushing Tx buffer\n");
 			err = sangoma_flush_tx_bufs(ftdmchan->sockfd, &tdm_api);
 		}
 		break;
@@ -981,8 +999,8 @@ static void wanpipe_read_stats(ftdm_channel_t *ftdmchan, wp_tdm_api_rx_hdr_t *rx
 	}
 
 	if (ftdmchan->iostats.rx.queue_len >= (0.8 * ftdmchan->iostats.rx.queue_size)) {
-		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Rx Queue length exceeded 80%% threshold (%d/%d)\n",
-					  		ftdmchan->iostats.rx.queue_len, ftdmchan->iostats.rx.queue_size);
+		ftdm_log_chan_throttle(ftdmchan, FTDM_LOG_DEBUG, "Rx Queue length exceeded 80% threshold (%d/%d)\n",
+			  		ftdmchan->iostats.rx.queue_len, ftdmchan->iostats.rx.queue_size);
 		ftdm_set_flag(&(ftdmchan->iostats.rx), FTDM_IOSTATS_ERROR_QUEUE_THRES);
 	} else if (ftdm_test_flag(&(ftdmchan->iostats.rx), FTDM_IOSTATS_ERROR_QUEUE_THRES)){
 		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Rx Queue length reduced 80%% threshold (%d/%d)\n",
@@ -1079,6 +1097,18 @@ static FIO_READ_FUNCTION(wanpipe_read)
 	}
 	*datalen = rx_len;
 
+	if (ftdm_channel_test_feature(ftdmchan, FTDM_CHANNEL_FEATURE_IO_STATS) && !ftdmchan->iostats.rx.packets) {
+		wanpipe_tdm_api_t tdm_api;
+		int err;
+		memset(&tdm_api, 0, sizeof(tdm_api));
+		ftdm_log_chan_msg(ftdmchan, FTDM_LOG_DEBUG, "Flusing on first rx frame\n");
+		/* if this is the first write ever, flush the tx first to have clean stats */
+		err = sangoma_flush_rx_bufs(ftdmchan->sockfd, &tdm_api);
+		if (err) {
+			ftdm_log_chan_msg(ftdmchan, FTDM_LOG_WARNING, "Failed to flush rx on first read\n");
+		}
+	}
+
 	if (ftdm_channel_test_feature(ftdmchan, FTDM_CHANNEL_FEATURE_IO_STATS)) {
 		wanpipe_read_stats(ftdmchan, &hdrframe);
 	}
@@ -1117,6 +1147,7 @@ static FIO_WRITE_FUNCTION(wanpipe_write)
 		wanpipe_tdm_api_t tdm_api;
 		memset(&tdm_api, 0, sizeof(tdm_api));
 		/* if this is the first write ever, flush the tx first to have clean stats */
+		ftdm_log_chan_msg(ftdmchan, FTDM_LOG_DEBUG, "Flush buffers on first write\n");
 		err = sangoma_flush_tx_bufs(ftdmchan->sockfd, &tdm_api);
 		if (err) {
 			ftdm_log_chan_msg(ftdmchan, FTDM_LOG_WARNING, "Failed to flush on first write\n");
@@ -1136,6 +1167,9 @@ static FIO_WRITE_FUNCTION(wanpipe_write)
 		}
 		return FTDM_SUCCESS;
 	}
+
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Failed to write on channel (dtmfbuffer=%i)\n",
+		ftdmchan->dtmf_buffer?ftdm_buffer_inuse(ftdmchan->dtmf_buffer):0);
 
 	return FTDM_FAIL;
 }
@@ -1189,6 +1223,113 @@ static FIO_WAIT_FUNCTION(wanpipe_wait)
 	if (inflags & POLLPRI) {
 		*flags |= FTDM_EVENTS;
 	}
+
+	return FTDM_SUCCESS;
+}
+
+/**
+ * \brief Checks/poll/waits for events on a multiple channels of different spans
+ * \param ftdmchan Set of Channels to check for events
+ * \param poll_events Type of events w.r.t. each channels to wait/poll for
+ * \param num_chans Number of channels to check for events for
+ * \param ms Time to wait for event
+ * \return Success if event is waiting or failure if not
+ */
+static FIO_WAIT_MULTIPLE_FUNCTION(wanpipe_wait_multiple)
+{
+#ifdef LIBSANGOMA_VERSION
+	sangoma_status_t sangstatus;
+	sangoma_wait_obj_t *pfds[FTDM_MAX_CHANNELS_SPAN] = { 0 };
+	uint32_t inflags[FTDM_MAX_CHANNELS_SPAN];
+	uint32_t outflags[FTDM_MAX_CHANNELS_SPAN];
+#else
+	struct pollfd pfds[FTDM_MAX_CHANNELS_SPAN];
+#endif
+	uint32_t idx = 0;
+	uint32_t chan_events = 0;
+	uint32_t status = 0;
+
+	for (idx = 0; idx < num_chans; idx++) {
+		/* translate events from ftdm to libsnagoma. if the user don't specify which events to poll the
+		 * channel for, we just use SANG_WAIT_OBJ_HAS_EVENTS */
+		if (poll_events) {
+			if (poll_events[idx] & FTDM_READ) {
+				chan_events = SANG_WAIT_OBJ_HAS_INPUT;
+			}
+			if (poll_events[idx] & FTDM_WRITE) {
+				chan_events |= SANG_WAIT_OBJ_HAS_OUTPUT;
+			}
+			if (poll_events[idx] & FTDM_EVENTS) {
+				chan_events |= SANG_WAIT_OBJ_HAS_EVENTS;
+			}
+		} else {
+			chan_events = SANG_WAIT_OBJ_HAS_EVENTS;
+		}
+
+#ifdef LIBSANGOMA_VERSION
+		if (!ftdmchan[idx]->io_data) {
+			continue; /* should never happen but happens when shutting down */
+		}
+		pfds[idx] = WP_GET_WAITABLE(ftdmchan[idx]);
+		inflags[idx] = chan_events;
+#else
+		memset(&pfds[idx], 0, sizeof(pfds[idx]));
+		pfds[idx].fd = ftdmchan[idx]->sockfd;
+		pfds[idx].events = chan_events;
+#endif
+	}
+
+#ifdef LIBSANGOMA_VERSION
+	sangstatus = sangoma_waitfor_many(pfds, inflags, outflags, idx, ms);
+	if (SANG_STATUS_APIPOLL_TIMEOUT == sangstatus) {
+		status = 0;
+	} else if (SANG_STATUS_SUCCESS == sangstatus) {
+		status = 1; /* hopefully we never need how many changed -_- */
+	} else {
+		ftdm_log(FTDM_LOG_ERROR, "sangoma_waitfor_many failed: %d, %s\n", sangstatus, strerror(errno));
+		status = -1;
+	}
+#else
+	status = poll(pfds, num_chans, ms);
+#endif
+
+	switch (status) {
+		case 0:
+			return FTDM_TIMEOUT;
+			break;
+
+		case 1:
+			for (idx = 0; idx < num_chans; idx++) {
+#ifdef LIBSANGOMA_VERSION
+				if (outflags[idx] & POLLPRI) {
+#else
+				if (pfds[idx].revents & POLLPRI) {
+#endif
+					ftdm_set_io_flag(ftdmchan[idx], FTDM_CHANNEL_IO_EVENT);
+					ftdmchan[idx]->last_event_time = ftdm_current_time_in_ms();
+				}
+#ifdef LIBSANGOMA_VERSION
+				if (outflags[idx] & POLLIN) {
+#else
+				if (pfds[idx].revents & POLLIN) {
+#endif
+					ftdm_set_io_flag(ftdmchan[idx], FTDM_CHANNEL_IO_READ);
+				}
+#ifdef LIBSANGOMA_VERSION
+				if (outflags[idx] & POLLOUT) {
+#else
+				if (pfds[idx].revents & POLLOUT) {
+#endif
+					ftdm_set_io_flag(ftdmchan[idx], FTDM_CHANNEL_IO_WRITE);
+				}
+			}
+			break;
+
+		default:
+			ftdm_log(FTDM_LOG_ERROR, "Sangoma channel poll error: %d, %s\n", sangstatus, strerror(errno));
+			return FTDM_FAIL;
+			break;
+		}
 
 	return FTDM_SUCCESS;
 }
@@ -1345,6 +1486,7 @@ static FIO_GET_ALARMS_FUNCTION(wanpipe_get_alarms)
 {
 	wanpipe_tdm_api_t tdm_api;
 	unsigned int alarms = 0;
+	unsigned int ftdm_old_alarms=0;
 	int err;
 
 	memset(&tdm_api, 0, sizeof(tdm_api));
@@ -1363,6 +1505,7 @@ static FIO_GET_ALARMS_FUNCTION(wanpipe_get_alarms)
 	}
 	alarms = tdm_api.wp_tdm_cmd.fe_alarms;
 #endif
+
 #ifdef WIN32
 	/* Temporary fix: in the current trunk of libsangoma, for BRI,
 		WAN_TE_BIT_ALARM_RED bit is set if the card is in disconnected state, but this has
@@ -1375,34 +1518,52 @@ static FIO_GET_ALARMS_FUNCTION(wanpipe_get_alarms)
 	}
 #endif
 
+	ftdm_old_alarms=ftdmchan->alarm_flags;
 	ftdmchan->alarm_flags = FTDM_ALARM_NONE;
+
+	/* Ignore Open Circuit Alarms */
+	if (alarms & WAN_TE_BIT_ALARM_LIU_OC) {
+		alarms &= ~WAN_TE_BIT_ALARM_LIU_OC;
+	}
 
 	if (alarms & WAN_TE_BIT_ALARM_RED) {
 		ftdmchan->alarm_flags |= FTDM_ALARM_RED;
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Wanpipe RED Alarm Set %s\n", " ");
 		alarms &= ~WAN_TE_BIT_ALARM_RED;
 	}
 		
-
 	if (alarms & WAN_TE_BIT_ALARM_AIS) {
 		ftdmchan->alarm_flags |= FTDM_ALARM_BLUE;
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Wanpipe BLUE Alarm Set %s\n", " ");
 		alarms &= ~WAN_TE_BIT_ALARM_AIS;
 	}
 
 	if (alarms & WAN_TE_BIT_ALARM_RAI) {
 		ftdmchan->alarm_flags |= FTDM_ALARM_YELLOW;
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Wanpipe RAI Alarm Set\n", " ");
 		alarms &= ~WAN_TE_BIT_ALARM_RAI;
 	}
 
 	if (!ftdmchan->alarm_flags) {
-		/* there is a bug in wanpipe where alarms were not properly set when they should be
-		 * on at application startup, until that is fixed we check the link status here too */
-		ftdm_channel_hw_link_status_t sangoma_status = 0;
-		ftdm_channel_command(ftdmchan, FTDM_COMMAND_GET_LINK_STATUS, &sangoma_status);
-		ftdmchan->alarm_flags = sangoma_status == FTDM_HW_LINK_DISCONNECTED ? FTDM_ALARM_RED : FTDM_ALARM_NONE;
+		if (FTDM_IS_DIGITAL_CHANNEL(ftdmchan)) {
+			ftdm_channel_hw_link_status_t sangoma_status = 0;
+			/* there was a bug in wanpipe where alarms were not properly set when they should be
+			 * on at application startup, until that is fixed we check the link status here too */
+			ftdm_channel_command(ftdmchan, FTDM_COMMAND_GET_LINK_STATUS, &sangoma_status);
+			ftdmchan->alarm_flags = sangoma_status == FTDM_HW_LINK_DISCONNECTED ? FTDM_ALARM_RED : FTDM_ALARM_NONE;
+		} 
 	}
-
+			
+	if (ftdm_old_alarms != ftdmchan->alarm_flags) { 
+		if (ftdmchan->alarm_flags) {
+			ftdm_log_chan(ftdmchan, FTDM_LOG_WARNING, "Link status is Disconnected (alarms=0x%X)\n",ftdmchan->alarm_flags);
+		} else {
+			ftdm_log_chan(ftdmchan, FTDM_LOG_INFO, "Link status is Connected (alarms=0x%X)\n",ftdmchan->alarm_flags);
+		}
+	}
+	
 	if (alarms) {
-		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Unmapped wanpipe alarms: %d\n", alarms);
+		ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Unmapped wanpipe alarm(0x%x): %s\n", alarms, DECODE_WAN_ALARM(alarms));
 	}
 
 	return FTDM_SUCCESS;
@@ -1554,8 +1715,21 @@ static __inline__ ftdm_status_t wanpipe_channel_process_event(ftdm_channel_t *fc
 	case WP_API_EVENT_ALARM:
 		{
 			if (tdm_api->wp_tdm_cmd.event.wp_api_event_alarm) {
-				ftdm_log_chan(fchan, FTDM_LOG_DEBUG, "Got Wanpipe alarms %d\n", tdm_api->wp_tdm_cmd.event.wp_api_event_alarm);
-				*event_id = FTDM_OOB_ALARM_TRAP;
+				ftdm_log_chan(fchan, FTDM_LOG_DEBUG, "Got wanpipe alarm (0x%x): %s\n", tdm_api->wp_tdm_cmd.event.wp_api_event_alarm,
+						DECODE_WAN_ALARM(tdm_api->wp_tdm_cmd.event.wp_api_event_alarm));
+
+				/* Check if channel is already in alarm then there is no need to send TRAP again */
+			        if (fchan->alarm_flags != FTDM_ALARM_NONE) {
+					break;
+				}
+
+				/* Check if "OPEN CIRCUIT" Alarm, If yes then ignore that one */
+				if (tdm_api->wp_tdm_cmd.event.wp_api_event_alarm == WAN_TE_BIT_ALARM_LIU_OC) {
+					ftdm_log_chan_msg(fchan, FTDM_LOG_DEBUG, "Ignored Open Circuit Alarm \n");
+					*event_id = FTDM_OOB_ALARM_CLEAR;
+				} else {
+					*event_id = FTDM_OOB_ALARM_TRAP;
+				}
 			} else {
 				ftdm_log_chan_msg(fchan, FTDM_LOG_DEBUG, "Wanpipe alarms cleared\n");
 				*event_id = FTDM_OOB_ALARM_CLEAR;
@@ -1599,7 +1773,8 @@ FIO_CHANNEL_NEXT_EVENT_FUNCTION(wanpipe_channel_next_event)
 		return FTDM_FAIL;
 	}
 
-	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "read wanpipe event %d\n", tdm_api.wp_tdm_cmd.event.wp_tdm_api_event_type);
+	ftdm_log_chan(ftdmchan, FTDM_LOG_DEBUG, "Wanpipe event(%d): %s\n", tdm_api.wp_tdm_cmd.event.wp_tdm_api_event_type,
+			DECODE_WAN_EVENT(tdm_api.wp_tdm_cmd.event.wp_tdm_api_event_type));
 	status = wanpipe_channel_process_event(ftdmchan, &event_id, &tdm_api);
 	if (status == FTDM_BREAK) {
 		ftdm_log_chan_msg(ftdmchan, FTDM_LOG_ERROR, "Ignoring event for now\n");
@@ -1675,7 +1850,8 @@ FIO_SPAN_NEXT_EVENT_FUNCTION(wanpipe_span_next_event)
 				ftdm_log_chan(span->channels[i], FTDM_LOG_ERROR, "read wanpipe event got error: %s\n", strerror(errno));
 				return FTDM_FAIL;
 			}
-			ftdm_log_chan(span->channels[i], FTDM_LOG_DEBUG, "read wanpipe event %d\n", tdm_api.wp_tdm_cmd.event.wp_tdm_api_event_type);
+			ftdm_log_chan(span->channels[i], FTDM_LOG_DEBUG, "Wanpipe event(%d): %s\n", tdm_api.wp_tdm_cmd.event.wp_tdm_api_event_type,
+					DECODE_WAN_EVENT(tdm_api.wp_tdm_cmd.event.wp_tdm_api_event_type));
 
 			ftdm_channel_lock(ftdmchan);
 			status = wanpipe_channel_process_event(ftdmchan, &event_id, &tdm_api);
@@ -1764,6 +1940,7 @@ static FIO_IO_LOAD_FUNCTION(wanpipe_init)
 	wanpipe_interface.close = wanpipe_close;
 	wanpipe_interface.command = wanpipe_command;
 	wanpipe_interface.wait = wanpipe_wait;
+	wanpipe_interface.wait_multiple = wanpipe_wait_multiple;
 	wanpipe_interface.read = wanpipe_read;
 	wanpipe_interface.write = wanpipe_write;
 	wanpipe_interface.poll_event = wanpipe_poll_event;

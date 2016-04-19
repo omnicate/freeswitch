@@ -30,6 +30,10 @@
  * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Contribuotrs:
+ * 		Kapil Gupta <kgupta@sangoma.com>
+ * 		Pushkar Singh <psingh@sangoma.com>
  */
 
 #include "ftmod_sangoma_isdn.h"
@@ -39,7 +43,7 @@ void sngisdn_snd_setup(ftdm_channel_t *ftdmchan)
 	ConEvnt conEvnt;
 	sngisdn_chan_data_t *sngisdn_info = ftdmchan->call_data;
 	sngisdn_span_data_t *signal_data = (sngisdn_span_data_t*) ftdmchan->span->signal_data;
-	ftdm_sngisdn_progind_t prog_ind = {SNGISDN_PROGIND_LOC_USER, SNGISDN_PROGIND_DESCR_INVALID};	
+	ftdm_sngisdn_progind_t prog_ind = {SNGISDN_PROGIND_LOC_USER, SNGISDN_PROGIND_DESCR_INVALID};
 
 	ftdm_assert((!sngisdn_info->suInstId && !sngisdn_info->spInstId), "Trying to call out, but call data was not cleared\n");
 	
@@ -76,7 +80,12 @@ void sngisdn_snd_setup(ftdm_channel_t *ftdmchan)
 	set_facility_ie(ftdmchan, &conEvnt.facilityStr);
 	set_prog_ind_ie(ftdmchan, &conEvnt.progInd, prog_ind);
 
-	ftdm_log_chan(ftdmchan, FTDM_LOG_INFO, "Sending SETUP (suId:%d suInstId:%u spInstId:%u dchan:%d ces:%d)\n", signal_data->cc_id, sngisdn_info->suInstId, sngisdn_info->spInstId, sngisdn_dchan(signal_data)->link_id, sngisdn_info->ces);
+	/* Set lawful interception information if any */
+	set_lawful_interception(ftdmchan, &conEvnt);
+
+	set_user_user_ie(ftdmchan, &conEvnt.usrUsr);
+
+	ftdm_log_chan(ftdmchan, FTDM_LOG_INFO, "Sending SETUP (suId:%d suInstId:%u spInstId:%u dchan:%d ces:%d)\n", signal_data->cc_id, sngisdn_info->suInstId, sngisdn_info->spInstId, signal_data->dchan_id, sngisdn_info->ces);
 
 	if (sng_isdn_con_request(signal_data->cc_id, sngisdn_info->suInstId, &conEvnt, sngisdn_dchan(signal_data)->link_id, sngisdn_info->ces)) {
 		ftdm_log_chan_msg(ftdmchan, FTDM_LOG_CRIT, "stack refused SETUP request\n");
@@ -171,6 +180,7 @@ void sngisdn_snd_proceed(ftdm_channel_t *ftdmchan, ftdm_sngisdn_progind_t prog_i
 	}
 	set_prog_ind_ie(ftdmchan, &cnStEvnt.progInd, prog_ind);
 	set_facility_ie(ftdmchan, &cnStEvnt.facilityStr);
+	set_user_user_ie(ftdmchan, &cnStEvnt.usrUsr);
 
 	ftdm_log_chan(ftdmchan, FTDM_LOG_INFO, "Sending PROCEED (suId:%d suInstId:%u spInstId:%u dchan:%d ces:%d)\n", signal_data->cc_id, sngisdn_info->suInstId, sngisdn_info->spInstId, sngisdn_dchan(signal_data)->link_id, sngisdn_info->ces);
 
@@ -203,6 +213,7 @@ void sngisdn_snd_progress(ftdm_channel_t *ftdmchan, ftdm_sngisdn_progind_t prog_
 	memset(&cnStEvnt, 0, sizeof(cnStEvnt));	
 	set_prog_ind_ie(ftdmchan, &cnStEvnt.progInd, prog_ind);
 	set_facility_ie(ftdmchan, &cnStEvnt.facilityStr);
+	set_user_user_ie(ftdmchan, &cnStEvnt.usrUsr);
 
 	ftdm_log_chan(ftdmchan, FTDM_LOG_INFO, "Sending PROGRESS (suId:%d suInstId:%u spInstId:%u dchan:%d ces:%d)\n", signal_data->cc_id, sngisdn_info->suInstId, sngisdn_info->spInstId, sngisdn_dchan(signal_data)->link_id, sngisdn_info->ces);
 	if(sng_isdn_con_status(signal_data->cc_id, sngisdn_info->suInstId, sngisdn_info->spInstId,&cnStEvnt, MI_PROGRESS, sngisdn_dchan(signal_data)->link_id, sngisdn_info->ces)) {
@@ -229,6 +240,7 @@ void sngisdn_snd_alert(ftdm_channel_t *ftdmchan, ftdm_sngisdn_progind_t prog_ind
 
 	set_prog_ind_ie(ftdmchan, &cnStEvnt.progInd, prog_ind);
 	set_facility_ie(ftdmchan, &cnStEvnt.facilityStr);
+	set_user_user_ie(ftdmchan, &cnStEvnt.usrUsr);
 
 	ftdm_log_chan(ftdmchan, FTDM_LOG_INFO, "Sending ALERT (suId:%d suInstId:%u spInstId:%u dchan:%d ces:%d)\n", signal_data->cc_id, sngisdn_info->suInstId, sngisdn_info->spInstId, sngisdn_dchan(signal_data)->link_id, sngisdn_info->ces);
 
@@ -265,6 +277,7 @@ void sngisdn_snd_connect(ftdm_channel_t *ftdmchan)
 	}
 	set_prog_ind_ie(ftdmchan, &cnStEvnt.progInd, prog_ind);
 	set_facility_ie(ftdmchan, &cnStEvnt.facilityStr);
+	set_user_user_ie(ftdmchan, &cnStEvnt.usrUsr);
 
 	ftdm_log_chan(ftdmchan, FTDM_LOG_INFO, "Sending CONNECT (suId:%d suInstId:%u spInstId:%u dchan:%d ces:%d)\n", signal_data->cc_id, sngisdn_info->suInstId, sngisdn_info->spInstId, sngisdn_dchan(signal_data)->link_id, sngisdn_info->ces);
 	if (sng_isdn_con_response(signal_data->cc_id, sngisdn_info->suInstId, sngisdn_info->spInstId, &cnStEvnt, sngisdn_dchan(signal_data)->link_id, sngisdn_info->ces)) {
@@ -314,6 +327,13 @@ void sngisdn_snd_dl_req(ftdm_channel_t *ftdmchan)
 	sngisdn_chan_data_t *sngisdn_info = (sngisdn_chan_data_t*) ftdmchan->call_data;
 	sngisdn_span_data_t *signal_data = (sngisdn_span_data_t*) ftdmchan->span->signal_data;
 
+	if (ftdmchan->span->trunk_type != FTDM_TRUNK_BRI &&
+		ftdmchan->span->trunk_type != FTDM_TRUNK_BRI_PTMP) {
+
+		ftdm_log_chan_msg(ftdmchan, FTDM_LOG_DEBUG, "Ignoring INFO REQ on non-BRI channel\n");
+		return;
+	}
+
 	memset(&cnStEvnt, 0, sizeof(cnStEvnt));
 
 	ftdm_log_chan(ftdmchan, FTDM_LOG_INFO, "Requesting Link establishment (suId:%d dchan:%d ces:%d)\n", signal_data->cc_id, sngisdn_dchan(signal_data)->link_id, sngisdn_info->ces);
@@ -350,6 +370,69 @@ void sngisdn_snd_notify_req(ftdm_channel_t *ftdmchan)
 	return;
 }
 
+/* =================================== */
+ftdm_status_t sngisdn_snd_srv_req(ftdm_channel_t *ftdmchan, char *str)
+{
+	Srv q931_srvMsg;
+
+	sngisdn_chan_data_t *sngisdn_info = (sngisdn_chan_data_t*) ftdmchan->call_data;
+	sngisdn_span_data_t *signal_data = (sngisdn_span_data_t*) ftdmchan->span->signal_data;
+
+	memset(&q931_srvMsg, 0, sizeof(q931_srvMsg));
+
+	/* Filling up Channel status token */
+	q931_srvMsg.chStatus.eh.pres = PRSNT_NODEF;
+
+	q931_srvMsg.chStatus.preference.pres = PRSNT_NODEF;
+	q931_srvMsg.chStatus.preference.val = 0x01;
+
+	q931_srvMsg.chStatus.newStatus.pres = PRSNT_NODEF;
+	if (!strcasecmp(str, "unblock")) {
+	       q931_srvMsg.chStatus.newStatus.val = 0x00;
+	} else if (!strcasecmp(str, "block")) {
+		q931_srvMsg.chStatus.newStatus.val = 0x02;
+	}
+
+	/* Filling up Channel Id element */
+	q931_srvMsg.chanId.eh.pres = PRSNT_NODEF;
+
+	q931_srvMsg.chanId.infoChanSel.pres = PRSNT_NODEF;
+	q931_srvMsg.chanId.infoChanSel.val = 0x01;
+
+	q931_srvMsg.chanId.dChanInd.pres = PRSNT_NODEF;
+	q931_srvMsg.chanId.dChanInd.val = 0x00;
+
+	q931_srvMsg.chanId.prefExc.pres = PRSNT_NODEF;
+	q931_srvMsg.chanId.prefExc.val = 0x01;
+
+	q931_srvMsg.chanId.intType.pres = PRSNT_NODEF;
+	q931_srvMsg.chanId.intType.val = 0x01;
+
+	q931_srvMsg.chanId.intIdentPres.pres = PRSNT_NODEF;
+	q931_srvMsg.chanId.intIdentPres.val = 0x00;
+
+	q931_srvMsg.chanId.nmbMap.pres = PRSNT_NODEF;
+	q931_srvMsg.chanId.nmbMap.val = 0x00;
+
+	q931_srvMsg.chanId.codeStand1.pres = PRSNT_NODEF;
+	q931_srvMsg.chanId.codeStand1.val = 0x00;
+
+	q931_srvMsg.chanId.chanMapType.pres = PRSNT_NODEF;
+	q931_srvMsg.chanId.chanMapType.val = 0x03;
+
+	q931_srvMsg.chanId.chanNmbSlotMap.pres = PRSNT_NODEF;
+	q931_srvMsg.chanId.chanNmbSlotMap.len = 0x01;
+	q931_srvMsg.chanId.chanNmbSlotMap.val[0] = ftdmchan->chan_id;
+
+	ftdm_log_chan(ftdmchan, FTDM_LOG_INFO, "Sending SERVICE (suId:%d dchan:%d ces:%d)\n", signal_data->cc_id, sngisdn_dchan(signal_data)->link_id, sngisdn_info->ces);
+
+	if (sng_isdn_service_request(signal_data->cc_id,  &q931_srvMsg, MI_SRV, sngisdn_dchan(signal_data)->link_id, sngisdn_info->ces)) {
+		ftdm_log_chan_msg(ftdmchan, FTDM_LOG_CRIT, "stack refused SERVICE request\n");
+		return FTDM_FAIL;
+	}
+	return FTDM_SUCCESS;
+}
+/* ======================================= */
 
 void sngisdn_snd_status_enq(ftdm_channel_t *ftdmchan)
 {
@@ -389,7 +472,7 @@ void sngisdn_snd_disconnect(ftdm_channel_t *ftdmchan)
 
 	set_cause_ie(ftdmchan, &discEvnt.causeDgn[0]);
 	set_facility_ie(ftdmchan, &discEvnt.facilityStr);
-	set_user_to_user_ie(ftdmchan, &discEvnt.usrUsr);
+	set_user_user_ie(ftdmchan, &discEvnt.usrUsr);
 
 	ftdm_log_chan(ftdmchan, FTDM_LOG_INFO, "Sending DISCONNECT (suId:%d suInstId:%u spInstId:%u)\n", signal_data->cc_id, sngisdn_info->suInstId, sngisdn_info->spInstId);
 	if (sng_isdn_disc_request(signal_data->cc_id, sngisdn_info->suInstId, sngisdn_info->spInstId, &discEvnt)) {
@@ -437,6 +520,7 @@ void sngisdn_snd_release(ftdm_channel_t *ftdmchan, uint8_t glare)
 	}
 
 	set_facility_ie(ftdmchan, &relEvnt.facilityStr);
+	set_user_user_ie(ftdmchan, &relEvnt.usrUsr);
 	
 	ftdm_log_chan(ftdmchan, FTDM_LOG_INFO, "Sending RELEASE/RELEASE COMPLETE (suId:%d suInstId:%u spInstId:%u)\n", signal_data->cc_id, suInstId, spInstId);
 

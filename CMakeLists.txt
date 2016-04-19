@@ -212,6 +212,7 @@ IF(DEFINED SNGSS7)
 		${ftmod_DIR}/ftmod_sangoma_ss7/ftmod_sangoma_ss7_sta.c
 		${ftmod_DIR}/ftmod_sangoma_ss7/ftmod_sangoma_ss7_sts.c
 		${ftmod_DIR}/ftmod_sangoma_ss7/ftmod_sangoma_ss7_logger.c
+		${ftmod_DIR}/ftmod_sangoma_ss7/ftmod_sangoma_ss7_acc.c
 	)
 	IF(NOT DEFINED WIN32)
 		ADD_DEFINITIONS(-D_GNU_SOURCE)

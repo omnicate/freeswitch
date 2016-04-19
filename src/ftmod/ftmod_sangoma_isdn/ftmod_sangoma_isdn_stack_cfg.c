@@ -30,6 +30,10 @@
  * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Contributors:
+ * 		Kapil Gupta <kgupta@sangoma.com>
+ * 		Pushkar Singh <psingh@sangoma.com>
  */
 
 #include "ftmod_sangoma_isdn.h"
@@ -90,7 +94,6 @@ ftdm_status_t sngisdn_start_gen_cfg(void)
 	}
 	return FTDM_SUCCESS;
 }
-
 
 ftdm_status_t sngisdn_stack_cfg(ftdm_span_t *span)
 {
@@ -377,11 +380,13 @@ ftdm_status_t sngisdn_stack_cfg_q921_msap(ftdm_span_t *span)
 
 	if (signal_data->signalling == SNGISDN_SIGNALING_NET) {
 		cfg.t.cfg.s.bdMSAP.logInt      = 1;         /* logical interface = 0 = user, 1= network */
-		cfg.t.cfg.s.bdMSAP.setUpArb    = PASSIVE;       /* set up arbitration */
 	} else {
 		cfg.t.cfg.s.bdMSAP.logInt      = 0;         /* logical interface = 0 = user, 1= network */
-		cfg.t.cfg.s.bdMSAP.setUpArb    = ACTIVE;       /* set up arbitration */
 	}
+
+	/* by default setUpArb is set to true i.e. both NET/CPE will trigger association request i.e.
+	 * generate SABME, if the links are not in Connected/UP state */
+	cfg.t.cfg.s.bdMSAP.setUpArb    = ACTIVE;       /* set up arbitration */
 
 	/* Overwrite setUpArb value if user forced it */
 	if (signal_data->setup_arb == SNGISDN_OPT_TRUE) {
@@ -639,7 +644,7 @@ ftdm_status_t sngisdn_stack_cfg_q931_dlsap(ftdm_span_t *span)
 	} else {
 		cfg.t.cfg.s.inDLSAP.facilityHandling = 0;
 	}
-	
+
 	if (!signal_data->nfas.trunk) {
 		cfg.t.cfg.s.inDLSAP.nfasInt = FALSE;
 		cfg.t.cfg.s.inDLSAP.intId = 0;
@@ -737,7 +742,6 @@ ftdm_status_t sngisdn_stack_cfg_q931_dlsap(ftdm_span_t *span)
 
 	if (signal_data->switchtype == SNGISDN_SWITCH_QSIG ||
 	    signal_data->switchtype == SNGISDN_SWITCH_5ESS) {
-
 		cfg.t.cfg.s.inDLSAP.ackOpt = TRUE;
 	} else if (signal_data->signalling == SNGISDN_SIGNALING_NET) {
 		cfg.t.cfg.s.inDLSAP.ackOpt = TRUE;
@@ -968,7 +972,7 @@ ftdm_status_t sngisdn_stack_cfg_q931_dlsap(ftdm_span_t *span)
 			cfg.t.cfg.s.inDLSAP.teiAlloc = IN_STATIC;
 			cfg.t.cfg.s.inDLSAP.intCfg = IN_INTCFG_PTPT;
 			cfg.t.cfg.s.inDLSAP.firstBChanNum = 1;
-			
+
 			if (signal_data->nfas.trunk) {
 				if (signal_data->nfas.sigchan ==  SNGISDN_NFAS_DCHAN_PRIMARY ||
 					signal_data->nfas.sigchan ==  SNGISDN_NFAS_DCHAN_BACKUP) {
@@ -982,7 +986,6 @@ ftdm_status_t sngisdn_stack_cfg_q931_dlsap(ftdm_span_t *span)
 			} else {
 				cfg.t.cfg.s.inDLSAP.dChannelNum = 24;
 				cfg.t.cfg.s.inDLSAP.nmbBearChan = NUM_T1_CHANNELS_PER_SPAN;
-				cfg.t.cfg.s.inDLSAP.firstBChanNum = 1;
 			}
 			break;
 		case FTDM_TRUNK_BRI:
@@ -1053,18 +1056,18 @@ ftdm_status_t sngisdn_stack_cfg_q931_lce(ftdm_span_t *span)
 		cfg.t.cfg.s.inLCe.lnkUpDwnInd = TRUE;
 	}
 
-	if (FTDM_SPAN_IS_BRI(span)) {
-		/* tCon Timer causes unwanted hangup on BRI links
-			where the Q.921 link goes into disconnected
-			state when idle. */
-
+	/* tCon Timer causes unwanted hangup on BRI links
+	   where the Q.921 link goes into disconnected
+	   state when idle.
+	   Therefore, by default TCON is set to false in
+	   case of BRI span */
+	if (!signal_data->timer_tCon) {
 		cfg.t.cfg.s.inLCe.tCon.enb = FALSE;
-		cfg.t.cfg.s.inLCe.tCon.val = 0;
 	} else {
 		cfg.t.cfg.s.inLCe.tCon.enb = TRUE;
-		cfg.t.cfg.s.inLCe.tCon.val = 35;
 	}
-	
+	cfg.t.cfg.s.inLCe.tCon.val = signal_data->timer_tCon;
+
 	cfg.t.cfg.s.inLCe.tDisc.enb = TRUE;
 	cfg.t.cfg.s.inLCe.tDisc.val = 35;
 	cfg.t.cfg.s.inLCe.t314.enb = FALSE; /* if segmentation enabled, set to TRUE */
@@ -1168,8 +1171,8 @@ ftdm_status_t sngisdn_stack_cfg_cc_sap(ftdm_span_t *span)
 	cfg.hdr.elmId.elmnt = STTSAP;
 
 	cfg.t.cfg.s.ccISAP.pst.srcProcId	= SFndProcId();
-    cfg.t.cfg.s.ccISAP.pst.srcEnt		= ENTCC;
-    cfg.t.cfg.s.ccISAP.pst.srcInst		= S_INST;
+	cfg.t.cfg.s.ccISAP.pst.srcEnt		= ENTCC;
+	cfg.t.cfg.s.ccISAP.pst.srcInst		= S_INST;
 	cfg.t.cfg.s.ccISAP.pst.dstEnt		= ENTIN;
 	cfg.t.cfg.s.ccISAP.pst.dstInst		= S_INST;
 	cfg.t.cfg.s.ccISAP.pst.dstProcId	= SFndProcId();

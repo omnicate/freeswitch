@@ -107,7 +107,10 @@ static void *run_main_schedule(ftdm_thread_t *thread, void *data)
 
 	ftdm_unused_arg(data);
 	ftdm_unused_arg(thread);
-
+#ifdef __WINDOWS__
+	UNREFERENCED_PARAMETER(data);
+	UNREFERENCED_PARAMETER(thread);
+#endif
 	while (ftdm_running()) {
 		
 		sleepms = SCHED_MAX_SLEEP;
@@ -344,6 +347,10 @@ tryagain:
 done:
 	ftdm_mutex_unlock(sched->mutex);
 	ftdm_unused_arg(sched);
+#ifdef __WINDOWS__
+	UNREFERENCED_PARAMETER(sched);
+#endif
+
 	return status;
 }
 
@@ -418,6 +425,14 @@ done:
 	ftdm_unused_arg(callback);
 	ftdm_unused_arg(data);
 	ftdm_unused_arg(timerid);
+#ifdef __WINDOWS__
+	UNREFERENCED_PARAMETER(sched);
+	UNREFERENCED_PARAMETER(name);
+	UNREFERENCED_PARAMETER(ms);
+	UNREFERENCED_PARAMETER(callback);
+	UNREFERENCED_PARAMETER(data);
+	UNREFERENCED_PARAMETER(timerid);
+#endif
 	return status;
 }
 
@@ -474,6 +489,11 @@ done:
 	ftdm_mutex_unlock(sched->mutex);
 	ftdm_unused_arg(timeto);
 	ftdm_unused_arg(sched);
+#ifdef __WINDOWS__
+	UNREFERENCED_PARAMETER(timeto);
+	UNREFERENCED_PARAMETER(sched);
+#endif
+
 	return status;
 }
 

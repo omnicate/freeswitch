@@ -2,6 +2,8 @@
  * Copyright (c) 2010, Sangoma Technologies 
  * David Yat Sin <davidy@sangoma.com>
  * Moises Silva <moy@sangoma.com>
+ * Kapil Gupta <kgupta@sangoma.com>
+ * Pushkar Singh <psingh@sangoma.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -43,7 +45,12 @@ ftdm_status_t sngisdn_deactivate_phy(ftdm_span_t *span);
 ftdm_status_t sngisdn_activate_cc(ftdm_span_t *span);
 
 ftdm_status_t sngisdn_cntrl_q931(ftdm_span_t *span, uint8_t action, uint8_t subaction);
+
 ftdm_status_t sngisdn_cntrl_q921(ftdm_span_t *span, uint8_t action, uint8_t subaction);
+ftdm_status_t sngisdn_q921_dlsap_cntrl_req(ftdm_span_t *span, uint8_t action, uint8_t subaction);
+/* Stack logging enable */
+ftdm_status_t sngisdn_debug_q931(uint8_t action, uint8_t subaction);
+ftdm_status_t sngisdn_debug_q921(uint8_t action, uint8_t subaction);
 
 
 extern ftdm_sngisdn_data_t	g_sngisdn_data;
@@ -69,7 +76,7 @@ ftdm_status_t sngisdn_stack_start(ftdm_span_t *span)
 	LdUiDatConReq when activated, and this requires the Mac SAP to be already
 	bound first */
 	ftdm_sleep(500); 
-		
+
 	if (!g_sngisdn_data.ccs[signal_data->cc_id].activation_done) {
 		g_sngisdn_data.ccs[signal_data->cc_id].activation_done = 1;
 		if (sngisdn_activate_cc(span) != FTDM_SUCCESS) {
@@ -98,20 +105,36 @@ ftdm_status_t sngisdn_stack_stop(ftdm_span_t *span)
 	}
 	if (sngisdn_deactivate_phy(span) != FTDM_SUCCESS) {
 		ftdm_log(FTDM_LOG_CRIT, "%s:Failed to deactivate stack phy\n", span->name);
-		return FTDM_FAIL;
 	}
 
 	if (sngisdn_cntrl_q931(span, AUBND_DIS, SAELMNT) != FTDM_SUCCESS) {
 		ftdm_log(FTDM_LOG_CRIT, "%s:Failed to deactivate stack q931\n", span->name);
-		return FTDM_FAIL;
 	}
 
 	if (sngisdn_cntrl_q921(span, AUBND_DIS, SAELMNT) != FTDM_SUCCESS) {
 		ftdm_log(FTDM_LOG_CRIT, "%s:Failed to deactivate stack q921\n", span->name);
-		return FTDM_FAIL;
 	}
-	
+
+	/* Deactivate q921 DLSAP */
+	if (sngisdn_q921_dlsap_cntrl_req(span, AUBND_DIS, SAELMNT)) {
+		ftdm_log(FTDM_LOG_CRIT, "%s:Failed to deactivate q921 DLSAP\n", span->name);
+	}
+
+	if (sngisdn_cntrl_q931(span, ADEL, SAELMNT) != FTDM_SUCCESS) {
+		ftdm_log(FTDM_LOG_CRIT, "%s:Failed to delete stack q931\n", span->name);
+	}
+
+	if (sngisdn_cntrl_q921(span, ADEL, SAELMNT) != FTDM_SUCCESS) {
+		ftdm_log(FTDM_LOG_CRIT, "%s:Failed to delete stack q921\n", span->name);
+	}
+
+	/* Delete q921 DLSAP */
+	if (sngisdn_q921_dlsap_cntrl_req(span, ADEL, SAELMNT)) {
+		ftdm_log(FTDM_LOG_CRIT, "%s:Failed to delete q921 DLSAP\n", span->name);
+	}
+
 	ftdm_log(FTDM_LOG_INFO, "%s:Signalling stopped\n", span->name);
+
 	return FTDM_SUCCESS;
 }
 
@@ -197,21 +220,21 @@ ftdm_status_t sngisdn_wake_up_phy(ftdm_span_t *span)
 ftdm_status_t sngisdn_activate_cc(ftdm_span_t *span)
 {
 	CcMngmt cntrl;
-    Pst pst;
+	Pst pst;
 
 	sngisdn_span_data_t *signal_data = (sngisdn_span_data_t*)span->signal_data;
 
-    /* initalize the post structure */
-   stack_pst_init(&pst);
+	/* initalize the post structure */
+	stack_pst_init(&pst);
 
-    /* insert the destination Entity */
-    pst.dstEnt = ENTCC;
+	/* insert the destination Entity */
+	pst.dstEnt = ENTCC;
 
-    /* initalize the control structure */
+	/* initalize the control structure */
 	memset(&cntrl, 0, sizeof(cntrl));
 
-    /* initalize the control header */
-    stack_hdr_init(&cntrl.hdr);
+	/* initalize the control header */
+	stack_hdr_init(&cntrl.hdr);
 
 	cntrl.hdr.msgType = TCNTRL;			/* configuration */
 	cntrl.hdr.entId.ent = ENTCC;		/* entity */
@@ -221,7 +244,7 @@ ftdm_status_t sngisdn_activate_cc(ftdm_span_t *span)
 	cntrl.t.cntrl.action = ABND_ENA;
 	cntrl.t.cntrl.subAction = SAELMNT;
 
-  	cntrl.t.cntrl.sapId = signal_data->cc_id;
+	cntrl.t.cntrl.sapId = signal_data->cc_id;
 	if (sng_isdn_cc_cntrl(&pst, &cntrl)) {
 		return FTDM_FAIL;
 	}
@@ -230,7 +253,14 @@ ftdm_status_t sngisdn_activate_cc(ftdm_span_t *span)
 
 ftdm_status_t sngisdn_activate_trace(ftdm_span_t *span, sngisdn_tracetype_t trace_opt)
 {
-	sngisdn_span_data_t *signal_data = sngisdn_dchan((sngisdn_span_data_t*)span->signal_data);
+	sngisdn_span_data_t *signal_data = NULL;
+
+	if (span) {
+		signal_data = sngisdn_dchan((sngisdn_span_data_t*)span->signal_data);
+	} else {
+		ftdm_log(FTDM_LOG_ERROR, "Invalid span passed\n");
+		return FTDM_FAIL;
+	}
 
 	if (!signal_data) {
 		ftdm_log(FTDM_LOG_ERROR, "%s:Span is not used by signalling module\n", span->name);
@@ -243,16 +273,16 @@ ftdm_status_t sngisdn_activate_trace(ftdm_span_t *span, sngisdn_tracetype_t trac
 				ftdm_log(FTDM_LOG_INFO, "%s:Disabling q921 trace\n", signal_data->ftdm_span->name);
 				sngisdn_clear_trace_flag(signal_data, SNGISDN_TRACE_Q921);
 				
-				if (sngisdn_cntrl_q921(signal_data->ftdm_span, ADISIMM, SATRC) != FTDM_SUCCESS) {
-					ftdm_log(FTDM_LOG_INFO, "%s:Failed to disable q921 trace\n", signal_data->ftdm_span->name);
+				if (sngisdn_cntrl_q921(span, ADISIMM, SATRC) != FTDM_SUCCESS) {
+					ftdm_log(FTDM_LOG_ERROR, "%s:Failed to disable q921 trace\n", span->name);
 				}
 			}
 			if (sngisdn_test_trace_flag(signal_data, SNGISDN_TRACE_Q931)) {
 				ftdm_log(FTDM_LOG_INFO, "%s:Disabling q921 trace\n", signal_data->ftdm_span->name);
 				sngisdn_clear_trace_flag(signal_data, SNGISDN_TRACE_Q931);
 
-				if (sngisdn_cntrl_q931(signal_data->ftdm_span, ADISIMM, SATRC) != FTDM_SUCCESS) {
-					ftdm_log(FTDM_LOG_INFO, "%s:Failed to disable q921 trace\n", signal_data->ftdm_span->name);
+				if (sngisdn_cntrl_q931(span, ADISIMM, SATRC) != FTDM_SUCCESS) {
+					ftdm_log(FTDM_LOG_ERROR, "%s:Failed to disable q931 trace\n", span->name);
 				}
 			}
 			break;
@@ -261,25 +291,116 @@ ftdm_status_t sngisdn_activate_trace(ftdm_span_t *span, sngisdn_tracetype_t trac
 				ftdm_log(FTDM_LOG_INFO, "%s:Enabling q921 trace\n", signal_data->ftdm_span->name);
 				sngisdn_set_trace_flag(signal_data, SNGISDN_TRACE_Q921);
 
-				if (sngisdn_cntrl_q921(signal_data->ftdm_span, AENA, SATRC) != FTDM_SUCCESS) {
-					ftdm_log(FTDM_LOG_INFO, "%s:Failed to enable q921 trace\n", signal_data->ftdm_span->name);
+				if (sngisdn_cntrl_q921(span, AENA, SATRC) != FTDM_SUCCESS) {
+					ftdm_log(FTDM_LOG_ERROR, "%s:Failed to enable q921 trace\n", span->name);
 				}
 			}
 			break;
 		case SNGISDN_TRACE_Q931:
 			if (!sngisdn_test_trace_flag(signal_data, SNGISDN_TRACE_Q931)) {
-				ftdm_log(FTDM_LOG_INFO, "s%d Enabling q931 trace\n", signal_data->link_id);
+				ftdm_log(FTDM_LOG_INFO, "%s:Enabling q931 trace\n", signal_data->ftdm_span->name);
 				sngisdn_set_trace_flag(signal_data, SNGISDN_TRACE_Q931);
 				
-				if (sngisdn_cntrl_q931(signal_data->ftdm_span, AENA, SATRC) != FTDM_SUCCESS) {
-					ftdm_log(FTDM_LOG_INFO, "%s:Failed to enable q931 trace\n", signal_data->ftdm_span->name);
+				if (sngisdn_cntrl_q931(span, AENA, SATRC) != FTDM_SUCCESS) {
+					ftdm_log(FTDM_LOG_ERROR, "%s:Failed to enable q931 trace\n", span->name);
 				}
 			}
+			break;
+
+		case SNGISDN_STACK_TRACE_ENABLE:
+				if (sngisdn_debug_q931(AENA, SADBG) != FTDM_SUCCESS) {
+					ftdm_log(FTDM_LOG_ERROR, "%s:Failed to enable q931 trace\n", signal_data->ftdm_span->name);
+				} else {
+					ftdm_log(FTDM_LOG_INFO, "ISDN q931 stack trace enable\n");
+				}
+				if (sngisdn_debug_q921(AENA, SADBG) != FTDM_SUCCESS) {
+					ftdm_log(FTDM_LOG_ERROR, "%s:Failed to enable q921 trace\n", signal_data->ftdm_span->name);
+				} else {
+					ftdm_log(FTDM_LOG_INFO, "ISDN q921 stack trace enable\n");
+				}
+			break;
+
+		case SNGISDN_STACK_TRACE_DISABLE:
+				if (sngisdn_debug_q931(ADISIMM, SADBG) != FTDM_SUCCESS) {
+					ftdm_log(FTDM_LOG_ERROR, "%s:Failed to enable q931 trace\n", signal_data->ftdm_span->name);
+				} else {
+					ftdm_log(FTDM_LOG_INFO, "ISDN q931 stack trace disable\n");
+				}
+				if (sngisdn_debug_q921(ADISIMM, SADBG) != FTDM_SUCCESS) {
+					ftdm_log(FTDM_LOG_ERROR, "%s:Failed to enable q921 trace\n", signal_data->ftdm_span->name);
+				} else {
+					ftdm_log(FTDM_LOG_INFO, "ISDN q921 stack trace disable\n");
+				}
 			break;
 	}
 	return FTDM_SUCCESS;
 }
 
+ftdm_status_t sngisdn_debug_q931(uint8_t action, uint8_t subaction)
+{
+	InMngmt cntrl;
+	Pst pst;
+
+	/* initalize the post structure */
+	stack_pst_init(&pst);
+
+	/* insert the destination Entity */
+	pst.dstEnt = ENTIN;
+
+	/* initalize the control structure */
+	memset(&cntrl, 0, sizeof(cntrl));
+
+	/* initalize the control header */
+	stack_hdr_init(&cntrl.hdr);
+
+	cntrl.hdr.msgType = TCNTRL;		/* configuration */
+	cntrl.hdr.entId.ent = ENTIN;		/* entity */
+	cntrl.hdr.entId.inst = S_INST;		/* instance */
+	cntrl.hdr.elmId.elmnt = STGEN;		/* general configuration */
+
+	cntrl.t.cntrl.action = action;
+	cntrl.t.cntrl.subAction = subaction;
+
+	cntrl.t.cntrl.par.inDbg.dbgMask = 0xFFFF;
+
+	if(sng_isdn_q931_cntrl(&pst, &cntrl)) {
+		return FTDM_FAIL;
+	}
+	return FTDM_SUCCESS;
+}
+
+ftdm_status_t sngisdn_debug_q921(uint8_t action, uint8_t subaction)
+{
+	BdMngmt cntrl;
+	Pst pst;
+
+	/* initalize the post structure */
+	stack_pst_init(&pst);
+
+	/* insert the destination Entity */
+	pst.dstEnt = ENTLD;
+
+	/* initalize the control structure */
+	memset(&cntrl, 0, sizeof(cntrl));
+
+	/* initalize the control header */
+	stack_hdr_init(&cntrl.hdr);
+
+	cntrl.hdr.msgType = TCNTRL;		/* configuration */
+	cntrl.hdr.entId.ent = ENTLD;		/* entity */
+	cntrl.hdr.entId.inst = S_INST;		/* instance */
+	cntrl.hdr.elmId.elmnt = STGEN;		/* general configuration */
+
+	cntrl.t.cntrl.action = action;
+	cntrl.t.cntrl.subAction = subaction;
+
+	cntrl.t.cntrl.s.bdDbg.dbgMask = 0xFFFF;
+
+	if(sng_isdn_q921_cntrl(&pst, &cntrl)) {
+		return FTDM_FAIL;
+	}
+	return FTDM_SUCCESS;
+}
 
 ftdm_status_t sngisdn_cntrl_q931(ftdm_span_t *span, uint8_t action, uint8_t subaction)
 {
@@ -375,6 +496,60 @@ ftdm_status_t sngisdn_cntrl_q921(ftdm_span_t *span, uint8_t action, uint8_t suba
 	return FTDM_SUCCESS;
 }
 
+
+ftdm_status_t sngisdn_q921_dlsap_cntrl_req(ftdm_span_t *span, uint8_t action, uint8_t subaction)
+{
+	BdMngmt cntrl;
+        Pst pst;
+        sngisdn_span_data_t *signal_data = (sngisdn_span_data_t*)span->signal_data;
+
+        /* initalize the post structure */
+        stack_pst_init(&pst);
+
+        /* insert the destination Entity */
+        pst.dstEnt = ENTLD;
+
+        /* initalize the control structure */
+        memset(&cntrl, 0, sizeof(cntrl));
+
+        /* initalize the control header */
+        stack_hdr_init(&cntrl.hdr);
+        /* build control request */
+        cntrl.hdr.msgType          = TCNTRL;
+        cntrl.hdr.entId.ent        = ENTLD;
+        cntrl.hdr.entId.inst       = S_INST;
+
+#if (SMBD_LMINT3 || BD_LMINT3)
+        stack_resp_hdr_init(&cntrl.hdr);
+#endif /* _LMINT3 */
+
+        cntrl.hdr.elmId.elmnt      = STDLSAP;
+        cntrl.t.cntrl.action       = action;
+        cntrl.t.cntrl.subAction    = subaction;
+
+#if (SMBD_LMINT3 || BD_LMINT3)
+        cntrl.t.cntrl.lnkNmb       = signal_data->link_id;
+        cntrl.t.cntrl.sapi         = NOTUSED;
+        cntrl.t.cntrl.tei          = NOTUSED;
+#else /* _LMINT3 */
+        cntrl.hdr.elmId.elmntInst1 = signal_data->link_id;
+        cntrl.hdr.elmId.elmntInst2 = NOTUSED;
+        cntrl.hdr.elmId.elmntInst3 = NOTUSED;
+#endif /* _LMINT3 */
+
+        cntrl.t.cntrl.logInt       = NOTUSED;
+        cntrl.t.cntrl.trcLen       = NOTUSED;
+        if (action == AENA && subaction == SATRC) {
+                cntrl.t.cntrl.trcLen = -1; /* Trace the entire message buffer */
+        }
+
+        SGetDateTime(&(cntrl.t.cntrl.dt));
+        if(sng_isdn_q921_cntrl(&pst, &cntrl)) {
+                return FTDM_FAIL;
+        }
+
+	return FTDM_SUCCESS;
+}
 
 void stack_resp_hdr_init(Header *hdr)
 { 

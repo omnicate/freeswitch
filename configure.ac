@@ -2,12 +2,12 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.59])
-AC_INIT([freetdm], [0.1], [bugs@freeswitch.org])
+AC_INIT([freetdm], [pre-alpha], [bugs@freeswitch.org])
 AC_CONFIG_SRCDIR([src/ftdm_io.c])
 
 AC_CONFIG_AUX_DIR([build])
 AC_CONFIG_MACRO_DIR([build])
-AM_INIT_AUTOMAKE
+AM_INIT_AUTOMAKE([libfreetdm], [0.1])
 
 # >=automake-1.11
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
@@ -91,7 +91,7 @@ gnu)
 	COMP_VENDOR_CFLAGS="-ffast-math -Wall -Werror -Wunused-variable -Wwrite-strings -Wstrict-prototypes -Wmissing-prototypes -O0"
 	;;
 sun)
-	COMP_VENDOR_CFLAGS="-xc99=all -mt -xCC -xvpara"
+	COMP_VENDOR_CFLAGS="-xc99=all -mt -xCC -D__FUNCTION__=__func__ -xvpara"
 	if test "$enable_64" != "no" ; then
 		COMP_VENDOR_CFLAGS="-m64 $COMP_VENDOR_CFLAGS"
 	fi
@@ -119,6 +119,18 @@ if test "${enable_debug}" != "no"; then
 	fi
 fi
 AC_SUBST([COMP_VENDOR_CFLAGS])
+
+# set DYNAMIC_LIB_EXTEN
+# we should really be using libtool so we don't need to do this
+case "$host" in
+*cygwin* | *mingw*)
+	DYNAMIC_LIB_EXTEN="dll"
+	;;
+*)
+	DYNAMIC_LIB_EXTEN="so"
+	;;
+esac
+AC_SUBST([DYNAMIC_LIB_EXTEN])
 
 AC_CHECK_LIB([dl], [dlopen])
 AC_CHECK_LIB([pthread], [pthread_create])
@@ -168,6 +180,50 @@ AC_ARG_WITH([pritap],
 )
 HAVE_PRITAP="${enable_pritap}"
 AM_CONDITIONAL([HAVE_PRITAP],[test "${enable_pritap}" = "yes"])
+
+
+##
+# Sangoma ISDN Tapping module
+#
+HAVE_SNG_ISDNTAP="no"
+AC_MSG_RESULT([${as_nl}<<>> Sangoma ISDN Decoder Lib stack])
+AC_CHECK_LIB([sng_decoder], [sng_decoder_lib_init], [HAVE_SNG_ISDNTAP="yes"])
+AC_MSG_RESULT([checking whether to build ftmod_sangoma_isdn_tap... ${HAVE_SNG_ISDNTAP}])
+AM_CONDITIONAL([HAVE_SNG_ISDNTAP], [test "${HAVE_SNG_ISDNTAP}" = "yes"])
+
+if test "${HAVE_SNG_ISDNTAP}" = "yes"; then
+        if test "${build}" = "${host}"
+        then
+                case "${host}" in
+                x86_64-*)
+                        # X86_64 machines need additional flags when compiling against isdn_tap
+                        CFLAGS="$CFLAGS -DBIT_64 -DALIGN_64BIT"
+                        ;;
+                esac
+        fi
+fi
+
+##
+# Sangoma ISUP Tapping module
+#
+HAVE_SNG_ISUPTAP="no"
+AC_MSG_RESULT([${as_nl}<<>> Sangoma ISUP Decoder Lib stack])
+AC_CHECK_LIB([sng_decoder], [sng_decoder_lib_init], [HAVE_SNG_ISUPTAP="yes"])
+AC_MSG_RESULT([checking whether to build ftmod_sangoma_isup_tap... ${HAVE_SNG_ISUPTAP}])
+AM_CONDITIONAL([HAVE_SNG_ISUPTAP], [test "${HAVE_SNG_ISUPTAP}" = "yes"])
+
+if test "${HAVE_SNG_ISUPTAP}" = "yes"; then
+        if test "${build}" = "${host}"
+        then
+                case "${host}" in
+                x86_64-*)
+                        # X86_64 machines need additional flags when compiling against isup_tap
+                        CFLAGS="$CFLAGS -DBIT_64 -DALIGN_64BIT"
+                        ;;
+                esac
+        fi
+fi
+
 
 ##
 # OpenR2 stack
@@ -471,6 +527,9 @@ AC_MSG_RESULT([
 	ftmod_r2........................... ${HAVE_OPENR2}
 	ftmod_gsm.......................... ${HAVE_WAT}
 	ftmod_pritap....................... ${HAVE_PRITAP}
+	ftmod_sangoma_isdn_tap............. ${HAVE_SNG_ISDNTAP}
+	ftmod_sangoma_isup_tap............. ${HAVE_SNG_ISUPTAP}
+
   I/O:
 	ftmod_zt........................... yes
 	ftmod_wanpipe...................... ${HAVE_LIBSANGOMA}

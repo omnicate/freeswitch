@@ -30,10 +30,13 @@
  * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Contribuotrs:
+ * 		Kapil Gupta <kgupta@sangoma.com>
+ * 		Pushkar Singh <psingh@sangoma.com>
  */
 
 #include "ftmod_sangoma_isdn.h"
-//static void sngisdn_rcv_q931_ind_span(sngisdn_span_data_t *signal_data, InMngmt *status);
 
 void sngisdn_rcv_con_ind (int16_t suId, uint32_t suInstId, uint32_t spInstId, ConEvnt *conEvnt, int16_t dChan, uint8_t ces)
 {
@@ -91,7 +94,6 @@ void sngisdn_rcv_con_ind (int16_t suId, uint32_t suInstId, uint32_t spInstId, Co
 		
 		sngisdn_info = g_sngisdn_data.spans[dChan]->channels[bchan_no];
 	}
-	
 
 	ftdm_log_chan(sngisdn_info->ftdmchan, FTDM_LOG_INFO, "Received SETUP (suId:%u suInstId:%u spInstId:%u)\n", suId, suInstId, spInstId);
 	
@@ -665,7 +667,7 @@ void sngisdn_rcv_rst_ind (int16_t suId, Rst *rstEvnt, int16_t dChan, uint8_t ces
 }
 
 void sngisdn_rcv_rst_cfm (int16_t suId, Rst *rstEvnt, int16_t dChan, uint8_t ces, uint8_t evntType)
-{	
+{
 	sngisdn_span_data_t	*signal_data;
 	sngisdn_event_data_t *sngisdn_event = NULL;
 
@@ -823,38 +825,69 @@ void sngisdn_rcv_q931_ind(InMngmt *status)
 			int i;
 			sngisdn_nfas_data_t *nfas_data = NULL;
 			ftdm_log(FTDM_LOG_INFO, "[SNGISDN Q931] s%d: %s: %s(%d): %s(%d)\n",
-										status->t.usta.suId,
-	  									DECODE_LCM_CATEGORY(status->t.usta.alarm.category),
-										DECODE_LCM_EVENT(status->t.usta.alarm.event), status->t.usta.alarm.event,
-										DECODE_LCM_CAUSE(status->t.usta.alarm.cause), status->t.usta.alarm.cause);
+				 status->t.usta.suId,
+  				 DECODE_LCM_CATEGORY(status->t.usta.alarm.category),
+				 DECODE_LCM_EVENT(status->t.usta.alarm.event), status->t.usta.alarm.event,
+				 DECODE_LCM_CAUSE(status->t.usta.alarm.cause), status->t.usta.alarm.cause);
 
 			nfas_data = signal_data->nfas.trunk;
 
-			if (nfas_data && status->t.usta.alarm.event == LCM_EVENT_UP) {
-				for (i = 0; i < ftdm_array_len(nfas_data->spans); i++) {
-					if (nfas_data->spans[i] && nfas_data->spans[i]->nfas.sigchan == SNGISDN_NFAS_DCHAN_NONE) {
-
-						sngisdn_set_span_sig_status(nfas_data->spans[i]->ftdm_span, FTDM_SIG_STATE_UP);
-						sngisdn_set_span_avail_rate(nfas_data->spans[i]->ftdm_span, SNGISDN_AVAIL_UP);
-					}
-				}
-			}
-			
-			sngisdn_set_span_sig_status(ftdmspan, (status->t.usta.alarm.event == LCM_EVENT_UP) ? FTDM_SIG_STATE_UP : FTDM_SIG_STATE_DOWN);
-			sngisdn_set_span_avail_rate(ftdmspan, (status->t.usta.alarm.event == LCM_EVENT_UP) ? SNGISDN_AVAIL_UP: SNGISDN_AVAIL_PWR_SAVING);
-
-			if (nfas_data && status->t.usta.alarm.event == LCM_EVENT_DOWN) {
-				if (nfas_data->dchan->sigstatus == FTDM_SIG_STATE_DOWN &&
-				   ((nfas_data->backup && nfas_data->backup->sigstatus == FTDM_SIG_STATE_DOWN) || !nfas_data->backup)) {
-
+			if (nfas_data) {
+				if (status->t.usta.alarm.event == LCM_EVENT_UP) {
 					for (i = 0; i < ftdm_array_len(nfas_data->spans); i++) {
 						if (nfas_data->spans[i] && nfas_data->spans[i]->nfas.sigchan == SNGISDN_NFAS_DCHAN_NONE) {
 
-							sngisdn_set_span_sig_status(nfas_data->spans[i]->ftdm_span, FTDM_SIG_STATE_DOWN);
-							sngisdn_set_span_avail_rate(nfas_data->spans[i]->ftdm_span, SNGISDN_AVAIL_PWR_SAVING);
+							sngisdn_set_span_sig_status(nfas_data->spans[i]->ftdm_span, FTDM_SIG_STATE_UP);
+							sngisdn_set_span_avail_rate(nfas_data->spans[i]->ftdm_span, SNGISDN_AVAIL_UP);
 						}
 					}
 				}
+			
+				sngisdn_set_span_sig_status(ftdmspan, (status->t.usta.alarm.event == LCM_EVENT_UP) ? FTDM_SIG_STATE_UP : FTDM_SIG_STATE_DOWN);
+				sngisdn_set_span_avail_rate(ftdmspan, (status->t.usta.alarm.event == LCM_EVENT_UP) ? SNGISDN_AVAIL_UP: SNGISDN_AVAIL_PWR_SAVING);
+
+				if (status->t.usta.alarm.event == LCM_EVENT_DOWN) {
+					if (nfas_data->dchan->sigstatus == FTDM_SIG_STATE_DOWN &&
+							((nfas_data->backup && nfas_data->backup->sigstatus == FTDM_SIG_STATE_DOWN) || !nfas_data->backup)) {
+
+						for (i = 0; i < ftdm_array_len(nfas_data->spans); i++) {
+							if (nfas_data->spans[i] && nfas_data->spans[i]->nfas.sigchan == SNGISDN_NFAS_DCHAN_NONE) {
+
+								sngisdn_set_span_sig_status(nfas_data->spans[i]->ftdm_span, FTDM_SIG_STATE_DOWN);
+								sngisdn_set_span_avail_rate(nfas_data->spans[i]->ftdm_span, SNGISDN_AVAIL_PWR_SAVING);
+							}
+						}
+					}
+				}
+			} else if (status->t.usta.alarm.event == LCM_EVENT_UP) {
+				uint32_t chan_no = status->t.usta.evntParm[2];
+				ftdm_log(FTDM_LOG_INFO, "[SNGISDN Q931] s%d: %s: %s(%d): %s(%d)\n",
+						 status->t.usta.suId,
+								DECODE_LCM_CATEGORY(status->t.usta.alarm.category),
+								DECODE_LCM_EVENT(status->t.usta.alarm.event), status->t.usta.alarm.event,
+								DECODE_LCM_CAUSE(status->t.usta.alarm.cause), status->t.usta.alarm.cause);
+
+				if (chan_no) {
+					ftdm_channel_t *ftdmchan = ftdm_span_get_channel(ftdmspan, chan_no);
+					if (ftdmchan) {
+						sngisdn_set_chan_sig_status(ftdmchan, FTDM_SIG_STATE_UP);
+						sngisdn_set_chan_avail_rate(ftdmchan, SNGISDN_AVAIL_UP);
+					} else {
+						ftdm_log(FTDM_LOG_CRIT, "stack alarm event on invalid channel :%d\n", chan_no);
+					}
+				} else {
+					sngisdn_set_span_sig_status(ftdmspan, FTDM_SIG_STATE_UP);
+					sngisdn_set_span_avail_rate(ftdmspan, SNGISDN_AVAIL_UP);
+				}
+			} else {
+				ftdm_log(FTDM_LOG_WARNING, "[SNGISDN Q931] s%d: %s: %s(%d): %s(%d)\n",
+						 		status->t.usta.suId,
+								DECODE_LCM_CATEGORY(status->t.usta.alarm.category),
+								DECODE_LCM_EVENT(status->t.usta.alarm.event), status->t.usta.alarm.event,
+								DECODE_LCM_CAUSE(status->t.usta.alarm.cause), status->t.usta.alarm.cause);
+				
+				sngisdn_set_span_sig_status(ftdmspan, FTDM_SIG_STATE_DOWN);
+				sngisdn_set_span_avail_rate(ftdmspan, SNGISDN_AVAIL_PWR_SAVING);
 			}
 		}
 		break;

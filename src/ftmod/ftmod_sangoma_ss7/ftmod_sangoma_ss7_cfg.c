@@ -29,6 +29,10 @@
  * LIABILITY|WHETHER IN CONTRACT|STRICT LIABILITY|OR TORT (INCLUDING
  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE|EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Contributors:
+ * 		Kapil Gupta <kgupta@sangoma.com>
+ * 		Pushkar Singh <psingh@sangoma.com>
  */
 
 /* INCLUDE ********************************************************************/
@@ -42,7 +46,7 @@
 /******************************************************************************/
 
 /* PROTOTYPES *****************************************************************/
-int ft_to_sngss7_cfg_all(void);
+int ft_to_sngss7_cfg_all(ftdm_sngss7_operating_modes_e opr_mode, int reload);
 
 int ftmod_ss7_relay_gen_config(void);
 int ftmod_ss7_mtp1_gen_config(void);
@@ -51,16 +55,16 @@ int ftmod_ss7_mtp3_gen_config(void);
 int ftmod_ss7_isup_gen_config(void);
 int ftmod_ss7_cc_gen_config(void);
 
-int ftmod_ss7_mtp1_psap_config(int id);
+int ftmod_ss7_mtp1_psap_config(int id, ftdm_sngss7_operating_modes_e opr_mode);
 
 int ftmod_ss7_mtp2_dlsap_config(int id);
 
-int ftmod_ss7_mtp3_dlsap_config(int id);
+int ftmod_ss7_mtp3_dlsap_config(int id, ftdm_sngss7_operating_modes_e opr_mode);
 int ftmod_ss7_mtp3_nsap_config(int id);
 int ftmod_ss7_mtp3_linkset_config(int id);
 int ftmod_ss7_mtp3_route_config(int id);
 
-int ftmod_ss7_isup_nsap_config(int id);
+int ftmod_ss7_isup_nsap_config(int id, ftdm_sngss7_operating_modes_e opr_mode);
 int ftmod_ss7_isup_intf_config(int id);
 int ftmod_ss7_isup_ckt_config(int id);
 int ftmod_ss7_isup_isap_config(int id);
@@ -68,18 +72,31 @@ int ftmod_ss7_isup_isap_config(int id);
 int ftmod_ss7_cc_isap_config(int id);
 
 int ftmod_ss7_relay_chan_config(int id);
+/* To enable stack logging */
+void ftmod_ss7_enable_isup_logging(void);
 /******************************************************************************/
 
 /* FUNCTIONS ******************************************************************/
-int  ft_to_sngss7_cfg_all(void)
+void ftmod_ss7_enable_isup_logging(void) {
+	/* Enable Stack Logs */
+	ftmod_ss7_isup_debug(AENA);
+	ftmod_ss7_mtp3_debug(AENA);
+	ftmod_ss7_mtp2_debug(AENA);
+}
+/******************************************************************************/
+
+int  ft_to_sngss7_cfg_all(ftdm_sngss7_operating_modes_e opr_mode, int reload)
 {
 	int x = 0;
 	int ret = 0;
 
-	/* check if we have done gen_config already */
-	if (g_ftdm_sngss7_data.gen_config == SNG_GEN_CFG_STATUS_INIT) {
-		/* update the global gen_config so we don't do it again */
-		g_ftdm_sngss7_data.gen_config = SNG_GEN_CFG_STATUS_PENDING;
+	/* check if we have done gen_config valid for all operating mode already */
+	/**************************************************************************/
+	if ((SNG_GEN_CFG_STATUS_INIT == g_ftdm_sngss7_data.gen_config.cm) &&
+		(!reload)) {
+	/**************************************************************************/
+		/* update the common gen_config so we don't do it again */
+		g_ftdm_sngss7_data.gen_config.cm = SNG_GEN_CFG_STATUS_PENDING;
 
 		/* start of by checking if the license and sig file are valid */
 		if (sng_validate_license(g_ftdm_sngss7_data.cfg.license,
@@ -94,7 +111,7 @@ int  ft_to_sngss7_cfg_all(void)
 			/* set the desired procID value */
 			sng_set_procId((uint16_t)g_ftdm_sngss7_data.cfg.procId);
 		}
-			
+
 		/* start up the stack manager */
 		if (sng_isup_init_sm()) {
 			SS7_CRITICAL("Failed to start Stack Manager\n");
@@ -104,124 +121,245 @@ int  ft_to_sngss7_cfg_all(void)
 			sngss7_set_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_SM_STARTED);
 		}
 
-		/* check if the configuration had a Relay Channel */
-		if (sngss7_test_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_RY_PRESENT)) { 
-			/* start up the relay task */
-			if (sng_isup_init_relay()) {
-				SS7_CRITICAL("Failed to start Relay\n");
-				return 1;
-			} else {
-				SS7_INFO("Started Relay!\n");
-				sngss7_set_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_RY_STARTED);
-			}
+		g_ftdm_sngss7_data.gen_config.cm = SNG_GEN_CFG_STATUS_DONE;
+	/**************************************************************************/
+	}
+	/**************************************************************************/
 
-			/* run general configuration on the relay task */
-			if (ftmod_ss7_relay_gen_config()) {
-				SS7_CRITICAL("Relay General configuration FAILED!\n");
-				return 1;
-			} else {
-				SS7_INFO("Relay General configuration DONE\n");
-			}
+	/**************************************************************************/
+	/* check if the configuration had a Relay Channel and it is not been
+	 * initilized yet */
+	if ((sngss7_test_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_RY_PRESENT)) &&
+	    (SNG_GEN_CFG_STATUS_INIT == g_ftdm_sngss7_data.gen_config.relay) &&
+		(!reload)) {
+	/**************************************************************************/
+		/* update the relay gen_config so we don't do it again */
+		g_ftdm_sngss7_data.gen_config.relay = SNG_GEN_CFG_STATUS_PENDING;
 
-		} /* if (sngss7_test_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_RY)) */
+		/* start up the relay task */
+		if (sng_isup_init_relay()) {
+			SS7_CRITICAL("Failed to start Relay\n");
+			return 1;
+		} else {
+			SS7_INFO("Started Relay!\n");
+			sngss7_set_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_RY_STARTED);
+		}
 
-		if (sngss7_test_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_CC_PRESENT)) {
-			if (sng_isup_init_cc()) {
-				SS7_CRITICAL("Failed to start Call-Control\n");
-				return 1;
-			} else {
-				SS7_INFO("Started Call-Control!\n");
-				sngss7_set_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_CC_STARTED);
-			}
-			if (ftmod_ss7_cc_gen_config()) {
-				SS7_CRITICAL("CC General configuration FAILED!\n");
-				return 1;
-			} else {
-				SS7_INFO("CC General configuration DONE\n");
-			}
-			if (ftmod_ss7_cc_isap_config(1)) {
-				SS7_CRITICAL("CC ISAP configuration FAILED!\n");
-				return 1;
-			} else {
-				SS7_INFO("CC ISAP configuration DONE!\n");
-			}
-		} /* if (sngss7_test_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_CC)) */
+		/* run general configuration on the relay task */
+		if (ftmod_ss7_relay_gen_config()) {
+			SS7_CRITICAL("Relay General configuration FAILED!\n");
+			return 1;
+		} else {
+			SS7_INFO("Relay General configuration DONE\n");
+		}
 
-		if (sngss7_test_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_ISUP_PRESENT)) {
-			if (sng_isup_init_isup()) {
-				SS7_CRITICAL("Failed to start ISUP\n");
-				return 1;
-			} else {
-				SS7_INFO("Started ISUP!\n");
-				sngss7_set_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_ISUP_STARTED);
-			}	
-			if (ftmod_ss7_isup_gen_config()) {
-				SS7_CRITICAL("ISUP General configuration FAILED!\n");
-				return 1;
-			} else {
-				SS7_INFO("ISUP General configuration DONE\n");
-			}
-		} /* if (sngss7_test_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_ISUP)) */
+		g_ftdm_sngss7_data.gen_config.relay = SNG_GEN_CFG_STATUS_DONE;
+	/**************************************************************************/
+	} /* if ((sngss7_test_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_RY)) &&
+	         (SNG_GEN_CFG_STATUS_INIT == g_ftdm_sngss7_data.gen_config.relay)) */
+	/**************************************************************************/
 
-		if (sngss7_test_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_MTP3_PRESENT)) {
-			if (sng_isup_init_mtp3()) {
-				SS7_CRITICAL("Failed to start MTP3\n");
-				return 1;
-			} else {
-				SS7_INFO("Started MTP3!\n");
-				sngss7_set_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_MTP3_STARTED);
-			}
+	/**************************************************************************/
+	/* check if the configuration had a CC layer configuration and it is not been
+	 * initilized yet */
+	if ((sngss7_test_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_CC_PRESENT)) &&
+	    (SNG_GEN_CFG_STATUS_INIT == g_ftdm_sngss7_data.gen_config.cc) &&
+		(!reload)) {
+	/**************************************************************************/
+		/* update the cc gen_config so we don't do it again */
+		g_ftdm_sngss7_data.gen_config.cc = SNG_GEN_CFG_STATUS_PENDING;
 
-			if (ftmod_ss7_mtp3_gen_config()) {
-				SS7_CRITICAL("MTP3 General configuration FAILED!\n");
-				return 1;
-			} else {
-				SS7_INFO("MTP3 General configuration DONE\n");
-			}
-		} /* if (sngss7_test_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_MTP3)) */
-
-		if (sngss7_test_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_MTP2_PRESENT)) {
-			if (sng_isup_init_mtp2()) {
-				SS7_CRITICAL("Failed to start MTP2\n");
-				return 1;
-			} else {
-				SS7_INFO("Started MTP2!\n");
-				sngss7_set_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_MTP2_STARTED);
-			}
-			if (sng_isup_init_mtp1()) {
-				SS7_CRITICAL("Failed to start MTP1\n");
-				return 1;
-			} else {
-				SS7_INFO("Started MTP1!\n");
-				sngss7_set_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_MTP1_STARTED);
-			}
-			if (ftmod_ss7_mtp1_gen_config()) {
-				SS7_CRITICAL("MTP1 General configuration FAILED!\n");
-				return 1;
-			} else {
-				SS7_INFO("MTP1 General configuration DONE\n");
-			}
-			if (ftmod_ss7_mtp2_gen_config()) {
-				SS7_CRITICAL("MTP2 General configuration FAILED!\n");
-				return 1;
-			} else {
-				SS7_INFO("MTP2 General configuration DONE\n");
-			}
-		} /* if (sngss7_test_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_MTP2)) */
-
-		if(SNG_SS7_OPR_MODE_M2UA_SG == g_ftdm_operating_mode){
-			if(FTDM_SUCCESS != ftmod_ss7_m2ua_init()){
-				ftdm_log (FTDM_LOG_ERROR, "ftmod_ss7_m2ua_init FAILED \n");
-				return FTDM_FAIL;
+		if (sng_isup_init_cc()) {
+			SS7_CRITICAL("Failed to start Call-Control\n");
+			return 1;
+		} else {
+			SS7_INFO("Started Call-Control!\n");
+			sngss7_set_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_CC_STARTED);
+		}
+		if (ftmod_ss7_cc_gen_config()) {
+			SS7_CRITICAL("CC General configuration FAILED!\n");
+			return 1;
+		} else {
+			SS7_INFO("CC General configuration DONE\n");
+		}
+		x= 1;
+		if (!(g_ftdm_sngss7_data.cfg.isap[x].id != 0 &&
+		     (!(g_ftdm_sngss7_data.cfg.isap[x].flags & SNGSS7_CONFIGURED)))) {
+			if (sngss7_test_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_RY_PRESENT)) {
+				if (ftmod_ss7_cc_isap_config(x)) {
+					SS7_CRITICAL("CC ISAP configuration FAILED!\n");
+					return 1;
+				} else {
+					x = 0;
+					SS7_INFO("CC ISAP configuration DONE for relay!\n");
+				}
 			}
 		}
 
-		g_ftdm_sngss7_data.gen_config = SNG_GEN_CFG_STATUS_DONE;
+		g_ftdm_sngss7_data.gen_config.cc = SNG_GEN_CFG_STATUS_DONE;
+	/**************************************************************************/
+	} /* if ((sngss7_test_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_CC)) &&
+		 (SNG_GEN_CFG_STATUS_INIT == g_ftdm_sngss7_data.gen_config.cc)) */
+	/**************************************************************************/
 
-	} /* if (!(g_ftdm_sngss7_data.gen_config)) */
+	/**************************************************************************/
+	/* check if the configuration had ISUP layer configuration and it is not been
+	 * initilized yet */
+	if ((sngss7_test_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_ISUP_PRESENT)) &&
+	    (SNG_GEN_CFG_STATUS_INIT == g_ftdm_sngss7_data.gen_config.isup) &&
+		(!reload)) {
+        /**************************************************************************/
+                /* update the isup gen_config so we don't do it again */
+		g_ftdm_sngss7_data.gen_config.isup = SNG_GEN_CFG_STATUS_PENDING;
+
+		if (sng_isup_init_isup()) {
+			SS7_CRITICAL("Failed to start ISUP\n");
+			return 1;
+		} else {
+			SS7_INFO("Started ISUP!\n");
+			sngss7_set_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_ISUP_STARTED);
+		}
+		if (ftmod_ss7_isup_gen_config()) {
+			SS7_CRITICAL("ISUP General configuration FAILED!\n");
+			return 1;
+		} else {
+			SS7_INFO("ISUP General configuration DONE\n");
+		}
+
+		g_ftdm_sngss7_data.gen_config.isup = SNG_GEN_CFG_STATUS_DONE;
+        /**************************************************************************/
+	} /* if ((sngss7_test_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_ISUP)) &&
+	     (SNG_GEN_CFG_STATUS_INIT == g_ftdm_sngss7_data.gen_config.isup)) */
+        /**************************************************************************/
+
+        /**************************************************************************/
+	/* check if the configuration had MTP3 layer configuration and it is not been
+	 * initilized yet */
+	if ((sngss7_test_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_MTP3_PRESENT)) &&
+	    (SNG_GEN_CFG_STATUS_INIT == g_ftdm_sngss7_data.gen_config.mtp3) &&
+		(!reload)) {
+	/**************************************************************************/
+		/* update the mtp3 gen_config so we don't do it again */
+		g_ftdm_sngss7_data.gen_config.mtp3 = SNG_GEN_CFG_STATUS_PENDING;
+
+		if (sng_isup_init_mtp3()) {
+			SS7_CRITICAL("Failed to start MTP3\n");
+			return 1;
+		} else {
+			SS7_INFO("Started MTP3!\n");
+			sngss7_set_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_MTP3_STARTED);
+		}
+
+		if (ftmod_ss7_mtp3_gen_config()) {
+			SS7_CRITICAL("MTP3 General configuration FAILED!\n");
+			return 1;
+		} else {
+			SS7_INFO("MTP3 General configuration DONE\n");
+		}
+
+		g_ftdm_sngss7_data.gen_config.mtp3 = SNG_GEN_CFG_STATUS_DONE;
+	/**************************************************************************/
+	} /* if ((sngss7_test_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_MTP3)) &&
+		 (SNG_GEN_CFG_STATUS_INIT == g_ftdm_sngss7_data.gen_config.mtp3)) */
+	/**************************************************************************/
+
+	/**************************************************************************/
+	/* check if the configuration had MTP1/MTP2 layer configuration and it is
+	 * not initilized yet */
+	if ((sngss7_test_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_MTP2_PRESENT)) &&
+	    (SNG_GEN_CFG_STATUS_INIT == g_ftdm_sngss7_data.gen_config.mtp) &&
+		(!reload)) {
+	/**************************************************************************/
+		/* update the mtp gen_config so we don't do it again */
+		g_ftdm_sngss7_data.gen_config.mtp = SNG_GEN_CFG_STATUS_PENDING;
+
+		if (sng_isup_init_mtp2()) {
+			SS7_CRITICAL("Failed to start MTP2\n");
+			return 1;
+		} else {
+			SS7_INFO("Started MTP2!\n");
+			sngss7_set_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_MTP2_STARTED);
+		}
+		if (sng_isup_init_mtp1()) {
+			SS7_CRITICAL("Failed to start MTP1\n");
+			return 1;
+		} else {
+			SS7_INFO("Started MTP1!\n");
+			sngss7_set_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_MTP1_STARTED);
+		}
+		if (ftmod_ss7_mtp1_gen_config()) {
+			SS7_CRITICAL("MTP1 General configuration FAILED!\n");
+			return 1;
+		} else {
+			SS7_INFO("MTP1 General configuration DONE\n");
+		}
+		if (ftmod_ss7_mtp2_gen_config()) {
+			SS7_CRITICAL("MTP2 General configuration FAILED!\n");
+			return 1;
+		} else {
+			SS7_INFO("MTP2 General configuration DONE\n");
+		}
+
+		g_ftdm_sngss7_data.gen_config.mtp = SNG_GEN_CFG_STATUS_DONE;
+	/**************************************************************************/
+	} /* if ((sngss7_test_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_MTP2)) &&
+		 (SNG_GEN_CFG_STATUS_INIT == g_ftdm_sngss7_data.gen_config.mtp)) */
+	/**************************************************************************/
+
+	/**************************************************************************/
+	if ((SNG_SS7_OPR_MODE_M2UA_SG == opr_mode) ||
+	    (SNG_SS7_OPR_MODE_M2UA_ASP == opr_mode)) {
+	/**************************************************************************/
+
+		/**************************************************************************/
+		/* check if m2ua general configuration is already done */
+		if (SNG_GEN_CFG_STATUS_INIT == g_ftdm_sngss7_data.gen_config.m2ua) {
+		/**************************************************************************/
+			/* update the mtp gen_config so we don't do it again */
+			g_ftdm_sngss7_data.gen_config.m2ua = SNG_GEN_CFG_STATUS_PENDING;
+
+			if (FTDM_SUCCESS != ftmod_ss7_m2ua_init(opr_mode)) {
+				ftdm_log (FTDM_LOG_ERROR, "ftmod_ss7_m2ua_init FAILED \n");
+				return FTDM_FAIL;
+			}
+
+			g_ftdm_sngss7_data.gen_config.m2ua = SNG_GEN_CFG_STATUS_DONE;
+		/**************************************************************************/
+		}
+		/**************************************************************************/
+	/**************************************************************************/
+	} else if ((SNG_SS7_OPR_MODE_M3UA_SG == opr_mode) ||
+		   (SNG_SS7_OPR_MODE_M3UA_ASP == opr_mode)) {
+	/**************************************************************************/
+
+		/**************************************************************************/
+		/* check if m3ua general configuration is already done */
+		if (SNG_GEN_CFG_STATUS_INIT == g_ftdm_sngss7_data.gen_config.m3ua) {
+		/**************************************************************************/
+			/* update the m3ua gen_config so we don't do it again */
+			g_ftdm_sngss7_data.gen_config.m3ua = SNG_GEN_CFG_STATUS_PENDING;
+
+			if (FTDM_SUCCESS != ftmod_ss7_m3ua_init(opr_mode)) {
+				ftdm_log (FTDM_LOG_ERROR, "ftmod_ss7_m2ua_init FAILED \n");
+				return FTDM_FAIL;
+			}
+
+			g_ftdm_sngss7_data.gen_config.m3ua = SNG_GEN_CFG_STATUS_DONE;
+		/**************************************************************************/
+		}
+		/**************************************************************************/
+	/**************************************************************************/
+	}
+	/**************************************************************************/
+
+	if (!(sngss7_test_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_RY_PRESENT))) {
+		if ((g_ftdm_sngss7_data.stack_logging_enable) && (SNG_SS7_OPR_MODE_ISUP == opr_mode)) {
+			ftmod_ss7_enable_isup_logging();
+		}
+	}
 
 
-	if (g_ftdm_sngss7_data.gen_config != SNG_GEN_CFG_STATUS_DONE) {
+	if (ftmod_ss7_check_gen_config_status()) {
 			SS7_CRITICAL("General configuration FAILED!\n");
 			return 1;
 	}
@@ -230,16 +368,23 @@ int  ft_to_sngss7_cfg_all(void)
 	while (x < (MAX_MTP_LINKS)) {
 		/* check if this link has been configured already */
 		if ((g_ftdm_sngss7_data.cfg.mtp1Link[x].id != 0) &&
-			(!(g_ftdm_sngss7_data.cfg.mtp1Link[x].flags & SNGSS7_CONFIGURED))) {
+			(!(g_ftdm_sngss7_data.cfg.mtp1Link[x].flags & SNGSS7_CONFIGURED) ||
+			(g_ftdm_sngss7_data.cfg.mtp1Link[x].reload == FTDM_TRUE))) {
 
 			/* configure mtp1 */
-			if (ftmod_ss7_mtp1_psap_config(x)) {
-				SS7_CRITICAL("MTP1 PSAP %d configuration FAILED!\n", x);
+			if (ftmod_ss7_mtp1_psap_config(x, opr_mode)) {
+				SS7_CRITICAL("MTP1 PSAP %d %s FAILED!\n",
+					     x,
+					     g_ftdm_sngss7_data.cfg.mtp1Link[x].reload == FTDM_TRUE ? "Reconfiguration" : "configuration");
 				return 1;;
 			} else {
-				SS7_INFO("MTP1 PSAP %d configuration DONE!\n", x);
+				SS7_INFO("MTP1 PSAP %d %s successfully DONE!\n",
+					 x,
+					 g_ftdm_sngss7_data.cfg.mtp1Link[x].reload == FTDM_TRUE ? "Reconfiguration" : "configuration");
 			}
 
+			/* unset reconfiguration flag if already set */
+			g_ftdm_sngss7_data.cfg.mtp1Link[x].reload = FTDM_FALSE;
 			/* set the SNGSS7_CONFIGURED flag */
 			g_ftdm_sngss7_data.cfg.mtp1Link[x].flags |= SNGSS7_CONFIGURED;
 		}
@@ -250,16 +395,23 @@ int  ft_to_sngss7_cfg_all(void)
 	while (x < (MAX_MTP_LINKS)) {
 		/* check if this link has been configured already */
 		if ((g_ftdm_sngss7_data.cfg.mtp2Link[x].id != 0) &&
-			(!(g_ftdm_sngss7_data.cfg.mtp2Link[x].flags & SNGSS7_CONFIGURED))) {
+			(!(g_ftdm_sngss7_data.cfg.mtp2Link[x].flags & SNGSS7_CONFIGURED) ||
+			(g_ftdm_sngss7_data.cfg.mtp2Link[x].reload == FTDM_TRUE))) {
 
 			/* configure mtp2 */
 			if (ftmod_ss7_mtp2_dlsap_config(x)) {
-				SS7_CRITICAL("MTP2 DLSAP %d configuration FAILED!\n",x);
+				SS7_CRITICAL("MTP2 DLSAP %d %s FAILED!\n",
+					     x,
+					     g_ftdm_sngss7_data.cfg.mtp2Link[x].reload == FTDM_TRUE ? "Reconfiguration" : "configuration");
 				return 1;;
 			} else {
-				SS7_INFO("MTP2 DLSAP %d configuration DONE!\n", x);
+				SS7_INFO("MTP2 DLSAP %d %s successfully DONE!\n",
+					 x,
+					 g_ftdm_sngss7_data.cfg.mtp2Link[x].reload == FTDM_TRUE ? "Reconfiguration" : "configuration");
 			}
 
+			/* unset reconfiguration flag if already set */
+			g_ftdm_sngss7_data.cfg.mtp2Link[x].reload = FTDM_FALSE;
 			/* set the SNGSS7_CONFIGURED flag */
 			g_ftdm_sngss7_data.cfg.mtp2Link[x].flags |= SNGSS7_CONFIGURED;
 		}
@@ -272,16 +424,23 @@ int  ft_to_sngss7_cfg_all(void)
 			while (x < (MAX_MTP_LINKS)) {
 				/* check if this link has been configured already */
 				if ((g_ftdm_sngss7_data.cfg.mtp3Link[x].id != 0) &&
-						(!(g_ftdm_sngss7_data.cfg.mtp3Link[x].flags & SNGSS7_CONFIGURED))) {
+					(!(g_ftdm_sngss7_data.cfg.mtp3Link[x].flags & SNGSS7_CONFIGURED) ||
+					(g_ftdm_sngss7_data.cfg.mtp3Link[x].reload == FTDM_TRUE))) {
 
 					/* configure mtp3 */
-					if (ftmod_ss7_mtp3_dlsap_config(x)) {
-						SS7_CRITICAL("MTP3 DLSAP %d configuration FAILED!\n", x);
+					if (ftmod_ss7_mtp3_dlsap_config(x, opr_mode)) {
+						SS7_CRITICAL("MTP3 DLSAP %d %s FAILED!\n",
+							     x,
+							     g_ftdm_sngss7_data.cfg.mtp3Link[x].reload == FTDM_TRUE ? "Reconfiguration" : "configuration");
 						return 1;;
 					} else {
-						SS7_INFO("MTP3 DLSAP %d configuration DONE!\n", x);
+						SS7_INFO("MTP3 DLSAP %d %s successfully DONE!\n",
+							 x,
+							 g_ftdm_sngss7_data.cfg.mtp3Link[x].reload == FTDM_TRUE ? "Reconfiguration" : "configuration");
 					}
 
+					/* unset reconfiguration flag if already set */
+					g_ftdm_sngss7_data.cfg.mtp3Link[x].reload = FTDM_FALSE;
 					/* set the SNGSS7_CONFIGURED flag */
 					g_ftdm_sngss7_data.cfg.mtp3Link[x].flags |= SNGSS7_CONFIGURED;
 				}
@@ -290,29 +449,58 @@ int  ft_to_sngss7_cfg_all(void)
 			} /* while (x < (MAX_MTP_LINKS+1)) */
 
 		/* in M2UA_SG mode there will not be any MTP3 layer */
-			if(SNG_SS7_OPR_MODE_M2UA_SG != g_ftdm_operating_mode){
+			if(SNG_SS7_OPR_MODE_M2UA_SG != opr_mode){
 				x = 1;
 				while (x < (MAX_NSAPS)) {
 					/* check if this link has been configured already */
+					/*
+					 * NOTE: It is possible that NSG is configured for multiple SS7 operating mode
+					 * 	 For e.g.: When NSG is configured for M3UA SG as well as ISUP operating
+					 * 	 mode. In such case we must configure nsap based on the operating mode
+					 * 	 for which nsap is configured and also we must check is nsap is configured
+					 * 	 either for MTP3 or ISUP then and only then flag must be marked as
+					 * 	 SNGSS7_CONFIGURED else we must wait for the right moment to configure
+					 * 	 nsap for proper operating mode
+					 */
 					if ((g_ftdm_sngss7_data.cfg.nsap[x].id != 0) &&
-							(!(g_ftdm_sngss7_data.cfg.nsap[x].flags & SNGSS7_CONFIGURED))) {
+							(!(g_ftdm_sngss7_data.cfg.nsap[x].flags & SNGSS7_CONFIGURED) ||
+							(g_ftdm_sngss7_data.cfg.nsap[x].reload == FTDM_TRUE)) &&
+							(g_ftdm_sngss7_data.cfg.nsap[x].opr_mode == opr_mode)) {
 
-						ret = ftmod_ss7_mtp3_nsap_config(x);
-						if (ret) {
-							SS7_CRITICAL("MTP3 NSAP %d configuration FAILED!(%s)\n", x, DECODE_LCM_REASON(ret));
-							return 1;
-						} else {
-							SS7_INFO("MTP3 NSAP %d configuration DONE!\n", x);
+						if (SNG_SS7_OPR_MODE_M3UA_ASP != opr_mode) {
+							ret = ftmod_ss7_mtp3_nsap_config(x);
+							if (ret) {
+								SS7_CRITICAL("MTP3 NSAP %d %s FAILED!(%s)\n",
+									     x,
+										 g_ftdm_sngss7_data.cfg.nsap[x].reload == FTDM_TRUE ? "Reconfiguration" : "configuration",
+										DECODE_LCM_REASON(ret));
+								return 1;
+							} else {
+								SS7_INFO("MTP3 NSAP %d %s successfully DONE!\n",
+										 x,
+										 g_ftdm_sngss7_data.cfg.nsap[x].reload == FTDM_TRUE ? "Reconfiguration" : "configuration");
+							}
 						}
 
-						ret = ftmod_ss7_isup_nsap_config(x);
-						if (ret) {
-							SS7_CRITICAL("ISUP NSAP %d configuration FAILED!(%s)\n", x, DECODE_LCM_REASON(ret));
-							return 1;
-						} else {
-							SS7_INFO("ISUP NSAP %d configuration DONE!\n", x);
+						if ((SNG_SS7_OPR_MODE_ISUP == opr_mode) ||
+						    (SNG_SS7_OPR_MODE_M3UA_ASP == opr_mode)) {
+
+							ret = ftmod_ss7_isup_nsap_config(x, opr_mode);
+							if (ret) {
+								SS7_CRITICAL("ISUP NSAP %d %s FAILED!(%s)\n",
+											 x,
+											 g_ftdm_sngss7_data.cfg.nsap[x].reload == FTDM_TRUE ? "Reconfiguration" : "configuration",
+											 DECODE_LCM_REASON(ret));
+								return 1;
+							} else {
+								SS7_INFO("ISUP NSAP %d %s successfully DONE!\n",
+										 x,
+										 g_ftdm_sngss7_data.cfg.nsap[x].reload == FTDM_TRUE ? "Reconfiguration" : "configuration");
+							}
 						}
 
+						/* unset reconfiguration flag if already set */
+						g_ftdm_sngss7_data.cfg.nsap[x].reload = FTDM_FALSE;
 						/* set the SNGSS7_CONFIGURED flag */
 						g_ftdm_sngss7_data.cfg.nsap[x].flags |= SNGSS7_CONFIGURED;
 					} /* if !SNGSS7_CONFIGURED */
@@ -322,20 +510,29 @@ int  ft_to_sngss7_cfg_all(void)
 			}
 
 		/* in M2UA_SG mode there will not be any MTP3 layer */
-		if(SNG_SS7_OPR_MODE_M2UA_SG != g_ftdm_operating_mode){
+		 if ((SNG_SS7_OPR_MODE_M2UA_SG != opr_mode) &&
+			( SNG_SS7_OPR_MODE_M3UA_ASP != opr_mode )) {
+
 			x = 1;
 			while (x < (MAX_MTP_LINKSETS+1)) {
 				/* check if this link has been configured already */
 				if ((g_ftdm_sngss7_data.cfg.mtpLinkSet[x].id != 0) &&
-						(!(g_ftdm_sngss7_data.cfg.mtpLinkSet[x].flags & SNGSS7_CONFIGURED))) {
+					(!(g_ftdm_sngss7_data.cfg.mtpLinkSet[x].flags & SNGSS7_CONFIGURED) ||
+					(g_ftdm_sngss7_data.cfg.mtpLinkSet[x].reload == FTDM_TRUE))) {
 
 					if (ftmod_ss7_mtp3_linkset_config(x)) {
-						SS7_CRITICAL("MTP3 LINKSET %d configuration FAILED!\n", x);
+						SS7_CRITICAL("MTP3 LINKSET %d %s FAILED!\n",
+								x,
+								g_ftdm_sngss7_data.cfg.mtpLinkSet[x].reload == FTDM_TRUE ? "Reconfiguration" : "configuration");
 						return 1;
 					} else {
-						SS7_INFO("MTP3 LINKSET %d configuration DONE!\n", x);
+						SS7_INFO("MTP3 LINKSET %d %s successfully DONE!\n",
+								x,
+								g_ftdm_sngss7_data.cfg.mtpLinkSet[x].reload == FTDM_TRUE ? "Reconfiguration" : "configuration");
 					}
 
+					/* unset reconfiguration flag if already set */
+					g_ftdm_sngss7_data.cfg.mtpLinkSet[x].reload = FTDM_FALSE;
 					/* set the SNGSS7_CONFIGURED flag */
 					g_ftdm_sngss7_data.cfg.mtpLinkSet[x].flags |= SNGSS7_CONFIGURED;
 				} /* if !SNGSS7_CONFIGURED */
@@ -345,20 +542,58 @@ int  ft_to_sngss7_cfg_all(void)
 		}
 
 		/* in M2UA_SG mode there will not be any MTP3 layer */
-		if(SNG_SS7_OPR_MODE_M2UA_SG != g_ftdm_operating_mode){
+		 if ((SNG_SS7_OPR_MODE_M2UA_SG != opr_mode) &&
+			(SNG_SS7_OPR_MODE_M3UA_ASP != opr_mode)) {
+
 			x = 1;
 			while (x < (MAX_MTP_ROUTES+1)) {
+				/* Configure MTP routes */
 				/* check if this link has been configured already */
 				if ((g_ftdm_sngss7_data.cfg.mtpRoute[x].id != 0) &&
-						(!(g_ftdm_sngss7_data.cfg.mtpRoute[x].flags & SNGSS7_CONFIGURED))) {
+					(!(g_ftdm_sngss7_data.cfg.mtpRoute[x].flags & SNGSS7_CONFIGURED) ||
+					(g_ftdm_sngss7_data.cfg.mtpRoute[x].reload == FTDM_TRUE))) {
 
 					if (ftmod_ss7_mtp3_route_config(x)) {
-						SS7_CRITICAL("MTP3 ROUTE %d configuration FAILED!\n", x);
+						SS7_CRITICAL("MTP3 ROUTE %d %s FAILED!\n",
+								x,
+								g_ftdm_sngss7_data.cfg.mtpRoute[x].reload == FTDM_TRUE ? "Reconfiguration" : "configuration");
 						return 1;
 					} else {
-						SS7_INFO("MTP3 ROUTE %d configuration DONE!\n",x);
+						SS7_INFO("MTP3 ROUTE %d %s successfully DONE!\n",
+							x,
+							g_ftdm_sngss7_data.cfg.mtpRoute[x].reload == FTDM_TRUE ? "Reconfiguration" : "configuration");
 					}
 
+					/* unset reconfiguration flag if already set */
+					g_ftdm_sngss7_data.cfg.mtpRoute[x].reload = FTDM_FALSE;
+					/* set the SNGSS7_CONFIGURED flag */
+					g_ftdm_sngss7_data.cfg.mtpRoute[x].flags |= SNGSS7_CONFIGURED;
+				} /* if !SNGSS7_CONFIGURED */
+
+				x++;
+			} /* while (x < (MAX_MTP_ROUTES+1)) */
+
+			/* Configure self route */
+			x = MAX_MTP_ROUTES + 1;
+			while ((x > MAX_MTP_ROUTES) && (x < (MAX_MTP_ROUTES + SELF_ROUTE_INDEX + 1))) {
+				/* check if this link has been configured already */
+				if ((g_ftdm_sngss7_data.cfg.mtpRoute[x].id != 0) &&
+				    (!(g_ftdm_sngss7_data.cfg.mtpRoute[x].flags & SNGSS7_CONFIGURED) ||
+				     (g_ftdm_sngss7_data.cfg.mtpRoute[x].reload == FTDM_TRUE))) {
+
+					if (ftmod_ss7_mtp3_route_config(x)) {
+						SS7_CRITICAL("MTP3 ROUTE %d %s FAILED!\n",
+							     x,
+							     g_ftdm_sngss7_data.cfg.mtpRoute[x].reload == FTDM_TRUE ? "Reconfiguration" : "configuration");
+						return 1;
+					} else {
+						SS7_INFO("MTP3 ROUTE %d %s successfully DONE!\n",
+							 x,
+							 g_ftdm_sngss7_data.cfg.mtpRoute[x].reload == FTDM_TRUE ? "Reconfiguration" : "configuration");
+					}
+
+					/* unset reconfiguration flag if already set */
+					g_ftdm_sngss7_data.cfg.mtpRoute[x].reload = FTDM_FALSE;
 					/* set the SNGSS7_CONFIGURED flag */
 					g_ftdm_sngss7_data.cfg.mtpRoute[x].flags |= SNGSS7_CONFIGURED;
 				} /* if !SNGSS7_CONFIGURED */
@@ -371,19 +606,36 @@ int  ft_to_sngss7_cfg_all(void)
 		while (x < (MAX_ISAPS)) {
 			/* check if this link has been configured already */
 			if ((g_ftdm_sngss7_data.cfg.isap[x].id != 0) &&
-				(!(g_ftdm_sngss7_data.cfg.isap[x].flags & SNGSS7_CONFIGURED))) {
-				
+				(!(g_ftdm_sngss7_data.cfg.isap[x].flags & SNGSS7_CONFIGURED) ||
+				(g_ftdm_sngss7_data.cfg.isap[x].reload == FTDM_TRUE))) {
+
 				if (ftmod_ss7_isup_isap_config(x)) {
-					SS7_CRITICAL("ISUP ISAP %d configuration FAILED!\n", x);
+					SS7_CRITICAL("ISUP ISAP %d %s FAILED!\n",
+								x,
+								g_ftdm_sngss7_data.cfg.isap[x].reload == FTDM_TRUE ? "Reconfiguration" : "configuration");
 					return 1;
 				} else {
-					SS7_INFO("ISUP ISAP %d configuration DONE!\n", x);
+					SS7_INFO("ISUP ISAP %d %s successfully DONE!\n",
+							x,
+							g_ftdm_sngss7_data.cfg.isap[x].reload == FTDM_TRUE ? "Reconfiguration" : "configuration");
+				}
+				if (ftmod_ss7_cc_isap_config(x)) {
+					SS7_CRITICAL("CC ISAP %d %s FAILED!\n",
+								x,
+								g_ftdm_sngss7_data.cfg.isap[x].reload == FTDM_TRUE ? "Reconfiguration" : "configuration");
+					return 1;
+				} else {
+					SS7_INFO("CC ISAP %d %s successfully DONE!\n",
+							x,
+							g_ftdm_sngss7_data.cfg.isap[x].reload == FTDM_TRUE ? "Reconfiguration" : "configuration");
 				}
 
+				/* unset reconfiguration flag if already set */
+				g_ftdm_sngss7_data.cfg.isap[x].reload = FTDM_FALSE;
 				/* set the SNGSS7_CONFIGURED flag */
 				g_ftdm_sngss7_data.cfg.isap[x].flags |= SNGSS7_CONFIGURED;
 			} /* if !SNGSS7_CONFIGURED */
-			
+
 			x++;
 		} /* while (x < (MAX_ISAPS)) */
 
@@ -392,17 +644,24 @@ int  ft_to_sngss7_cfg_all(void)
 			while (x < (MAX_ISUP_INFS)) {
 				/* check if this link has been configured already */
 				if ((g_ftdm_sngss7_data.cfg.isupIntf[x].id != 0) &&
-					(!(g_ftdm_sngss7_data.cfg.isupIntf[x].flags & SNGSS7_CONFIGURED))) {
+					(!(g_ftdm_sngss7_data.cfg.isupIntf[x].flags & SNGSS7_CONFIGURED) ||
+					(g_ftdm_sngss7_data.cfg.isupIntf[x].reload == FTDM_TRUE))) {
 		
 					if (ftmod_ss7_isup_intf_config(x)) {
-						SS7_CRITICAL("ISUP INTF %d configuration FAILED!\n", x);
+						SS7_CRITICAL("ISUP INTF %d %s FAILED!\n",
+									x,
+									g_ftdm_sngss7_data.cfg.isupIntf[x].reload == FTDM_TRUE ? "Reconfiguration" : "configuration");
 						return 1;
 					} else {
-						SS7_INFO("ISUP INTF %d configuration DONE!\n", x);
+						SS7_INFO("ISUP INTF %d %s successfully DONE!\n",
+								x,
+								g_ftdm_sngss7_data.cfg.isupIntf[x].reload == FTDM_TRUE ? "Reconfiguration" : "configuration");
 						/* set the interface to paused */
 						sngss7_set_flag(&g_ftdm_sngss7_data.cfg.isupIntf[x], SNGSS7_PAUSED);
 					}
-		
+
+					/* unset reconfiguration flag if already set */
+					g_ftdm_sngss7_data.cfg.isupIntf[x].reload = FTDM_FALSE;
 					/* set the SNGSS7_CONFIGURED flag */
 					g_ftdm_sngss7_data.cfg.isupIntf[x].flags |= SNGSS7_CONFIGURED;
 				} /* if !SNGSS7_CONFIGURED */
@@ -411,7 +670,10 @@ int  ft_to_sngss7_cfg_all(void)
 			} /* while (x < (MAX_ISUP_INFS)) */
 		} /* if (sngss7_test_flag(&g_ftdm_sngss7_data.cfg, SNGSS7_ISUP)) */
 
-		x = (g_ftdm_sngss7_data.cfg.procId * 1000) + 1;
+		/* Donot take the circuit start CIC value from CCSpan as this is a configuration request
+		 * and while configuring/reconfiguring circuits circuit must always be start from circuit
+		 * start range */
+		x = ftmod_ss7_get_circuit_start_range(g_ftdm_sngss7_data.cfg.procId);
 		while (g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0) {
 
 			if (g_ftdm_sngss7_data.cfg.procId > 1) {
@@ -420,15 +682,22 @@ int  ft_to_sngss7_cfg_all(void)
 
 			/* check if this link has been configured already */
 			if ((g_ftdm_sngss7_data.cfg.isupCkt[x].id != 0) &&
-				(!(g_ftdm_sngss7_data.cfg.isupCkt[x].flags & SNGSS7_CONFIGURED))) {
+				(!(g_ftdm_sngss7_data.cfg.isupCkt[x].flags & SNGSS7_CONFIGURED) ||
+				(g_ftdm_sngss7_data.cfg.isupCkt[x].reload == FTDM_TRUE))) {
 
 				if (ftmod_ss7_isup_ckt_config(x)) {
-					SS7_CRITICAL("ISUP CKT %d configuration FAILED!\n", x);
+					SS7_CRITICAL("ISUP CKT %d %s FAILED!\n",
+								x,
+								g_ftdm_sngss7_data.cfg.isupCkt[x].reload == FTDM_TRUE ? "Reconfiguration" : "configuration");
 					return 1;
 				} else {
-					SS7_INFO("ISUP CKT %d configuration DONE!\n", x);
+					SS7_INFO("ISUP CKT %d %s successfully DONE!\n",
+							x,
+							g_ftdm_sngss7_data.cfg.isupCkt[x].reload == FTDM_TRUE ? "Reconfiguration" : "configuration");
 				}
 
+				/* unset reconfiguration flag if already set */
+				g_ftdm_sngss7_data.cfg.isupCkt[x].reload = FTDM_FALSE;
 				/* set the SNGSS7_CONFIGURED flag */
 				g_ftdm_sngss7_data.cfg.isupCkt[x].flags |= SNGSS7_CONFIGURED;
 			} /* if !SNGSS7_CONFIGURED */
@@ -459,10 +728,17 @@ int  ft_to_sngss7_cfg_all(void)
 	} /* while (x < (MAX_RELAY_CHANNELS)) */
 
 
-	if(SNG_SS7_OPR_MODE_M2UA_SG == g_ftdm_operating_mode){
-		return ftmod_ss7_m2ua_cfg();
+	if ((SNG_SS7_OPR_MODE_M2UA_SG  == opr_mode) ||
+			(SNG_SS7_OPR_MODE_M2UA_ASP == opr_mode)) {
+		return ftmod_ss7_m2ua_cfg(opr_mode);
 	}
-	
+
+	if ((SNG_SS7_OPR_MODE_M3UA_SG  == opr_mode) ||
+			(SNG_SS7_OPR_MODE_M3UA_ASP == opr_mode)) {
+		return ftmod_ss7_m3ua_cfg(opr_mode);
+	}
+
+
 	return 0;
 }
 
@@ -626,10 +902,9 @@ int ftmod_ss7_mtp3_gen_config(void)
 	cfg.t.cfg.s.snGen.extCmbndLnkst	= FALSE;			/* enbale extended combined linkset feature */
 
 #if (defined(LSNV3) || defined(SN_MULTIPLE_NETWORK_RESTART))
-
 #else
 	cfg.t.cfg.s.snGen.rstReq		= LSN_NO_RST;		/* restarting procedure required */
-	cfg.t.cfg.s.snGen.tfrReq		= FALSE;			/* TFR procedure required or not */
+	cfg.t.cfg.s.snGen.tfrReq		= YES;			/* TFR procedure required or not */
 	cfg.t.cfg.s.snGen.tmr.t15.enb	= TRUE;				/* t15 - waiting to start route set congestion test */
 	cfg.t.cfg.s.snGen.tmr.t15.val	= 30;
 	cfg.t.cfg.s.snGen.tmr.t16.enb	= TRUE;				/* t16 - waiting for route set congestion status update */
@@ -725,6 +1000,22 @@ int ftmod_ss7_isup_gen_config(void)
 	cfg.t.cfg.s.siGen.suppressCfn		= TRUE;					/* Flag used for 'suppress CFN' feature */
 #endif
 
+	if (g_ftdm_sngss7_data.cfg.sng_acc) {
+		cfg.t.cfg.s.siGen.autoCongEn = TRUE;
+	} else {
+		cfg.t.cfg.s.siGen.autoCongEn = FALSE;
+	}
+
+	cfg.t.cfg.s.siGen.msgPriorEn = g_ftdm_sngss7_data.cfg.msg_priority;
+	/* Setting up ISUP message priority */
+	if (cfg.t.cfg.s.siGen.msgPriorEn) {
+		/* Setting up priority level values of ISUP messages */
+		cfg.t.cfg.s.siGen.msgPrior = g_ftdm_sngss7_data.cfg.set_msg_priority;
+	} else {
+		cfg.t.cfg.s.siGen.msgPrior = DEFAULT_MSG_PRIORITY;
+	}
+
+
 	return(sng_cfg_isup(&pst, &cfg));
 
 }
@@ -766,7 +1057,7 @@ int ftmod_ss7_cc_gen_config(void)
 }
 
 /******************************************************************************/
-int ftmod_ss7_mtp1_psap_config(int id)
+int ftmod_ss7_mtp1_psap_config(int id, ftdm_sngss7_operating_modes_e opr_mode)
 {
 	L1Mngmt			cfg;
 	Pst				pst;
@@ -791,9 +1082,21 @@ int ftmod_ss7_mtp1_psap_config(int id)
 	cfg.hdr.elmId.elmnt 		= STPSAP;
 	
 	cfg.hdr.elmId.elmntInst1	= k->id;
-	
-	cfg.t.cfg.s.l1PSAP.span		= k->span;
-	cfg.t.cfg.s.l1PSAP.chan		= k->chan;
+
+    /* for MTP2 API mode , FreeTDM open channel and pass the FD to Layer 1, 
+     * rest all other cases layer1 will open the channel*/
+    if (SNG_SS7_OPR_MODE_MTP2_API == opr_mode) {
+        cfg.t.cfg.s.l1PSAP.span         = k->ftdmchan->physical_span_id;
+        cfg.t.cfg.s.l1PSAP.chan         = k->ftdmchan->physical_chan_id;
+        cfg.t.cfg.s.l1PSAP.sockfd       = k->ftdmchan->sockfd;
+#ifdef SD_HSL
+        cfg.t.cfg.s.l1PSAP.extSeqNum    = k->extSeqNum;
+#endif
+    } else {
+        cfg.t.cfg.s.l1PSAP.span         = k->span;
+        cfg.t.cfg.s.l1PSAP.chan         = k->chan;
+    }
+
 	cfg.t.cfg.s.l1PSAP.spId		= k->id;
 
 	return(sng_cfg_mtp1(&pst, &cfg));
@@ -874,14 +1177,29 @@ int ftmod_ss7_mtp2_dlsap_config(int id)
 	cfg.t.cfg.s.sdDLSAP.sdtFlcStartTr	= 256;						/* SDT interface flow control start thresh */
 	cfg.t.cfg.s.sdDLSAP.sdtFlcEndTr		= 512;						/* SDT interface flow control end thresh */
 
+   /* HIGH_SPEED_SIGNALING_SUPPORT */
 #ifdef SD_HSL
-	cfg.t.cfg.s.sdDLSAP.sapType			=;							/* Indcates whether link is HSL or LSL */
-	cfg.t.cfg.s.sdDLSAP.sapFormat		=;							/* The extened sequence no to be used or not */
-	cfg.t.cfg.s.sdDLSAP.t8.enb			=;							/* timer 8 configuration structure */
-	cfg.t.cfg.s.sdDLSAP.sdTe			=;							/* EIM threshold */
-	cfg.t.cfg.s.sdDLSAP.sdUe			=;							/* increment constant */
-	cfg.t.cfg.s.sdDLSAP.sdDe			=;							/* decrement constant */
-#endif /* HIGH_SPEED_SIGNALING_SUPPORT */
+    switch (k->sapType) {
+        case SNGSS7_SAPTYPE_HSL:
+            cfg.t.cfg.s.sdDLSAP.sapType     = SD_HSL_LINK;
+            cfg.t.cfg.s.sdDLSAP.sapFormat   = NORMAL_HSL_FORMAT;
+            break;
+        case SNGSS7_SAPTYPE_HSL_EXT:
+            cfg.t.cfg.s.sdDLSAP.sapType     = SD_HSL_LINK;
+            cfg.t.cfg.s.sdDLSAP.sapFormat   = EXTENDED_HSL_FORMAT;
+            break;
+        default:
+        case SNGSS7_SAPTYPE_LSL:
+            cfg.t.cfg.s.sdDLSAP.sapType     = SD_LSL_LINK;
+            cfg.t.cfg.s.sdDLSAP.sapFormat   = NORMAL_HSL_FORMAT;
+            break;
+    }
+
+    cfg.t.cfg.s.sdDLSAP.t8.enb          = k->t8;                    /* timer 8 configuration structure */
+    cfg.t.cfg.s.sdDLSAP.sdTe            = k->sdTe;                  /* EIM threshold */
+    cfg.t.cfg.s.sdDLSAP.sdUe            = k->sdUe;                  /* increment constant */
+    cfg.t.cfg.s.sdDLSAP.sdDe            = k->sdDe;                  /* decrement constant */
+#endif /* SD_HSL */
 
 #if (SS7_TTC || SS7_NTT)
 	cfg.t.cfg.s.sdDLSAP.numRtb			=;							/* outstanding number of messages in RTB */
@@ -910,7 +1228,7 @@ int ftmod_ss7_mtp2_dlsap_config(int id)
 }
 
 /******************************************************************************/
-int ftmod_ss7_mtp3_dlsap_config(int id)
+int ftmod_ss7_mtp3_dlsap_config(int id, ftdm_sngss7_operating_modes_e opr_mode)
 {
 	Pst				pst;
 	SnMngmt			cfg;
@@ -947,9 +1265,9 @@ int ftmod_ss7_mtp3_dlsap_config(int id)
 	cfg.t.cfg.s.snDLSAP.upSwtch			= k->switchType;		/* user part switch type */
 	cfg.t.cfg.s.snDLSAP.maxSLTtry		= MAX_SLTM_RETRIES;		/* maximun times to retry SLTM */
 	cfg.t.cfg.s.snDLSAP.p0QLen			= 32;					/* size of the priority 0 Q */
-	cfg.t.cfg.s.snDLSAP.p1QLen			= 32;					/* size of the priority 1 Q */
-	cfg.t.cfg.s.snDLSAP.p2QLen			= 32;					/* size of the priority 2 Q */
-	cfg.t.cfg.s.snDLSAP.p3QLen			= 32;					/* size of the priority 3 Q */
+	cfg.t.cfg.s.snDLSAP.p1QLen			= 42;					/* size of the priority 1 Q */
+	cfg.t.cfg.s.snDLSAP.p2QLen			= 52;					/* size of the priority 2 Q */
+	cfg.t.cfg.s.snDLSAP.p3QLen			= 64;					/* size of the priority 3 Q */
 	cfg.t.cfg.s.snDLSAP.discPrior		= 0;					/* discard priority */
 #ifndef SDT2
 	cfg.t.cfg.s.snDLSAP.maxCredit		= MAX_SN_CREDIT;		/* max credit */
@@ -966,7 +1284,11 @@ int ftmod_ss7_mtp3_dlsap_config(int id)
 	cfg.t.cfg.s.snDLSAP.tst[6]			= 'A';					/* link test pattern */
 	cfg.t.cfg.s.snDLSAP.ssf				= k->ssf;				/* sub service field */ 
 	cfg.t.cfg.s.snDLSAP.dstProcId		= k->mtp2ProcId;		/* destination processor id */
-	cfg.t.cfg.s.snDLSAP.dstEnt			= ENTSD;				/* entity */
+	if (SNG_SS7_OPR_MODE_M2UA_ASP == opr_mode) {
+		cfg.t.cfg.s.snDLSAP.dstEnt			= ENTMW;				/* entity */
+	}else{
+		cfg.t.cfg.s.snDLSAP.dstEnt			= ENTSD;				/* entity */
+	}
 	cfg.t.cfg.s.snDLSAP.dstInst			= S_INST;				/* instance */
 	cfg.t.cfg.s.snDLSAP.prior			= PRIOR0;				/* priority */
 	cfg.t.cfg.s.snDLSAP.route			= RTESPEC;				/* route */
@@ -1112,7 +1434,7 @@ int ftmod_ss7_mtp3_nsap_config(int id)
 	cfg.t.cfg.s.snNSAP.dpcLen		= DPC14;			/* dpc length 14 or 24 bits */
 #endif
 #if (defined(SN_SG) || defined(TDS_ROLL_UPGRADE_SUPPORT))
-	cfg.t.cfg.s.snNSAP.usrParts		= ;					/* user parts configured on self postatic int code on IP side */ 
+	cfg.t.cfg.s.snNSAP.usrParts		= 0xFFF; /*SI_ALLUSER_BIT;*//* user parts configured on self postatic int code on IP side */
 #endif
 #ifdef TDS_ROLL_UPGRADE_SUPPORT
 	cfg.t.cfg.s.snNSAP.remIntfValid	= FALSE;			/* remote interface version is valid */
@@ -1196,10 +1518,18 @@ int ftmod_ss7_mtp3_route_config(int id)
 	cfg.t.cfg.s.snRout.swtchType		= k->linkType;				/* switch type */
 	cfg.t.cfg.s.snRout.upSwtch			= k->switchType;			/* user part switch type */
 	cfg.t.cfg.s.snRout.cmbLnkSetId		= k->cmbLinkSetId;			/* combined link set ID */
-	if (k->dir == SNG_RTE_UP) {
-		cfg.t.cfg.s.snRout.dir		 	= LSN_RTE_UP;				/* direction */
-	} else {
-		cfg.t.cfg.s.snRout.dir		 	= LSN_RTE_DN;				/* direction */
+	switch (k->dir)
+	{
+		case SNG_RTE_UP:
+			cfg.t.cfg.s.snRout.dir		 	= LSN_RTE_UP;				/* direction */
+			break;
+#ifdef SN_SG
+		case SNG_RTE_IP:
+			cfg.t.cfg.s.snRout.dir		 	= LSN_RTE_IP;				/* direction */
+			break;
+#endif
+		default:
+			cfg.t.cfg.s.snRout.dir		 	= LSN_RTE_DN;				/* direction */
 	}
 	cfg.t.cfg.s.snRout.rteToAdjSp		= 0;						/* flag indicating this route to adjacent SP */ 
 	cfg.t.cfg.s.snRout.ssf				= k->ssf;					/* sub service field */
@@ -1219,17 +1549,21 @@ int ftmod_ss7_mtp3_route_config(int id)
 	} else {
 		cfg.t.cfg.s.snRout.slsRange		= LSN_ANSI_5BIT_SLS_RANGE;	/* max value of SLS for this DPC */
 	}
-	cfg.t.cfg.s.snRout.lsetSel			= 0x1;						/* linkset selection bit in SLS for STP */
+	if (k->lsetSel) {
+		cfg.t.cfg.s.snRout.lsetSel			= k->lsetSel;		/* linkset selection bit in SLS for STP */
+	} else {
+		cfg.t.cfg.s.snRout.lsetSel			= 0x1;			/* linkset selection bit in SLS for STP */
+	}
 	cfg.t.cfg.s.snRout.multiMsgPrior	= TRUE;					/* TRUE if multiple cong priorities of messages */
 	cfg.t.cfg.s.snRout.rctReq			= TRUE;					/* route set congestion test required or not */
-	cfg.t.cfg.s.snRout.slsLnk			= FALSE;
+	cfg.t.cfg.s.snRout.slsLnk			= k->slsLnk;
 #ifdef LSNV2
 # if (SS7_NTT || defined(TDS_ROLL_UPGRADE_SUPPORT))
 	cfg.t.cfg.s.snRout.destSpec			=;							/* destination specfication A or B*/ 
 # endif  
 #endif  
 #if (defined(LSNV3) || defined(SN_MULTIPLE_NETWORK_RESTART))
-	cfg.t.cfg.s.snRout.tfrReq			=;							/* TFR procedure required or not */
+	cfg.t.cfg.s.snRout.tfrReq			= k->tfrReq;							/* TFR procedure required or not */
 #endif
 	cfg.t.cfg.s.snRout.tmr.t6.enb		= TRUE;
 	cfg.t.cfg.s.snRout.tmr.t6.val		= k->t6;
@@ -1264,14 +1598,14 @@ int ftmod_ss7_mtp3_route_config(int id)
 #endif
 #if (defined(SN_SG) || defined(TDS_ROLL_UPGRADE_SUPPORT))
 	cfg.t.cfg.s.snRout.tmr.tQry.enb		= TRUE;						/* Periodic query timer over the NIF */
-	cfg.t.cfg.s.snRout.tmr.tQry.val		= k->tqry;
+	cfg.t.cfg.s.snRout.tmr.tQry.val		= k->tQuery;
 #endif
 
 	return(sng_cfg_mtp3(&pst, &cfg));
 }
 
 /******************************************************************************/
-int ftmod_ss7_isup_nsap_config(int id)
+int ftmod_ss7_isup_nsap_config(int id, ftdm_sngss7_operating_modes_e opr_mode)
 {
 	SiMngmt	 cfg;
 	Pst		 pst;
@@ -1303,12 +1637,17 @@ int ftmod_ss7_isup_nsap_config(int id)
 	cfg.t.cfg.s.siNSap.nwId			= k->nwId;			/* Network Id */
 	cfg.t.cfg.s.siNSap.spId			= k->spId;			/* service providor id */
 	cfg.t.cfg.s.siNSap.ssf			= k->ssf;			/* sub service field */
-	cfg.t.cfg.s.siNSap.dstEnt		= ENTSN;			/* entity */
+	if (SNG_SS7_OPR_MODE_M3UA_ASP == opr_mode) {
+		cfg.t.cfg.s.siNSap.dstEnt		= ENTIT;			/* entity */
+		cfg.t.cfg.s.siNSap.sapType		= SAP_M3UA;			/* sap type */
+	} else {
+		cfg.t.cfg.s.siNSap.dstEnt		= ENTSN;			/* entity */
+		cfg.t.cfg.s.siNSap.sapType		= SAP_MTP;			/* sap type */
+	}
 	cfg.t.cfg.s.siNSap.dstInst		= S_INST;			/* instance */
 	cfg.t.cfg.s.siNSap.prior		= PRIOR0;			/* priority */
 	cfg.t.cfg.s.siNSap.route		= RTESPEC;			/* route */
 	cfg.t.cfg.s.siNSap.dstProcId	= SFndProcId();		/* destination processor id */
-	cfg.t.cfg.s.siNSap.sapType		= SAP_MTP;			/* sap type */
 	cfg.t.cfg.s.siNSap.selector		= 0;				/* selector */
 	cfg.t.cfg.s.siNSap.tINT.enb		= TRUE;				/* interface (Bind Confirm) timer */
 	cfg.t.cfg.s.siNSap.tINT.val		= 50;
@@ -1357,7 +1696,7 @@ int ftmod_ss7_isup_intf_config(int id)
 	cfg.t.cfg.s.siIntfCb.phyDpc					= k->dpc;				/* physical destination postatic int code */
 	cfg.t.cfg.s.siIntfCb.swtch					= k->switchType;		/* Protocol Switch */
 	cfg.t.cfg.s.siIntfCb.ssf					= k->ssf;				/* subsystem service information */
-	cfg.t.cfg.s.siIntfCb.pauseActn				= SI_PAUSE_CLRTRAN;		/* call clearing behavior upon rx. PAUSE */
+	cfg.t.cfg.s.siIntfCb.pauseActn			= k->pauseAction;		/* call clearing behavior upon rx. PAUSE */
 	cfg.t.cfg.s.siIntfCb.dpcCbTmr.t4.enb		= TRUE;					/* t4 timer - user part test sent */
 	cfg.t.cfg.s.siIntfCb.dpcCbTmr.t4.val		= k->t4;
 	cfg.t.cfg.s.siIntfCb.dpcCbTmr.tPAUSE.enb	= TRUE;					/* waiting for PAUSE to be effective */
@@ -1394,7 +1733,7 @@ int ftmod_ss7_isup_intf_config(int id)
 
 #endif
 #if (LSIV4 || LSIV5)
-	cfg.t.cfg.s.siIntfCb.lnkSelOpt				= LSI_LINSEK_CIC;		/* link select option */
+	cfg.t.cfg.s.siIntfCb.lnkSelOpt				= LSI_LNKSEL_CIC;		/* link select option */
 # if (SS7_ANS88 || SS7_ANS92 || SS7_ANS95 || SS7_BELL)
 	cfg.t.cfg.s.siIntfCb.lnkSelBits				= LSI_LNKSEL_8BITS;		/* number of bits for link selection */
 # endif
@@ -1444,7 +1783,7 @@ int ftmod_ss7_isup_ckt_config(int id)
 #if (SI_218_COMP || SS7_ANS88 || SS7_ANS92 || SS7_ANS95 || SS7_BELL)
 	cfg.t.cfg.s.siCir.firstCic			= 1;					/* First cic in the circuit group		  */
 	cfg.t.cfg.s.siCir.numCir			= 24;					/* Number of circuits in the circuit group */
-	cfg.t.cfg.s.siCir.nonSS7Con			= TRUE;				/* connecting to non SS7 network			*/
+	cfg.t.cfg.s.siCir.nonSS7Con			= FALSE;				/* connecting to non SS7 network			*/
 	cfg.t.cfg.s.siCir.outTrkGrpN.length	= 0;					/* outgoing trunk group number (For EXM)	*/
 	cfg.t.cfg.s.siCir.cvrTrkClli.length	= 0;					/* Trunk Group number (For CVR validation) */
 	cfg.t.cfg.s.siCir.clli.length		= 0;					/* common language location identifier	 */
@@ -1559,7 +1898,7 @@ int ftmod_ss7_isup_isap_config(int id)
 	cfg.t.cfg.s.siSap.allCallMod			= TRUE;						/* call modification allowed flag */
 	cfg.t.cfg.s.siSap.maxLenU2U				= MAX_SI_USER_2_USER_LEN;	/* Max length of user to user messages */
 	cfg.t.cfg.s.siSap.passOnFlag			= TRUE;						/* flag for passing unknown par/msg */
-	cfg.t.cfg.s.siSap.relLocation			= ILOC_PRIVNETLU;			/* release location indicator in cause val */
+	cfg.t.cfg.s.siSap.relLocation			= k->defRelLocation; 			/* release location indicator in cause val */
 	cfg.t.cfg.s.siSap.prior					= PRIOR0;					/* priority */
 	cfg.t.cfg.s.siSap.route					= RTESPEC;					/* route */
 	cfg.t.cfg.s.siSap.selector				= 0;						/* selector */
@@ -1622,7 +1961,7 @@ int ftmod_ss7_isup_isap_config(int id)
 }
 
 /******************************************************************************/
-int ftmod_ss7_cc_isap_config(int dstProcId)
+int ftmod_ss7_cc_isap_config(int id)
 {
 	CcMngmt	 cfg;
 	Pst		 pst;
@@ -1646,11 +1985,11 @@ int ftmod_ss7_cc_isap_config(int dstProcId)
 	cfg.hdr.entId.inst					= S_INST;
 	cfg.hdr.elmId.elmnt					= STISAP;
 
-	cfg.hdr.elmId.elmntInst1 			= 1;
+	cfg.hdr.elmId.elmntInst1 			= id;
 
-	cfg.t.cfg.s.ccISAP.suId			 	= 1;
-	cfg.t.cfg.s.ccISAP.spId			 	= 1;
-	cfg.t.cfg.s.ccISAP.pst.dstProcId	= dstProcId;
+	cfg.t.cfg.s.ccISAP.suId			 	= id;
+	cfg.t.cfg.s.ccISAP.spId			 	= id;
+	cfg.t.cfg.s.ccISAP.pst.dstProcId	= 1;
 	cfg.t.cfg.s.ccISAP.pst.dstEnt		= ENTSI;
 	cfg.t.cfg.s.ccISAP.pst.dstInst		= S_INST;
 	cfg.t.cfg.s.ccISAP.pst.srcProcId	= SFndProcId();

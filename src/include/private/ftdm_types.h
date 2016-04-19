@@ -198,6 +198,10 @@ typedef enum {
 	FTDM_SPAN_USE_TRANSFER = (1 << 14),
 	/* This is the last flag, no more flags bigger than this */
 	FTDM_SPAN_MAX_FLAG = (1 << 15),
+	/*	If this flag is set, then span is stopped forcefully */
+	FTDM_SPAN_FORCE_STOP = (1 << 16),
+	/* If this flag is set , then span need to reconfig */
+	FTDM_SPAN_RECONFIG = (1 << 17)
 } ftdm_span_flag_t;
 
 /*! \brief Channel supported features */

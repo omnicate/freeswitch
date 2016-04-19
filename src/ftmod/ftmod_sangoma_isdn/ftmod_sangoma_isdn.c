@@ -1,8 +1,9 @@
-
 /*
  * Copyright (c) 2010, Sangoma Technologies 
  * David Yat Sin <davidy@sangoma.com>
  * Moises Silva <moy@sangoma.com>
+ * Kapil Gupta <kgupta@sangoma.com>
+ * Pushkar Singh <psingh@sangoma.com>
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,6 +36,7 @@
  */
 
 
+#include "private/ftdm_core.h"
 #include "ftmod_sangoma_isdn.h"
 
 #ifdef FTDM_DEBUG_CHAN_MEMORY
@@ -278,6 +280,20 @@ ftdm_state_map_t sangoma_isdn_state_map = {
 	}
 };
 
+static int teletone_handler(teletone_generation_session_t *ts, teletone_tone_map_t *map)
+{
+	ftdm_buffer_t *dt_buffer = ts->user_data;
+	int wrote;
+
+	if (!dt_buffer) {
+		return -1;
+	}
+	wrote = teletone_mux_tones(ts, map);
+	ftdm_buffer_write(dt_buffer, ts->buffer, wrote * 2);
+	return 0;
+}
+
+
 static void ftdm_sangoma_isdn_process_phy_events(ftdm_span_t *span, ftdm_oob_event_t event)
 {
 	sngisdn_span_data_t *signal_data = (sngisdn_span_data_t*) span->signal_data;
@@ -365,6 +381,15 @@ static void *ftdm_sangoma_isdn_io_run(ftdm_thread_t *me, void *obj)
 		waitms = 1000;
 		memset(poll_events, 0, sizeof(short)*span->chan_count);
 
+		/* check if ftdmspan needs to be reconfigured then please do not check i.e poll
+		 * for event and wait untill span is properly reconfigured */
+
+		if (!ftdm_span_test_reconfig_flag(span)) {
+			ftdm_sleep(100);
+			continue;
+		}
+
+
 		for (i = 0, citer = ftdm_span_get_chan_iterator(span, chaniter); citer; citer = ftdm_iterator_next(citer), i++) {
 			ftdmchan = ftdm_iterator_current(citer);
 
@@ -379,6 +404,8 @@ static void *ftdm_sangoma_isdn_io_run(ftdm_thread_t *me, void *obj)
 				poll_events[i] |= FTDM_READ;
 			}
 		}
+		/* Free memory allocated to citer */
+		ftdm_iterator_free(citer);
 
 		status = ftdm_span_poll_event(span, waitms, poll_events);
 		switch (status) {
@@ -395,7 +422,7 @@ static void *ftdm_sangoma_isdn_io_run(ftdm_thread_t *me, void *obj)
 					if (FTDM_IS_VOICE_CHANNEL(ftdmchan)) {
 						if (ftdm_test_flag(ftdmchan, FTDM_CHANNEL_RX_DISABLED)) {
 							if (ftdm_test_io_flag(ftdmchan, FTDM_CHANNEL_IO_READ)) {
-								status = ftdm_raw_read(ftdmchan, data, &len);
+								status = ftdm_channel_raw_read(ftdmchan, data, &len);
 								if (status != FTDM_SUCCESS) {
 									ftdm_log_chan_msg(ftdmchan, FTDM_LOG_WARNING, "raw I/O read failed\n");
 									continue;
@@ -417,6 +444,8 @@ static void *ftdm_sangoma_isdn_io_run(ftdm_thread_t *me, void *obj)
 						}
 					}
 				}
+				/* Free memory allocated to citer */
+				ftdm_iterator_free(citer);
 
 				/* Check if there are any channels that have events available */
 				while (ftdm_span_next_event(span, &event) == FTDM_SUCCESS) {
@@ -466,6 +495,13 @@ static void *ftdm_sangoma_isdn_run(ftdm_thread_t *me, void *obj)
 	}
 
 	while (ftdm_running() && !(ftdm_test_flag(span, FTDM_SPAN_STOP_THREAD))) {
+             /* check if ftdmspan needs to be reconfigured then please do not check i.e poll
+              * for event and wait untill span is properly reconfigured */
+                if (!ftdm_span_test_reconfig_flag(span)) {
+                        ftdm_sleep(100);
+                        continue;
+                }
+
 		/* Check if there are any timers to process */
 		ftdm_sched_run(signal_data->sched);
 		ftdm_span_trigger_signals(span);
@@ -521,6 +557,199 @@ ftdm_sangoma_isdn_run_exit:
 
 	return NULL;
 }
+
+
+static void *ftdm_sangoma_isdn_tones_run(ftdm_thread_t *me, void *obj)
+{
+	ftdm_span_t *span = (ftdm_span_t *) obj;
+	
+	sngisdn_span_data_t *signal_data = (sngisdn_span_data_t*)span->signal_data;
+	ftdm_iterator_t *chaniter = NULL;
+	ftdm_iterator_t *citer = NULL;
+	ftdm_channel_t *ftdmchan = NULL;
+	
+	ftdm_buffer_t *dt_buffer = NULL;
+	teletone_generation_session_t ts = {{{{0}}}};;
+	unsigned char frame[1024];
+	/*
+	int x;
+	*/
+	int interval;
+	int offset = 0;
+	unsigned i = 0;	
+
+	ftdm_log(FTDM_LOG_DEBUG, "Sangoma ISDN tones thread starting.\n");
+
+	if (ftdm_buffer_create(&dt_buffer, 1024, 1024, 0) != FTDM_SUCCESS) {
+		snprintf(signal_data->dchan->last_error, sizeof(signal_data->dchan->last_error), "memory error!");
+		ftdm_log(FTDM_LOG_ERROR, "MEM ERROR\n");
+		goto done;
+	}
+	ftdm_buffer_set_loops(dt_buffer, -1);
+
+
+	ftdm_assert(((sngisdn_span_data_t*)span->signal_data)->dchan, "Span does not have a dchannel");
+	chaniter = ftdm_span_get_chan_iterator(span, NULL);
+	if (!chaniter) {
+		ftdm_log(FTDM_LOG_CRIT, "Failed to allocate channel iterator for span %s!\n", span->name);
+		goto done;
+	}
+	for (i = 0, citer = ftdm_span_get_chan_iterator(span, chaniter); citer; citer = ftdm_iterator_next(citer), i++) {
+		ftdmchan = ftdm_iterator_current(citer);
+		ftdm_channel_command(ftdmchan, FTDM_COMMAND_GET_INTERVAL, &interval);
+	}
+	if (!interval) {
+		interval = 20;
+	}
+	ftdm_log(FTDM_LOG_NOTICE, "Tone generating interval %d\n", interval);
+
+	/* init teletone */
+	teletone_init_session(&ts, 0, teletone_handler, dt_buffer);
+	ts.rate     = 8000;
+	ts.duration = ts.rate;
+
+	/* main loop */
+	while (ftdm_running() && !(ftdm_test_flag(span, FTDM_SPAN_STOP_THREAD))) {
+		ftdm_wait_flag_t flags;
+		ftdm_status_t status;
+		int last_chan_state = 0;
+		int gated = 0;
+		/* check if ftdmspan needs to be reconfigured then please do not check i.e poll
+		 * for event and wait untill span is properly reconfigured */
+
+		if (!ftdm_span_test_reconfig_flag(span)) {
+			ftdm_sleep(100);
+			continue;
+		}
+
+
+		// unsigned long now = ftdm_current_time_in_ms();
+
+		/* check b-channel states and generate & send tones if neccessary */
+		for (i = 0, citer = ftdm_span_get_chan_iterator(span, chaniter); citer; citer = ftdm_iterator_next(citer), i++) {
+			ftdmchan = ftdm_iterator_current(citer);
+			ftdm_size_t len = sizeof(frame), rlen;
+			
+			switch (ftdmchan->state) {
+			case FTDM_CHANNEL_STATE_COLLECT:
+				{
+					if (last_chan_state != ftdm_channel_get_state(ftdmchan) && 
+					    signal_data->overlap_dial_gentone == SNGISDN_OPT_TRUE ) {
+						ftdm_buffer_zero(dt_buffer);
+						teletone_run(&ts, span->tone_map[FTDM_TONEMAP_DIAL]);
+						last_chan_state = ftdm_channel_get_state(ftdmchan);
+					}
+				}
+				break;
+
+			case FTDM_CHANNEL_STATE_RING:
+				{
+					#if 0
+					if (last_chan_state != ftdm_channel_get_state(chan)) {
+						ftdm_buffer_zero(dt_buffer);
+						teletone_run(&ts, span->tone_map[FTDM_TONEMAP_RING]);
+						last_chan_state = ftdm_channel_get_state(chan);
+					}
+					ftdm_log(FTDM_LOG_DEBUG, "Channel in RING state.......\n");
+					#endif
+					
+				}
+				/* do not play ringtone in ring event */
+				continue;
+				break;
+
+			default:
+				continue;
+			}
+
+			if (!ftdm_test_flag(ftdmchan, FTDM_CHANNEL_OPEN)) {
+				if (ftdm_channel_open_chan(ftdmchan) != FTDM_SUCCESS) {
+					ftdm_set_state_locked(ftdmchan, FTDM_CHANNEL_STATE_HANGUP);
+					continue;
+				}
+				ftdm_log(FTDM_LOG_NOTICE, "Successfully opened channel %d:%d\n",
+						ftdm_channel_get_span_id(ftdmchan),
+						ftdm_channel_get_id(ftdmchan));
+			}
+
+			flags = FTDM_READ;
+
+			status = ftdm_channel_wait(ftdmchan, &flags, (gated) ? 0 : interval);
+			switch (status) {
+			case FTDM_FAIL:
+				continue;
+
+			case FTDM_TIMEOUT:
+				gated = 1;
+				continue;
+
+			default:
+				if (!(flags & FTDM_READ)) {
+					continue;
+				}
+			}
+			gated = 1;
+
+			status = ftdm_channel_read(ftdmchan, frame, &len);
+			if (status != FTDM_SUCCESS || len <= 0) {
+				continue;
+			}
+
+			if (ftdmchan->effective_codec != FTDM_CODEC_SLIN) {
+				len *= 2;
+			}
+
+			/* seek to current offset */
+			ftdm_buffer_seek(dt_buffer, offset);
+
+			rlen = ftdm_buffer_read_loop(dt_buffer, frame, len);
+
+			if (ftdmchan->effective_codec != FTDM_CODEC_SLIN) {
+				fio_codec_t codec_func = NULL;
+
+				if (ftdmchan->native_codec == FTDM_CODEC_ULAW) {
+					codec_func = fio_slin2ulaw;
+				} else if (ftdmchan->native_codec == FTDM_CODEC_ALAW) {
+					codec_func = fio_slin2alaw;
+				}
+
+				if (codec_func) {
+					status = codec_func(frame, sizeof(frame), &rlen);
+				} else {
+					snprintf(ftdmchan->last_error, sizeof(ftdmchan->last_error), "codec error!");
+					goto done;
+				}
+			}
+			ftdm_channel_write(ftdmchan, frame, sizeof(frame), &rlen);
+		}
+
+		/*
+		 * sleep a bit if there was nothing to do
+		 */
+		if (!gated) {
+			ftdm_sleep(interval);
+		}
+
+		offset += (ts.rate / (1000 / interval)) << 1;
+		if (offset >= ts.rate) {
+			offset = 0;
+		}
+	}
+
+done:
+	if (ts.buffer) {
+		teletone_destroy_session(&ts);
+	}
+
+	if (dt_buffer) {
+		ftdm_buffer_destroy(&dt_buffer);
+	}
+
+	ftdm_log(FTDM_LOG_DEBUG, "Sangoma ISDN tone thread ended.\n");
+
+	return NULL;
+}
+
 
 
 /**
@@ -643,6 +872,18 @@ static ftdm_status_t ftdm_sangoma_isdn_process_state_change(ftdm_channel_t *ftdm
 	sigev.span_id = ftdmchan->span_id;
 	sigev.channel = ftdmchan;
 
+	ftdm_buffer_t *dt_buffer = NULL;
+	teletone_generation_session_t ts;
+
+	if (ftdm_buffer_create(&dt_buffer, 1024, 3192, 0) != FTDM_SUCCESS) {
+		snprintf(ftdmchan->last_error, sizeof(ftdmchan->last_error), "memory error!");
+		ftdm_log_chan_msg(ftdmchan, FTDM_LOG_ERROR, "MEM ERROR\n");
+		return FTDM_FAIL;
+	}
+	ts.buffer = NULL;
+	teletone_init_session(&ts, 0, teletone_handler, dt_buffer);
+	ts.rate = 8000;
+
 #ifdef FTDM_DEBUG_CHAN_MEMORY
 	if (ftdmchan->state == FTDM_CHANNEL_STATE_DIALING) {
 		ftdm_assert(mprotect(ftdmchan, sizeof(*ftdmchan), PROT_READ) == 0, "Failed to mprotect");
@@ -660,6 +901,38 @@ static ftdm_status_t ftdm_sangoma_isdn_process_state_change(ftdm_channel_t *ftdm
 			/* TODO: Re-implement this. There is a way to re-evaluate new incoming digits from dialplan as they come */
 			sngisdn_snd_setup_ack(ftdmchan);
 			/* Just wait in this state until we get enough digits or T302 timeout */
+
+			
+#if  0
+#if 1 
+			ts.debug = 1;
+			ts.debug_stream = stdout;
+#endif
+			ftdm_buffer_set_loops(dt_buffer, -1);
+			ftdm_buffer_zero(dt_buffer);
+			if (ftdmchan->fsk_buffer) {
+				ftdm_buffer_zero(ftdmchan->fsk_buffer);
+			} else {
+				ftdm_buffer_create(&ftdmchan->fsk_buffer, 128, 128, 0);
+				ftdm_log_chan(ftdmchan, FTDM_LOG_CRIT, "jz: created fsk_buffer in ISDN mod %p\n", ftdmchan->fsk_buffer);
+			}
+						
+			ts.user_data = ftdmchan->fsk_buffer;
+			teletone_run(&ts, ftdmchan->span->tone_map[FTDM_TONEMAP_DIAL]);
+			ts.user_data = dt_buffer;
+
+
+#if 0
+			ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_RING);
+			ftdm_sangoma_isdn_process_state_change( ftdmchan );
+
+			sngisdn_send_signal(sngisdn_info, FTDM_SIGEVENT_RING);
+
+#endif
+
+#endif
+
+
 		}
 		break;
 	case FTDM_CHANNEL_STATE_GET_CALLERID:
@@ -796,7 +1069,13 @@ static ftdm_status_t ftdm_sangoma_isdn_process_state_change(ftdm_channel_t *ftdm
 	case FTDM_CHANNEL_STATE_TERMINATING: /* call is hung up by the remote end */
 		{
 			/* this state is set when the line is hanging up */
-			sngisdn_send_signal(sngisdn_info, FTDM_SIGEVENT_STOP);
+			if (ftdm_test_flag(ftdmchan, FTDM_CHANNEL_USER_HANGUP)) {
+				sngisdn_set_flag(sngisdn_info, FLAG_LOCAL_ABORT);
+				state_change++;
+				ftdm_set_state(ftdmchan, FTDM_CHANNEL_STATE_HANGUP_COMPLETE);
+			} else {
+				sngisdn_send_signal(sngisdn_info, FTDM_SIGEVENT_STOP);
+			}
 		}
 		break;
 	case FTDM_CHANNEL_STATE_HANGUP:	/* call is hung up locally */
@@ -946,6 +1225,14 @@ static ftdm_status_t ftdm_sangoma_isdn_process_state_change(ftdm_channel_t *ftdm
 		ftdm_assert(mprotect(ftdmchan, sizeof(*ftdmchan), PROT_READ|PROT_WRITE) == 0, "Failed to mprotect");
 	}
 #endif
+							
+			if (ts.buffer) {
+				teletone_destroy_session(&ts);
+			}
+			
+			if (dt_buffer) {
+				ftdm_buffer_destroy(&dt_buffer);
+			}
 	return FTDM_SUCCESS;
 }
 
@@ -1071,6 +1358,12 @@ static ftdm_status_t ftdm_sangoma_isdn_perform_start(ftdm_span_t *span)
 		return FTDM_FAIL;
 	}
 
+	/*start the tone thread*/
+	if (ftdm_thread_create_detached(ftdm_sangoma_isdn_tones_run, span) != FTDM_SUCCESS) {
+		ftdm_log(FTDM_LOG_CRIT,"Failed to start Sangoma ISDN Tone Thread!\n");
+		return FTDM_FAIL;
+	}
+
 	if (signal_data->restart_timeout) {
 		ftdm_log(FTDM_LOG_DEBUG, "%s:Scheduling Restart timeout\n", signal_data->ftdm_span->name);
 		ftdm_sched_timer(signal_data->sched, "restart_timeout", signal_data->restart_timeout,
@@ -1080,7 +1373,6 @@ static ftdm_status_t ftdm_sangoma_isdn_perform_start(ftdm_span_t *span)
 	ftdm_log(FTDM_LOG_DEBUG,"Finished starting span %s\n", span->name);
 	return FTDM_SUCCESS;
 }
-
 
 static ftdm_status_t ftdm_sangoma_isdn_start(ftdm_span_t *span)
 {
@@ -1128,7 +1420,7 @@ static ftdm_status_t ftdm_sangoma_isdn_start(ftdm_span_t *span)
 	}
 
 	ftdm_sangoma_isdn_perform_start(span);
-	
+
 	return FTDM_SUCCESS;
 }
 
@@ -1174,126 +1466,170 @@ static ftdm_status_t ftdm_sangoma_isdn_stop(ftdm_span_t *span)
 	return FTDM_SUCCESS;
 }
 
+/* ISDN SIG_FUNCTIONS ***************************************************************/
 static FIO_CONFIGURE_SPAN_SIGNALING_FUNCTION(ftdm_sangoma_isdn_span_config)
 {
 	ftdm_iterator_t *chaniter = NULL;
 	ftdm_iterator_t *curr = NULL;
+	ftdm_status_t status = FTDM_SUCCESS;
+	sngisdn_span_data_t *signal_data = NULL;
+	int idx=0;
 
-	sngisdn_span_data_t *signal_data;
-	
-	ftdm_log(FTDM_LOG_INFO, "Configuring ftmod_sangoma_isdn span = %s\n", span->name);	
 
-	signal_data = ftdm_calloc(1, sizeof(sngisdn_span_data_t));
-	signal_data->ftdm_span = span;
-	span->signal_data = signal_data;
-	
+        /* check if this is a configuration request where whole span is destroyed first and created again,
+	 * then in such cases this must be considered as a new configuration request */
+	if ((span->flags == FTDM_SPAN_CONFIGURED)) {
+		/* If this span is not yet configured in  span list then this is a confirm a new
+		 * configureation request */
+
+		if ((idx == MAX_VARIANTS) && (!(ftdm_test_flag(span, FTDM_SPAN_STARTED)))) {
+			ftdm_log(FTDM_LOG_DEBUG,"Start Configuration for Span %s(%d)\n",
+					span->name, span->span_id);
+
+		}
+		ftdm_span_clear_reconfig_flag(span);
+		signal_data = ftdm_calloc(1, sizeof(sngisdn_span_data_t));
+		signal_data->ftdm_span = span;
+		span->signal_data = signal_data;
+	}
+
 	chaniter = ftdm_span_get_chan_iterator(span, NULL);
 	for (curr = chaniter; curr; curr = ftdm_iterator_next(curr)) {
 		sngisdn_chan_data_t *chan_data = ftdm_calloc(1, sizeof(sngisdn_chan_data_t));
 		chan_data->ftdmchan = ((ftdm_channel_t*)ftdm_iterator_current(curr));
 		((ftdm_channel_t*)ftdm_iterator_current(curr))->call_data = chan_data;
-		
+
 	}
 	ftdm_iterator_free(chaniter);
 
-	if (ftmod_isdn_parse_cfg(ftdm_parameters, span) != FTDM_SUCCESS) {
-		ftdm_log(FTDM_LOG_ERROR, "Failed to parse configuration\n");
-		return FTDM_FAIL;
-	}
-
-	if (signal_data->nfas.trunk) {
-		if (signal_data->nfas.trunk->num_spans == ++signal_data->nfas.trunk->num_spans_configured) {
-			int i;
-			ftdm_log(FTDM_LOG_DEBUG, "Starting stack configuration for all spans within trunkgroup:%s\n", signal_data->nfas.trunk->name);
-
-			sngisdn_stack_cfg(signal_data->nfas.trunk->dchan->ftdm_span);
-			if (signal_data->nfas.trunk->backup) {
-				sngisdn_stack_cfg(signal_data->nfas.trunk->backup->ftdm_span);
-			}
-			
-			for (i = 0; i < signal_data->nfas.trunk->num_spans; i++) {
-				if (signal_data->nfas.trunk->spans[i] &&
-					signal_data->nfas.trunk->spans[i]->nfas.sigchan == SNGISDN_NFAS_DCHAN_NONE) {
-					sngisdn_stack_cfg(signal_data->nfas.trunk->spans[i]->ftdm_span);
-				}
-			}
-		} else {
-			ftdm_log(FTDM_LOG_DEBUG, "Delaying span stack configuration until all spans within trunkgroup are started:%s\n", signal_data->nfas.trunk->name);
+	/* Check if this is a reconfiguration request, please apply this reconfiguration */
+	if (ftdm_span_test_reconfig_flag(span)) {
+		/* First need to check whether this is new span configuration request or need to reconfigure alrady
+		 * existing span. */
+		/* parse isdn cfg with reload paramater 0 so that we can segregate logic inside ftmod_isdn_parse_cfg function */
+		if (ftmod_isdn_parse_cfg(ftdm_parameters, span, 0 ) != FTDM_SUCCESS) {
+			ftdm_log(FTDM_LOG_ERROR, "Failed to parse configuration\n");
+			return FTDM_FAIL;
 		}
-	} else if (sngisdn_stack_cfg(span) != FTDM_SUCCESS) {
-		ftdm_log(FTDM_LOG_CRIT, "Sangoma ISDN Stack configuration failed\n");
-		return FTDM_FAIL;
-	}
 
-	if (signal_data->cid_name_method == SNGISDN_CID_NAME_AUTO) {
-		switch (signal_data->switchtype) {
-			case SNGISDN_SWITCH_EUROISDN:
-				if (FTDM_SPAN_IS_BRI(span)) {
-					signal_data->cid_name_method = SNGISDN_CID_NAME_USR_USR_IE;
-				} else {
+		if (signal_data->nfas.trunk) {
+			if (signal_data->nfas.trunk->num_spans == ++signal_data->nfas.trunk->num_spans_configured) {
+				int i;
+				ftdm_log(FTDM_LOG_DEBUG, "Starting stack configuration for all spans within trunkgroup:%s\n", signal_data->nfas.trunk->name);
+
+				sngisdn_stack_cfg(signal_data->nfas.trunk->dchan->ftdm_span);
+				if (signal_data->nfas.trunk->backup) {
+					sngisdn_stack_cfg(signal_data->nfas.trunk->backup->ftdm_span);
+				}
+
+				for (i = 0; i < signal_data->nfas.trunk->num_spans; i++) {
+					if (signal_data->nfas.trunk->spans[i] &&
+							signal_data->nfas.trunk->spans[i]->nfas.sigchan == SNGISDN_NFAS_DCHAN_NONE) {
+						sngisdn_stack_cfg(signal_data->nfas.trunk->spans[i]->ftdm_span);
+					}
+				}
+			} else {
+				ftdm_log(FTDM_LOG_DEBUG, "Delaying span stack configuration until all spans within trunkgroup are started:%s\n", signal_data->nfas.trunk->name);
+			}
+		} else if (sngisdn_stack_cfg(span) != FTDM_SUCCESS) {
+			ftdm_log(FTDM_LOG_CRIT, "Sangoma ISDN Stack configuration failed\n");
+			ftdm_sangoma_isdn_stop(span);
+			return FTDM_FAIL;
+		}
+
+		if (signal_data->cid_name_method == SNGISDN_CID_NAME_AUTO) {
+			switch (signal_data->switchtype) {
+				case SNGISDN_SWITCH_EUROISDN:
+					if (FTDM_SPAN_IS_BRI(span)) {
+						signal_data->cid_name_method = SNGISDN_CID_NAME_USR_USR_IE;
+					} else {
+						signal_data->cid_name_method = SNGISDN_CID_NAME_DISPLAY_IE;
+					}
+					break;
+				case SNGISDN_SWITCH_DMS100:
 					signal_data->cid_name_method = SNGISDN_CID_NAME_DISPLAY_IE;
-				}
-				break;
-			case SNGISDN_SWITCH_DMS100:
-				signal_data->cid_name_method = SNGISDN_CID_NAME_DISPLAY_IE;
-				break;
-			case SNGISDN_SWITCH_NI2:
-			case SNGISDN_SWITCH_5ESS:
-			case SNGISDN_SWITCH_4ESS:
-				signal_data->cid_name_method = SNGISDN_CID_NAME_FACILITY_IE;
-				break;
-			default:
-				break;
+					break;
+				case SNGISDN_SWITCH_NI2:
+				case SNGISDN_SWITCH_5ESS:
+				case SNGISDN_SWITCH_4ESS:
+					signal_data->cid_name_method = SNGISDN_CID_NAME_FACILITY_IE;
+					break;
+				default:
+					break;
+			}
 		}
-	}
 
-	if (signal_data->send_cid_name == SNGISDN_OPT_DEFAULT) {
-		switch (signal_data->switchtype) {
-			case SNGISDN_SWITCH_EUROISDN:
+		if (signal_data->send_cid_name == SNGISDN_OPT_DEFAULT) {
+			switch (signal_data->switchtype) {
+				case SNGISDN_SWITCH_EUROISDN:
 #ifdef SNGISDN_SUPPORT_CALLING_NAME_IN_FACILITY
-			case SNGISDN_SWITCH_NI2:
-			case SNGISDN_SWITCH_5ESS:
-			case SNGISDN_SWITCH_4ESS:
+				case SNGISDN_SWITCH_NI2:
+				case SNGISDN_SWITCH_5ESS:
+				case SNGISDN_SWITCH_4ESS:
 #endif
-				if (signal_data->signalling == SNGISDN_SIGNALING_NET) {
+					if (signal_data->signalling == SNGISDN_SIGNALING_NET) {
+						signal_data->send_cid_name = SNGISDN_OPT_TRUE;
+					} else {
+						signal_data->send_cid_name = SNGISDN_OPT_FALSE;
+					}
+					break;
+				case SNGISDN_SWITCH_DMS100:
 					signal_data->send_cid_name = SNGISDN_OPT_TRUE;
-				} else {
+					break;
+#ifndef SNGISDN_SUPPORT_CALLING_NAME_IN_FACILITY
+				case SNGISDN_SWITCH_NI2:
+				case SNGISDN_SWITCH_5ESS:
+				case SNGISDN_SWITCH_4ESS:
 					signal_data->send_cid_name = SNGISDN_OPT_FALSE;
-				}
-				break;
-			case SNGISDN_SWITCH_DMS100:
-				signal_data->send_cid_name = SNGISDN_OPT_TRUE;
-				break;
-#ifndef SNGISDN_SUPPORT_CALLING_NAME_IN_FACILITY
-			case SNGISDN_SWITCH_NI2:
-			case SNGISDN_SWITCH_5ESS:
-			case SNGISDN_SWITCH_4ESS:
-				signal_data->send_cid_name = SNGISDN_OPT_FALSE;
-				break;
+					break;
 #endif
-			default:
-				signal_data->send_cid_name = SNGISDN_OPT_FALSE;
-				break;
+				default:
+					signal_data->send_cid_name = SNGISDN_OPT_FALSE;
+					break;
+			}
+		} else if (signal_data->send_cid_name == SNGISDN_OPT_TRUE) {
+			switch (signal_data->switchtype) {
+				case SNGISDN_SWITCH_NI2:
+				case SNGISDN_SWITCH_5ESS:
+				case SNGISDN_SWITCH_4ESS:
+#ifndef SNGISDN_SUPPORT_CALLING_NAME_IN_FACILITY
+					ftdm_log(FTDM_LOG_WARNING, "Sending Calling Name in Facility IE not supported, please update your libsng_isdn library\n");
+					signal_data->send_cid_name = SNGISDN_OPT_FALSE;
+#endif
+					break;
+				case SNGISDN_SWITCH_INSNET: /* Don't know how to transmit caller ID name on INSNET */
+				case SNGISDN_SWITCH_QSIG: /* It seems like QSIG does not support Caller ID */
+					signal_data->send_cid_name = SNGISDN_OPT_FALSE;
+					break;
+				case SNGISDN_SWITCH_EUROISDN:
+					break;
+				default:
+					signal_data->send_cid_name = SNGISDN_OPT_FALSE;
+					break;
+			}
 		}
-	} else if (signal_data->send_cid_name == SNGISDN_OPT_TRUE) {
-		switch (signal_data->switchtype) {
-			case SNGISDN_SWITCH_NI2:
-			case SNGISDN_SWITCH_5ESS:
-			case SNGISDN_SWITCH_4ESS:
-#ifndef SNGISDN_SUPPORT_CALLING_NAME_IN_FACILITY
-				ftdm_log(FTDM_LOG_WARNING, "Sending Calling Name in Facility IE not supported, please update your libsng_isdn library\n");
-				signal_data->send_cid_name = SNGISDN_OPT_FALSE;
-#endif
-				break;
-			case SNGISDN_SWITCH_INSNET: /* Don't know how to transmit caller ID name on INSNET */
-			case SNGISDN_SWITCH_QSIG: /* It seems like QSIG does not support Caller ID */
-				signal_data->send_cid_name = SNGISDN_OPT_FALSE;
-				break;
-			case SNGISDN_SWITCH_EUROISDN:
-				break;
-			default:
-				signal_data->send_cid_name = SNGISDN_OPT_FALSE;
-				break;
+	} else {
+		ftdm_log (FTDM_LOG_INFO, "[Reload]: Reconfiguring ftmod_sangoma_isdn span = %s(%d)...\n",
+				span->name,
+				span->span_id);
+		/* parse isdn cfg with reload paramater 1 so that we can segregate logic inside ftmod_isdn_parse_cfg function */
+		if (( status = ftmod_isdn_parse_cfg(ftdm_parameters, span, 1 ) )) {
+
+			if (status == FTDM_BREAK) {
+				ftdm_log(FTDM_LOG_INFO,"Stopping Span %s(%d) and then reconfiguring it\n",
+						span->name, span->span_id);
+
+			} else if (status == FTDM_ECANCELED) {
+				ftdm_log (FTDM_LOG_INFO, "[Reload]: Operation Cancelled for span = %s(%d) due to same configuration received!\n",
+						span->name,
+						span->span_id);
+				return status;
+			}
+			if((status==FTDM_EAGAIN)) {
+				ftdm_sangoma_isdn_stop(span);
+				span->flags = FTDM_SPAN_CONFIGURED;
+				return status;
+			}
 		}
 	}
 
@@ -1369,7 +1705,7 @@ static FIO_SIG_LOAD_FUNCTION(ftdm_sangoma_isdn_init)
 	g_sngisdn_event_interface.sta.sng_cc_sta_ind	= sngisdn_rcv_cc_ind;
 
 	g_sngisdn_event_interface.io.sng_l1_data_req	= sngisdn_rcv_l1_data_req;
-	g_sngisdn_event_interface.io.sng_l1_cmd_req		= sngisdn_rcv_l1_cmd_req;
+	g_sngisdn_event_interface.io.sng_l1_cmd_req	= sngisdn_rcv_l1_cmd_req;
 	
 	for(i=1;i<=MAX_VARIANTS;i++) {		
 		ftdm_mutex_create(&g_sngisdn_data.ccs[i].mutex);
@@ -1400,12 +1736,16 @@ static FIO_SIG_UNLOAD_FUNCTION(ftdm_sangoma_isdn_unload)
 }
 
 #define SANGOMA_ISDN_API_USAGE_TRACE 			"ftdm sangoma_isdn trace <q921|q931> <span name>\n"
-#define SANGOMA_ISDN_API_USAGE_SHOW_L1_STATS	"ftdm sangoma_isdn l1_stats <span name>\n"
-#define SANGOMA_ISDN_API_USAGE_SHOW_SPANS		"ftdm sangoma_isdn show_spans [<span name>]\n"
+#define SANGOMA_ISDN_API_USAGE_STACK_TRACE 		"ftdm sangoma_isdn stack trace <enable|disable>\n"
+#define SANGOMA_ISDN_API_USAGE_SHOW_L1_STATS		"ftdm sangoma_isdn l1_stats <span name>\n"
+#define SANGOMA_ISDN_API_USAGE_SHOW_SPAN_STATUS		"ftdm sangoma_isdn show span [<span name>/all]\n"
+#define SANGOMA_ISDN_API_USAGE_SHOW_STACK_MEMORY	"ftdm sangoma_isdn show_stack_memory\n"
 
 #define SANGOMA_ISDN_API_USAGE	"\t"SANGOMA_ISDN_API_USAGE_TRACE \
+								"\t"SANGOMA_ISDN_API_USAGE_STACK_TRACE \
 								"\t"SANGOMA_ISDN_API_USAGE_SHOW_L1_STATS \
-								"\t"SANGOMA_ISDN_API_USAGE_SHOW_SPANS
+								"\t"SANGOMA_ISDN_API_USAGE_SHOW_SPAN_STATUS \
+								"\t"SANGOMA_ISDN_API_USAGE_SHOW_STACK_MEMORY
 
 static FIO_API_FUNCTION(ftdm_sangoma_isdn_api)
 {
@@ -1457,7 +1797,34 @@ static FIO_API_FUNCTION(ftdm_sangoma_isdn_api)
 		}
 		goto done;
 	}
-	
+
+	/* ISDN Stack trace on */
+	if (!strcasecmp(argv[0], "stack")) {
+		char *trace_opt;
+
+		if (argc != 3) {
+			ftdm_log(FTDM_LOG_ERROR, "Usage: %s\n", SANGOMA_ISDN_API_USAGE_STACK_TRACE);
+			status = FTDM_FAIL;
+			goto done;
+		}
+		trace_opt = argv[2];
+
+		if (!strcasecmp(argv[1], "trace")) {
+			if (!strcasecmp(trace_opt, "enable")) {
+				status = sngisdn_activate_trace(NULL, SNGISDN_STACK_TRACE_ENABLE);
+			} else if (!strcasecmp(trace_opt, "disable")) {
+				status = sngisdn_activate_trace(NULL, SNGISDN_STACK_TRACE_DISABLE);
+			} else {
+				stream->write_function(stream, "-ERR invalid stack trace option <enable|disable>\n");
+				status = FTDM_FAIL;
+			}
+		} else {
+			stream->write_function(stream, "-ERR invalid stack trace option <enable|disable>\n");
+			status = FTDM_FAIL;
+		}
+		goto done;
+	}
+
 	if (!strcasecmp(argv[0], "l1_stats")) {
 		ftdm_span_t *span;
 		if (argc < 2) {
@@ -1476,30 +1843,125 @@ static FIO_API_FUNCTION(ftdm_sangoma_isdn_api)
 		goto done;
 	}
 	
-	if (!strcasecmp(argv[0], "show_spans")) {
+	if (!strcasecmp(argv[0], "show_spans_xml")) {
 		ftdm_span_t *span = NULL;
 		if (argc == 2) {
 			status = ftdm_span_find_by_name(argv[1], &span);
 			if (FTDM_SUCCESS != status) {
 				stream->write_function(stream, "-ERR failed to find span with name %s\n", argv[1]);
 				
-				stream->write_function(stream, "Usage: %s\n", SANGOMA_ISDN_API_USAGE_SHOW_SPANS);
 				status = FTDM_FAIL;
 				goto done;
 			}
-			status = sngisdn_show_span(stream, span);
+			status = sngisdn_show_span(stream, span, 1);
 			goto done;
 		}
-		status = sngisdn_show_spans(stream);
+		status = sngisdn_show_spans(stream, 1);
 		goto done;
 	}
-	
+
+	if (!strcasecmp(argv[0], "show")) {
+		ftdm_span_t *span = NULL;
+		if (argc == 3) {
+			if (!strcasecmp(argv[1], "span")) {
+				status = ftdm_span_find_by_name(argv[2], &span);
+				if (FTDM_SUCCESS != status) {
+					if (!strcasecmp(argv[2], "all")) {
+						status = sngisdn_show_span_all_status(stream, 0);
+						goto done;
+					} else {
+						stream->write_function(stream, "Usage: %s\n", SANGOMA_ISDN_API_USAGE_SHOW_SPAN_STATUS);
+						status = FTDM_FAIL;
+						goto done;
+					}
+				} else {
+					status = sngisdn_show_span_status(stream, span);
+					goto done;
+				}
+			}
+			status = FTDM_FAIL;
+			stream->write_function(stream, "Usage: %s\n", SANGOMA_ISDN_API_USAGE_SHOW_SPAN_STATUS);
+			goto done;
+		}
+		stream->write_function(stream, "-ERR invalid span status option provided\n");
+		stream->write_function(stream, "Usage: %s\n", SANGOMA_ISDN_API_USAGE_SHOW_SPAN_STATUS);
+		status = FTDM_FAIL;
+		goto done;
+	}
+
+	if (!strcasecmp(argv[0], "show_calls_xml")) {
+		ftdm_span_t *span = NULL;
+		if (argc == 2) {
+			status = ftdm_span_find_by_name(argv[1], &span);
+			if (FTDM_SUCCESS != status) {
+				stream->write_function(stream, "-ERR failed to find span with name %s\n", argv[1]);
+				
+				status = FTDM_FAIL;
+				goto done;
+			}
+			if (span->signal_type != FTDM_SIGTYPE_ISDN) {
+				stream->write_function(stream, "-ERR %s: is not a sangoma_isdn span\n", argv[1]);
+				status = FTDM_FAIL;
+				goto done;
+			}
+			status = sngisdn_show_calls_span(stream, span, 1);
+			goto done;
+		}
+		status = sngisdn_show_calls(stream, 1);
+		goto done;
+	}
 	if (!strcasecmp(argv[0], "check_ids")) {
 		status = sngisdn_check_free_ids();
 		goto done;
 	}
 	if (!strcasecmp(argv[0], "check_mem")) {
 		sngisdn_get_memory_info();
+	}
+
+	if (!strcasecmp(argv[0], "show_stack_memory")) {
+		sngisdn_get_memory_info();
+		status = FTDM_SUCCESS;
+	}
+
+	if (!strcasecmp(argv[0], "send")) {
+		ftdm_span_t *span = NULL;
+		ftdm_channel_t *chan = NULL;
+		if (argc == 5) {
+			if (!((!strcasecmp(argv[1], "unblock")) || (!strcasecmp(argv[1], "block")))) {
+				stream->write_function(stream, "Invalid action specified only support block/unblock!\n");
+				stream->write_function(stream, "Usage: ftdm sangoma_isdn send <block/unblock> srv_req <span_name/span_id> <channel_id>\n");
+				goto done;
+			}
+
+			if (!strcasecmp(argv[2], "srv_req")) {
+				status = ftdm_span_find_by_name(argv[3], &span);
+				if (FTDM_SUCCESS != status) {
+					stream->write_function(stream, "Invalid span specified!\n");
+					stream->write_function(stream, "Usage: ftdm sangoma_isdn send <block/unblock> srv_req <span_name/span_id> <channel_id>\n");
+					status = FTDM_FAIL;
+					goto done;
+				}
+
+				chan = ftdm_span_get_channel(span, atoi(argv[4]));
+				if (chan == NULL) {
+					stream->write_function(stream, "Invalid channel specified!\n");
+					stream->write_function(stream, "Usage: ftdm sangoma_isdn send <block/unblock> srv_req <span_name/span_id> <channel_id>\n");
+					status = FTDM_FAIL;
+					goto done;
+				}
+
+				status = sngisdn_snd_srv_req(chan, argv[1]);
+				goto done;
+
+			}
+			status = FTDM_FAIL;
+			stream->write_function(stream, "Usage: ftdm sangoma_isdn send <block/unblock> srv_req <span_name/span_id> <channel_id>\n");
+			goto done;
+		}
+		stream->write_function(stream, "-ERR invalid send option provided!\n");
+		stream->write_function(stream, "Usage: ftdm sangoma_isdn send <block/unblock> srv_req <span_name/span_id> <channel_id>\n");
+		status = FTDM_FAIL;
+		goto done;
 	}
 done:
 	switch (status) {
@@ -1546,7 +2008,7 @@ EX_DECLARE_DATA ftdm_module_t ftdm_module =
 	ftdm_sangoma_isdn_span_config  /* fio_configure_span_signaling_t */
 };
 
-
+/******************************************************************************/
 /* For Emacs:
  * Local Variables:
  * mode:c
@@ -1557,7 +2019,3 @@ EX_DECLARE_DATA ftdm_module_t ftdm_module =
  * For VIM:
  * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
  */
-
-/******************************************************************************/
-
-

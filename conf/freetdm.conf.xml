@@ -501,13 +501,13 @@ with the signaling protocols that you can run on top of your I/O interfaces.
 			-->
 			<!-- 
 				Send CONNECT ACK
-				Whether to send a Connect Ack 
+				Whether to send a Connect Ack
 
 				Possible values:
 				yes - send connect ack
 				no - do not send connect ack
 				default (will transmit Connect Ack based on variant + signaling)
-			
+
 				<param name="send-connect-ack" value="yes"/>
 			-->
 
@@ -629,5 +629,99 @@ with the signaling protocols that you can run on top of your I/O interfaces.
 			<!-- <param name="startup-command" value="AT$GPSAT=1" /> -->
 		</span>
 	</gsm_spans>
+
+	<!--
+	     Sangoma Transparent Span/Channel configuration.
+	     Transparent Span/channel is required when we want to transparently relay the E1 data over IP and vice-versa.
+	     Network scenario -
+	     Telco  < == X channel data over E1 == >  Sangoma GW < == X channel data over IP == > Sangoma GW < == X channel data over E1 == > Telco
+	-->
+
+	<transparent_spans>
+		<!-- Optional parameters -->
+		<!--
+		     User may not need to change these parameters unless it is really required.
+		     Default value of chunk-size is set to 10 and echo-cancel mode is DISABLE
+		-->
+		<span_gen>
+			<param name="chunk-size" value="10"/>
+			<param name="echo-cancel" value="no"/>
+		</span_gen>
+
+		<span name="wp1">
+			<!-- Mandatory parameters -->
+			<!-- This part of configuration configures transparent channel and its
+		             respective dependent configurable parameters
+			-->
+			<channel id="1">
+				<!-- remote IP to send raw data present on transparent channel -->
+				<param name="remote-ip" value="xxx.xxx.xxx.xxx"/>
+
+				<!-- remote port -->
+				<param name="remote-port" value="wxyz"/>
+
+				<!-- local IP to received raw data present on socket -->
+				<param name="local-ip" value="yyy.yyy.yyy.yyy"/>
+
+				<!-- local port -->
+				<param name="local-port" value="xwyz"/>
+			</channel>
+		</span>
+	</transparent_spans>
+
+	<!--
+		SANGOMA ISDN passive tapping spans
+		ISDN Tapping SPAN is required when we need to passively tap E1/T1 messages
+	-->
+	<sangoma_isdn_tap_spans>
+		<span name="tap1" cfgprofile="E1 PRI CPE">
+			<!--
+				Switch emulation/Variant
+				Possible values are:
+					national
+					4ess
+					5ess
+					qsig
+					euroisdn
+					ntt
+
+			<param name="switchtype" value="national"/>
+			-->
+
+			<!--
+				The peer span name used to tap the link
+
+			<param name="peerspan" value="tap2"/>
+			-->
+
+			<!--
+				Only useful in case of NFAS Tapping. Trunkgroup is used to set NFAS group
+				name, number of spans present in that NFAS group, primary signalling span
+				of that NFAS group and back up signalling span of that NFAS group
+
+			<param name="trunkgroup" value="nfas1,3,wp1,wp2"/>
+			-->
+
+			<!--
+				Only useful in case of NFAS Tapping. Spanmap is used to set in which NFAS
+				group does the span belongs to and span's logical ID in that NFAS group
+
+			<param name="spanmap" value="nfas1,0"/>
+			-->
+
+			<!--
+				To enable bi-directional call control that is to generate SIP INVITE
+				as soon as SETUP/PROCEED/PROGRESS/ALERT  any of these messages are
+				received and 200 K is being sent on receipt of CONNECT
+
+			<param name="tapmode" value="bi-dir"/>
+			-->
+
+			<!-- switch parameters (required), where to send calls to -->
+			<param name="dialplan" value="XML"/>
+			<param name="context" value="default"/>
+		</span>
+	</sangoma_isdn_tap_spans>
+
 </configuration>
 
