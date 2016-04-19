@@ -2754,7 +2754,7 @@ static dht_msg_type_t parse_message(const unsigned char *buf, int buflen,
 
 #define CHECK(ptr, len) if (((unsigned char*)ptr) + (len) > (buf) + (buflen)) goto overflow;
 
-	ks_log(KS_LOG_DEBUG, "Starting Bencode decode of DHT message\n");	
+	ks_log(KS_LOG_DEBUG, "\n\nStarting Bencode decode of DHT message\n");	
 
 	bencode_p = ben_decode((const void *) buf, buflen);
 	
@@ -2765,13 +2765,26 @@ static dht_msg_type_t parse_message(const unsigned char *buf, int buflen,
 		b_tmp = ben_dict_get_by_str(bencode_p, "t");
 		if ( b_tmp ) {
 			const char *val = ben_str_val(b_tmp);
-			ks_log(KS_LOG_DEBUG, "Message transaction [%s]\n", val);
+			ks_log(KS_LOG_DEBUG, "Message transaction [%02X%02X]\n", val[0], val[1]);
 		}
 
 		if ( ( b_tmp = ben_dict_get_by_str(bencode_p, "y") ) ) {
 			if ( ben_cmp_with_str(b_tmp, "q") ) {
+				struct bencode *b_query = NULL;
 				const char *val = ben_str_val(b_tmp);
 				ks_log(KS_LOG_DEBUG, "Message Query [%s]\n", val);
+
+				if ( !( b_query = ben_dict_get_by_str(bencode_p, "q") ) ) {
+					ks_log(KS_LOG_DEBUG, "Unable to locate query type field\n");
+				} else { /* Has a query type */
+					const char *query_type = ben_str_val(b_query);
+					if (!ben_cmp_with_str(b_tmp, "asdf")) {
+						ks_log(KS_LOG_DEBUG, "asdf\n");
+					} else {
+						ks_log(KS_LOG_DEBUG, "Unknown query type field [%s]\n", query_type);
+					}
+				}
+				
 			} else if ( ben_cmp_with_str(b_tmp, "r") ) {
 				const char *val = ben_str_val(b_tmp);
 				ks_log(KS_LOG_DEBUG, "Message Response [%s]\n", val);
@@ -2781,6 +2794,8 @@ static dht_msg_type_t parse_message(const unsigned char *buf, int buflen,
 			} else {
 				ks_log(KS_LOG_DEBUG, "Message Type Unknown!!!\n");
 			}
+		} else {
+			ks_log(KS_LOG_DEBUG, "Message Type Unknown, has no 'y' key!!!\n");
 		}
 		
 		/* 
