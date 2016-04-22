@@ -1,0 +1,266 @@
+diff --git a/libs/apr/include/apr_network_io.h b/libs/apr/include/apr_network_io.h
+index 24708c5..0adf90e 100644
+--- a/libs/apr/include/apr_network_io.h
++++ b/libs/apr/include/apr_network_io.h
+@@ -632,6 +632,12 @@ APR_DECLARE(apr_status_t) apr_socket_opt_get(apr_socket_t *sock,
+                                              apr_int32_t opt, apr_int32_t *on);
+ 
+ /**
++ * Get Socket fd for the socket passed
++ * @param sock The socket to quesry for the socket fd
++ */
++APR_DECLARE(int) apr_socket_fd_get(apr_socket_t *sock);
++
++/**
+  * Query socket timeout for the specified socket
+  * @param sock The socket to query
+  * @param t Socket timeout returned from the query.
+diff --git a/libs/apr/network_io/os2/sockopt.c b/libs/apr/network_io/os2/sockopt.c
+index 101a952..8a7133e 100644
+--- a/libs/apr/network_io/os2/sockopt.c
++++ b/libs/apr/network_io/os2/sockopt.c
+@@ -109,6 +109,15 @@ APR_DECLARE(apr_status_t) apr_socket_opt_get(apr_socket_t *sock,
+     return APR_SUCCESS;
+ }
+ 
++APR_DECLARE(int) apr_socket_fd_get(apr_socket_t *sock)
++{
++	if (sock) {
++		return sock->socketdes;
++	} else {
++		return 0;
++	}
++}
++
+ 
+ APR_DECLARE(apr_status_t) apr_socket_atmark(apr_socket_t *sock, int *atmark)
+ {
+diff --git a/libs/apr/network_io/unix/sockopt.c b/libs/apr/network_io/unix/sockopt.c
+index 3fc932f..b9d7769 100644
+--- a/libs/apr/network_io/unix/sockopt.c
++++ b/libs/apr/network_io/unix/sockopt.c
+@@ -343,6 +343,15 @@ apr_status_t apr_socket_opt_get(apr_socket_t *sock,
+     return APR_SUCCESS;
+ }
+ 
++int apr_socket_fd_get(apr_socket_t *sock)
++{
++	if (sock) {
++		return sock->socketdes;
++	} else {
++		return 0;
++	}
++}
++
+ 
+ apr_status_t apr_socket_atmark(apr_socket_t *sock, int *atmark)
+ {
+diff --git a/libs/apr/network_io/win32/sockopt.c b/libs/apr/network_io/win32/sockopt.c
+index c8e670f..30e73e5 100644
+--- a/libs/apr/network_io/win32/sockopt.c
++++ b/libs/apr/network_io/win32/sockopt.c
+@@ -243,6 +243,15 @@ APR_DECLARE(apr_status_t) apr_socket_opt_get(apr_socket_t *sock,
+     return APR_SUCCESS;
+ }
+ 
++APR_DECLARE(int) apr_socket_fd_get(apr_socket_t *sock)
++{
++	if (sock) {
++		return sock->socketdes;
++	} else {
++		return 0;
++	}
++}
++
+ 
+ APR_DECLARE(apr_status_t) apr_socket_atmark(apr_socket_t *sock, int *atmark)
+ {
+diff --git a/sangoma-public-fs-compile.txt b/sangoma-public-fs-compile.txt
+new file mode 100644
+index 0000000..0df0100
+--- /dev/null
++++ b/sangoma-public-fs-compile.txt
+@@ -0,0 +1,56 @@
++This Readme shows how we can compile (sangoma + public) merged freeTDM
++with public freeswitch v-1.6
++
++Download and Compile Public Freeswitch v1.6 and (sangom + public v1.6) Merged FreeTDM
++-------------------------------------------------------------------------------------
++1) Download public freeswitch using git or from public freeswitch website
++   git clone https://freeswitch.org/stash/scm/fs/freeswitch.git public_freeswitch
++
++2) change public freeswitch git repo branch to "v1.6"
++   git checkout -b v1.6 origin/v1.6
++
++3) Download (sangoma + public) merged freetdm from the public git directory
++
++4) Now change merged freetdm git repo branch to "public_v1.6-merge"
++   git checkout -b public_v1.6-merge origin/public_v1.6-merge
++
++5) Now replace freetdm directorty as present in public freeswitch with
++   the merged freeTDM directory
++
++6) Now compile public freeswitch containing merged freeTDM
++   Public freeswitch v1.6 has configuration of compiling freeswitch with File System Hierarchy(FHS) enable or disable
++
++   E.g.: Compiling FS with merged freeTDM with FHS enable
++         ./devel-bootstrap.sh --prefix=<base-directory> --enable-fhs
++                               or
++         ./devel-bootstrap.sh --prefix=<base-directory>
++
++         Compiling FS with merged freeTDM with FHS disable
++         ./devel-bootstrap.sh --prefix=<base-directory> --disable-fhs
++
++NOTE: 1) <base-directory> is where FS is installed
++      2) By default FHS is enable.
++
++
++Run Merged freeTDM with public FS:
++----------------------------------
++In v1.6 public freeswitch added a support to build/compile freeswitch with fhs for further information regarding "fhs" please refer to below link
++https://freeswitch.org/fisheye/changelog/freeswitch?cs=f5ecbc84ca2f12a31d14474044ddcd4ca3187715
++
++Compiling public freeswitch with FHS enable is by default and it would lead to set default patch as per file system hierarchy standard(FHS) in such case
++freeswitch config directory changes to : <base-directory>/etc/freeswitch/conf
++freeswitch modules directory changes to: <base-directory>/lib/freeswitch/mod
++
++NOTE:
++      ========================================
++      1) When FHS is enable while compiling FS
++      ========================================
++          1.1) In such case please copy freetdm modules specific libs as present in <base-directory>/mod/ to <base-directory>/lib/freeswitch/mod/
++          1.2) Make sure the comiguration file must present inside <base-directory>/etc/freeswitch/conf/
++
++
++      ========================================
++      2) When FHS is disable while compiling FS
++      ========================================
++          1.1) No need to move freeTDM modules as everything is on the proper path
++          1.2) Make sure the comiguration file must present inside <base-directory>/conf/
+diff --git a/src/include/switch_apr.h b/src/include/switch_apr.h
+index 5ab5d35..82a25f3 100644
+--- a/src/include/switch_apr.h
++++ b/src/include/switch_apr.h
+@@ -1103,6 +1103,12 @@ SWITCH_DECLARE(switch_status_t) switch_socket_accept(switch_socket_t ** new_sock
+  */
+ SWITCH_DECLARE(switch_status_t) switch_socket_connect(switch_socket_t *sock, switch_sockaddr_t *sa);
+ 
++/**
++ * Get socket fd for the switch socket passed
++ * @param sock The socket we wish to have fd
++ */
++SWITCH_DECLARE(int) switch_socket_fd_get(switch_socket_t *sock);
++
+ SWITCH_DECLARE(uint16_t) switch_sockaddr_get_port(switch_sockaddr_t *sa);
+ SWITCH_DECLARE(const char *) switch_get_addr(char *buf, switch_size_t len, switch_sockaddr_t *in);
+ SWITCH_DECLARE(switch_status_t) switch_getnameinfo(char **hostname, switch_sockaddr_t *sa, int32_t flags);
+diff --git a/src/include/switch_core.h b/src/include/switch_core.h
+index 7a0a0e4..b14f6e7 100644
+--- a/src/include/switch_core.h
++++ b/src/include/switch_core.h
+@@ -2654,6 +2654,19 @@ SWITCH_DECLARE(switch_status_t) switch_core_del_registration(const char *user, c
+ */
+ SWITCH_DECLARE(switch_status_t) switch_core_expire_registration(int force);
+ 
++/*!
++ * \brief Get RTP port range start value
++ * \param[in] void
++ * \param[out] RTP port range start value
++ */
++SWITCH_DECLARE(uint16_t) switch_core_get_rtp_port_range_start_port(void);
++
++/*!
++ * \brief Get RTP port range end value
++ * \param[in] void
++ * \param[out] RTP port range end value
++ */
++SWITCH_DECLARE(uint16_t) switch_core_get_rtp_port_range_end_port(void);
+ 
+ SWITCH_DECLARE(char *) switch_say_file_handle_get_variable(switch_say_file_handle_t *sh, const char *var);
+ SWITCH_DECLARE(char *) switch_say_file_handle_get_path(switch_say_file_handle_t *sh);
+diff --git a/src/include/switch_types.h b/src/include/switch_types.h
+index b8da675..e4f08f8 100644
+--- a/src/include/switch_types.h
++++ b/src/include/switch_types.h
+@@ -1049,6 +1049,7 @@ typedef enum {
+ 	SWITCH_MESSAGE_INDICATE_UNBRIDGE,
+ 	SWITCH_MESSAGE_INDICATE_TRANSFER,
+ 	SWITCH_MESSAGE_INDICATE_RINGING,
++	SWITCH_MESSAGE_INDICATE_ALERTING,
+ 	SWITCH_MESSAGE_INDICATE_MEDIA,
+ 	SWITCH_MESSAGE_INDICATE_3P_MEDIA,
+ 	SWITCH_MESSAGE_INDICATE_NOMEDIA,
+diff --git a/src/mod/endpoints/mod_sofia/mod_sofia.c b/src/mod/endpoints/mod_sofia/mod_sofia.c
+index 8486b96..7c6d98b 100644
+--- a/src/mod/endpoints/mod_sofia/mod_sofia.c
++++ b/src/mod/endpoints/mod_sofia/mod_sofia.c
+@@ -2133,6 +2133,20 @@ static switch_status_t sofia_receive_message(switch_core_session_t *session, swi
+ 			}
+ 		}
+ 		break;
++	case SWITCH_MESSAGE_INDICATE_ALERTING:
++		{
++			char *extra_header = sofia_glue_get_extra_headers(channel, SOFIA_SIP_PROGRESS_HEADER_PREFIX);
++			const char *call_info = switch_channel_get_variable(channel, "presence_call_info_full");
++			char *cid = generate_pai_str(tech_pvt);
++			nua_respond(tech_pvt->nh, SIP_180_RINGING,
++					SIPTAG_CONTACT_STR(tech_pvt->reply_contact),
++					TAG_IF(cid, SIPTAG_HEADER_STR(cid)),
++					TAG_IF(call_info, SIPTAG_CALL_INFO_STR(call_info)),
++					TAG_IF(!zstr(extra_header), SIPTAG_HEADER_STR(extra_header)),
++					TAG_IF(switch_stristr("update_display", tech_pvt->x_freeswitch_support_remote),
++						SIPTAG_HEADER_STR("X-FS-Support: " FREESWITCH_SUPPORT)), TAG_END());
++		}
++		break;
+ 	case SWITCH_MESSAGE_INDICATE_RINGING:
+ 		{
+ 			switch_ring_ready_t ring_ready_val = msg->numeric_arg;
+diff --git a/src/switch_apr.c b/src/switch_apr.c
+index db226cb..c0ae265 100644
+--- a/src/switch_apr.c
++++ b/src/switch_apr.c
+@@ -908,6 +908,11 @@ SWITCH_DECLARE(const char *) switch_get_addr(char *buf, switch_size_t len, switc
+ 	return buf;
+ }
+ 
++SWITCH_DECLARE(int) switch_socket_fd_get(switch_socket_t *sock)
++{
++	return apr_socket_fd_get(sock);
++}
++
+ SWITCH_DECLARE(uint16_t) switch_sockaddr_get_port(switch_sockaddr_t *sa)
+ {
+ 	return sa->port;
+diff --git a/src/switch_core.c b/src/switch_core.c
+index 67d3560..f60dffc 100644
+--- a/src/switch_core.c
++++ b/src/switch_core.c
+@@ -3281,6 +3281,28 @@ SWITCH_DECLARE(int) switch_stream_system(const char *cmd, switch_stream_handle_t
+ 
+ }
+ 
++SWITCH_DECLARE(uint16_t) switch_core_get_rtp_port_range_start_port()
++{
++	uint16_t start_port = 0;
++
++	/* By default pass rtp port range start value as zero in order to get actual
++	 * RTP port range start value as configured */
++	start_port = (uint16_t)switch_rtp_set_start_port((switch_port_t)start_port);
++
++	return start_port;
++}
++
++SWITCH_DECLARE(uint16_t) switch_core_get_rtp_port_range_end_port()
++{
++	uint16_t end_port = 0;
++
++	/* By default pass rtp port range end value as zero in order to get actual
++         * RTP port range end value as configured */
++	end_port = (uint16_t)switch_rtp_set_end_port((switch_port_t)end_port);
++
++	return end_port;
++}
++
+ /* For Emacs:
+  * Local Variables:
+  * mode:c
