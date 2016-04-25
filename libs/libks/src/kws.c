@@ -390,7 +390,7 @@ KS_DECLARE(ks_ssize_t) kws_raw_read(kws_t *kws, void *data, ks_size_t bytes, int
 		}
 	} while (r == -1 && ks_errno_is_blocking(ks_errno()) && kws->x < 1000);
 	
-	if (kws->x >= 1000 || (block && kws->x >= 100)) {
+	if (kws->x >= 10000 || (block && kws->x >= 1000)) {
 		r = -1;
 	}
 
