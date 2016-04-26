@@ -2361,7 +2361,29 @@ static int dht_send(dht_handle_t *h, const void *buf, size_t len, int flags, con
 int send_ping(dht_handle_t *h, const struct sockaddr *sa, int salen, const unsigned char *tid, int tid_len)
 {
     char buf[512];
-    int i = 0, rc;
+    int i = 0;//, rc;
+	struct bencode *bencode_p = NULL;
+	struct bencode *bencode_a_p = NULL;
+
+	/* Sets some default values for message, then encodes 20 characters worth of local node id */
+	/* also adds the transaction id tid, then a few final key values. */
+
+	/* Sample encoded ping 'd1:ad2:id20:Td2????#?)y1:q4:ping1:t4:pn' */
+	/*                     'd1:ad2:id20:Td2????#?)y1:q4:ping1:t4:pn' */
+	/* https://en.wikipedia.org/wiki/Bencode */
+	/* Sample ping packet '{"t":"aa", "y":"q", "q":"ping", "a":{"id":"abcdefghij0123456789"}}' */
+	/* http://www.bittorrent.org/beps/bep_0005.html */
+	
+	bencode_a_p = ben_dict(); /* Initialize empty bencode dictionary */
+	ben_dict_set(bencode_a_p, ben_blob("id", 2), ben_blob(h->myid, 20));
+
+	bencode_p = ben_dict();
+	ben_dict_set(bencode_p, ben_blob("a", 1), bencode_a_p);
+	ben_dict_set(bencode_p, ben_blob("q", 1), ben_blob("ping", 4));
+	ben_dict_set(bencode_p, ben_blob("t", 1), ben_blob(tid, tid_len));
+	ben_dict_set(bencode_p, ben_blob("y", 1), ben_blob("q", 1));
+
+	/* 
     rc = ks_snprintf(buf + i, 512 - i, "d1:ad2:id20:"); INC(i, rc, 512);
     COPY(buf, i, h->myid, 20, 512);
     rc = ks_snprintf(buf + i, 512 - i, "e1:q4:ping1:t%d:", tid_len);
@@ -2369,11 +2391,18 @@ int send_ping(dht_handle_t *h, const struct sockaddr *sa, int salen, const unsig
     COPY(buf, i, tid, tid_len, 512);
     ADD_V(buf, i, 512);
     rc = ks_snprintf(buf + i, 512 - i, "1:y1:qe"); INC(i, rc, 512);
+	*/
+	ben_encode2(buf, 512, bencode_p);
+	ben_free(bencode_p); /* This SHOULD free the bencode_a_p as well */
+	
+	ks_log(KS_LOG_DEBUG, "Encoded PING: %s\n\n", buf);
     return dht_send(h, buf, i, 0, sa, salen);
 
+	/*
+	  // Need to fix, not just disable error handling.
  fail:
     errno = ENOSPC;
-    return -1;
+    return -1; */
 }
 
 int send_pong(dht_handle_t *h, const struct sockaddr *sa, int salen, const unsigned char *tid, int tid_len)
