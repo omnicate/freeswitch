@@ -514,6 +514,10 @@ static switch_status_t my_on_reporting(switch_core_session_t *session)
 
 	status = SWITCH_STATUS_SUCCESS;
 
+	if ( globals.shutdown ) {
+		return SWITCH_STATUS_FAILURE;
+	}
+
 	switch_thread_rwlock_rdlock(globals.rwlock);
 
 	for (hi = switch_core_hash_first(globals.profile_hash); hi; hi = switch_core_hash_next(&hi)) {
@@ -537,6 +541,10 @@ static void event_handler(switch_event_t *event)
 {
 	switch_hash_index_t *hi;
 	void *val;
+
+	if ( globals.shutdown ) {
+		return;
+	}
 
 	const char *sig = switch_event_get_header(event, "Trapped-Signal");
 
@@ -812,10 +820,10 @@ SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_format_cdr_shutdown)
 
 	globals.shutdown = 1;
 
-	switch_thread_rwlock_wrlock(globals.rwlock);
-
 	switch_event_unbind(&globals.node);
 	switch_core_remove_state_handler(&state_handlers);
+
+	switch_thread_rwlock_wrlock(globals.rwlock);
 
 	for (hi = switch_core_hash_first(globals.profile_hash); hi; hi = switch_core_hash_next(&hi)) {
 		cdr_profile_t *profile;
