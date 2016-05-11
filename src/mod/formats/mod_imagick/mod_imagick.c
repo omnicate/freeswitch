@@ -34,8 +34,6 @@
 
 
 #include <switch.h>
-#include <libyuv.h>
-
 
 #if defined(__clang__)
 /* the imagemagick header files are very badly broken on clang.  They really should be fixing this, in the mean time, this dirty hack works */
@@ -125,6 +123,33 @@ static switch_status_t imagick_file_open(switch_file_handle_t *handle, const cha
 	context->image_info = AcquireImageInfo();
 	switch_set_string(context->image_info->filename, path);
 
+	if (handle->params) {
+		const char *max = switch_event_get_header(handle->params, "img_ms");
+		const char *autoplay = switch_event_get_header(handle->params, "autoplay");
+		const char *density = switch_event_get_header(handle->params, "density");
+		const char *quality = switch_event_get_header(handle->params, "quality");
+		int tmp;
+
+		if (max) {
+			tmp = atol(max);
+			context->max = tmp;
+		}
+
+		if (autoplay) {
+			context->autoplay = atoi(autoplay);
+		}
+
+		if (density) {
+			context->image_info->density = strdup(density);
+		}
+
+		if (quality) {
+			tmp = atoi(quality);
+
+			if (tmp > 0) context->image_info->quality = tmp;
+		}
+	}
+
 	context->images = ReadImages(context->image_info, context->exception);
 	if (context->exception->severity != UndefinedException) {
 		CatchException(context->exception);
@@ -136,21 +161,7 @@ static switch_status_t imagick_file_open(switch_file_handle_t *handle, const cha
 	}
 
 	context->pagecount = GetImageListLength(context->images);
-
-	if (handle->params) {
-		const char *max = switch_event_get_header(handle->params, "img_ms");
-		const char *autoplay = switch_event_get_header(handle->params, "autoplay");
-		int tmp;
-
-		if (max) {
-			tmp = atol(max);
-			context->max = tmp;
-		}
-
-		if (autoplay) {
-			context->autoplay = atoi(autoplay);
-		}
-	}
+	handle->duration = context->pagecount;
 
 	if (context->max) {
 		context->samples = (handle->samplerate / 1000) * context->max;
@@ -263,12 +274,7 @@ static switch_status_t read_page(pdf_file_context_t *context)
 			return SWITCH_STATUS_FALSE;
 		}
 
-		RAWToI420(storage, w * 3,
-			context->img->planes[0], context->img->stride[0],
-			context->img->planes[1], context->img->stride[1],
-			context->img->planes[2], context->img->stride[2],
-			context->img->d_w, context->img->d_h);
-
+		switch_img_from_raw(context->img, storage, SWITCH_IMG_FMT_BGR24, w, h);
 		free(storage);
 	} else {
 		switch_image_t *img = switch_img_alloc(NULL, SWITCH_IMG_FMT_ARGB, image->columns, image->rows, 0);
@@ -354,6 +360,7 @@ static switch_status_t imagick_file_seek(switch_file_handle_t *handle, unsigned 
 		context->pagenumber = page;
 		context->same_page = 0;
 		*cur_sample = page;
+		handle->vpos = page;
 	}
 
 	return status;

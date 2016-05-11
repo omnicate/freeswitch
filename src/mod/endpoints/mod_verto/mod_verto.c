@@ -2006,6 +2006,7 @@ static void *SWITCH_THREAD_FUNC client_thread(switch_thread_t *thread, void *obj
 	if (switch_event_create_subclass(&s_event, SWITCH_EVENT_CUSTOM, MY_EVENT_CLIENT_DISCONNECT) == SWITCH_STATUS_SUCCESS) {
 		switch_event_add_header_string(s_event, SWITCH_STACK_BOTTOM, "verto_profile_name", jsock->profile->name);
 		switch_event_add_header_string(s_event, SWITCH_STACK_BOTTOM, "verto_client_address", jsock->name);
+		switch_event_add_header_string(s_event, SWITCH_STACK_BOTTOM, "verto_login", switch_str_nil(jsock->uid));
 		switch_event_fire(&s_event);
 	}
 	switch_thread_rwlock_wrlock(jsock->rwlock);
@@ -2131,7 +2132,8 @@ static switch_status_t verto_on_hangup(switch_core_session_t *session)
 		cJSON *params = NULL;
 		cJSON *msg = jrpc_new_req("verto.bye", tech_pvt->call_id, &params);
 		switch_call_cause_t cause = switch_channel_get_cause(tech_pvt->channel);
-		
+		switch_channel_set_variable(tech_pvt->channel, "verto_hangup_disposition", "send_bye");
+
 		cJSON_AddItemToObject(params, "causeCode", cJSON_CreateNumber(cause));
 		cJSON_AddItemToObject(params, "cause", cJSON_CreateString(switch_channel_cause2str(cause)));
 		jsock_queue_event(jsock, &msg, SWITCH_TRUE);
@@ -2163,6 +2165,7 @@ static switch_status_t verto_connect(switch_core_session_t *session, const char 
 
 		switch_channel_set_variable(tech_pvt->channel, "verto_user", jsock->uid);
 		switch_channel_set_variable(tech_pvt->channel, "presence_id", jsock->uid);
+		switch_channel_set_variable(tech_pvt->channel, "verto_client_address", jsock->name);
 		switch_channel_set_variable(tech_pvt->channel, "chat_proto", VERTO_CHAT_PROTO);
 		switch_channel_set_variable(tech_pvt->channel, "verto_host", jsock->domain);
 
@@ -2661,6 +2664,7 @@ static switch_bool_t verto__answer_func(const char *method, cJSON *params, jsock
 
 		tech_pvt->r_sdp = switch_core_session_strdup(session, sdp);
 		switch_channel_set_variable(tech_pvt->channel, SWITCH_R_SDP_VARIABLE, sdp);		
+		switch_channel_set_variable(tech_pvt->channel, "verto_client_address", jsock->name);
 		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "Remote SDP %s:\n%s\n", switch_channel_get_name(tech_pvt->channel), sdp);
 		switch_core_media_set_sdp_codec_string(session, sdp, SDP_TYPE_RESPONSE);
 
@@ -2740,6 +2744,7 @@ static switch_bool_t verto__bye_func(const char *method, cJSON *params, jsock_t 
 	if ((session = switch_core_session_locate(call_id))) {
 		verto_pvt_t *tech_pvt = switch_core_session_get_private_class(session, SWITCH_PVT_SECONDARY);
 		tech_pvt->remote_hangup_cause = cause;
+		switch_channel_set_variable(tech_pvt->channel, "verto_hangup_disposition", "recv_bye");
 		switch_channel_hangup(tech_pvt->channel, cause);
 
 		cJSON_AddItemToObject(obj, "message", cJSON_CreateString("CALL ENDED"));
@@ -3350,7 +3355,7 @@ static switch_bool_t verto__info_func(const char *method, cJSON *params, jsock_t
 
 static switch_bool_t verto__invite_func(const char *method, cJSON *params, jsock_t *jsock, cJSON **response)
 {
-	cJSON *obj = cJSON_CreateObject(), *screenShare = NULL, *dedEnc = NULL, *mirrorInput, *json_ptr = NULL, *bandwidth = NULL;
+	cJSON *obj = cJSON_CreateObject(), *screenShare = NULL, *dedEnc = NULL, *mirrorInput, *json_ptr = NULL, *bandwidth = NULL, *canvas = NULL;
 	switch_core_session_t *session = NULL;
 	switch_channel_t *channel;
 	switch_event_t *var_event;
@@ -3433,6 +3438,21 @@ static switch_bool_t verto__invite_func(const char *method, cJSON *params, jsock
 		switch_channel_set_flag(channel, CF_VIDEO_MIRROR_INPUT);
 	}
 
+	if ((canvas = cJSON_GetObjectItem(dialog, "conferenceCanvasID"))) {
+		int canvas_id = 0;
+		
+		if (!zstr(canvas->valuestring)) {
+			canvas_id = atoi(canvas->valuestring);
+		} else if (canvas->valueint) {
+			canvas_id = canvas->valueint;
+		}
+
+		if (canvas_id >= 0) {
+			switch_channel_set_variable_printf(channel, "video_initial_watching_canvas", "%d", canvas_id);
+			switch_channel_set_variable(channel, "video_second_screen", "true");
+		}
+	}
+
 	if ((bandwidth = cJSON_GetObjectItem(dialog, "outgoingBandwidth"))) {
 		int core_bw = 0, bwval = 0;
 		const char *val;
@@ -3492,6 +3512,7 @@ static switch_bool_t verto__invite_func(const char *method, cJSON *params, jsock
 	switch_channel_set_variable(channel, "jsock_uuid_str", jsock->uuid_str);
 	switch_channel_set_variable(channel, "verto_user", jsock->uid);
 	switch_channel_set_variable(channel, "presence_id", jsock->uid);
+	switch_channel_set_variable(channel, "verto_client_address", jsock->name);
 	switch_channel_set_variable(channel, "chat_proto", VERTO_CHAT_PROTO);
 	switch_channel_set_variable(channel, "verto_host", jsock->domain);
 	switch_channel_set_variable(channel, "event_channel_cookie", tech_pvt->jsock_uuid);

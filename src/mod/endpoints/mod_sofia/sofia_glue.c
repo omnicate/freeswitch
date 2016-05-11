@@ -644,7 +644,7 @@ void sofia_glue_set_extra_headers(switch_core_session_t *session, sip_t const *s
 	}
 
 	for (un = sip->sip_unknown; un; un = un->un_next) {
-		if ((!strncasecmp(un->un_name, "X-", 2) && strncasecmp(un->un_name, "X-FS-", 5)) || !strncasecmp(un->un_name, "P-", 2)) {
+		if ((!strncasecmp(un->un_name, "X-", 2) && strncasecmp(un->un_name, "X-FS-", 5)) || !strncasecmp(un->un_name, "P-", 2) || !strncasecmp(un->un_name, "On", 2)) {
 			if (!zstr(un->un_value)) {
 				switch_snprintf(name, sizeof(name), "%s%s", prefix, un->un_name);
 				switch_channel_set_variable(channel, name, un->un_value);
@@ -2476,9 +2476,6 @@ switch_bool_t sofia_glue_execute_sql_callback(sofia_profile_t *profile,
 
 	switch_cache_db_release_db_handle(&dbh);
 
-
-	sofia_glue_fire_events(profile);
-
 	return ret;
 }
 
@@ -2514,9 +2511,6 @@ char *sofia_glue_execute_sql2str(sofia_profile_t *profile, switch_mutex_t *mutex
 	}
 
 	switch_cache_db_release_db_handle(&dbh);
-
-
-	sofia_glue_fire_events(profile);
 
 	return ret;
 }
@@ -3091,6 +3085,24 @@ void sofia_event_fire(sofia_profile_t *profile, switch_event_t **event)
 {
 	switch_queue_push(profile->event_queue, *event);
 	*event = NULL;
+}
+
+void sofia_glue_clear_soa(switch_core_session_t *session, switch_bool_t partner)
+{
+	switch_core_session_t *other_session;
+	struct private_object *tech_pvt = switch_core_session_get_private(session);
+
+	sofia_clear_flag(tech_pvt, TFLAG_ENABLE_SOA);
+
+	if (partner && switch_core_session_get_partner(session, &other_session) == SWITCH_STATUS_SUCCESS) {
+		if (switch_core_session_compare(session, other_session)) {
+			struct private_object *other_tech_pvt = switch_core_session_get_private(other_session);
+			
+			sofia_clear_flag(other_tech_pvt, TFLAG_ENABLE_SOA);
+		}
+		switch_core_session_rwunlock(other_session);
+	}
+
 }
 
 

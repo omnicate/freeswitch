@@ -239,16 +239,16 @@ struct switch_callstate_table {
 	switch_channel_callstate_t callstate;
 };
 static struct switch_callstate_table CALLSTATE_CHART[] = {
-    {"DOWN", CCS_DOWN},
-    {"DIALING", CCS_DIALING},
-    {"RINGING", CCS_RINGING},
-    {"EARLY", CCS_EARLY},
-    {"ACTIVE", CCS_ACTIVE},
-    {"HELD", CCS_HELD},
-    {"RING_WAIT", CCS_RING_WAIT},
-    {"HANGUP", CCS_HANGUP},
+	{"DOWN", CCS_DOWN},
+	{"DIALING", CCS_DIALING},
+	{"RINGING", CCS_RINGING},
+	{"EARLY", CCS_EARLY},
+	{"ACTIVE", CCS_ACTIVE},
+	{"HELD", CCS_HELD},
+	{"RING_WAIT", CCS_RING_WAIT},
+	{"HANGUP", CCS_HANGUP},
 	{"UNHELD", CCS_UNHELD},
-    {NULL, 0}
+	{NULL, 0}
 };
 
 struct switch_device_state_table {
@@ -256,14 +256,14 @@ struct switch_device_state_table {
 	switch_device_state_t device_state;
 };
 static struct switch_device_state_table DEVICE_STATE_CHART[] = {
-    {"DOWN", SDS_DOWN},
-    {"RINGING", SDS_RINGING},
-    {"ACTIVE", SDS_ACTIVE},
-    {"ACTIVE_MULTI", SDS_ACTIVE_MULTI},
-    {"HELD", SDS_HELD},
-    {"UNHELD", SDS_UNHELD},
-    {"HANGUP", SDS_HANGUP},
-    {NULL, 0}
+	{"DOWN", SDS_DOWN},
+	{"RINGING", SDS_RINGING},
+	{"ACTIVE", SDS_ACTIVE},
+	{"ACTIVE_MULTI", SDS_ACTIVE_MULTI},
+	{"HELD", SDS_HELD},
+	{"UNHELD", SDS_UNHELD},
+	{"HANGUP", SDS_HANGUP},
+	{NULL, 0}
 };
 
 
@@ -3246,6 +3246,7 @@ SWITCH_DECLARE(switch_channel_state_t) switch_channel_perform_hangup(switch_chan
 		switch_event_t *event;
 		const char *var;
 
+
 		switch_mutex_lock(channel->profile_mutex);
 		if (channel->hold_record && !channel->hold_record->off) {
 			channel->hold_record->off = switch_time_now();
@@ -3882,6 +3883,10 @@ SWITCH_DECLARE(char *) switch_channel_expand_variables_check(switch_channel_t *c
 					p++;
 					continue;
 				} else if (*(p + 1) == '\\') {
+					if (len + 1 >= olen) {
+						resize(1);
+					}
+
 					*c++ = *p++;
 					len++;
 					continue;
@@ -3907,6 +3912,10 @@ SWITCH_DECLARE(char *) switch_channel_expand_variables_check(switch_channel_t *c
 			}
 
 			if (nv) {
+				if (len + 1 >= olen) {
+					resize(1);
+				}
+
 				*c++ = *p;
 				len++;
 				nv = 0;
@@ -4102,11 +4111,12 @@ SWITCH_DECLARE(char *) switch_channel_expand_variables_check(switch_channel_t *c
 				vname = NULL;
 				br = 0;
 			}
-			if (len + 1 >= olen) {
-				resize(1);
-			}
 
 			if (sp) {
+				if (len + 1 >= olen) {
+					resize(1);
+				}
+
 				*c++ = ' ';
 				sp = 0;
 				len++;
@@ -4115,6 +4125,10 @@ SWITCH_DECLARE(char *) switch_channel_expand_variables_check(switch_channel_t *c
 			if (*p == '$') {
 				p--;
 			} else {
+				if (len + 1 >= olen) {
+					resize(1);
+				}
+
 				*c++ = *p;
 				len++;
 			}

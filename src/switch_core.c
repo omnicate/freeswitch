@@ -348,7 +348,7 @@ SWITCH_DECLARE(const char *) switch_core_get_hostname(void)
 
 SWITCH_DECLARE(const char *) switch_core_get_switchname(void)
 {
-    if (!zstr(runtime.switchname)) return runtime.switchname;
+	if (!zstr(runtime.switchname)) return runtime.switchname;
 	return runtime.hostname;
 }
 
@@ -2312,7 +2312,7 @@ static void switch_load_core_config(const char *file)
 #endif
 				} else if (!strcasecmp(var, "switchname") && !zstr(val)) {
 					runtime.switchname = switch_core_strdup(runtime.memory_pool, val);
-                    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "Set switchname to %s\n", runtime.switchname);
+					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "Set switchname to %s\n", runtime.switchname);
 				} else if (!strcasecmp(var, "rtp-retain-crypto-keys")) {
 					if (switch_true(val)) {
 						switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING,
@@ -3279,6 +3279,28 @@ SWITCH_DECLARE(int) switch_stream_system(const char *cmd, switch_stream_handle_t
 	return switch_stream_system_fork(cmd, stream);
 #endif
 
+}
+
+SWITCH_DECLARE(uint16_t) switch_core_get_rtp_port_range_start_port()
+{
+	uint16_t start_port = 0;
+
+	/* By default pass rtp port range start value as zero in order to get actual
+	 * RTP port range start value as configured */
+	start_port = (uint16_t)switch_rtp_set_start_port((switch_port_t)start_port);
+
+	return start_port;
+}
+
+SWITCH_DECLARE(uint16_t) switch_core_get_rtp_port_range_end_port()
+{
+	uint16_t end_port = 0;
+
+	/* By default pass rtp port range end value as zero in order to get actual
+	 * RTP port range end value as configured */
+	end_port = (uint16_t)switch_rtp_set_end_port((switch_port_t)end_port);
+
+	return end_port;
 }
 
 /* For Emacs:

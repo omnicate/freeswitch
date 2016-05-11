@@ -736,6 +736,10 @@ switch_status_t conference_member_add(conference_obj_t *conference, conference_m
 
 		channel = switch_core_session_get_channel(member->session);
 
+		if (switch_true(switch_channel_get_variable_dup(member->channel, "video_second_screen", SWITCH_FALSE, -1))) {
+			conference_utils_member_set_flag(member, MFLAG_SECOND_SCREEN);
+		}
+
 		conference_video_check_avatar(member, SWITCH_FALSE);
 
 		if ((var = switch_channel_get_variable_dup(member->channel, "video_initial_canvas", SWITCH_FALSE, -1))) {
@@ -748,16 +752,16 @@ switch_status_t conference_member_add(conference_obj_t *conference, conference_m
 
 		if ((var = switch_channel_get_variable_dup(member->channel, "video_initial_watching_canvas", SWITCH_FALSE, -1))) {
 			uint32_t id = atoi(var) - 1;
-
+			
 			if (id == 0) {
 				id = conference->canvas_count;
 			}
-
+			
 			if (id <= conference->canvas_count && conference->canvases[id]) {
 				member->watching_canvas_id = id;
 			}
 		}
-
+		
 		conference_video_reset_member_codec_index(member);
 
 		if (has_video) {
@@ -779,7 +783,7 @@ switch_status_t conference_member_add(conference_obj_t *conference, conference_m
 			}
 		
 			if ((var = switch_channel_get_variable(member->channel, "rtp_video_max_bandwidth_out"))) {
-				member->max_bw_out = switch_parse_bandwidth_string(var);;
+				member->max_bw_out = switch_parse_bandwidth_string(var);
 
 				if (member->max_bw_out < conference->video_codec_settings.video.bandwidth) {
 					conference_utils_member_set_flag_locked(member, MFLAG_NO_MINIMIZE_ENCODING);
@@ -1638,7 +1642,7 @@ int conference_member_setup_media(conference_member_t *member, conference_obj_t 
 		switch_resample_destroy(&member->read_resampler);
 	}
 
-	switch_core_session_get_read_impl(member->session, &member->orig_read_impl);
+	switch_core_session_get_real_read_impl(member->session, &member->orig_read_impl);
 	member->native_rate = member->orig_read_impl.samples_per_second;
 
 	/* Setup a Signed Linear codec for reading audio. */

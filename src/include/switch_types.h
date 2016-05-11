@@ -948,13 +948,6 @@ typedef struct {
 #pragma pack(push, r1, 1)
 #endif
 
-typedef struct switch_rtcp_sdes_unit_s {
-	unsigned char type;
-	unsigned char length;
-	char value[];
-} switch_rtcp_sdes_unit_t;
-
-
 #if SWITCH_BYTE_ORDER == __BIG_ENDIAN
 typedef struct switch_rtcp_hdr_s {
 	unsigned version:2;			/* protocol version                  */
@@ -1049,6 +1042,7 @@ typedef enum {
 	SWITCH_MESSAGE_INDICATE_UNBRIDGE,
 	SWITCH_MESSAGE_INDICATE_TRANSFER,
 	SWITCH_MESSAGE_INDICATE_RINGING,
+	SWITCH_MESSAGE_INDICATE_ALERTING,
 	SWITCH_MESSAGE_INDICATE_MEDIA,
 	SWITCH_MESSAGE_INDICATE_3P_MEDIA,
 	SWITCH_MESSAGE_INDICATE_NOMEDIA,
@@ -1358,6 +1352,8 @@ CF_STOP_BROADCAST	- Signal to stop broadcast
 CF_AUDIO_PAUSE      - Audio is not ready to read/write
 CF_VIDEO_PAUSE      - Video is not ready to read/write
 
+CF_MEDIA_SET        - Session has read codec assigned
+
 </pre>
  */
 
@@ -1491,6 +1487,7 @@ typedef enum {
 	CF_VIDEO_BITRATE_UNMANAGABLE,
 	CF_VIDEO_ECHO,
 	CF_VIDEO_BLANK,
+	CF_VIDEO_WRITING,
 	CF_SLA_INTERCEPT,
 	CF_VIDEO_BREAK,
 	CF_AUDIO_PAUSE,
@@ -1517,8 +1514,9 @@ typedef enum {
 } switch_channel_flag_t;
 
 typedef struct switch_vid_params_s {
-	int width;
-	int height;
+	uint32_t width;
+	uint32_t height;
+	uint32_t fps;
 } switch_vid_params_t;
 
 
@@ -1811,7 +1809,8 @@ typedef enum {
 	SWITCH_FILE_WRITE_OVER = (1 << 16),
 	SWITCH_FILE_NOMUX = (1 << 17),
 	SWITCH_FILE_BREAK_ON_CHANGE = (1 << 18),
-	SWITCH_FILE_FLAG_VIDEO = (1 << 19)
+	SWITCH_FILE_FLAG_VIDEO = (1 << 19),
+	SWITCH_FILE_FLAG_VIDEO_EOF = (1 << 20)
 } switch_file_flag_enum_t;
 typedef uint32_t switch_file_flag_t;
 
@@ -2548,7 +2547,8 @@ typedef enum {
 	SWITCH_MEDIA_FLOW_SENDRECV = 0,
 	SWITCH_MEDIA_FLOW_SENDONLY,
 	SWITCH_MEDIA_FLOW_RECVONLY,
-	SWITCH_MEDIA_FLOW_INACTIVE
+	SWITCH_MEDIA_FLOW_INACTIVE,
+	SWITCH_MEDIA_FLOW_DISABLED
 } switch_media_flow_t;
 
 typedef enum {
@@ -2594,6 +2594,11 @@ typedef enum {
 	SPY_LOWER_RIGHT_LARGE,
 	SPY_DUAL_CROP
 } switch_vid_spy_fmt_t;
+
+typedef enum {
+	SCFC_FLUSH_AUDIO,
+	SCFC_PAUSE_READ
+} switch_file_command_t;
 
 SWITCH_END_EXTERN_C
 #endif

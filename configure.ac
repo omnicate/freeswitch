@@ -377,6 +377,16 @@ if test "$ax_cv_c_compiler_vendor" = "gnu"; then
         [ac_cv_gcc_supports_w_no_unused_result=no])])
   CFLAGS="$saved_CFLAGS"
   AC_MSG_RESULT($ac_cv_gcc_supports_w_no_unused_result)
+
+  saved_CFLAGS="$CFLAGS"
+  AC_CACHE_CHECK([whether compiler supports -Wno-misleading-indentation],
+    [ac_cv_gcc_supports_w_no_misleading_indentation], [
+      CFLAGS="$CFLAGS -Wno-misleading-indentation -Wno-error=misleading-indentation"
+      AC_TRY_COMPILE([],[return 0;],
+        [ac_cv_gcc_supports_w_no_misleading_indentation=yes],
+        [ac_cv_gcc_supports_w_no_misleading_indentation=no])])
+  CFLAGS="$saved_CFLAGS"
+  AC_MSG_RESULT($ac_cv_gcc_supports_w_no_misleading_indentation)
 fi
 
 # tweak compiler specific flags
@@ -411,6 +421,10 @@ elif test "x${ax_cv_c_compiler_vendor}" = "xgnu" ; then
     AC_SUBST([AM_MOD_AVMD_CXXFLAGS], [-std=gnu99])      # FS-8809, needed for MAP_POPULATE
     if test "$ac_cv_gcc_supports_w_no_unused_result" = yes; then
       APR_ADDTO(SWITCH_AM_CFLAGS, -Werror)
+      APR_ADDTO(SWITCH_AM_CFLAGS, -Wno-unused-result)
+    fi
+    if test "$ac_cv_gcc_supports_w_no_misleading_indentation" = yes; then
+      APR_ADDTO(SWITCH_AM_CFLAGS, -Wno-misleading-indentation)
     fi
     if test "${enable_64}" = "yes"; then
 	case "$host" in
@@ -449,6 +463,16 @@ if test "${enable_address_sanitizer}" = "yes"; then
   fi
 fi
 
+
+case "${ax_cv_c_compiler_vendor}" in
+sun)
+	VISIBILITY_FLAG=-xldscope=hidden
+;;
+*)
+	VISIBILITY_FLAG=-fvisibility=hidden
+;;
+esac
+AC_SUBST(VISIBILITY_FLAG)
 
 #
 # gcc visibility cflag checks
@@ -542,6 +566,16 @@ if test "${enable_debug}" = "yes"; then
 	fi
 
 fi
+
+AC_ARG_ENABLE(libyuv,
+[AC_HELP_STRING([--disable-libyuv],[build without libyuv])],[enable_libyuv="$enableval"],[enable_libyuv="yes"])
+
+AM_CONDITIONAL([ENABLE_LIBYUV],[test "${enable_libyuv}" = "yes"])
+
+AC_ARG_ENABLE(libvpx,
+[AC_HELP_STRING([--disable-libvpx],[build without libvpx])],[enable_libvpx="$enableval"],[enable_libvpx="yes"])
+
+AM_CONDITIONAL([ENABLE_LIBVPX],[test "${enable_libvpx}" = "yes"])
 
 AC_ARG_ENABLE(cpp,
 [AC_HELP_STRING([--disable-cpp],[build without cpp code])],[enable_cpp="$enableval"],[enable_cpp="yes"])
@@ -785,13 +819,7 @@ if test "x$have_libz" = "xyes"  ; then
 APR_ADDTO([PLATFORM_CORE_LIBS], [-lz])
 fi
 
-PKG_CHECK_MODULES([YUV], [libyuv >= 0.0.1280],
-			 [AC_MSG_RESULT([yes]);AM_CONDITIONAL([HAVE_YUV],[true])],
-			 [AC_MSG_RESULT([no]);AM_CONDITIONAL([HAVE_YUV],[false])])
-
-APR_ADDTO([PLATFORM_CORE_LIBS], [${YUV_LIBS}])
-
-PKG_CHECK_MODULES([MPG123], [libmpg123 >= 1.20.1],[
+PKG_CHECK_MODULES([MPG123], [libmpg123 >= 1.16.0],[
   AM_CONDITIONAL([HAVE_MPG123],[true])],[
   AC_MSG_RESULT([no]); AM_CONDITIONAL([HAVE_MPG123],[false])])
 
@@ -900,8 +928,6 @@ AC_FUNC_STRERROR_R
 CPPFLAGS="$save_CPPFLAGS"
 
 AX_HAVE_CPU_SET
-
-AC_CHECK_LIB(vpx, vpx_img_alloc, [AC_DEFINE(HAVE_VPX, 1, [Define if you have vpx()])])
 
 AC_CHECK_LIB(rt, clock_gettime, [AC_DEFINE(HAVE_CLOCK_GETTIME, 1, [Define if you have clock_gettime()])])
 AC_CHECK_LIB(rt, clock_getres, [AC_DEFINE(HAVE_CLOCK_GETRES, 1, [Define if you have clock_getres()])])
@@ -1274,33 +1300,7 @@ PKG_CHECK_MODULES([SNDFILE], [sndfile >= 1.0.20],[
   AM_CONDITIONAL([HAVE_SNDFILE],[true])],[
   AC_MSG_RESULT([no]); AM_CONDITIONAL([HAVE_SNDFILE],[false])])
 
-ac_cv_have_vpx=no
-PKG_CHECK_MODULES([VPX], [vpx2 >= 1.5.0],[
-  ac_cv_have_vpx=yes],[
-    PKG_CHECK_MODULES([VPX], [vpx >= 1.5.0],[
-      ac_cv_have_vpx=yes],[
-      AC_MSG_RESULT([no]); ac_cv_have_vpx=no])])
-
-vpx_atleast_15=no
-
-if test x"$ac_cv_have_vpx" = xyes; then
-AC_MSG_CHECKING(whether libvpx is at least version 1.5)
-save_CPPFLAGS="${CPPFLAGS}"
-CPPFLAGS="${VPX_CFLAGS} ${save_CPPFLAGS}"
-AC_TRY_COMPILE([
-#include <vpx/vpx_image.h>
-], [vpx_color_range_t foo = VPX_CR_FULL_RANGE;],[vpx_atleast_15=yes],[vpx_atleast_15=no])
-AC_MSG_RESULT($vpx_atleast_15)
-CPPFLAGS="${save_CPPFLAGS}"
-fi
-
-AM_CONDITIONAL([HAVE_VPX],[test "x$vpx_atleast_15" != "xno"])
-
-SWITCH_AM_CFLAGS="$VPX_CFLAGS $SWITCH_AM_CFLAGS"
-SWITCH_AM_CXXFLAGS="$VPX_CFLAGS $SWITCH_AM_CXXFLAGS"
-SWITCH_AM_CPPFLAGS="$VPX_CFLAGS $SWITCH_AM_CPPFLAGS"
-
-PKG_CHECK_MODULES([MPG123], [libmpg123 >= 1.20.1],[
+PKG_CHECK_MODULES([MPG123], [libmpg123 >= 1.16.0],[
   AM_CONDITIONAL([HAVE_MPG123],[true])],[
   AC_MSG_RESULT([no]); AM_CONDITIONAL([HAVE_MPG123],[false])])
 
@@ -1379,7 +1379,7 @@ PKG_CHECK_MODULES([OPUS], [opus >= 1.1],[
   AM_CONDITIONAL([HAVE_OPUS],[true])],[
   AC_MSG_RESULT([no]); AM_CONDITIONAL([HAVE_OPUS],[false])])
 
-PKG_CHECK_MODULES([SOUNDTOUCH], [soundtouch >= 1.7.1],[
+PKG_CHECK_MODULES([SOUNDTOUCH], [soundtouch >= 1.7.0],[
   AM_CONDITIONAL([HAVE_SOUNDTOUCH],[true])],[
   AC_MSG_RESULT([no]); AM_CONDITIONAL([HAVE_SOUNDTOUCH],[false])])
 
@@ -1419,7 +1419,7 @@ PKG_CHECK_MODULES([SMPP34], [libsmpp34 >= 1.10],[
   AM_CONDITIONAL([HAVE_SMPP34],[true])],[
   AC_MSG_RESULT([no]); AM_CONDITIONAL([HAVE_SMPP34],[false])])
 
-PKG_CHECK_MODULES([HIREDIS], [hiredis >= 0.11.0],[
+PKG_CHECK_MODULES([HIREDIS], [hiredis >= 0.10.0],[
   AM_CONDITIONAL([HAVE_HIREDIS],[true])],[
   AC_MSG_RESULT([no]); AM_CONDITIONAL([HAVE_HIREDIS],[false])])
 
@@ -1781,7 +1781,6 @@ AC_CONFIG_FILES([Makefile
 		src/mod/codecs/mod_siren/Makefile
 		src/mod/codecs/mod_skel_codec/Makefile
 		src/mod/codecs/mod_theora/Makefile
-		src/mod/codecs/mod_vpx/Makefile
 		src/mod/dialplans/mod_dialplan_asterisk/Makefile
 		src/mod/dialplans/mod_dialplan_directory/Makefile
 		src/mod/dialplans/mod_dialplan_xml/Makefile
@@ -1927,7 +1926,7 @@ AC_SUBST(OUR_DISABLED_INSTALL_MODS)
 AC_SUBST(OUR_DISABLED_UNINSTALL_MODS)
 AC_SUBST(AM_MAKEFLAGS)
 
-ac_configure_args="$ac_configure_args CONFIGURE_CFLAGS='$CFLAGS $CPPFLAGS' CONFIGURE_CXXFLAGS='$CXXFLAGS $CPPFLAGS' CONFIGURE_LDFLAGS='$LDFLAGS' "
+ac_configure_args="$ac_configure_args --with-modinstdir=${modulesdir} CONFIGURE_CFLAGS='$CFLAGS $CPPFLAGS' CONFIGURE_CXXFLAGS='$CXXFLAGS $CPPFLAGS' CONFIGURE_LDFLAGS='$LDFLAGS' "
 
 #	--prefix='$prefix' --exec_prefix='$exec_prefix' --libdir='$libdir' --libexecdir='$libexecdir' --bindir='$bindir' --sbindir='$sbindir' \
 #	--localstatedir='$localstatedir' --datadir='$datadir'"

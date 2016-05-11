@@ -85,6 +85,7 @@ override_dh_auto_configure: .stamp-configure
 	@$(call show_vars)
 	make -j$(NJOBS)
 	make -C libs/esl pymod
+	make -C libs/esl perlmod
 	touch $@
 
 override_dh_auto_build: .stamp-build
@@ -98,24 +99,16 @@ override_dh_strip:
 override_dh_auto_install:
 	dh_auto_install
 	dh_auto_install -- -C libs/esl pymod-install
+	dh_auto_install -- -C libs/esl perlmod-install
 	rm -f debian/tmp/usr/share/freeswitch/grammar/model/communicator/COPYING
 
 override_dh_installinit:
 	if [ `cat debian/freeswitch-init.provided_by` = freeswitch-systemd ]; then \
-	  dh_systemd_enable -pfreeswitch-systemd --name=freeswitch; \
-	  dh_systemd_start  -pfreeswitch-systemd --name=freeswitch; \
-	  dh_systemd_enable -pfreeswitch-all --name=freeswitch; \
-	  dh_systemd_start  -pfreeswitch-all --name=freeswitch; \
+	dh_systemd_enable -pfreeswitch-systemd --name=freeswitch; \
+	dh_systemd_start  -pfreeswitch-systemd --name=freeswitch; \
 	else \
-	  dh_installinit -pfreeswitch-sysvinit --name=freeswitch; \
-	  dh_installinit -pfreeswitch-all --name=freeswitch; \
+	dh_installinit -pfreeswitch-sysvinit --name=freeswitch; \
 	fi
-
-override_dh_makeshlibs:
-	dh_makeshlibs
-	sed \
-	  -e '/^libfreeswitch 1/{s/freeswitch-all/libfreeswitch1/g}' \
-	  -i debian/freeswitch-all/DEBIAN/shlibs
 
 debian-bootstrap: debian/.stamp-bootstrap
 debian/.stamp-bootstrap:

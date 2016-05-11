@@ -377,10 +377,6 @@ Module: codecs/mod_theora
 Description: mod_theora
  Adds mod_theora.
 
-Module: codecs/mod_vpx
-Description: VP8/VP9 video codec
- This module adds the VP8 video codec, also known as WebM.
-
 Module: codecs/mod_yuv
 Description: Adds mod_yuv
  Adds mod_yuv.
@@ -529,15 +525,15 @@ Module: event_handlers/mod_format_cdr
 Description: mod_format_cdr
  Adds mod_format_cdr.
 
+Module: event_handlers/mod_json_cdr
+Description: mod_json_cdr
+ Adds mod_json_cdr.
+
 Module: event_handlers/mod_kazoo
 Description: mod_kazoo
  Adds mod_kazoo.
 Build-Depends: erlang-dev
 Depends: erlang
-
-Module: event_handlers/mod_json_cdr
-Description: mod_json_cdr
- Adds mod_json_cdr.
 
 Module: event_handlers/mod_odbc_cdr
 Description: mod_odbc_cdr
@@ -551,6 +547,10 @@ Module: event_handlers/mod_rayo
 Description: mod_rayo
  Adds mod_rayo.
 Depends: freeswitch-mod-ssml (= ${binary:Version})
+
+Module: event_handlers/mod_smpp
+Description: mod_snmp
+ Adds mod_snmp.
 
 Module: event_handlers/mod_snmp
 Description: mod_snmp

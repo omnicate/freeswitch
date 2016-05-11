@@ -1929,8 +1929,10 @@ SWITCH_DECLARE(switch_status_t) switch_core_file_get_string(_In_ switch_file_han
 */
 SWITCH_DECLARE(switch_status_t) switch_core_file_close(_In_ switch_file_handle_t *fh);
 
+SWITCH_DECLARE(switch_status_t) switch_core_file_command(switch_file_handle_t *fh, switch_file_command_t command);
+
 SWITCH_DECLARE(switch_status_t) switch_core_file_truncate(switch_file_handle_t *fh, int64_t offset);
-SWITCH_DECLARE(switch_bool_t) switch_core_file_has_video(switch_file_handle_t *fh);
+SWITCH_DECLARE(switch_bool_t) switch_core_file_has_video(switch_file_handle_t *fh, switch_bool_t CHECK_OPEN);
 
 
 ///\}
@@ -2652,6 +2654,19 @@ SWITCH_DECLARE(switch_status_t) switch_core_del_registration(const char *user, c
 */
 SWITCH_DECLARE(switch_status_t) switch_core_expire_registration(int force);
 
+/*!
+ \brief Get RTP port range start value
+ \param[in] void
+ \param[out] RTP port range start value
+*/
+SWITCH_DECLARE(uint16_t) switch_core_get_rtp_port_range_start_port(void);
+
+/*!
+ \brief Get RTP port range end value
+ \param[in] void
+ \param[out] RTP port range end value
+*/
+SWITCH_DECLARE(uint16_t) switch_core_get_rtp_port_range_end_port(void);
 
 SWITCH_DECLARE(char *) switch_say_file_handle_get_variable(switch_say_file_handle_t *sh, const char *var);
 SWITCH_DECLARE(char *) switch_say_file_handle_get_path(switch_say_file_handle_t *sh);
@@ -2734,6 +2749,8 @@ SWITCH_DECLARE(const char *)switch_version_revision(void);
 SWITCH_DECLARE(const char *)switch_version_revision_human(void);
 SWITCH_DECLARE(const char *)switch_version_full(void);
 SWITCH_DECLARE(const char *)switch_version_full_human(void);
+
+SWITCH_DECLARE(void) switch_core_autobind_cpu(void);
 
 SWITCH_END_EXTERN_C
 #endif

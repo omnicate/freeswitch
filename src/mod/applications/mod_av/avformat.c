@@ -43,6 +43,58 @@
 #define SCALE_FLAGS SWS_BICUBIC
 #define DFT_RECORD_OFFSET 0
 
+
+#ifndef AVUTIL_TIMESTAMP_H
+#define AVUTIL_TIMESTAMP_H
+
+#define AV_TS_MAX_STRING_SIZE 32
+
+/**
+ * Fill the provided buffer with a string containing a timestamp
+ * representation.
+ *
+ * @param buf a buffer with size in bytes of at least AV_TS_MAX_STRING_SIZE
+ * @param ts the timestamp to represent
+ * @return the buffer in input
+ */
+static inline char *av_ts_make_string(char *buf, int64_t ts)
+{
+    if (ts == AV_NOPTS_VALUE) snprintf(buf, AV_TS_MAX_STRING_SIZE, "NOPTS");
+    else                      snprintf(buf, AV_TS_MAX_STRING_SIZE, "%"PRId64"", ts);
+    return buf;
+}
+
+/**
+ * Convenience macro, the return value should be used only directly in
+ * function arguments but never stand-alone.
+ */
+#define av_ts2str(ts) av_ts_make_string((char[AV_TS_MAX_STRING_SIZE]){0}, ts)
+
+/**
+ * Fill the provided buffer with a string containing a timestamp time
+ * representation.
+ *
+ * @param buf a buffer with size in bytes of at least AV_TS_MAX_STRING_SIZE
+ * @param ts the timestamp to represent
+ * @param tb the timebase of the timestamp
+ * @return the buffer in input
+ */
+static inline char *av_ts_make_time_string(char *buf, int64_t ts, AVRational *tb)
+{
+    if (ts == AV_NOPTS_VALUE) snprintf(buf, AV_TS_MAX_STRING_SIZE, "NOPTS");
+    else                      snprintf(buf, AV_TS_MAX_STRING_SIZE, "%.6g", av_q2d(*tb) * ts);
+    return buf;
+}
+
+/**
+ * Convenience macro, the return value should be used only directly in
+ * function arguments but never stand-alone.
+ */
+#define av_ts2timestr(ts, tb) av_ts_make_time_string((char[AV_TS_MAX_STRING_SIZE]){0}, ts, tb)
+
+#endif /* AVUTIL_TIMESTAMP_H */
+
+
 static switch_status_t av_file_close(switch_file_handle_t *handle);
 SWITCH_MODULE_LOAD_FUNCTION(mod_avformat_load);
 
@@ -143,17 +195,18 @@ typedef struct record_helper_s {
 	switch_queue_t *video_queue;
 	switch_thread_t *video_thread;
 	switch_mm_t *mm;
+	int finalize;
 } record_helper_t;
 
 static void log_packet(const AVFormatContext *fmt_ctx, const AVPacket *pkt)
 {
-	// AVRational *time_base = &fmt_ctx->streams[pkt->stream_index]->time_base;
+	AVRational *time_base = &fmt_ctx->streams[pkt->stream_index]->time_base;
 
-	// printf("pts:%s pts_time:%s dts:%s dts_time:%s duration:%s duration_time:%s stream_index:%d\n",
-	// 	   av_ts2str(pkt->pts), av_ts2timestr(pkt->pts, time_base),
-	// 	   av_ts2str(pkt->dts), av_ts2timestr(pkt->dts, time_base),
-	// 	   av_ts2str(pkt->duration), av_ts2timestr(pkt->duration, time_base),
-	// 	   pkt->stream_index);
+	printf("pts:%s pts_time:%s dts:%s dts_time:%s duration:%s duration_time:%s stream_index:%d\n",
+		   av_ts2str(pkt->pts), av_ts2timestr(pkt->pts, time_base),
+		   av_ts2str(pkt->dts), av_ts2timestr(pkt->dts, time_base),
+		   av_ts2str(pkt->duration), av_ts2timestr(pkt->duration, time_base),
+		   pkt->stream_index);
 }
 
 static int mod_avformat_alloc_output_context2(AVFormatContext **avctx, AVOutputFormat *oformat,
@@ -229,8 +282,15 @@ static switch_status_t add_stream(MediaStream *mst, AVFormatContext *fc, AVCodec
 	int buffer_bytes = 2097152; /* 2 mb */
 	int fps = 15;
 
-	/* find the encoder */
-	*codec = avcodec_find_encoder(codec_id);
+	if (mm->try_hardware_encoder && codec_id == AV_CODEC_ID_H264) {
+		*codec = avcodec_find_encoder_by_name("nvenc_h264");
+	}
+
+	if (!*codec) {
+		/* find the encoder */
+		*codec = avcodec_find_encoder(codec_id);
+	}
+
 	if (!(*codec)) {
 		// switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Could not find encoder for '%s'\n", avcodec_get_name(codec_id));
 		return status;
@@ -306,6 +366,16 @@ static switch_status_t add_stream(MediaStream *mst, AVFormatContext *fc, AVCodec
 		if (codec_id == AV_CODEC_ID_H264) {
 			c->ticks_per_frame = 2;
 
+
+			c->flags|=CODEC_FLAG_LOOP_FILTER;   // flags=+loop
+			c->me_cmp|= 1;  // cmp=+chroma, where CHROMA = 1
+			c->me_range = 16;   // me_range=16
+			c->max_b_frames = 3;    // bf=3
+
+			av_opt_set_int(c->priv_data, "b_strategy", 1, 0);
+			av_opt_set_int(c->priv_data, "motion_est", ME_HEX, 0);
+			av_opt_set_int(c->priv_data, "coder", 1, 0);
+
 			switch (mm->vprofile) {
 			case SWITCH_VIDEO_PROFILE_BASELINE:
 				av_opt_set(c->priv_data, "profile", "baseline", 0);
@@ -314,10 +384,12 @@ static switch_status_t add_stream(MediaStream *mst, AVFormatContext *fc, AVCodec
 			case SWITCH_VIDEO_PROFILE_MAIN:
 				av_opt_set(c->priv_data, "profile", "main", 0);
 				av_opt_set(c->priv_data, "level", "5", 0);
+				c->level = 5;
 				break;
 			case SWITCH_VIDEO_PROFILE_HIGH:
 				av_opt_set(c->priv_data, "profile", "high", 0);
 				av_opt_set(c->priv_data, "level", "52", 0);
+				c->level = 52;
 				break;
 			}
 			
@@ -329,12 +401,23 @@ static switch_status_t add_stream(MediaStream *mst, AVFormatContext *fc, AVCodec
 				av_opt_set(c->priv_data, "preset", "medium", 0);
 				break;
 			case SWITCH_VIDEO_ENCODE_SPEED_FAST:
+				//av_opt_set(c->priv_data, "tune", "zerolatency", 0);
 				av_opt_set(c->priv_data, "preset", "veryfast", 0);
 				break;
 			default:
 				break;
 			}
 		}
+
+		c->gop_size = 250;  // g=250
+		c->keyint_min = 25; // keyint_min=25
+		c->i_quant_factor = 0.71; // i_qfactor=0.71
+		c->qcompress = 0.6; // qcomp=0.6
+		c->qmin = 10;   // qmin=10
+		c->qmax = 31;   // qmax=31
+		c->max_qdiff = 4;   // qdiff=4
+		av_opt_set_int(c->priv_data, "crf", 18, 0);
+
 
 		if (codec_id == AV_CODEC_ID_VP8) {
 			av_set_options_string(c, "quality=realtime", "=", ":");
@@ -400,6 +483,7 @@ static switch_status_t open_video(AVFormatContext *fc, AVCodec *codec, MediaStre
 	/* allocate and init a re-usable frame */
 	mst->frame = alloc_picture(c->pix_fmt, c->width, c->height);
 	switch_assert(mst->frame);
+	mst->frame->pts = 0;
 
 	// switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "pix_fmt: %d\n", c->pix_fmt);
 	switch_assert(c->pix_fmt == AV_PIX_FMT_YUV420P); // always I420 for NOW
@@ -416,8 +500,18 @@ static switch_status_t open_audio(AVFormatContext *fc, AVCodec *codec, MediaStre
 	c = mst->st->codec;
 
 	ret = avcodec_open2(c, codec, NULL);
+
+	if (ret == AVERROR_EXPERIMENTAL) {
+		const AVCodecDescriptor *desc = avcodec_descriptor_get(c->codec_id);
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Codec [%s] is experimental feature in libavcodec, never mind\n", desc->name);
+		c->strict_std_compliance = FF_COMPLIANCE_EXPERIMENTAL;
+		ret = avcodec_open2(c, codec, NULL);
+	}
+
 	if (ret < 0) {
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Could not open audio codec: %s\n", get_error_text(ret));
+		const AVCodecDescriptor *desc = avcodec_descriptor_get(c->codec_id);
+
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Could not open audio codec [%s], error: %s\n", desc->name, get_error_text(ret));
 		return status;
 	}
 
@@ -514,15 +608,20 @@ static void *SWITCH_THREAD_FUNC video_thread_run(switch_thread_t *thread, void *
 	switch_image_t *img = NULL, *tmp_img = NULL;
 	int d_w = eh->video_st->width, d_h = eh->video_st->height;
 	int size = 0, skip = 0, skip_freq = 0, skip_count = 0, skip_total = 0, skip_total_count = 0;
+	uint64_t hard_delta = 0, delta = 0, last_ts = 0;
 
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "video thread start\n");
-	
+
 	for(;;) {
 		AVPacket pkt = { 0 };
 		int got_packet;
 		int ret = -1;
 
 	top:
+
+		if (eh->mm->fps) {
+			hard_delta = 1000 / eh->mm->fps;
+		}
 
 		if (switch_queue_pop(eh->video_queue, &pop) == SWITCH_STATUS_SUCCESS) {
             switch_img_free(&img);
@@ -551,13 +650,14 @@ static void *SWITCH_THREAD_FUNC video_thread_run(switch_thread_t *thread, void *
 				skip_total_count = skip_total;
 				skip_count = 0;
 				skip--;
+
 				goto top;
 			}
 		} else {
 		
 			size = switch_queue_size(eh->video_queue);
 			
-			if (size > 5) {
+			if (size > 5 && !eh->finalize) {
 				skip = size;
 
 				if (size > 10) {
@@ -580,19 +680,39 @@ static void *SWITCH_THREAD_FUNC video_thread_run(switch_thread_t *thread, void *
 			ret = av_frame_make_writable(eh->video_st->frame);
 		}
 
-		if (ret < 0) continue;
+		if (ret < 0) {
+			continue;
+		}
 
 		fill_avframe(eh->video_st->frame, img);
-		switch_core_timer_sync(eh->timer);
 		
-		if (eh->video_st->frame->pts == eh->timer->samplecount) {
-			// never use the same pts, or the encoder coughs
-			eh->video_st->frame->pts++;
-		} else {
-			eh->video_st->frame->pts = eh->timer->samplecount;
+		if (hard_delta) {
+			delta = hard_delta;
 		}
-		// eh->video_st->frame->pts = switch_time_now() / 1000 - eh->video_st->next_pts;
-		// switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "pts: %lld\n", eh->video_st->frame->pts);
+
+		if ((eh->finalize && delta) || hard_delta) {
+			eh->video_st->frame->pts += delta;
+		} else {
+			switch_core_timer_sync(eh->timer);
+
+			if (eh->video_st->frame->pts == eh->timer->samplecount) {
+				// never use the same pts, or the encoder coughs
+				eh->video_st->frame->pts++;
+			} else {
+				uint64_t delta_tmp = eh->timer->samplecount - last_ts;
+
+				if (delta_tmp > 10) {
+					delta = delta_tmp;
+				}
+
+				eh->video_st->frame->pts = eh->timer->samplecount;
+			}
+		}
+
+		last_ts = eh->video_st->frame->pts;
+
+		//eh->video_st->frame->pts = switch_time_now() / 1000 - eh->video_st->next_pts;
+		//switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "pts: %ld\n", eh->video_st->frame->pts);
 
 		/* encode the image */
 		ret = avcodec_encode_video2(eh->video_st->st->codec, &pkt, eh->video_st->frame, &got_packet);
@@ -606,7 +726,7 @@ static void *SWITCH_THREAD_FUNC video_thread_run(switch_thread_t *thread, void *
 			switch_mutex_lock(eh->mutex);
 			ret = write_frame(eh->fc, &eh->video_st->st->codec->time_base, eh->video_st->st, &pkt);
 			switch_mutex_unlock(eh->mutex);
-			av_free_packet(&pkt);
+			av_packet_unref(&pkt);
 		}
 
 		eh->in_callback = 0;
@@ -614,6 +734,28 @@ static void *SWITCH_THREAD_FUNC video_thread_run(switch_thread_t *thread, void *
 	}
 
  endfor:
+
+	for(;;) {
+		AVPacket pkt = { 0 };
+		int got_packet = 0;
+		int ret = 0;
+
+		av_init_packet(&pkt);
+
+		ret = avcodec_encode_video2(eh->video_st->st->codec, &pkt, NULL, &got_packet);
+
+		if (ret < 0) {
+			break;
+		} else if (got_packet) {
+			switch_mutex_lock(eh->mutex);
+			ret = write_frame(eh->fc, &eh->video_st->st->codec->time_base, eh->video_st->st, &pkt);
+			switch_mutex_unlock(eh->mutex);
+			av_packet_unref(&pkt);
+			if (ret < 0) break;
+		} else {
+			break;
+		}
+	}
 
 	while(switch_queue_trypop(eh->video_queue, &pop) == SWITCH_STATUS_SUCCESS) {
 		if (!pop) break;
@@ -884,8 +1026,8 @@ SWITCH_STANDARD_APP(record_av_function)
 				switch_buffer_read(buffer, audio_st.frame->data[0], bytes);
 				/* convert to destination format */
 				ret = avresample_convert(audio_st.resample_ctx,
-						(uint8_t **)audio_st.frame->data, 0, out_samples,
-						audio_st.tmp_frame->data, 0, audio_st.frame->nb_samples);
+						audio_st.tmp_frame->data, 0, out_samples,
+						(uint8_t **)audio_st.frame->data, 0, audio_st.frame->nb_samples);
 
 				if (ret < 0) {
 					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error while converting %d samples, error text: %s\n",
@@ -952,7 +1094,7 @@ SWITCH_STANDARD_APP(record_av_function)
 
 		if (got_packet) {
 			ret = write_frame(fc, &video_st.st->codec->time_base, video_st.st, &pkt);
-			av_free_packet(&pkt);
+			av_packet_unref(&pkt);
 			goto again;
 		}
 	}
@@ -1102,8 +1244,10 @@ struct av_file_context {
 	switch_timer_t video_timer;
 	int offset;
 	int audio_start;
+	int aud_ready;
 	int vid_ready;
 	int audio_ready;
+	int closed;
 
 	MediaStream video_st;
 	MediaStream audio_st;
@@ -1120,6 +1264,9 @@ struct av_file_context {
 	switch_time_t video_start_time;
 	switch_image_t *last_img;
 	int read_fps;
+	switch_time_t last_vid_push;
+	int64_t seek_ts;
+	switch_bool_t read_paused;
 };
 
 typedef struct av_file_context av_file_context_t;
@@ -1152,6 +1299,9 @@ static switch_status_t open_input_file(av_file_context_t *context, switch_file_h
 		switch_goto_status(SWITCH_STATUS_FALSE, err);
 	}
 
+	handle->seekable = context->fc->iformat->read_seek2 ? 1 : (context->fc->iformat->read_seek ? 1 : 0);
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "file %s is %sseekable\n", filename, handle->seekable ? "" : "not ");
+
 	/** Get information on the input file (number of streams etc.). */
 	if ((error = avformat_find_stream_info(context->fc, NULL)) < 0) {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Could not open find stream info (error '%s')\n", get_error_text(error));
@@ -1168,6 +1318,7 @@ static switch_status_t open_input_file(av_file_context_t *context, switch_file_h
 			context->video_st.st = context->fc->streams[i];
 			if (switch_test_flag(handle, SWITCH_FILE_FLAG_VIDEO)) {
 				context->has_video = 1;
+				handle->duration = av_rescale_q(context->video_st.st->duration, context->video_st.st->time_base, AV_TIME_BASE_Q);
 			}
 			handle->mm.source_fps = ceil(av_q2d(context->video_st.st->avg_frame_rate));
 			context->read_fps = (int)handle->mm.source_fps;
@@ -1221,14 +1372,18 @@ static switch_status_t open_input_file(av_file_context_t *context, switch_file_h
 				av_opt_set_int(resample_ctx, "in_channel_count",   c->channels,       0);
 				av_opt_set_int(resample_ctx, "in_sample_rate",     c->sample_rate,    0);
 				av_opt_set_int(resample_ctx, "in_sample_fmt",      c->sample_fmt,     0);
-				av_opt_set_int(resample_ctx, "in_channel_layout",  c->channel_layout, 0);
+				av_opt_set_int(resample_ctx, "in_channel_layout",
+					(c->channel_layout == 0 && c->channels == 2) ? AV_CH_LAYOUT_STEREO : c->channel_layout, 0);
 				av_opt_set_int(resample_ctx, "out_channel_count",  handle->channels,  0);
 				av_opt_set_int(resample_ctx, "out_sample_rate",    handle->samplerate,0);
 				av_opt_set_int(resample_ctx, "out_sample_fmt",     AV_SAMPLE_FMT_S16, 0);
 				av_opt_set_int(resample_ctx, "out_channel_layout", handle->channels == 2 ? AV_CH_LAYOUT_STEREO : AV_CH_LAYOUT_MONO, 0);
 
 				if ((ret = avresample_open(resample_ctx)) < 0) {
-					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Failed to initialize the resampling context\n");
+					char errbuf[1024];
+					av_strerror(ret, errbuf, 1024);
+
+					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Failed to initialize the resampling context, ret=%d: %s\n", ret, errbuf);
 					av_free(resample_ctx);
 					switch_goto_status(SWITCH_STATUS_FALSE, err);
 				}
@@ -1250,6 +1405,9 @@ err:
 	return status;
 }
 
+//#define ALT_WAY
+#define AUDIO_BUF_SEC 5
+
 static void *SWITCH_THREAD_FUNC file_read_thread_run(switch_thread_t *thread, void *obj)
 {
 	av_file_context_t *context = (av_file_context_t *) obj;
@@ -1257,47 +1415,85 @@ static void *SWITCH_THREAD_FUNC file_read_thread_run(switch_thread_t *thread, vo
 	int got_data = 0;
 	int error;
 	int sync  = 0;
+	int eof = 0;
 
 	context->file_read_thread_running = 1;
 
-#define AUDIO_BUF_SEC 5
+	while (context->file_read_thread_running && !context->closed) {
+		int vid_frames = 0;
 
-	while (context->file_read_thread_running) {
-		if (switch_buffer_inuse(context->audio_buffer) > AUDIO_BUF_SEC * context->audio_st.sample_rate * context->audio_st.channels * 2) {
-			switch_yield(10000);
+		if (context->seek_ts >= 0) {
+			int stream_id = -1;
+
+			switch_mutex_lock(context->mutex);
+			switch_buffer_zero(context->audio_buffer);
+			switch_mutex_unlock(context->mutex);
+
+			if (context->eh.video_queue) {
+				flush_video_queue(context->eh.video_queue, 0);
+			}
+
+			// if (context->has_audio) stream_id = context->audio_st.st->index;
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "seeking to %" SWITCH_INT64_T_FMT "\n", context->seek_ts);
+			avformat_seek_file(context->fc, stream_id, 0, context->seek_ts, INT64_MAX, 0);
+			context->seek_ts = -2;
+			context->video_st.next_pts = 0;
+			context->video_start_time = 0;
+
+			avcodec_flush_buffers(context->video_st.st->codec);
+		}
+
+		if (context->has_video) {
+			vid_frames = switch_queue_size(context->eh.video_queue);
+		}
+
+		if (switch_buffer_inuse(context->audio_buffer) > AUDIO_BUF_SEC * context->audio_st.sample_rate * context->audio_st.channels * 2 &&
+			(!context->has_video || vid_frames > 5)) {
+			switch_yield(context->has_video ? 1000 : 10000);
 			continue;
 		}
-		
+
 		av_init_packet(&pkt);
 		pkt.data = NULL;
 		pkt.size = 0;
 
-		if ((error = av_read_frame(context->fc, &pkt)) < 0) {
-			if (error == AVERROR_EOF) break;
+		if (context->video_st.st && (error = av_read_frame(context->fc, &pkt)) < 0) {
+			if (error == AVERROR_EOF) {
+				if (!context->has_video) break;
 
-			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Could not read frame (error '%s')\n", get_error_text(error));
-			break;
+				eof = 1;
+				/* just make sure*/
+				pkt.data = NULL;
+				pkt.size = 0;
+				pkt.stream_index = context->video_st.st->index;
+			} else {
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Could not read frame (error '%s')\n", get_error_text(error));
+				break;
+			}
 		}
 
 		// switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "stream: %d, pkt size %d\n", pkt.stream_index, pkt.size);
 		if (context->has_video && pkt.stream_index == context->video_st.st->index) {
-			AVFrame *vframe = av_frame_alloc();
+			AVFrame *vframe;
 			switch_image_t *img;
 			if (!sync) {
 				switch_buffer_zero(context->audio_buffer);
 				sync = 1;
 			}
+
+again:
+			vframe = av_frame_alloc();
 			switch_assert(vframe);
 
 			if ((error = avcodec_decode_video2(context->video_st.st->codec, vframe, &got_data, &pkt)) < 0) {
 				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Could not decode frame (error '%s')\n", get_error_text(error));
-				av_free_packet(&pkt);
+				av_packet_unref(&pkt);
 				av_frame_free(&vframe);
 				break;
 			}
 
 			// switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "pkt: %d, pts: %lld dts: %lld\n", pkt.size, pkt.pts, pkt.dts);
-			av_free_packet(&pkt);
+			av_packet_unref(&pkt);
 
 			//if (switch_queue_size(context->eh.video_queue) > 300) {
 			//	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Dropping frames\n");
@@ -1305,7 +1501,7 @@ static void *SWITCH_THREAD_FUNC file_read_thread_run(switch_thread_t *thread, vo
 			//	continue;
 			//}
 
-			if (got_data && error > 0) {
+			if (got_data && error >= 0) {
 				// switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "got picture %dx%d fmt: %d pktpts:%lld pktdts:%lld\n", vframe->width, vframe->height, vframe->format, vframe->pkt_pts, vframe->pkt_dts);
 
 				if (vframe->format != AV_PIX_FMT_YUV420P) {
@@ -1352,29 +1548,54 @@ static void *SWITCH_THREAD_FUNC file_read_thread_run(switch_thread_t *thread, vo
 
 				img = switch_img_alloc(NULL, SWITCH_IMG_FMT_I420, vframe->width, vframe->height, 1);
 				if (img) {
-					uint64_t *pts = malloc(sizeof(uint64_t));
+					int64_t *pts = malloc(sizeof(int64_t));
 
 					if (pts) {
+#ifdef ALT_WAY
+						int diff;
+						int sleep = 66000;
+#endif
 						*pts = vframe->pkt_pts;
 						avframe2img(vframe, img);
 						img->user_priv = pts;
+						
+#ifdef ALT_WAY
+						diff = sleep - (switch_time_now() - context->last_vid_push);
+						
+						if (diff > 0 && diff <= sleep) {
+							switch_core_timer_next(&context->video_timer);
+						} else {
+							switch_core_timer_sync(&context->video_timer);
+						}
+#endif			
+
+						context->vid_ready = 1;
 						switch_queue_push(context->eh.video_queue, img);
+						context->last_vid_push = switch_time_now();
 					}
 				}
 			}
 			av_frame_free(&vframe);
+
+			if (eof) {
+				if (got_data) {
+					goto again; // to get all delayed video frames in decoder
+				} else {
+					break;
+				}
+			}
 			continue;
 		} else if (context->has_audio && pkt.stream_index == context->audio_st.st->index) {
 			AVFrame in_frame = { { 0 } };
 
 			if ((error = avcodec_decode_audio4(context->audio_st.st->codec, &in_frame, &got_data, &pkt)) < 0) {
 				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Could not decode frame (error '%s')\n", get_error_text(error));
-				av_free_packet(&pkt);
+				av_packet_unref(&pkt);
 				break;
 			}
 
 			// switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "pkt: %d, decodedddd: %d pts: %lld dts: %lld\n", pkt.size, error, pkt.pts, pkt.dts);
-			av_free_packet(&pkt);
+			av_packet_unref(&pkt);
 
 			if (got_data) {
 				// switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "got data frm->format: %d samples: %d\n", in_frame.format, in_frame.nb_samples);
@@ -1456,7 +1677,7 @@ static switch_status_t av_file_open(switch_file_handle_t *handle, const char *pa
 	memset(context, 0, sizeof(av_file_context_t));
 	handle->private_info = context;
 	context->pool = handle->memory_pool;
-
+	context->seek_ts = -1;
 	context->offset = DFT_RECORD_OFFSET;
 	if (handle->params && (tmp = switch_event_get_header(handle->params, "av_video_offset"))) {
 		context->offset = atoi(tmp);
@@ -1483,7 +1704,7 @@ static switch_status_t av_file_open(switch_file_handle_t *handle, const char *pa
 		if (context->has_video) {
 			switch_queue_create(&context->eh.video_queue, SWITCH_CORE_QUEUE_LEN, handle->memory_pool);
 			switch_mutex_init(&context->eh.mutex, SWITCH_MUTEX_NESTED, handle->memory_pool);
-
+			switch_core_timer_init(&context->video_timer, "soft", 66, 1, context->pool);
 		}
 
 		{
@@ -1525,14 +1746,17 @@ static switch_status_t av_file_open(switch_file_handle_t *handle, const char *pa
 		handle->mm.ab = 128;
 	}
 
+	handle->mm.vb = switch_calc_bitrate(handle->mm.vw, handle->mm.vh, 1, handle->mm.fps);
+
 	if (fmt->video_codec != AV_CODEC_ID_NONE) {
 		const AVCodecDescriptor *desc;
 
-		if (handle->stream_name && (!strcasecmp(handle->stream_name, "rtmp") || !strcasecmp(handle->stream_name, "youtube"))) {
+		if ((handle->stream_name && (!strcasecmp(handle->stream_name, "rtmp") || !strcasecmp(handle->stream_name, "youtube")))) {
+
 			if (fmt->video_codec != AV_CODEC_ID_H264 ) {
 				fmt->video_codec = AV_CODEC_ID_H264; // force H264
 			}
-			
+
 			fmt->audio_codec = AV_CODEC_ID_AAC;
 			handle->samplerate = 44100;
 			handle->mm.samplerate = 44100;
@@ -1558,12 +1782,12 @@ static switch_status_t av_file_open(switch_file_handle_t *handle, const char *pa
 					handle->mm.vb = 4500;
 					break;
 				default:
-					handle->mm.vb = (handle->mm.vw * handle->mm.vh) / 175;
+					handle->mm.vb = switch_calc_bitrate(handle->mm.vw, handle->mm.vh, 1, handle->mm.fps);
 					break;
 				}
 			}
 
-			if (handle->mm.fps > 0.0f) {
+			if (handle->stream_name && handle->mm.fps > 0.0f) {
 				handle->mm.keyint = (int) 2.0f * handle->mm.fps;
 			}
 		}
@@ -1578,6 +1802,7 @@ static switch_status_t av_file_open(switch_file_handle_t *handle, const char *pa
 		context->audio_st.sample_rate = handle->samplerate;
 
 		add_stream(&context->audio_st, context->fc, &context->audio_codec, fmt->audio_codec, &handle->mm);
+
 		if (open_audio(context->fc, context->audio_codec, &context->audio_st) != SWITCH_STATUS_SUCCESS) {
 			switch_goto_status(SWITCH_STATUS_GENERR, end);
 		}
@@ -1634,8 +1859,22 @@ static switch_status_t av_file_write(switch_file_handle_t *handle, void *data, s
 	uint32_t bytes;
 	int inuse;
 
+	if (!switch_test_flag(handle, SWITCH_FILE_FLAG_WRITE)) {
+		return SWITCH_STATUS_FALSE;
+	}
+
 	if (!context->vid_ready) {
-		return status;
+		if (switch_test_flag(handle, SWITCH_FILE_FLAG_VIDEO)) {
+			switch_buffer_zero(context->audio_buffer);
+			return status;
+		} else if (!context->aud_ready) { // audio only recording
+			int ret = avformat_write_header(context->fc, NULL);
+			if (ret < 0) {
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error occurred when opening output file: %s\n", get_error_text(ret));
+				return SWITCH_STATUS_FALSE;
+			}
+			context->aud_ready = 1;
+		}
 	}
 
 	if (data && len) {
@@ -1662,6 +1901,14 @@ static switch_status_t av_file_write(switch_file_handle_t *handle, void *data, s
 	//inuse = switch_buffer_inuse(context->audio_buffer);
 	//switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "inuse: %d samples: %d bytes: %d\n", inuse, context->audio_st.frame->nb_samples, bytes);
 
+	if (context->closed) {
+		inuse = switch_buffer_inuse(context->audio_buffer);
+		if (inuse < bytes) {
+			char buf[SWITCH_RECOMMENDED_BUFFER_SIZE] = {0};
+			switch_buffer_write(context->audio_buffer, buf, bytes - inuse);
+		}
+	}
+	
 	
 	while ((inuse = switch_buffer_inuse(context->audio_buffer)) >= bytes) {
 		AVPacket pkt = { 0 };
@@ -1672,14 +1919,13 @@ static switch_status_t av_file_write(switch_file_handle_t *handle, void *data, s
 		
 		if (context->audio_st.resample_ctx) { // need resample
 			int out_samples = avresample_get_out_samples(context->audio_st.resample_ctx, context->audio_st.frame->nb_samples);
-
 			av_frame_make_writable(context->audio_st.frame);
 			av_frame_make_writable(context->audio_st.tmp_frame);
 			switch_buffer_read(context->audio_buffer, context->audio_st.frame->data[0], bytes);
 			/* convert to destination format */
 			ret = avresample_convert(context->audio_st.resample_ctx,
-									 (uint8_t **)context->audio_st.frame->data, 0, out_samples,
-									 context->audio_st.tmp_frame->data, 0, context->audio_st.frame->nb_samples);
+									 context->audio_st.tmp_frame->data, 0, out_samples,
+									 (uint8_t **)context->audio_st.frame->data, 0, context->audio_st.frame->nb_samples);
 			
 			if (ret < 0) {
 				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error while converting %d samples, error text: %s\n",
@@ -1721,10 +1967,39 @@ static switch_status_t av_file_write(switch_file_handle_t *handle, void *data, s
 	return status;
 }
 
+static switch_status_t av_file_command(switch_file_handle_t *handle, switch_file_command_t command)
+{
+	av_file_context_t *context = (av_file_context_t *)handle->private_info;
+
+	switch(command) {
+	case SCFC_FLUSH_AUDIO:
+		switch_mutex_lock(context->mutex);		
+		switch_buffer_zero(context->audio_buffer);
+		switch_mutex_unlock(context->mutex);		
+		break;
+	case SCFC_PAUSE_READ:
+		if (context->read_paused) {
+			context->read_paused = SWITCH_FALSE;
+			context->video_st.next_pts = 0;
+			context->video_start_time = 0;
+		} else {
+			context->read_paused = SWITCH_TRUE;
+		}
+		break;
+	default:
+		break;
+	}
+
+	return SWITCH_STATUS_SUCCESS;
+}
+
 static switch_status_t av_file_close(switch_file_handle_t *handle)
 {
 	av_file_context_t *context = (av_file_context_t *)handle->private_info;
 	switch_status_t status;
+
+	context->closed = 1;
+	context->eh.finalize = 1;
 
 	if (context->eh.video_queue) {
 		switch_queue_push(context->eh.video_queue, NULL);
@@ -1733,8 +2008,10 @@ static switch_status_t av_file_close(switch_file_handle_t *handle)
 	if (context->eh.video_thread) {
 		switch_thread_join(&status, context->eh.video_thread);
 	}
-	
-	av_file_write(handle, NULL, NULL);
+
+	if (switch_test_flag(handle, SWITCH_FILE_FLAG_WRITE)) {
+		av_file_write(handle, NULL, NULL);
+	}
 
 	if (context->file_read_thread_running && context->file_read_thread) {
 		context->file_read_thread_running = 0;
@@ -1764,7 +2041,15 @@ static switch_status_t av_file_close(switch_file_handle_t *handle)
 
 static switch_status_t av_file_seek(switch_file_handle_t *handle, unsigned int *cur_sample, int64_t samples, int whence)
 {
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "seek not implemented\n");
+	av_file_context_t *context = (av_file_context_t *)handle->private_info;
+
+	if (whence == SEEK_SET) {
+		handle->pos = handle->offset_pos = samples;
+	}
+
+	context->seek_ts = samples / handle->native_rate * AV_TIME_BASE;
+	*cur_sample = context->seek_ts;
+
 	return SWITCH_STATUS_FALSE;
 }
 
@@ -1784,10 +2069,12 @@ static switch_status_t av_file_read(switch_file_handle_t *handle, void *data, si
 		return SWITCH_STATUS_FALSE;
 	}
 
+	while (context->has_video && !context->vid_ready && !context->closed) {
+		switch_yield(1000);
+	}
+
 	switch_mutex_lock(context->mutex);
-	size = switch_buffer_inuse(context->audio_buffer);
-	if (size > *len * context->audio_st.channels * 2) size = *len * context->audio_st.channels * 2;
-	if (size) size = switch_buffer_read(context->audio_buffer, data, size);
+	size = switch_buffer_read(context->audio_buffer, data, need);
 	switch_mutex_unlock(context->mutex);
 
 	if (size == 0) {
@@ -1808,6 +2095,46 @@ static switch_status_t av_file_read(switch_file_handle_t *handle, void *data, si
 	return *len == 0 ? SWITCH_STATUS_FALSE : SWITCH_STATUS_SUCCESS;
 }
 
+
+#ifdef ALT_WAY
+static switch_status_t av_file_read_video(switch_file_handle_t *handle, switch_frame_t *frame, switch_video_read_flag_t flags)
+{
+	void *pop;
+	av_file_context_t *context = (av_file_context_t *)handle->private_info;
+	switch_status_t status;
+
+
+	if (!context->has_video || context->closed) return SWITCH_STATUS_FALSE;
+
+	if ((flags & SVR_CHECK)) {
+		return SWITCH_STATUS_BREAK;
+	}
+
+	if ((flags & SVR_FLUSH)) {
+		flush_video_queue(context->eh.video_queue, 1);
+	}
+	
+	if ((flags & SVR_BLOCK)) {
+		status = switch_queue_pop(context->eh.video_queue, &pop);
+	} else {
+		status = switch_queue_trypop(context->eh.video_queue, &pop);
+	}
+
+	if (status == SWITCH_STATUS_SUCCESS) {
+		if (!pop) {
+			return SWITCH_STATUS_FALSE;
+		}
+
+		context->vid_ready = 1;
+
+		frame->img = (switch_image_t *) pop;
+		return SWITCH_STATUS_SUCCESS;
+	}
+
+	return (flags & SVR_FLUSH) ? SWITCH_STATUS_BREAK : status;
+}
+#else 
+
 static switch_status_t av_file_read_video(switch_file_handle_t *handle, switch_frame_t *frame, switch_video_read_flag_t flags)
 {
 	av_file_context_t *context = (av_file_context_t *)handle->private_info;
@@ -1815,10 +2142,11 @@ static switch_status_t av_file_read_video(switch_file_handle_t *handle, switch_f
 	MediaStream *mst = &context->video_st;
 	AVStream *st = mst->st;
 	int ticks = 0;
-	int max_delta = 1 * AV_TIME_BASE; // 1 second
+	int64_t max_delta = 1 * AV_TIME_BASE; // 1 second
 	switch_status_t status = SWITCH_STATUS_SUCCESS;
 	double fl_to = 0.02;
 	int do_fl = 0;
+	int smaller_ts = context->read_fps;
 
 	if (!context->has_video) return SWITCH_STATUS_FALSE;
 
@@ -1826,11 +2154,72 @@ static switch_status_t av_file_read_video(switch_file_handle_t *handle, switch_f
 		return SWITCH_STATUS_BREAK;
 	}
 
-	fl_to = (1000 / context->read_fps) * 1000;
+	if (handle->mm.fps > 0 && handle->mm.fps < smaller_ts) {
+		smaller_ts = handle->mm.fps;
+	}
+
+	fl_to = (1000 / smaller_ts) * 1000;
 	//printf("WTF %d (%f)\n",switch_queue_size(context->eh.video_queue), fl_to);
 	if (flags & SVR_FLUSH) {
-		max_delta = fl_to * AV_TIME_BASE;
+		max_delta = fl_to;
 		do_fl = 1;
+	}
+
+	if (!context->file_read_thread_running && switch_queue_size(context->eh.video_queue) == 0) {
+		return SWITCH_STATUS_FALSE;
+	}
+
+	if (context->read_paused) {
+		int sanity = 10;
+
+		if (context->seek_ts == -2) { // just seeked, try read a new img
+		again1:
+			status = switch_queue_trypop(context->eh.video_queue, &pop);
+			if (pop && status == SWITCH_STATUS_SUCCESS) {
+				context->seek_ts = -1;
+				switch_img_free(&context->last_img);
+				context->last_img = (switch_image_t *)pop;
+				switch_img_copy(context->last_img, &frame->img);
+				context->vid_ready = 1;
+				return SWITCH_STATUS_SUCCESS;
+			}
+
+			if (context->last_img) { // repeat the last img
+				switch_img_copy(context->last_img, &frame->img);
+				context->vid_ready = 1;
+				context->seek_ts = -1;
+				return SWITCH_STATUS_SUCCESS;
+			}
+
+			if ((flags & SVR_BLOCK) && sanity-- > 0) {
+				switch_yield(10000);
+				goto again1;
+			}
+
+			return SWITCH_STATUS_BREAK;
+		}
+
+		if (context->last_img) { // repeat the last img
+			if ((flags & SVR_BLOCK)) switch_yield(100000);
+			switch_img_copy(context->last_img, &frame->img);
+			context->vid_ready = 1;
+			return SWITCH_STATUS_SUCCESS;
+		}
+
+		if ((flags & SVR_BLOCK)) {
+			status = switch_queue_pop(context->eh.video_queue, &pop);
+		} else {
+			status = switch_queue_trypop(context->eh.video_queue, &pop);
+		}
+
+		if (pop && status == SWITCH_STATUS_SUCCESS) {
+			context->last_img = (switch_image_t *)pop;
+			switch_img_copy(context->last_img, &frame->img);
+			context->vid_ready = 1;
+			return SWITCH_STATUS_SUCCESS;
+		}
+
+		return SWITCH_STATUS_BREAK;
 	}
 
 	if (context->last_img) {
@@ -1839,14 +2228,19 @@ static switch_status_t av_file_read_video(switch_file_handle_t *handle, switch_f
 		} else if (mst->next_pts && (switch_time_now() - mst->next_pts > -10000)) {
 			frame->img = context->last_img;
 			context->last_img = NULL;
+			context->vid_ready = 1;
 			return SWITCH_STATUS_SUCCESS;
 		}
 
-		if (!(flags & SVR_BLOCK) && !do_fl) return SWITCH_STATUS_BREAK;
-	}
-
-	if (!context->file_read_thread_running && switch_queue_size(context->eh.video_queue) == 0) {
-		return SWITCH_STATUS_FALSE;
+		if (!(flags & SVR_BLOCK) && !do_fl) {
+			if (!mst->next_pts) {
+				frame->img = context->last_img;
+				context->last_img = NULL;
+				context->vid_ready = 1;
+				return SWITCH_STATUS_SUCCESS;
+			}
+			return SWITCH_STATUS_BREAK;
+		}
 	}
 
 	if (st->codec->time_base.num) {
@@ -1870,48 +2264,53 @@ static switch_status_t av_file_read_video(switch_file_handle_t *handle, switch_f
 
 	if (pop && status == SWITCH_STATUS_SUCCESS) {
 		switch_image_t *img = (switch_image_t *)pop;
-		uint64_t pts;
-		uint64_t now = switch_time_now();
+		int64_t pts;
+		int64_t now = switch_time_now();
 
 		pts = av_rescale_q(*((uint64_t *)img->user_priv), st->time_base, AV_TIME_BASE_Q);
+		// switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "pkt_pts: %lld pts: %lld queue size: %u\n", *((uint64_t *)img->user_priv), pts, switch_queue_size(context->eh.video_queue));
+		handle->vpos = pts;
 
 		if (!context->video_start_time) {
 			context->video_start_time = now - pts;
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "set start time: %" SWITCH_INT64_T_FMT " now: %" SWITCH_INT64_T_FMT " pts: %" SWITCH_INT64_T_FMT "\n", context->video_start_time, now, pts);
 		}
 
 		if (st->time_base.num == 0) {
 			mst->next_pts = 0;
 		} else {
-			//uint64_t last_pts = mst->next_pts;
+			// int64_t last_pts = mst->next_pts;
 			mst->next_pts = context->video_start_time + pts;
-			//switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "pts: %" SWITCH_INT64_T_FMT " last_pts: %" SWITCH_INT64_T_FMT " delta: %" SWITCH_INT64_T_FMT " frame_pts: %" SWITCH_INT64_T_FMT " nextpts: %" SWITCH_INT64_T_FMT ", num: %d, den:%d num:%d den:%d sleep: %" SWITCH_INT64_T_FMT "\n",
-			//pts, last_pts, mst->next_pts - last_pts, *((uint64_t *)img->user_priv), mst->next_pts, st->time_base.num, st->time_base.den, st->codec->time_base.num, st->codec->time_base.den, mst->next_pts - now);
+			// switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "pts: %" SWITCH_INT64_T_FMT " last_pts: %" SWITCH_INT64_T_FMT " delta: %" SWITCH_INT64_T_FMT " frame_pts: %" SWITCH_INT64_T_FMT " nextpts: %" SWITCH_INT64_T_FMT ", num: %d, den:%d num:%d den:%d sleep: %" SWITCH_INT64_T_FMT "\n",
+			// pts, last_pts, mst->next_pts - last_pts, *((uint64_t *)img->user_priv), mst->next_pts, st->time_base.num, st->time_base.den, st->codec->time_base.num, st->codec->time_base.den, mst->next_pts - now);
 		}
 
-		if (pts == 0) mst->next_pts = 0;
+		if (pts == 0 || context->video_start_time == 0) mst->next_pts = 0;
 
-		if ((mst->next_pts && switch_time_now() - mst->next_pts > max_delta)) {
-			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG3, "picture is too late, off: %" SWITCH_INT64_T_FMT " queue size:%u\n", (int64_t)(switch_time_now() - mst->next_pts), switch_queue_size(context->eh.video_queue));
+		if ((mst->next_pts && (now - mst->next_pts) > max_delta)) {
+			//switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "picture is too late, off: %" SWITCH_INT64_T_FMT " max delta: %" SWITCH_INT64_T_FMT " queue size:%u fps:%u/%0.2f\n", (int64_t)(now - mst->next_pts), max_delta, switch_queue_size(context->eh.video_queue), context->read_fps, handle->mm.fps);
 			switch_img_free(&img);
-			max_delta = AV_TIME_BASE;
-
+			//max_delta = AV_TIME_BASE;
+		
 			if (switch_queue_size(context->eh.video_queue) > 0) {
+				// switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "WTF again\n");
 				goto again;
 			} else if (!(flags & SVR_BLOCK) && !do_fl) {
 				mst->next_pts = 0;
+				context->video_start_time = 0;
 				return SWITCH_STATUS_BREAK;
-			}
+			} 
 		}
 
 		if ((flags & SVR_BLOCK) || do_fl) {
-			while (switch_micro_time_now() - mst->next_pts < -10000 / 2) {
-				// switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "yield\n");
-				switch_yield(10000);
+			while (switch_micro_time_now() - mst->next_pts < -10000) {
+				// switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "yield, delta=%" SWITCH_INT64_T_FMT "\n", switch_micro_time_now() - mst->next_pts);
+				switch_yield(1000);
 			}
 			frame->img = img;
 			do_fl = 0;
 		} else {
-			if (switch_micro_time_now() - mst->next_pts > -10000 / 2) {
+			if (switch_micro_time_now() - mst->next_pts > -10000) {
 				frame->img = img;
 			} else {
 				context->last_img = img;
@@ -1923,8 +2322,13 @@ static switch_status_t av_file_read_video(switch_file_handle_t *handle, switch_f
 		return SWITCH_STATUS_BREAK;
 	}
 
+	if (frame->img) {
+		context->vid_ready = 1;
+	}
+
 	return frame->img ? SWITCH_STATUS_SUCCESS : SWITCH_STATUS_FALSE;
 }
+#endif
 
 static switch_status_t av_file_write_video(switch_file_handle_t *handle, switch_frame_t *frame)
 {
@@ -2061,6 +2465,7 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_avformat_load)
 	file_interface->file_seek = av_file_seek;
 	file_interface->file_set_string = av_file_set_string;
 	file_interface->file_get_string = av_file_get_string;
+	file_interface->file_command = av_file_command;
 
 	SWITCH_ADD_API(api_interface, "av_format", "av information", av_format_api_function, "");
 

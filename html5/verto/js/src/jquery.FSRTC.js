@@ -103,7 +103,7 @@
 
 	if (moz) {
             this.constraints = {
-		offerToReceiveAudio: true,
+		offerToReceiveAudio: this.options.useSpeak === "none" ? false : true,
 		offerToReceiveVideo: this.options.useVideo ? true : false,
             };
 	} else {
@@ -111,7 +111,7 @@
 		optional: [{
 		    'DtlsSrtpKeyAgreement': 'true'
 		}],mandatory: {
-		    OfferToReceiveAudio: true,
+		    OfferToReceiveAudio: this.options.useSpeak === "none" ? false : true,
 		    OfferToReceiveVideo: this.options.useVideo ? true : false,
 		}
             };
@@ -513,13 +513,22 @@
 	    audio = false;
 	} else {
 	    audio = {
-		mandatory: obj.options.audioParams,
+		mandatory: {},
 		optional: []
 	    };
 
 	    if (obj.options.useMic !== "any") {
 		audio.optional = [{sourceId: obj.options.useMic}]
 	    }
+
+	    if (obj.options.audioParams) {
+		for (var key in obj.options.audioParams) {
+		    var con = {};
+		    con[key] = obj.options.audioParams[key];
+		    audio.optional.push(con);
+		}
+	    }
+
 
 	}
 

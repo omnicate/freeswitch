@@ -382,6 +382,7 @@ static void remove_session_elem_from_listener(listener_t *listener, session_elem
 static void destroy_session_elem(session_elem_t *session_element)
 {
 	switch_core_session_t *session;
+	void *pop;
 
 	/* wait for readers */
 	switch_thread_rwlock_wrlock(session_element->rwlock);
@@ -395,6 +396,13 @@ static void destroy_session_elem(session_elem_t *session_element)
 		switch_core_session_soft_unlock(session);
 		switch_core_session_rwunlock(session);
 	}
+
+	while (switch_queue_trypop(session_element->event_queue, &pop) == SWITCH_STATUS_SUCCESS) {
+		switch_event_t *event = (switch_event_t *) pop;
+		switch_event_destroy(&event);
+	}
+
+	switch_core_hash_destroy(&session_element->event_hash);
 	switch_core_destroy_memory_pool(&session_element->pool);
 }
 
@@ -1509,8 +1517,6 @@ session_elem_t *attach_call_to_spawned_process(listener_t *listener, char *modul
 	char hash[100];
 	spawn_reply_t *p;
 	erlang_ref ref;
-	switch_os_socket_t sockdes;
-	switch_os_sock_get(&sockdes, listen_list.sock);
 
 	ei_init_ref(listener->ec, &ref);
 	ei_hash_ref(&ref, hash);
@@ -1546,7 +1552,7 @@ session_elem_t *attach_call_to_spawned_process(listener_t *listener, char *modul
 		ei_x_encode_ref(&rbuf, &ref);
 		ei_x_encode_pid(&rbuf, ei_self(listener->ec));
 		/* should lock with mutex? */
-		ei_reg_send(listener->ec, sockdes, module, rbuf.buff, rbuf.index);
+		ei_reg_send(listener->ec, listener->sockdes, module, rbuf.buff, rbuf.index);
 #ifdef EI_DEBUG
 		ei_x_print_reg_msg(&rbuf, module, 1);
 #endif
@@ -1555,7 +1561,7 @@ session_elem_t *attach_call_to_spawned_process(listener_t *listener, char *modul
 		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "rpc call: %s:%s(Ref)\n", module, function);
 		/* should lock with mutex? */
 		switch_mutex_lock(listener->sock_mutex);
-		ei_pid_from_rpc(listener->ec, sockdes, &ref, module, function);
+		ei_pid_from_rpc(listener->ec, listener->sockdes, &ref, module, function);
 		switch_mutex_unlock(listener->sock_mutex);
 		/*
 		   char *argv[1];

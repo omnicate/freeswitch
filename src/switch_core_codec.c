@@ -319,11 +319,10 @@ SWITCH_DECLARE(switch_status_t) switch_core_session_get_read_impl(switch_core_se
 	if (session->read_impl.codec_id) {
 		*impp = session->read_impl;
 		return SWITCH_STATUS_SUCCESS;
-	} else {
-		memset(impp, 0, sizeof(*impp));
-		impp->number_of_channels = 1;
 	}
 
+	memset(impp, 0, sizeof(*impp));
+	impp->number_of_channels = 1;
 	return SWITCH_STATUS_FALSE;
 }
 
@@ -332,12 +331,9 @@ SWITCH_DECLARE(switch_status_t) switch_core_session_get_real_read_impl(switch_co
 	if (session->real_read_impl.codec_id) {
 		*impp = session->real_read_impl;
 		return SWITCH_STATUS_SUCCESS;
-	} else {
-		memset(impp, 0, sizeof(*impp));
-		impp->number_of_channels = 1;
 	}
 
-	return SWITCH_STATUS_FALSE;
+	return switch_core_session_get_read_impl(session, impp);
 }
 
 SWITCH_DECLARE(switch_status_t) switch_core_session_get_write_impl(switch_core_session_t *session, switch_codec_implementation_t *impp)
@@ -345,11 +341,10 @@ SWITCH_DECLARE(switch_status_t) switch_core_session_get_write_impl(switch_core_s
 	if (session->write_impl.codec_id) {
 		*impp = session->write_impl;
 		return SWITCH_STATUS_SUCCESS;
-	} else {
-		memset(impp, 0, sizeof(*impp));
-		impp->number_of_channels = 1;
 	}
-
+	
+	memset(impp, 0, sizeof(*impp));
+	impp->number_of_channels = 1;
 	return SWITCH_STATUS_FALSE;
 }
 
@@ -358,11 +353,10 @@ SWITCH_DECLARE(switch_status_t) switch_core_session_get_video_read_impl(switch_c
 	if (session->video_read_impl.codec_id) {
 		*impp = session->video_read_impl;
 		return SWITCH_STATUS_SUCCESS;
-	} else {
-		memset(impp, 0, sizeof(*impp));
-		impp->number_of_channels = 1;
 	}
 
+	memset(impp, 0, sizeof(*impp));
+	impp->number_of_channels = 1;
 	return SWITCH_STATUS_FALSE;
 }
 
@@ -371,11 +365,10 @@ SWITCH_DECLARE(switch_status_t) switch_core_session_get_video_write_impl(switch_
 	if (session->video_write_impl.codec_id) {
 		*impp = session->video_write_impl;
 		return SWITCH_STATUS_SUCCESS;
-	} else {
-		memset(impp, 0, sizeof(*impp));
-		impp->number_of_channels = 1;
 	}
 
+	memset(impp, 0, sizeof(*impp));
+	impp->number_of_channels = 1;
 	return SWITCH_STATUS_FALSE;
 }
 

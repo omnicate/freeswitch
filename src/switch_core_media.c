@@ -66,13 +66,23 @@ typedef struct secure_settings_s {
 	char *remote_crypto_key;
 } switch_secure_settings_t;
 
+typedef struct core_video_globals_s {
+	int cpu_count;
+	int cur_cpu;
+	switch_memory_pool_t *pool;
+	switch_mutex_t *mutex;
+	uint32_t fps;
+	uint32_t synced;
+} core_video_globals_t;
 
+static core_video_globals_t video_globals = { 0 };
 
 struct media_helper {
 	switch_core_session_t *session;
 	switch_thread_cond_t *cond;
 	switch_mutex_t *cond_mutex;
-	switch_mutex_t *file_mutex;
+	switch_mutex_t *file_read_mutex;
+	switch_mutex_t *file_write_mutex;
 	int up;
 };
 
@@ -164,6 +174,8 @@ typedef struct switch_rtp_engine_s {
 	switch_thread_id_t thread_id;
 	uint8_t new_ice;
 	uint8_t new_dtls;
+	uint32_t sdp_bw;
+	uint8_t reject_avp;
 } switch_rtp_engine_t;
 
 struct switch_media_handle_s {
@@ -175,8 +187,8 @@ struct switch_media_handle_s {
 	switch_mutex_t *read_mutex[2];
 	switch_mutex_t *write_mutex[2];
 	char *codec_order[SWITCH_MAX_CODECS];
-    int codec_order_last;
-    const switch_codec_implementation_t *codecs[SWITCH_MAX_CODECS];
+	int codec_order_last;
+	const switch_codec_implementation_t *codecs[SWITCH_MAX_CODECS];
 
 	int payload_space;
 	char *origin;
@@ -222,6 +234,8 @@ struct switch_media_handle_s {
 	time_t vid_started;
 	int ready_loops;
 
+	switch_thread_t *video_write_thread;
+	int video_write_thread_running;
 };
 
 static switch_srtp_crypto_suite_t SUITES[CRYPTO_INVALID] = {
@@ -344,11 +358,21 @@ SWITCH_DECLARE(uint32_t) switch_core_media_get_video_fps(switch_core_session_t *
 		return 0;
 	}
 	
-	fps = switch_round_to_step(smh->vid_frames / (now - smh->vid_started), 5);
-	if (fps < 15) fps = 15;
+	fps = switch_round_to_step(smh->vid_frames / (now - smh->vid_started), 5);	
 
-	smh->vid_started = switch_epoch_time_now(NULL);
-	smh->vid_frames = 1;
+	if (smh->vid_frames > 1000) {
+		smh->vid_started = switch_epoch_time_now(NULL);
+		smh->vid_frames = 1;
+	}
+
+	if (fps > 0) {
+		video_globals.fps = fps;
+	
+		if (smh->vid_params.fps != fps) {
+			switch_channel_set_variable_printf(session->channel, "video_fps", "%d", fps);
+			smh->vid_params.fps = fps;
+		}
+	}
 
 	return fps;
 }
@@ -1053,7 +1077,7 @@ static switch_status_t switch_core_media_build_crypto(switch_media_handle_t *smh
 		*p-- = '\0';
 	}
 
-	if (!index) index = ctype + 1;
+	if (index == SWITCH_NO_CRYPTO_TAG) index = ctype + 1;
 
 	engine->ssec[ctype].local_crypto_key = switch_core_session_sprintf(smh->session, "%d %s inline:%s", index, SUITES[ctype].name, b64_key);
 	switch_channel_set_variable_name_printf(smh->session->channel, engine->ssec[ctype].local_crypto_key, "rtp_last_%s_local_crypto_key", type2str(type));
@@ -1449,10 +1473,10 @@ SWITCH_DECLARE(void) switch_core_session_check_outgoing_crypto(switch_core_sessi
 
 	for (i = 0; smh->crypto_suite_order[i] != CRYPTO_INVALID; i++) {
 		switch_core_media_build_crypto(session->media_handle,
-									   SWITCH_MEDIA_TYPE_AUDIO, 0, smh->crypto_suite_order[i], SWITCH_RTP_CRYPTO_SEND, 0);
+									   SWITCH_MEDIA_TYPE_AUDIO, SWITCH_NO_CRYPTO_TAG, smh->crypto_suite_order[i], SWITCH_RTP_CRYPTO_SEND, 0);
 
 		switch_core_media_build_crypto(session->media_handle,
-									   SWITCH_MEDIA_TYPE_VIDEO, 0, smh->crypto_suite_order[i], SWITCH_RTP_CRYPTO_SEND, 0);
+									   SWITCH_MEDIA_TYPE_VIDEO, SWITCH_NO_CRYPTO_TAG, smh->crypto_suite_order[i], SWITCH_RTP_CRYPTO_SEND, 0);
 	}
 
 }
@@ -1511,12 +1535,38 @@ static void set_stats(switch_core_session_t *session, switch_media_type_t type, 
 	}
 }
 
+SWITCH_DECLARE(void) switch_core_media_sync_stats(switch_core_session_t *session)
+{
+	switch_media_handle_t *smh;
+	switch_rtp_engine_t *a_engine, *v_engine;
+
+	switch_assert(session);
+
+	if (!(smh = session->media_handle)) {
+		return;
+	}
+
+	a_engine = &smh->engines[SWITCH_MEDIA_TYPE_AUDIO];
+	v_engine = &smh->engines[SWITCH_MEDIA_TYPE_VIDEO];	
+
+	if (a_engine->rtp_session) {
+		switch_rtp_sync_stats(a_engine->rtp_session);
+	}
+
+	if (v_engine->rtp_session) {
+		switch_rtp_sync_stats(v_engine->rtp_session);
+	}
+
+}
+
 SWITCH_DECLARE(void) switch_core_media_set_stats(switch_core_session_t *session)
 {
 	
 	if (!session->media_handle) {
 		return;
 	}
+
+	switch_core_media_sync_stats(session);
 
 	set_stats(session, SWITCH_MEDIA_TYPE_AUDIO, "audio");
 	set_stats(session, SWITCH_MEDIA_TYPE_VIDEO, "video");
@@ -1642,6 +1692,7 @@ SWITCH_DECLARE(switch_status_t) switch_media_handle_create(switch_media_handle_t
 		session->media_handle->engines[SWITCH_MEDIA_TYPE_VIDEO].payload_map = switch_core_alloc(session->pool, sizeof(payload_map_t));
 		session->media_handle->engines[SWITCH_MEDIA_TYPE_VIDEO].cur_payload_map = session->media_handle->engines[SWITCH_MEDIA_TYPE_VIDEO].payload_map;
 		session->media_handle->engines[SWITCH_MEDIA_TYPE_VIDEO].cur_payload_map->current = 1;
+		session->media_handle->engines[SWITCH_MEDIA_TYPE_VIDEO].codec_settings.video.try_hardware_encoder = 1;
 
 		switch_channel_set_flag(session->channel, CF_DTLS_OK);
 
@@ -1819,7 +1870,81 @@ SWITCH_DECLARE(void) switch_core_media_prepare_codecs(switch_core_session_t *ses
 
 }
 
+static void adjust_jb(switch_core_session_t *session, int new_ptime_ms)
+{
+	const char *val;
+	switch_media_handle_t *smh;
+	switch_rtp_engine_t *a_engine = NULL;
+	int maxlen = 0;
+	int32_t jb_msec = 0 ;
+	int qlen, maxqlen = 50;
 
+	switch_assert(session);
+
+	if (!(smh = session->media_handle)) {
+		return;
+	}
+
+	a_engine = &smh->engines[SWITCH_MEDIA_TYPE_AUDIO];
+
+	if ((val = switch_channel_get_variable(session->channel, "jitterbuffer_msec")) || (val = smh->mparams->jb_msec)) {
+		char *p;
+
+		if (!jb_msec) {
+			jb_msec = atoi(val);
+
+			if (strchr(val, 'p') && jb_msec > 0) {
+				jb_msec *= -1;
+			} else {
+				switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG3, "Will not adjust JB size, token 'p' not specified\n");
+				return;
+			}
+					
+			if ((p = strchr(val, ':'))) {
+				p++;
+				maxlen = atoi(p);
+
+				if (strchr(p, 'p') && maxlen > 0) {
+					maxlen *= -1;
+				}
+			}
+		}
+
+		if (jb_msec < 0 && jb_msec > -1000) {
+			jb_msec = new_ptime_ms * abs(jb_msec);
+		}
+
+		if (maxlen < 0 && maxlen > -1000) {
+			maxlen = new_ptime_ms * abs(maxlen);
+		}
+
+		if (jb_msec < 10 || jb_msec > 10000) {
+			switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR,
+							  "Invalid Jitterbuffer spec [%d] must be between 10 and 10000\n", jb_msec);
+		} else {
+			qlen = jb_msec / new_ptime_ms;
+			if (maxlen) {
+				maxqlen = maxlen / new_ptime_ms;
+			}
+			if (maxqlen < qlen) {
+				maxqlen = qlen * 5;
+			}
+			if (switch_rtp_activate_jitter_buffer(a_engine->rtp_session, qlen, maxqlen, 
+					a_engine->read_impl.samples_per_packet, a_engine->read_impl.samples_per_second) == SWITCH_STATUS_SUCCESS) {
+				switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), 
+									  SWITCH_LOG_DEBUG, "Adjusting Jitterbuffer to %dms (%d frames) (%d max frames)\n", 
+									  jb_msec, qlen, maxqlen);
+				switch_channel_set_flag(session->channel, CF_JITTERBUFFER);
+				if (!switch_false(switch_channel_get_variable(session->channel, "rtp_jitter_buffer_plc"))) {
+					switch_channel_set_flag(session->channel, CF_JITTERBUFFER_PLC);
+				}
+			} else {
+				switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), 
+								  SWITCH_LOG_DEBUG, "Error adjusting Jitterbuffer to %dms (%d frames)\n", jb_msec, qlen);
+			}
+		}
+	}
+}
 
 static void check_jb(switch_core_session_t *session, const char *input, int32_t jb_msec, int32_t maxlen, switch_bool_t silent)
 {
@@ -1957,7 +2082,7 @@ static void check_jb(switch_core_session_t *session, const char *input, int32_t 
 static void check_jb_sync(switch_core_session_t *session)
 {
 	int32_t jb_sync_msec = 0;
-	uint32_t fps, frames = 0;
+	uint32_t fps = 0, frames = 0;
 	uint32_t min_frames = 0;
 	uint32_t max_frames = 0;
 	uint32_t cur_frames = 0;
@@ -1999,14 +2124,8 @@ static void check_jb_sync(switch_core_session_t *session)
 		}
 	}
 	
-	if (smh->vid_frames < 10) {
-		fps = 30; 
-	} else {
-		fps = switch_core_media_get_video_fps(session);
-	}
+	fps = switch_core_media_get_video_fps(session);
 	
-	if (fps < 15) return;
-
 	switch_rtp_get_video_buffer_size(v_engine->rtp_session, &min_frames, &max_frames, &cur_frames, NULL);
 
 	if (!frames) {
@@ -2035,11 +2154,13 @@ static void check_jb_sync(switch_core_session_t *session)
 					  switch_core_session_get_uuid(session),
 					  switch_channel_get_name(session->channel),
 					  switch_channel_get_variable_dup(session->channel, "caller_id_name", SWITCH_FALSE, -1),
-					  jb_sync_msec, frames, fps, sync_audio ? "yes" : "no", sync_video ? "yes" : "no");
+					  jb_sync_msec, frames, video_globals.fps, sync_audio ? "yes" : "no", sync_video ? "yes" : "no");
 	
 	if (sync_audio) {
 		check_jb(session, NULL, jb_sync_msec, 0, SWITCH_TRUE);
 	}
+
+	video_globals.synced++;
 }
 
 
@@ -2156,12 +2277,21 @@ SWITCH_DECLARE(switch_status_t) switch_core_media_read_frame(switch_core_session
 			goto end;
 		}
 	
+		if (status == SWITCH_STATUS_BREAK) {
+			goto end;
+		}
+
 		if (type == SWITCH_MEDIA_TYPE_VIDEO && engine->read_frame.m) {
+			
 			if (!smh->vid_started) {
 				smh->vid_started = switch_epoch_time_now(NULL);
 			}
 			smh->vid_frames++;
 
+			if ((smh->vid_frames % 15) == 0) {
+				switch_core_media_get_video_fps(session);
+			}
+			
 			if (smh->vid_frames == 1 || ((smh->vid_frames % 300) == 0)) {
 				check_jb_sync(session);
 			}
@@ -2185,34 +2315,36 @@ SWITCH_DECLARE(switch_status_t) switch_core_media_read_frame(switch_core_session
 						switch_goto_status(SWITCH_STATUS_GENERR, end);
 					}
 				}
-
-				if ((val = switch_channel_get_variable(session->channel, "rtp_timeout_sec"))) {
-					int v = atoi(val);
-					if (v >= 0) {
-						rtp_timeout_sec = v;
-					}
-				}
 				
-				if ((val = switch_channel_get_variable(session->channel, "rtp_hold_timeout_sec"))) {
-					int v = atoi(val);
-					if (v >= 0) {
-						rtp_hold_timeout_sec = v;
+				if (type == SWITCH_MEDIA_TYPE_AUDIO && engine->read_impl.samples_per_second) {
+					if ((val = switch_channel_get_variable(session->channel, "rtp_timeout_sec"))) {
+						int v = atoi(val);
+						if (v >= 0) {
+							rtp_timeout_sec = v;
+						}
 					}
-				}
-
-				if (rtp_timeout_sec) {
-					engine->max_missed_packets = (engine->read_impl.samples_per_second * rtp_timeout_sec) /
-						engine->read_impl.samples_per_packet;
-
-					switch_rtp_set_max_missed_packets(engine->rtp_session, engine->max_missed_packets);
-					if (!rtp_hold_timeout_sec) {
-						rtp_hold_timeout_sec = rtp_timeout_sec * 10;
+				
+					if ((val = switch_channel_get_variable(session->channel, "rtp_hold_timeout_sec"))) {
+						int v = atoi(val);
+						if (v >= 0) {
+							rtp_hold_timeout_sec = v;
+						}
 					}
-				}
 
-				if (rtp_hold_timeout_sec) {
-					engine->max_missed_hold_packets = (engine->read_impl.samples_per_second * rtp_hold_timeout_sec) /
-						engine->read_impl.samples_per_packet;
+					if (rtp_timeout_sec) {
+						engine->max_missed_packets = (engine->read_impl.samples_per_second * rtp_timeout_sec) /
+							engine->read_impl.samples_per_packet;
+
+						switch_rtp_set_max_missed_packets(engine->rtp_session, engine->max_missed_packets);
+						if (!rtp_hold_timeout_sec) {
+							rtp_hold_timeout_sec = rtp_timeout_sec * 10;
+						}
+					}
+
+					if (rtp_hold_timeout_sec) {
+						engine->max_missed_hold_packets = (engine->read_impl.samples_per_second * rtp_hold_timeout_sec) /
+							engine->read_impl.samples_per_packet;
+					}
 				}
 			}
 
@@ -2333,25 +2465,22 @@ SWITCH_DECLARE(switch_status_t) switch_core_media_read_frame(switch_core_session
 				}
 				
 				/* check for timing issues */
-				if (smh->media_flags[SCMF_AUTOFIX_TIMING] && engine->check_frames < MAX_CODEC_CHECK_FRAMES) {
-
+				if (smh->media_flags[SCMF_AUTOFIX_TIMING]) {
+					char is_vbr;
+					is_vbr = engine->read_impl.encoded_bytes_per_packet?0:1;
 
 					engine->check_frames++;
-
-					if (!engine->read_impl.encoded_bytes_per_packet) {
-						engine->check_frames = MAX_CODEC_CHECK_FRAMES;
-						goto skip;
-					}
-					
-					if (smh->media_flags[SCMF_AUTOFIX_TIMING] && (engine->read_frame.datalen % 10) == 0) {
+					/* CBR */
+					if ((smh->media_flags[SCMF_AUTOFIX_TIMING] && (engine->read_frame.datalen % 10) == 0) 
+							&& (engine->check_frames < MAX_CODEC_CHECK_FRAMES) && !is_vbr) {
+						engine->check_frames++;
 						
 						if (engine->last_ts && engine->read_frame.datalen != engine->read_impl.encoded_bytes_per_packet) {
 
 							uint32_t codec_ms = (int) (engine->read_frame.timestamp -
 													   engine->last_ts) / (engine->read_impl.samples_per_second / 1000);
-
 							if (engine->last_seq && (int) (engine->read_frame.seq - engine->last_seq) > 1) {
-								switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "Correcting calculated ptime value from %d to %d to compensate for %d lost packet(s)\n", codec_ms, codec_ms / (int) (engine->read_frame.seq - engine->last_seq), (int) (engine->read_frame.seq - engine->last_seq - 1));
+								switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "[%s]: Correcting calculated ptime value from [%d] to [%d] to compensate for [%d] lost packet(s). \n", is_vbr?"VBR":"CBR", codec_ms, codec_ms / (int) (engine->read_frame.seq - engine->last_seq), (int) (engine->read_frame.seq - engine->last_seq - 1));
 								codec_ms = codec_ms / (int) (engine->read_frame.seq - engine->last_seq);
 							}
 
@@ -2360,7 +2489,6 @@ SWITCH_DECLARE(switch_status_t) switch_core_media_read_frame(switch_core_session
 								engine->last_seq = 0;
 								goto skip;
 							}
-
 
 							if (engine->last_codec_ms && engine->last_codec_ms == codec_ms) {
 								engine->mismatch_count++;
@@ -2373,8 +2501,9 @@ SWITCH_DECLARE(switch_status_t) switch_core_media_read_frame(switch_core_session
 
 									if (codec_ms > 120) {	/* yeah right */
 										switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_WARNING,
-														  "Your phone is trying to send timestamps that suggest an increment of %dms per packet\n"
+														  "[%s]: Your phone is trying to send timestamps that suggest an increment of %dms per packet\n"
 														  "That seems hard to believe so I am going to go on ahead and um ignore that, mmkay?\n",
+														  is_vbr?"VBR":"CBR",
 														  (int) codec_ms);
 										engine->check_frames = MAX_CODEC_CHECK_FRAMES;
 										goto skip;
@@ -2384,7 +2513,8 @@ SWITCH_DECLARE(switch_status_t) switch_core_media_read_frame(switch_core_session
 
 									if (codec_ms != engine->cur_payload_map->codec_ms) {
 										switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_WARNING,
-														  "Asynchronous PTIME not supported, changing our end from %d to %d\n",
+														  "[%s]: Asynchronous PTIME not supported, changing our end from %d to %d\n",
+														  is_vbr?"VBR":"CBR",
 														  (int) engine->cur_payload_map->codec_ms,
 														  (int) codec_ms
 														  );
@@ -2407,6 +2537,52 @@ SWITCH_DECLARE(switch_status_t) switch_core_media_read_frame(switch_core_session
 						engine->last_ts = engine->read_frame.timestamp;
 						engine->last_seq = engine->read_frame.seq;
 
+					} else if (smh->media_flags[SCMF_AUTOFIX_TIMING] && is_vbr && switch_rtp_get_jitter_buffer(engine->rtp_session) 
+																			&& engine->read_frame.timestamp && engine->read_frame.seq) {
+
+						uint32_t codec_ms = (int) (engine->read_frame.timestamp -
+								   engine->last_ts) / (engine->read_impl.samples_per_second / 1000);
+
+						if (engine->last_seq && (int) (engine->read_frame.seq - engine->last_seq) > 1) {
+								switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG, "[%s]: Correcting calculated ptime value from [%d] to [%d] to compensate for [%d] lost packet(s)\n", is_vbr?"VBR":"CBR", codec_ms, codec_ms / (int) (engine->read_frame.seq - engine->last_seq), (int) (engine->read_frame.seq - engine->last_seq - 1));
+								codec_ms = codec_ms / (int) (engine->read_frame.seq - engine->last_seq);
+						}
+
+						engine->last_codec_ms = codec_ms;
+
+						if (codec_ms != engine->cur_payload_map->codec_ms && codec_ms) {
+
+							if (codec_ms > 120) {
+								/*will show too many times with packet loss*/
+								switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_DEBUG3,
+												  "[%s]: Remote party is trying to send timestamps that suggest an increment of [%d] ms per packet, which is too high. Ignoring.\n",
+												   is_vbr?"VBR":"CBR",
+												  (int) codec_ms);
+								engine->last_ts = engine->read_frame.timestamp;
+								engine->last_seq = engine->read_frame.seq;
+								goto skip;
+							}
+
+							if (codec_ms != engine->cur_payload_map->codec_ms) {
+								switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_WARNING,
+												  "[%s]: Asynchronous PTIME supported, adjusting JB size. Remote PTIME changed from [%d] to [%d]\n",
+												  is_vbr?"VBR":"CBR",
+												  (int) engine->cur_payload_map->codec_ms,
+												  (int) codec_ms
+												  );
+			 					engine->cur_payload_map->codec_ms = codec_ms;
+								/* adjust audio JB size, but do not substitute the codec */
+								adjust_jb(session,codec_ms);
+								engine->reset_codec = 2;
+
+								if (switch_channel_test_flag(session->channel, CF_CONFERENCE)) {
+									switch_channel_set_flag(session->channel, CF_CONFERENCE_RESET_MEDIA);
+								}
+							}
+						}
+
+						engine->last_ts = engine->read_frame.timestamp;
+						engine->last_seq = engine->read_frame.seq;
 
 					} else {
 						engine->mismatch_count = 0;
@@ -2627,20 +2803,30 @@ static void switch_core_session_parse_codec_settings(switch_core_session_t *sess
 	switch(type) {
 	case SWITCH_MEDIA_TYPE_AUDIO:
 		break;
-	case SWITCH_MEDIA_TYPE_VIDEO:
-		{
-			const char *bwv = switch_channel_get_variable(session->channel, "rtp_video_max_bandwidth");
+	case SWITCH_MEDIA_TYPE_VIDEO: {
+		uint32_t system_bw = 0;
+		const char *var = NULL, *bwv;
 
-			if (!bwv) {
-				bwv = switch_channel_get_variable(session->channel, "rtp_video_max_bandwidth_out");
-			}
-
-			if (!bwv) {
-				bwv = "1mb";
-			}
-			
-			engine->codec_settings.video.bandwidth = switch_parse_bandwidth_string(bwv);
+		if ((var = switch_channel_get_variable(session->channel, "video_try_hardware_encoder"))) {
+			engine->codec_settings.video.try_hardware_encoder = switch_true(var);
 		}
+
+		if (!(bwv = switch_channel_get_variable(session->channel, "rtp_video_max_bandwidth"))) {
+			bwv = switch_channel_get_variable(session->channel, "rtp_video_max_bandwidth_out");
+		}
+		
+		if (!bwv) {
+			bwv = "1mb";
+		}
+		
+		system_bw = switch_parse_bandwidth_string(bwv);
+
+		if (engine->sdp_bw && engine->sdp_bw <= system_bw) {
+			engine->codec_settings.video.bandwidth = engine->sdp_bw;
+		} else {
+			engine->codec_settings.video.bandwidth = system_bw;
+		}
+	}
 		break;
 	default:
 		break;
@@ -2788,7 +2974,7 @@ SWITCH_DECLARE(switch_status_t) switch_core_media_set_codec(switch_core_session_
 				switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_NOTICE, "Deactivating read resampler\n");
 				switch_mutex_unlock(session->resample_mutex);
 			}
-
+			
 			if (session->write_resampler) {
 				switch_mutex_lock(session->resample_mutex);
 				switch_resample_destroy(&session->write_resampler);
@@ -3590,7 +3776,7 @@ SWITCH_DECLARE(uint8_t) switch_core_media_negotiate_sdp(switch_core_session_t *s
 	switch_channel_t *channel = switch_core_session_get_channel(session);
 	const char *val;
 	const char *crypto = NULL;
-	int got_crypto = 0, got_video_crypto = 0, got_audio = 0, got_avp = 0, got_video_avp = 0, got_video_savp = 0, got_savp = 0, got_udptl = 0, got_webrtc = 0;
+	int got_crypto = 0, got_video_crypto = 0, got_audio = 0, saw_audio = 0, got_avp = 0, got_video_avp = 0, got_video_savp = 0, got_savp = 0, got_udptl = 0, got_webrtc = 0;
 	int scrooge = 0;
 	sdp_parser_t *parser = NULL;
 	sdp_session_t *sdp;
@@ -3631,6 +3817,8 @@ SWITCH_DECLARE(uint8_t) switch_core_media_negotiate_sdp(switch_core_session_t *s
 		return 0;
 	}
 
+	switch_channel_clear_flag(channel, CF_AUDIO_PAUSE);
+
 	if (dtls_ok(session) && (tmp = switch_channel_get_variable(smh->session->channel, "webrtc_enable_dtls")) && switch_false(tmp)) {
 		switch_channel_clear_flag(smh->session->channel, CF_DTLS_OK);
 		switch_channel_clear_flag(smh->session->channel, CF_DTLS);
@@ -3640,7 +3828,8 @@ SWITCH_DECLARE(uint8_t) switch_core_media_negotiate_sdp(switch_core_session_t *s
 	v_engine->new_ice = 1;
 	a_engine->new_dtls = 1;
 	a_engine->new_ice = 1;
-
+	a_engine->reject_avp = 0;
+			
 	switch_core_session_parse_crypto_prefs(session);
 
 	clear_pmaps(a_engine);
@@ -3714,6 +3903,10 @@ SWITCH_DECLARE(uint8_t) switch_core_media_negotiate_sdp(switch_core_session_t *s
 
 		if (!m->m_port) {
 			continue;
+		}
+
+		if (m->m_type == sdp_media_audio) {
+			saw_audio = 1;
 		}
 
 		ptime = dptime;
@@ -3794,16 +3987,16 @@ SWITCH_DECLARE(uint8_t) switch_core_media_negotiate_sdp(switch_core_session_t *s
 					char tmp[32] = "";
 
 
-                    if (!switch_channel_test_flag(other_channel, CF_ANSWERED)) {
-                        switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session),
-                                          SWITCH_LOG_WARNING, "%s Error Passing T.38 to unanswered channel %s\n",
-                                          switch_channel_get_name(session->channel), switch_channel_get_name(other_channel));
-                        switch_core_session_rwunlock(other_session);
+					if (!switch_channel_test_flag(other_channel, CF_ANSWERED)) {
+						switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session),
+										SWITCH_LOG_WARNING, "%s Error Passing T.38 to unanswered channel %s\n",
+										switch_channel_get_name(session->channel), switch_channel_get_name(other_channel));
+						switch_core_session_rwunlock(other_session);
 
-                        pass = 0;
-                        match = 0;
-                        goto done;
-                    }
+						pass = 0;
+						match = 0;
+						goto done;
+					}
 
 
 					if (switch_true(switch_channel_get_variable(session->channel, "t38_broken_boolean")) && 
@@ -3833,7 +4026,8 @@ SWITCH_DECLARE(uint8_t) switch_core_media_negotiate_sdp(switch_core_session_t *s
 							switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "AUDIO RTP REPORTS ERROR: [%s]\n", err);
 							switch_channel_hangup(channel, SWITCH_CAUSE_INCOMPATIBLE_DESTINATION);
 						}
-						
+
+						switch_core_media_check_autoadj(session);
 					}
 
 					
@@ -3857,6 +4051,8 @@ SWITCH_DECLARE(uint8_t) switch_core_media_negotiate_sdp(switch_core_session_t *s
 			/* do nothing here, mod_fax will trigger a response (if it's listening =/) */
 			match = 1;
 			goto done;
+		} else if (m->m_type == sdp_media_audio && m->m_port && got_audio && got_savp) {
+			a_engine->reject_avp = 1;
 		} else if (m->m_type == sdp_media_audio && m->m_port && !got_audio) {
 			sdp_rtpmap_t *map;
 			int ice = 0;
@@ -3893,7 +4089,7 @@ SWITCH_DECLARE(uint8_t) switch_core_media_negotiate_sdp(switch_core_session_t *s
 					break;
 				}
 			}
-
+			
 			for (attr = sdp->sdp_attributes; attr; attr = attr->a_next) {
 				if (zstr(attr->a_name)) {
 					continue;
@@ -4019,7 +4215,7 @@ SWITCH_DECLARE(uint8_t) switch_core_media_negotiate_sdp(switch_core_session_t *s
 					maxptime = atoi(attr->a_value);
 				} else if (got_crypto < 1 && !strcasecmp(attr->a_name, "crypto") && !zstr(attr->a_value)) {
 					int crypto_tag;
-
+					
 					if (!(smh->mparams->ndlb & SM_NDLB_ALLOW_CRYPTO_IN_AVP) && 
 						!switch_true(switch_channel_get_variable(session->channel, "rtp_allow_crypto_in_avp"))) {
 						if (m->m_proto != sdp_proto_srtp && !got_webrtc) {
@@ -4462,14 +4658,16 @@ SWITCH_DECLARE(uint8_t) switch_core_media_negotiate_sdp(switch_core_session_t *s
 			if (best_te) {
 				smh->mparams->te_rate = best_te_rate;
 
-				if (sdp_type == SDP_TYPE_REQUEST) {
-					smh->mparams->te = smh->mparams->recv_te = (switch_payload_t) best_te;
-					switch_channel_set_variable(session->channel, "dtmf_type", "rfc2833");
-					smh->mparams->dtmf_type = DTMF_2833;
-				} else {
-					smh->mparams->te = (switch_payload_t) best_te;
-					switch_channel_set_variable(session->channel, "dtmf_type", "rfc2833");
-					smh->mparams->dtmf_type = DTMF_2833;
+				if (smh->mparams->dtmf_type == DTMF_AUTO) {
+					if (sdp_type == SDP_TYPE_REQUEST) {
+						smh->mparams->te = smh->mparams->recv_te = (switch_payload_t) best_te;
+						switch_channel_set_variable(session->channel, "dtmf_type", "rfc2833");
+						smh->mparams->dtmf_type = DTMF_2833;
+					} else {
+						smh->mparams->te = (switch_payload_t) best_te;
+						switch_channel_set_variable(session->channel, "dtmf_type", "rfc2833");
+						smh->mparams->dtmf_type = DTMF_2833;
+					}
 				}
 				
 				if (a_engine->rtp_session) {
@@ -4527,6 +4725,18 @@ SWITCH_DECLARE(uint8_t) switch_core_media_negotiate_sdp(switch_core_session_t *s
 			v_engine->rmode = sdp_media_flow(m->m_mode);
 
 			if (sdp_type == SDP_TYPE_REQUEST) {
+				sdp_bandwidth_t *bw;
+				int tias = 0;
+				
+				for (bw = m->m_bandwidths; bw; bw = bw->b_next) {
+					if (bw->b_modifier == sdp_bw_as && !tias) {
+						v_engine->sdp_bw = bw->b_value / 1024;
+					} else if (bw->b_modifier == sdp_bw_tias) {
+						tias = 1;
+						v_engine->sdp_bw = bw->b_value / 1024;
+					}
+				}
+
 				switch(v_engine->rmode) {
 				case SWITCH_MEDIA_FLOW_RECVONLY:
 					switch_channel_set_variable(smh->session->channel, "video_media_flow", "sendonly");
@@ -4732,6 +4942,35 @@ SWITCH_DECLARE(uint8_t) switch_core_media_negotiate_sdp(switch_core_session_t *s
 		}
 	}
 
+	if (!saw_audio) {
+		payload_map_t *pmap;
+
+		a_engine->rmode = SWITCH_MEDIA_FLOW_DISABLED;
+		switch_channel_set_variable(smh->session->channel, "audio_media_flow", "inactive");
+		
+
+		pmap = switch_core_media_add_payload_map(session,
+												 SWITCH_MEDIA_TYPE_AUDIO,
+												 "L16",
+												 NULL,
+												 NULL,
+												 SDP_TYPE_REQUEST,
+												 97,
+												 8000,
+												 20,
+												 1,
+												 SWITCH_TRUE);
+
+		pmap->remote_sdp_ip = "127.0.0.1";
+		pmap->remote_sdp_port = 9999;
+		pmap->agreed_pt = 97;
+		pmap->recv_pt = 97;
+		pmap->codec_ms = 20;
+		a_engine->cur_payload_map = pmap;
+		switch_channel_set_flag(channel, CF_AUDIO_PAUSE);
+	}
+
+
 	if (!match && vmatch) match = 1;
 
  done:
@@ -4866,7 +5105,7 @@ SWITCH_DECLARE(int) switch_core_media_toggle_hold(switch_core_session_t *session
 			if (b_channel && (switch_channel_test_flag(session->channel, CF_BYPASS_MEDIA_AFTER_HOLD) ||
 							  switch_channel_test_flag(b_channel, CF_BYPASS_MEDIA_AFTER_HOLD) || bypass_after_hold_a || bypass_after_hold_b)) {
 				/* try to stay out from media stream */
-				switch_ivr_nomedia(switch_core_session_get_uuid(session), SMF_REBRIDGE);
+				switch_ivr_bg_media(switch_core_session_get_uuid(session), SMF_REBRIDGE, SWITCH_FALSE, SWITCH_TRUE, 200);
 			}
 
 			if (a_engine->max_missed_packets && a_engine->rtp_session) {
@@ -4933,21 +5172,106 @@ SWITCH_DECLARE(switch_file_handle_t *) switch_core_media_get_video_file(switch_c
 
 	v_engine = &smh->engines[SWITCH_MEDIA_TYPE_VIDEO];	
 
-	switch_mutex_lock(v_engine->mh.file_mutex);
+
 
 	if (rw == SWITCH_RW_READ) {
+		switch_mutex_lock(v_engine->mh.file_read_mutex);
 		fh = smh->video_read_fh;
+		switch_mutex_unlock(v_engine->mh.file_read_mutex);
 	} else {
+		switch_mutex_lock(v_engine->mh.file_write_mutex);
 		fh = smh->video_write_fh;
+		switch_mutex_unlock(v_engine->mh.file_write_mutex);
 	}
 
-	switch_mutex_unlock(v_engine->mh.file_mutex);
+
 
 	return fh;
 }
 
 
-SWITCH_DECLARE(switch_status_t) switch_core_media_set_video_file(switch_core_session_t *session, switch_file_handle_t *fh, switch_rw_t rw)
+static void *SWITCH_THREAD_FUNC video_write_thread(switch_thread_t *thread, void *obj)
+{
+	switch_core_session_t *session = (switch_core_session_t *) obj;
+	switch_media_handle_t *smh;
+	unsigned char *buf = NULL;
+	switch_frame_t fr = { 0 };
+	switch_rtp_engine_t *v_engine;
+	int buflen = SWITCH_RTP_MAX_BUF_LEN;
+	switch_timer_t timer = { 0 };
+	int fps;
+	switch_video_read_flag_t read_flags = SVR_FLUSH|SVR_BLOCK;
+
+	if (switch_core_session_read_lock(session) != SWITCH_STATUS_SUCCESS) {
+		return NULL;
+	}
+	
+	if (!(smh = session->media_handle)) {
+		return NULL;
+	}
+
+	switch_channel_set_flag(session->channel, CF_VIDEO_WRITING);
+
+	v_engine = &smh->engines[SWITCH_MEDIA_TYPE_VIDEO];	
+
+
+	buf = switch_core_session_alloc(session, buflen);
+	fr.packet = buf;
+	fr.packetlen = buflen;
+	fr.data = buf + 12;
+	fr.buflen = buflen - 12;
+	switch_core_media_gen_key_frame(session);
+
+	
+	if (smh->video_write_fh->mm.source_fps) {
+		fps = (int) smh->video_write_fh->mm.source_fps;
+	} else {
+		fps = video_globals.fps;
+	}
+
+	if (!fps) {
+		fps = 15;
+	}
+
+
+	switch_core_timer_init(&timer, "soft", (int)(1000 / fps) , 1, switch_core_session_get_pool(session));
+
+	while (smh->video_write_thread_running > 0 &&
+		   switch_channel_up_nosig(session->channel) && smh->video_write_fh && switch_test_flag(smh->video_write_fh, SWITCH_FILE_OPEN)) {
+		switch_status_t wstatus = SWITCH_STATUS_FALSE;
+
+		switch_core_timer_next(&timer);
+		switch_mutex_lock(v_engine->mh.file_write_mutex);
+
+		if (smh->video_write_fh->mm.source_fps && smh->video_write_fh->mm.source_fps != fps) {
+			switch_core_timer_destroy(&timer);
+			switch_core_timer_init(&timer, "soft", (int)(1000 / fps) , 1, switch_core_session_get_pool(session));
+		}
+
+		if (smh->video_write_fh && !switch_test_flag(smh->video_write_fh, SWITCH_FILE_FLAG_VIDEO_EOF)) {
+			wstatus = switch_core_file_read_video(smh->video_write_fh, &fr, read_flags);
+
+			if (wstatus == SWITCH_STATUS_SUCCESS) {
+				switch_core_session_write_video_frame(session, &fr, SWITCH_IO_FLAG_NONE, SVR_FLUSH);
+				switch_img_free(&fr.img);
+			} else if (wstatus != SWITCH_STATUS_BREAK && wstatus != SWITCH_STATUS_IGNORE) {
+				switch_set_flag_locked(smh->video_write_fh, SWITCH_FILE_FLAG_VIDEO_EOF);
+			}
+		}
+		switch_mutex_unlock(v_engine->mh.file_write_mutex);
+	}
+
+	switch_core_timer_destroy(&timer);
+
+	switch_core_session_rwunlock(session);
+
+	switch_channel_clear_flag(session->channel, CF_VIDEO_WRITING);
+	smh->video_write_thread_running = 0;
+
+	return NULL;
+}
+
+SWITCH_DECLARE(switch_status_t) switch_core_media_lock_video_file(switch_core_session_t *session, switch_rw_t rw)
 {
 	switch_media_handle_t *smh;
 	switch_rtp_engine_t *v_engine;
@@ -4962,6 +5286,63 @@ SWITCH_DECLARE(switch_status_t) switch_core_media_set_video_file(switch_core_ses
 		return SWITCH_STATUS_FALSE;
 	}
 
+	v_engine = &smh->engines[SWITCH_MEDIA_TYPE_VIDEO];
+
+	if (rw == SWITCH_RW_READ) {
+		switch_mutex_lock(v_engine->mh.file_read_mutex);
+	} else {
+		switch_mutex_lock(v_engine->mh.file_write_mutex);
+	}
+
+	return SWITCH_STATUS_SUCCESS;
+
+}
+
+SWITCH_DECLARE(switch_status_t) switch_core_media_unlock_video_file(switch_core_session_t *session, switch_rw_t rw)
+{
+	switch_media_handle_t *smh;
+	switch_rtp_engine_t *v_engine;
+
+	switch_assert(session);
+
+	if (!switch_channel_test_flag(session->channel, CF_VIDEO)) {
+		return SWITCH_STATUS_FALSE;
+	}
+
+	if (!(smh = session->media_handle)) {
+		return SWITCH_STATUS_FALSE;
+	}
+
+	v_engine = &smh->engines[SWITCH_MEDIA_TYPE_VIDEO];
+
+	if (rw == SWITCH_RW_READ) {
+		switch_mutex_unlock(v_engine->mh.file_read_mutex);
+	} else {
+		switch_mutex_unlock(v_engine->mh.file_write_mutex);
+	}
+
+	return SWITCH_STATUS_SUCCESS;
+}
+
+SWITCH_DECLARE(switch_status_t) switch_core_media_set_video_file(switch_core_session_t *session, switch_file_handle_t *fh, switch_rw_t rw)
+{
+	switch_media_handle_t *smh;
+	switch_rtp_engine_t *v_engine;
+
+	switch_assert(session);
+
+	if (!(smh = session->media_handle)) {
+		return SWITCH_STATUS_FALSE;
+	}
+
+	if (!smh->video_read_fh && !smh->video_read_fh && !switch_channel_test_flag(session->channel, CF_VIDEO)) {
+		return SWITCH_STATUS_FALSE;
+	}
+
+	if (fh && !switch_core_file_has_video(fh, SWITCH_TRUE)) {
+		return SWITCH_STATUS_FALSE;
+	}
+
 	v_engine = &smh->engines[SWITCH_MEDIA_TYPE_VIDEO];	
 
 	switch_core_session_start_video_thread(session);
@@ -4970,9 +5351,17 @@ SWITCH_DECLARE(switch_status_t) switch_core_media_set_video_file(switch_core_ses
 	//	return SWITCH_STATUS_FALSE;
 	//}
 
-	switch_mutex_lock(v_engine->mh.file_mutex);
+
 
 	if (rw == SWITCH_RW_READ) {
+		switch_mutex_lock(v_engine->mh.file_read_mutex);
+
+		if (fh && smh->video_read_fh) {
+			switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "File is already open\n");
+			switch_mutex_unlock(v_engine->mh.file_read_mutex);
+			return SWITCH_STATUS_FALSE; 
+		}
+
 		
 		if (fh) {
 			switch_channel_set_flag_recursive(session->channel, CF_VIDEO_DECODED_READ);
@@ -4988,7 +5377,17 @@ SWITCH_DECLARE(switch_status_t) switch_core_media_set_video_file(switch_core_ses
 
 		smh->video_read_fh = fh;
 
+		switch_mutex_unlock(v_engine->mh.file_read_mutex);
+
 	} else {
+		switch_mutex_lock(v_engine->mh.file_write_mutex);
+		if (fh && smh->video_write_fh) {
+			switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "File is already open\n");
+			smh->video_write_fh = fh;
+			switch_mutex_unlock(v_engine->mh.file_write_mutex);
+			return SWITCH_STATUS_SUCCESS; 
+		}
+
 		if (fh) {
 			switch_channel_set_flag(session->channel, CF_VIDEO_WRITE_FILE_ATTACHED);
 		} else {
@@ -4996,16 +5395,63 @@ SWITCH_DECLARE(switch_status_t) switch_core_media_set_video_file(switch_core_ses
 		}
 
 		switch_core_media_gen_key_frame(session);
+
+		if (fh) {
+			switch_threadattr_t *thd_attr = NULL;
+
+			switch_threadattr_create(&thd_attr, switch_core_session_get_pool(session));
+			switch_threadattr_stacksize_set(thd_attr, SWITCH_THREAD_STACKSIZE);
+			smh->video_write_thread_running = 1;
+			switch_thread_create(&smh->video_write_thread, thd_attr, video_write_thread, session, switch_core_session_get_pool(session));
+		}
+
+		if (!fh && smh->video_write_thread) {
+			switch_status_t st;
+
+			if (smh->video_write_thread_running > 0) {
+				smh->video_write_thread_running = -1;
+			}
+			switch_mutex_unlock(v_engine->mh.file_write_mutex);
+			switch_thread_join(&st, smh->video_write_thread);
+			switch_mutex_lock(v_engine->mh.file_write_mutex);
+			smh->video_write_thread = NULL;
+		}
+		
 		smh->video_write_fh = fh;
+
+		switch_mutex_unlock(v_engine->mh.file_write_mutex);
 	}
 
 	if (!fh) switch_channel_video_sync(session->channel);
 	
 	switch_core_session_wake_video_thread(session);
-	switch_mutex_unlock(v_engine->mh.file_mutex);
+
 	
 	return SWITCH_STATUS_SUCCESS;
 }
+
+int next_cpu(void)
+{
+	int x = 0;
+
+	switch_mutex_lock(video_globals.mutex);
+	x = video_globals.cur_cpu++;
+	if (video_globals.cur_cpu == video_globals.cpu_count) {
+		video_globals.cur_cpu = 0;
+	}
+	switch_mutex_unlock(video_globals.mutex);
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG1, "Binding to CPU %d\n", x);
+
+	return x;
+}
+
+SWITCH_DECLARE(void) switch_core_autobind_cpu(void)
+{
+	if (video_globals.cpu_count > 1) {
+		switch_core_thread_set_cpu_affinity(next_cpu());
+	}
+}
+
 
 static void *SWITCH_THREAD_FUNC video_helper_thread(switch_thread_t *thread, void *obj)
 {
@@ -5016,17 +5462,19 @@ static void *SWITCH_THREAD_FUNC video_helper_thread(switch_thread_t *thread, voi
 	switch_frame_t *read_frame = NULL;
 	switch_media_handle_t *smh;
 	uint32_t loops = 0, xloops = 0, vloops = 0;
+	switch_image_t *blank_img = NULL;
 	switch_frame_t fr = { 0 };
 	unsigned char *buf = NULL;
-	switch_image_t *blank_img = NULL;
 	switch_rgb_color_t bgcolor;
 	switch_rtp_engine_t *v_engine = NULL;
-	
 	const char *var;
+	int buflen = SWITCH_RTP_MAX_BUF_LEN;
 
 	if (!(smh = session->media_handle)) {
 		return NULL;
 	}
+
+	switch_core_autobind_cpu();
 
 	if ((var = switch_channel_get_variable(session->channel, "core_video_blank_image"))) {
 		blank_img = switch_img_read_png(var, SWITCH_IMG_FMT_I420);
@@ -5054,6 +5502,14 @@ static void *SWITCH_THREAD_FUNC video_helper_thread(switch_thread_t *thread, voi
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "%s Video thread started. Echo is %s\n", 
 					  switch_channel_get_name(session->channel), switch_channel_test_flag(channel, CF_VIDEO_ECHO) ? "on" : "off");
 	switch_core_session_request_video_refresh(session);
+
+	buf = switch_core_session_alloc(session, buflen);
+	fr.packet = buf;
+	fr.packetlen = buflen;
+	fr.data = buf + 12;
+	fr.buflen = buflen - 12;
+
+	switch_core_media_gen_key_frame(session);
 
 	while (switch_channel_up_nosig(channel)) {
 		int send_blank = 0;
@@ -5107,62 +5563,38 @@ static void *SWITCH_THREAD_FUNC video_helper_thread(switch_thread_t *thread, voi
 			}
 		}
 
-		//if (!smh->video_write_fh || !switch_channel_test_flag(channel, CF_VIDEO_READY)) {
-		status = switch_core_session_read_video_frame(session, &read_frame, smh->video_write_fh ? SWITCH_IO_FLAG_NOBLOCK : SWITCH_IO_FLAG_NONE, 0);
-		
+		status = switch_core_session_read_video_frame(session, &read_frame, SWITCH_IO_FLAG_NONE, 0);
+
 		if (!SWITCH_READ_ACCEPTABLE(status)) {
 			switch_cond_next();
 			continue;
 		}
-		
-		//if (switch_test_flag(read_frame, SFF_CNG)) {
-		//	continue;
-		//}
-		//}
-		
-		//if (vloops < 300 && (vloops % 100) == 0) {
-		//			switch_core_media_gen_key_frame(session);
-		//switch_core_session_request_video_refresh(session);
-		//}
-		
+
 		vloops++;
-
-		if (!buf) {
-			int buflen = SWITCH_RTP_MAX_BUF_LEN;
-			buf = switch_core_session_alloc(session, buflen);
-			fr.packet = buf;
-			fr.packetlen = buflen;
-			fr.data = buf + 12;
-			fr.buflen = buflen - 12;
-			switch_core_media_gen_key_frame(session);
-		}
-
-		if (switch_channel_test_flag(channel, CF_VIDEO_READY)) {
-			switch_mutex_lock(mh->file_mutex);
-			if (smh->video_write_fh && switch_channel_ready(session->channel) && switch_test_flag(smh->video_write_fh, SWITCH_FILE_OPEN)) {
-				switch_status_t wstatus = switch_core_file_read_video(smh->video_write_fh, &fr, 0);
-				if (wstatus == SWITCH_STATUS_SUCCESS) {
-					switch_core_session_write_video_frame(session, &fr, SWITCH_IO_FLAG_NONE, SVR_FLUSH);
-					switch_img_free(&fr.img);
-				} else if (wstatus != SWITCH_STATUS_BREAK && wstatus != SWITCH_STATUS_IGNORE) {
-					smh->video_write_fh = NULL;
-				}
-				send_blank = 0;
-			} else if (smh->video_read_fh && switch_test_flag(smh->video_read_fh, SWITCH_FILE_OPEN) && read_frame->img) {
+		
+		send_blank = 1;
+		
+		if (switch_channel_test_flag(channel, CF_VIDEO_READY) && !switch_test_flag(read_frame, SFF_CNG)) {
+			switch_mutex_lock(mh->file_read_mutex);
+			if (smh->video_read_fh && switch_test_flag(smh->video_read_fh, SWITCH_FILE_OPEN) && read_frame->img) {
+				smh->video_read_fh->mm.fps = smh->vid_params.fps;
 				switch_core_file_write_video(smh->video_read_fh, read_frame);
-				send_blank = 0;
 			} 
-			switch_mutex_unlock(mh->file_mutex);
-		} else if (switch_channel_test_flag(channel, CF_VIDEO_DECODED_READ) || v_engine->smode == SWITCH_MEDIA_FLOW_SENDONLY) {
-			send_blank = 1;
+			switch_mutex_unlock(mh->file_read_mutex);
+		}
+		
+		if (switch_channel_test_flag(channel, CF_VIDEO_WRITING) || session->video_read_callback) {
+			send_blank = 0;
 		}
 
-		if (blank_img && (send_blank || switch_channel_test_flag(channel, CF_VIDEO_BLANK)) && !session->video_read_callback) {
-			fr.img = blank_img;
-			switch_yield(10000);
-			switch_core_session_write_video_frame(session, &fr, SWITCH_IO_FLAG_FORCE, 0);
-		} else if (read_frame && (switch_channel_test_flag(channel, CF_VIDEO_ECHO))) {
-			switch_core_session_write_video_frame(session, read_frame, SWITCH_IO_FLAG_NONE, 0);
+		if (send_blank) {
+			if (read_frame && (switch_channel_test_flag(channel, CF_VIDEO_ECHO))) {
+				switch_core_session_write_video_frame(session, read_frame, SWITCH_IO_FLAG_NONE, 0);
+			} else if (blank_img) {
+				fr.img = blank_img;
+				switch_yield(10000);
+				switch_core_session_write_video_frame(session, &fr, SWITCH_IO_FLAG_FORCE, 0);
+			}
 		}
 	}
 
@@ -5213,7 +5645,8 @@ SWITCH_DECLARE(switch_status_t) switch_core_session_start_video_thread(switch_co
 	
 	switch_thread_cond_create(&v_engine->mh.cond, pool);
 	switch_mutex_init(&v_engine->mh.cond_mutex, SWITCH_MUTEX_NESTED, pool);
-	switch_mutex_init(&v_engine->mh.file_mutex, SWITCH_MUTEX_NESTED, pool);
+	switch_mutex_init(&v_engine->mh.file_read_mutex, SWITCH_MUTEX_NESTED, pool);
+	switch_mutex_init(&v_engine->mh.file_write_mutex, SWITCH_MUTEX_NESTED, pool);
 	switch_mutex_init(&smh->read_mutex[SWITCH_MEDIA_TYPE_VIDEO], SWITCH_MUTEX_NESTED, pool);
 	switch_mutex_init(&smh->write_mutex[SWITCH_MEDIA_TYPE_VIDEO], SWITCH_MUTEX_NESTED, pool);
 	switch_thread_create(&v_engine->media_thread, thd_attr, video_helper_thread, &v_engine->mh, switch_core_session_get_pool(session));
@@ -6238,7 +6671,7 @@ SWITCH_DECLARE(switch_status_t) switch_core_media_activate_rtp(switch_core_sessi
 			if (!strcasecmp(val, "passthru")) {
 				switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_INFO, "Activating RTCP PASSTHRU PORT %d\n", remote_rtcp_port);
 				switch_rtp_activate_rtcp(a_engine->rtp_session, -1, remote_rtcp_port, a_engine->rtcp_mux > 0);
-			} else {
+			} else if (remote_rtcp_port) {
 				int interval = atoi(val);
 				if (interval < 100 || interval > 500000) {
 					switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR,
@@ -7524,9 +7957,13 @@ SWITCH_DECLARE(void) switch_core_media_gen_local_sdp(switch_core_session_t *sess
 					username, smh->owner_id, smh->session_id, family, ip, username, family, ip, srbuf);
 
 
+	if (a_engine->rmode == SWITCH_MEDIA_FLOW_DISABLED) {
+		goto video;
+	}
+
 	if (switch_channel_test_flag(smh->session->channel, CF_ICE)) {
 		gen_ice(session, SWITCH_MEDIA_TYPE_AUDIO, ip, port);
-		switch_snprintf(buf + strlen(buf), SDPBUFLEN - strlen(buf), "a=msid-semantic: WMS %s\r\n", smh->msid);
+		switch_snprintf(buf + strlen(buf), SDPBUFLEN - strlen(buf), "a=msid-semantic: WMS %s\r\na=end-of-candidates\r\n", smh->msid);
 	}
 
 	if (a_engine->codec_negotiated) {
@@ -7738,6 +8175,10 @@ SWITCH_DECLARE(void) switch_core_media_gen_local_sdp(switch_core_session_t *sess
 		//switch_snprintf(buf + strlen(buf), SDPBUFLEN - strlen(buf), "a=encryption:optional\r\n");
 		}
 
+		if (a_engine->reject_avp) {
+			switch_snprintf(buf + strlen(buf), SDPBUFLEN - strlen(buf), "m=audio 0 RTP/AVP 19\r\n");
+		}
+		
 	} else if (smh->mparams->num_codecs) {
 		int i;
 		int cur_ptime = 0, this_ptime = 0, cng_type = 0;
@@ -7816,6 +8257,8 @@ SWITCH_DECLARE(void) switch_core_media_gen_local_sdp(switch_core_session_t *sess
 		}
 
 	}
+
+ video:
 
 	if (!switch_channel_test_flag(session->channel, CF_VIDEO_POSSIBLE)) {
 		if (switch_channel_test_flag(session->channel, CF_VIDEO_SDP_RECVD)) {
@@ -8887,6 +9330,10 @@ SWITCH_DECLARE(switch_bool_t) switch_core_media_check_dtls(switch_core_session_t
 	
 	engine = &smh->engines[type];
 
+	if (engine->rmode == SWITCH_MEDIA_FLOW_DISABLED) {
+		return SWITCH_TRUE;
+	}
+
 	do {
 		if (engine->rtp_session) checking = check_engine(engine);
 	} while (switch_channel_ready(session->channel) && checking);
@@ -9648,6 +10095,10 @@ SWITCH_DECLARE(void) switch_core_media_set_sdp_codec_string(switch_core_session_
 		return;
 	}
 
+	if (!r_sdp) {
+		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_WARNING, "Setting NULL SDP is invalid\n");
+		return;
+	}
 
 	if ((parser = sdp_parse(NULL, r_sdp, (int) strlen(r_sdp), 0))) {
 
@@ -10282,11 +10733,18 @@ SWITCH_DECLARE (void) switch_core_media_recover_session(switch_core_session_t *s
 SWITCH_DECLARE(void) switch_core_media_init(void)
 {
 	switch_core_gen_certs(DTLS_SRTP_FNAME ".pem");	
+
+	video_globals.cpu_count = switch_core_cpu_count();
+	video_globals.cur_cpu = 0;
+
+	switch_core_new_memory_pool(&video_globals.pool);
+	switch_mutex_init(&video_globals.mutex, SWITCH_MUTEX_NESTED, video_globals.pool);
+
 }
 
 SWITCH_DECLARE(void) switch_core_media_deinit(void)
 {
-	
+	switch_core_destroy_memory_pool(&video_globals.pool);
 }
 
 static int payload_number(const char *name)
@@ -10928,6 +11386,53 @@ SWITCH_DECLARE(switch_status_t) switch_core_session_write_video_frame(switch_cor
 	return status;
 }
 
+SWITCH_DECLARE(switch_status_t) switch_core_session_wait_for_video_input_params(switch_core_session_t *session, uint32_t timeout_ms)
+{
+	switch_media_handle_t *smh;
+	switch_codec_implementation_t read_impl = { 0 };
+	switch_rtp_engine_t *v_engine = NULL;
+
+	switch_assert(session != NULL);
+
+	if (!(smh = session->media_handle)) {
+		return SWITCH_STATUS_FALSE;
+	}
+	
+	if (!switch_channel_test_flag(session->channel, CF_VIDEO_DECODED_READ)) {
+		return SWITCH_STATUS_GENERR;;
+	}
+
+	v_engine = &smh->engines[SWITCH_MEDIA_TYPE_VIDEO];
+
+	if (v_engine->smode == SWITCH_MEDIA_FLOW_SENDONLY) {
+		return SWITCH_STATUS_NOTIMPL;
+	}
+
+	switch_core_session_get_read_impl(session, &read_impl);
+		
+	while(switch_channel_ready(session->channel) && timeout_ms > 0) {
+		switch_frame_t *read_frame;
+		switch_status_t status;
+		
+		if (video_globals.synced && 
+			switch_channel_test_flag(session->channel, CF_VIDEO_READY) && smh->vid_params.width && smh->vid_params.height && smh->vid_params.fps) {
+			return SWITCH_STATUS_SUCCESS;
+		}
+
+		switch_core_session_request_video_refresh(session);
+		status = switch_core_session_read_frame(session, &read_frame, SWITCH_IO_FLAG_NONE, 0);
+
+		if (!SWITCH_READ_ACCEPTABLE(status)) {
+			return SWITCH_STATUS_FALSE;
+		}
+
+		timeout_ms -= (read_impl.microseconds_per_packet / 1000);
+	}
+
+	return SWITCH_STATUS_TIMEOUT;
+	
+}
+
 SWITCH_DECLARE(switch_status_t) switch_core_session_read_video_frame(switch_core_session_t *session, switch_frame_t **frame, switch_io_flag_t flags,
 																	 int stream_id)
 {
@@ -11015,8 +11520,16 @@ SWITCH_DECLARE(switch_status_t) switch_core_session_read_video_frame(switch_core
 		}
 
 		if ((*frame)->img && (*frame)->img->d_w && (*frame)->img->d_h) {
-			smh->vid_params.width = (*frame)->img->d_w;
-			smh->vid_params.height = (*frame)->img->d_h;
+
+			if ((*frame)->img->d_w != smh->vid_params.width) {
+				switch_channel_set_variable_printf(session->channel, "video_width", "%d", (*frame)->img->d_w);
+				smh->vid_params.width = (*frame)->img->d_w;
+			}
+
+			if ((*frame)->img->d_h != smh->vid_params.height) {
+				switch_channel_set_variable_printf(session->channel, "video_height", "%d", (*frame)->img->d_h);
+				smh->vid_params.height = (*frame)->img->d_h;
+			}
 		}
 
 		if (switch_test_flag((*frame), SFF_WAIT_KEY_FRAME)) {

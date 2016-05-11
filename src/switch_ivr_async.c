@@ -1131,16 +1131,21 @@ static void *SWITCH_THREAD_FUNC recording_thread(switch_thread_t *thread, void *
 		return NULL;
 	}
 
-	switch_core_session_get_read_impl(session, &read_impl);
-	bsize = read_impl.decoded_bytes_per_packet;
 	rh = switch_core_media_bug_get_user_data(bug);
 	switch_buffer_create_dynamic(&rh->thread_buffer, 1024 * 512, 1024 * 64, 0);
 	rh->thread_ready = 1;
 
 	channels = switch_core_media_bug_test_flag(bug, SMBF_STEREO) ? 2 : rh->read_impl.number_of_channels;
-	data = switch_core_session_alloc(session, bsize);
+	data = switch_core_session_alloc(session, SWITCH_RECOMMENDED_BUFFER_SIZE);
 
 	while(switch_test_flag(rh->fh, SWITCH_FILE_OPEN)) {
+		if (switch_core_file_has_video(rh->fh, SWITCH_TRUE)) {
+			switch_core_session_get_read_impl(session, &read_impl);
+			if (read_impl.decoded_bytes_per_packet > 0 && read_impl.decoded_bytes_per_packet <= SWITCH_RECOMMENDED_BUFFER_SIZE) {
+				bsize = read_impl.decoded_bytes_per_packet;
+			}
+		}
+
 		switch_mutex_lock(rh->buffer_mutex);
 		inuse = switch_buffer_inuse(rh->thread_buffer);
 
@@ -1347,7 +1352,7 @@ static switch_bool_t record_callback(switch_media_bug_t *bug, void *user_data, s
 				}
 
 				
-				//if (switch_core_file_has_video(rh->fh)) {
+				//if (switch_core_file_has_video(rh->fh, SWITCH_TRUE)) {
 					//switch_core_media_set_video_file(session, NULL, SWITCH_RW_READ);
 					//switch_channel_clear_flag_recursive(session->channel, CF_VIDEO_DECODED_READ);
 				//}
@@ -2546,7 +2551,7 @@ SWITCH_DECLARE(switch_status_t) switch_ivr_record_session(switch_core_session_t 
 			return SWITCH_STATUS_GENERR;
 		}
 
-		if (switch_core_file_has_video(fh)) {
+		if (switch_core_file_has_video(fh, SWITCH_TRUE)) {
 			//switch_core_media_set_video_file(session, fh, SWITCH_RW_READ);
 			//switch_channel_set_flag_recursive(session->channel, CF_VIDEO_DECODED_READ);
 			
@@ -5091,16 +5096,16 @@ static switch_bool_t video_write_overlay_callback(switch_media_bug_t *bug, void 
 	switch_core_session_t *session = switch_core_media_bug_get_session(bug);
 	switch_channel_t *channel = switch_core_session_get_channel(session);
 	
-    switch (type) {
-    case SWITCH_ABC_TYPE_INIT:
-        {			
-        }
-        break;
-    case SWITCH_ABC_TYPE_CLOSE:
-        {
+	switch (type) {
+	case SWITCH_ABC_TYPE_INIT:
+		{			
+		}
+		break;
+	case SWITCH_ABC_TYPE_CLOSE:
+		{
 			switch_img_free(&oht->img);
-        }
-        break;
+		}
+		break;
 	case SWITCH_ABC_TYPE_WRITE_VIDEO_PING:
 		if (switch_channel_test_flag(channel, CF_VIDEO_DECODED_READ)) {
 			switch_frame_t *frame = switch_core_media_bug_get_video_ping_frame(bug);
@@ -5116,12 +5121,12 @@ static switch_bool_t video_write_overlay_callback(switch_media_bug_t *bug, void 
 				switch_img_free(&oimg);
 			}
 		}
-        break;
-    default:
-        break;
-    }
+		break;
+	default:
+		break;
+	}
 
-    return SWITCH_TRUE;
+	return SWITCH_TRUE;
 }
 
 
@@ -5145,7 +5150,7 @@ SWITCH_DECLARE(switch_status_t) switch_ivr_video_write_overlay_session(switch_co
 	switch_channel_t *channel = switch_core_session_get_channel(session);
 	switch_status_t status;
 	switch_media_bug_flag_t bflags = SMBF_WRITE_VIDEO_PING;
-    switch_media_bug_t *bug;
+	switch_media_bug_t *bug;
 	overly_helper_t *oht;
 	switch_image_t *img;
 
