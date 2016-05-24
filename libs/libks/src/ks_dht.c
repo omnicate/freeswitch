@@ -29,6 +29,7 @@ THE SOFTWARE.
    improvements to the author. */
 
 #include "ks.h"
+#include "sodium.h"
 
 #ifndef MSG_CONFIRM
 #define MSG_CONFIRM 0
@@ -3125,6 +3126,151 @@ static dht_msg_type_t parse_message(const unsigned char *buf, int buflen,
     ks_log(KS_LOG_DEBUG, "Truncated message.\n");
     return DHT_MSG_INVALID;
 }
+
+/* b64encode function taken from kws.c. Maybe worth exposing a function like this. */
+static const char c64[65] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+static int b64encode(unsigned char *in, ks_size_t ilen, unsigned char *out, ks_size_t olen) 
+{
+	int y=0,bytes=0;
+	ks_size_t x=0;
+	unsigned int b=0,l=0;
+
+	if(olen) {
+	}
+
+	for(x=0;x<ilen;x++) {
+		b = (b<<8) + in[x];
+		l += 8;
+		while (l >= 6) {
+			out[bytes++] = c64[(b>>(l-=6))%64];
+			if(++y!=72) {
+				continue;
+			}
+			//out[bytes++] = '\n';
+			y=0;
+		}
+	}
+
+	if (l > 0) {
+		out[bytes++] = c64[((b%16)<<(6-l))%64];
+	}
+	if (l != 0) while (l < 6) {
+		out[bytes++] = '=', l += 2;
+	}
+
+	return 0;
+}
+
+
+/* 
+   This function should generate the fields needed for the mutable message.
+
+   Save the sending for another api, and possibly a third to generate and send all in one.
+   NOTE: 
+   1. When sending a mutable message, CAS(compare and swap) values need to be validated.
+   2. Mutable messages MUST have a new key pair generated for each different mutable message. 
+      The announce key is generated as a hash from the public key. To use one key pair for multiple messages, 
+	  a salt MUST be used that is unique and constant per message.
+   3. The target hash will be generated here, and will be the hash that must be used for announcing the message, and updating it.
+
+*/
+int ks_dht_generate_mutable_message(unsigned char *message, unsigned long long message_length,
+									int64_t sequence, int cas,
+									unsigned char *id, int id_len, /* querying nodes id */
+									const unsigned char *sk, const unsigned char *pk,
+									unsigned char *salt, unsigned long long salt_length,
+									unsigned char *token, unsigned long long token_length,
+									unsigned char *target, unsigned long long target_length,
+									unsigned char *signature, unsigned long long *signature_length,
+									struct bencode **arguments)
+{
+	struct bencode *arg = NULL, *sig = NULL;
+	unsigned char *encoded_message = NULL;
+	size_t encoded_message_size = 0;
+	unsigned char sha1[20] = {0};
+	int err = 0;
+	SHA_CTX sha;
+
+	if ( !message || !message_length || !sequence || !id || !id_len || !sk || !pk ||
+		 !token || !token_length || !signature || !signature_length) {
+		ks_log(KS_LOG_ERROR, "Missing required input\n");
+		return -1;
+	}
+
+	if ( arguments && *arguments) {
+		ks_log(KS_LOG_ERROR, "Arguments already defined.\n");
+		return -1;
+	}
+	
+	if ( salt && salt_length > 64 ) {
+		ks_log(KS_LOG_ERROR, "Salt is too long. Can not be longer than 64 bytes\n");
+		return -1;
+	}
+
+	if ( sequence && sequence < 0 ) {
+		ks_log(KS_LOG_ERROR, "Sequence out of acceptable range\n");
+		return -1;
+	}
+
+	if ( message_length > 1000 ) {
+		ks_log(KS_LOG_ERROR, "Message is too long. Max is 1000 bytes\n");
+		return -1;
+	}
+
+	/* Generate target sha-1 hash */
+	SHA1_Init(&sha);
+	SHA1_Update(&sha, pk, 32);
+
+	if ( salt ) {
+		SHA1_Update(&sha, salt, salt_length);
+	}
+	
+	SHA1_Final(sha1, &sha);
+
+	b64encode(sha1, 20, target, target_length);
+			  
+	/* Need to dynamically allocate a bencoded object for the signature. */
+	sig = ben_dict();
+
+	if ( salt ) {
+		ben_dict_set(sig, ben_blob("salt", 4), ben_blob(salt, salt_length));
+	}
+	
+	ben_dict_set(sig, ben_blob("seq", 3), ben_int(sequence));
+	ben_dict_set(sig, ben_blob("v", 1), ben_blob(message, message_length));
+
+	encoded_message = (unsigned char *) ben_encode(&encoded_message_size, sig);
+	ben_free(sig);
+
+	err = crypto_sign_ed25519_detached(signature, signature_length, encoded_message, (unsigned long long) encoded_message_size, sk);
+	if ( err ) {
+		ks_log(KS_LOG_ERROR, "Failed to sign message with provided secret key\n");
+		return 1;
+	}
+
+	arg = ben_dict();
+
+	if ( cas ) {
+		ben_dict_set(arg, ben_blob("cas", 3), ben_int(cas));
+	}
+
+	ben_dict_set(arg, ben_blob("id", 2), ben_blob(id, id_len));
+	ben_dict_set(arg, ben_blob("k", 1), ben_blob(pk, 32)); /* All ed25519 public keys are 32 bytes */
+
+	if ( salt ) {
+		ben_dict_set(arg, ben_blob("salt", 4), ben_blob(salt, salt_length));
+	}
+	
+	ben_dict_set(arg, ben_blob("seq", 3), ben_int(sequence));
+	ben_dict_set(arg, ben_blob("sig", 3), ben_blob(signature, *signature_length));
+	ben_dict_set(arg, ben_blob("token", 5), ben_blob(token, token_length));
+	ben_dict_set(arg, ben_blob("v", 1), ben_blob(message, message_length));
+
+	*arguments = arg;
+	
+	return 0;
+}
+
 
 
 /* For Emacs:
