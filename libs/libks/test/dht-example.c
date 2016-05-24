@@ -377,6 +377,41 @@ main(int argc, char **argv)
 				ks_global_set_default_logger(atoi(line + 9));
 			} else if (!strncmp(line, "peer_dump", 9)) {
 				dht_dump_tables(h, stdout);
+			} else if (!strncmp(line, "generate_identity", 17)) {
+				/* usage: generate_identity [identity key: first_id] */
+				/* requires an arg, checks identity hash for arg value. 
+				   
+				   if found, return already exists.
+				   if not found, generate sodium public and private keys, and insert into identities hash.
+				 */
+			} else if (!strncmp(line, "print_identity_key", 18)) {
+				/* usage: print_identity_key [identity key] */
+			} else if (!strncmp(line, "message_mutable", 15)) {
+				/* usage: message_mutable [identity key] [message id: asdf] [your message: Hello from DHT example]*/
+				/*
+				  takes an identity, a message id(salt) and a message, then sends out the announcement.
+				 */
+			} else if (!strncmp(line, "message_immutable", 15)) {
+				/* usage: message_immutable [identity key]
+				/*
+				  takes an identity, and a message, then sends out the announcement.
+				 */
+			} else if (!strncmp(line, "message_get", 11)) {
+				/* usage: message_get [40 character sha1 digest b64 encoded]*/
+
+				/* MUST RETURN BENCODE OBJECT */
+			} else if (!strncmp(line, "message_get_mine", 16)) {
+				/* usage: message_get [identity key] [message id: asdf]*/
+				/* This looks up the message token from identity key and the message id(aka message salt) */
+				
+				/* MUST RETURN BENCODE OBJECT */
+			} else if (!strncmp(line, "add_buddy", 9)) {
+				/* usage: add_buddy [buddy key] [buddy public key] */
+
+			} else if (!strncmp(line, "get_buddy_message", 17)) {
+				/* usage: get_buddy_message [buddy key] [buddy message_id] */
+
+				
 			} else if (!strncmp(line, "search", 6)) {
 				if ( line_len > 7 ) {
 					unsigned char hash[20];
