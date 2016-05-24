@@ -3174,24 +3174,20 @@ static int b64encode(unsigned char *in, ks_size_t ilen, unsigned char *out, ks_s
    3. The target hash will be generated here, and will be the hash that must be used for announcing the message, and updating it.
 
 */
-int ks_dht_generate_mutable_message(unsigned char *message, unsigned long long message_length,
-									int64_t sequence, int cas,
-									unsigned char *id, int id_len, /* querying nodes id */
-									const unsigned char *sk, const unsigned char *pk,
-									unsigned char *salt, unsigned long long salt_length,
-									unsigned char *token, unsigned long long token_length,
-									unsigned char *target, unsigned long long target_length,
-									unsigned char *signature, unsigned long long *signature_length,
-									struct bencode **arguments)
+int ks_dht_generate_mutable_storage_args(struct bencode *data, int64_t sequence, int cas,
+										 unsigned char *id, int id_len, /* querying nodes id */
+										 const unsigned char *sk, const unsigned char *pk,
+										 unsigned char *salt, unsigned long long salt_length,
+										 unsigned char *token, unsigned long long token_length,
+										 unsigned char *signature, unsigned long long *signature_length,
+										 struct bencode **arguments)
 {
 	struct bencode *arg = NULL, *sig = NULL;
-	unsigned char *encoded_message = NULL;
-	size_t encoded_message_size = 0;
-	unsigned char sha1[20] = {0};
+	unsigned char *encoded_message = NULL, *encoded_data = NULL;
+	size_t encoded_message_size = 0, encoded_data_size = 0;
 	int err = 0;
-	SHA_CTX sha;
 
-	if ( !message || !message_length || !sequence || !id || !id_len || !sk || !pk ||
+	if ( !data || !sequence || !id || !id_len || !sk || !pk ||
 		 !token || !token_length || !signature || !signature_length) {
 		ks_log(KS_LOG_ERROR, "Missing required input\n");
 		return -1;
@@ -3212,23 +3208,14 @@ int ks_dht_generate_mutable_message(unsigned char *message, unsigned long long m
 		return -1;
 	}
 
-	if ( message_length > 1000 ) {
+	encoded_data = (unsigned char *) ben_encode(&encoded_data_size, data);
+
+	if ( encoded_data_size > 1000 ) {
 		ks_log(KS_LOG_ERROR, "Message is too long. Max is 1000 bytes\n");
+		free(encoded_data);
 		return -1;
 	}
 
-	/* Generate target sha-1 hash */
-	SHA1_Init(&sha);
-	SHA1_Update(&sha, pk, 32);
-
-	if ( salt ) {
-		SHA1_Update(&sha, salt, salt_length);
-	}
-	
-	SHA1_Final(sha1, &sha);
-
-	b64encode(sha1, 20, target, target_length);
-			  
 	/* Need to dynamically allocate a bencoded object for the signature. */
 	sig = ben_dict();
 
@@ -3237,7 +3224,7 @@ int ks_dht_generate_mutable_message(unsigned char *message, unsigned long long m
 	}
 	
 	ben_dict_set(sig, ben_blob("seq", 3), ben_int(sequence));
-	ben_dict_set(sig, ben_blob("v", 1), ben_blob(message, message_length));
+	ben_dict_set(sig, ben_blob("v", 1), ben_blob(encoded_data, encoded_data_size));
 
 	encoded_message = (unsigned char *) ben_encode(&encoded_message_size, sig);
 	ben_free(sig);
@@ -3247,6 +3234,7 @@ int ks_dht_generate_mutable_message(unsigned char *message, unsigned long long m
 		ks_log(KS_LOG_ERROR, "Failed to sign message with provided secret key\n");
 		return 1;
 	}
+	free(encoded_message);
 
 	arg = ben_dict();
 
@@ -3264,13 +3252,61 @@ int ks_dht_generate_mutable_message(unsigned char *message, unsigned long long m
 	ben_dict_set(arg, ben_blob("seq", 3), ben_int(sequence));
 	ben_dict_set(arg, ben_blob("sig", 3), ben_blob(signature, *signature_length));
 	ben_dict_set(arg, ben_blob("token", 5), ben_blob(token, token_length));
-	ben_dict_set(arg, ben_blob("v", 1), ben_blob(message, message_length));
+	ben_dict_set(arg, ben_blob("v", 1), ben_blob(encoded_data, encoded_data_size));
 
 	*arguments = arg;
+
+	free(encoded_data);
 	
 	return 0;
 }
 
+int ks_dht_calculate_mutable_storage_target(unsigned char *pk, unsigned char *salt, int salt_length, unsigned char *target, int target_length)
+{
+	SHA_CTX sha;
+	unsigned char sha1[20] = {0};
+
+	/* Generate target sha-1 hash */
+	SHA1_Init(&sha);
+	SHA1_Update(&sha, pk, 32);
+
+	if ( salt ) {
+		SHA1_Update(&sha, salt, salt_length);
+	}
+	
+	SHA1_Final(sha1, &sha);
+	b64encode(sha1, 20, target, target_length);
+
+	return 0;
+}
+
+/*
+int ks_dht_generate_mutable_storage_args(struct bencode *data, int64_t sequence, int cas,
+										 unsigned char *id, int id_len,
+										 const unsigned char *sk, const unsigned char *pk,
+										 unsigned char *salt, unsigned long long salt_length,
+										 unsigned char *token, unsigned long long token_length,
+										 unsigned char *target, unsigned long long target_length,
+										 unsigned char *signature, unsigned long long *signature_length,
+										 struct bencode **arguments)
+
+*/
+
+KS_DECLARE(int) ks_dht_send_message_mutable(dht_handle_t *h, unsigned char *sk, unsigned char *pk, char *message_id, int sequence, char *message)
+{
+    char buf[512], target[40];
+	int message_length = strlen(message);
+	struct bencode *bencode_p = ben_blob(message, message_length);
+	
+	ks_dht_calculate_mutable_storage_target(pk, (unsigned char *)message_id, strlen(message_id), (unsigned char *)target, 40);
+
+	
+	ben_free(bencode_p); /* This SHOULD free the bencode_a_p as well */
+	
+	ks_log(KS_LOG_DEBUG, "Encoded PING: %s\n\n", buf);
+	return 1;
+	//    return dht_send(h, buf, i, 0, sa, salen);
+}
 
 
 /* For Emacs:
