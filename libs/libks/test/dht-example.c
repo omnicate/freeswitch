@@ -346,8 +346,8 @@ main(int argc, char **argv)
     status = ks_thread_create_ex(&threads[0], dht_event_thread, &globals, KS_THREAD_FLAG_DETATCHED, KS_THREAD_DEFAULT_STACK, KS_PRI_NORMAL, pool);
 
     if ( status != KS_STATUS_SUCCESS) {
-      printf("Failed to start DHT event thread\n");
-      exit(1);
+		printf("Failed to start DHT event thread\n");
+		exit(1);
     }
 
     /* For bootstrapping, we need an initial list of nodes.  This could be
@@ -365,44 +365,44 @@ main(int argc, char **argv)
         usleep(random() % 100000);
     }
     while ( !globals.exiting ) {
-      line = el_gets(el, &count);
+		line = el_gets(el, &count);
       
-      if (count > 1) {
-	int line_len = (int)strlen(line) - 1;
-	history(myhistory, &ev, H_ENTER, line);
+		if (count > 1) {
+			int line_len = (int)strlen(line) - 1;
+			history(myhistory, &ev, H_ENTER, line);
 
-	if (!strncmp(line, "quit", 4)) {
-	  globals.exiting = 1;
-	} else if (!strncmp(line, "loglevel", 8)) {
-	  ks_global_set_default_logger(atoi(line + 9));
-	} else if (!strncmp(line, "peer_dump", 9)) {
-            dht_dump_tables(h, stdout);
-	} else if (!strncmp(line, "search", 6)) {
-	  if ( line_len > 7 ) {
-	    unsigned char hash[20];
-	    memcpy(hash, line + 7, 20);
+			if (!strncmp(line, "quit", 4)) {
+				globals.exiting = 1;
+			} else if (!strncmp(line, "loglevel", 8)) {
+				ks_global_set_default_logger(atoi(line + 9));
+			} else if (!strncmp(line, "peer_dump", 9)) {
+				dht_dump_tables(h, stdout);
+			} else if (!strncmp(line, "search", 6)) {
+				if ( line_len > 7 ) {
+					unsigned char hash[20];
+					memcpy(hash, line + 7, 20);
 
-	    if(globals.s >= 0) {
-	      dht_search(h, hash, 0, AF_INET, callback, NULL);
-	    }
-	  } else {
-	    printf("Your search string isn't a valid 20 character hash. You entered [%.*s] of length %d\n", line_len - 7, line + 7, line_len - 7);
-	  }	  
-	} else if (!strncmp(line, "announce", 8)) {
-	  if ( line_len == 29 ) {
-	    unsigned char hash[20];
-	    memcpy(hash, line + 9, 20);
+					if(globals.s >= 0) {
+						dht_search(h, hash, 0, AF_INET, callback, NULL);
+					}
+				} else {
+					printf("Your search string isn't a valid 20 character hash. You entered [%.*s] of length %d\n", line_len - 7, line + 7, line_len - 7);
+				}
+			} else if (!strncmp(line, "announce", 8)) {
+				if ( line_len == 29 ) {
+					unsigned char hash[20];
+					memcpy(hash, line + 9, 20);
 
-	    if(globals.s >= 0) {
-	      dht_search(h, hash, globals.port, AF_INET, callback, NULL);
-	    }
-	  } else {
-	    printf("Your search string isn't a valid 20 character hash. You entered [%.*s]\n", line_len - 7, line + 7);
-	  }	  
-	} else {
-	  printf("Unknown command entered[%.*s]\n", line_len, line);
-	}
-      }
+					if(globals.s >= 0) {
+						dht_search(h, hash, globals.port, AF_INET, callback, NULL);
+					}
+				} else {
+					printf("Your search string isn't a valid 20 character hash. You entered [%.*s]\n", line_len - 7, line + 7);
+				}
+			} else {
+				printf("Unknown command entered[%.*s]\n", line_len, line);
+			}
+		}
     }
 
     {
