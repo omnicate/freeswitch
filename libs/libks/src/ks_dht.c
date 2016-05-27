@@ -248,7 +248,8 @@ typedef enum {
 	DHT_MSG_PING = 3,
 	DHT_MSG_FIND_NODE = 4,
 	DHT_MSG_GET_PEERS = 5,
-	DHT_MSG_ANNOUNCE_PEER = 6
+	DHT_MSG_ANNOUNCE_PEER = 6,
+	DHT_MSG_STORE_PUT = 7
 } dht_msg_type_t;
 
 #define WANT4 1
@@ -3183,6 +3184,7 @@ int ks_dht_generate_mutable_storage_args(struct bencode *data, int64_t sequence,
 										 struct bencode **arguments)
 {
 	struct bencode *arg = NULL, *sig = NULL;
+	char pk_hex[65], sig_hex[129];
 	unsigned char *encoded_message = NULL, *encoded_data = NULL;
 	size_t encoded_message_size = 0, encoded_data_size = 0;
 	int err = 0;
@@ -3230,11 +3232,11 @@ int ks_dht_generate_mutable_storage_args(struct bencode *data, int64_t sequence,
 	ben_free(sig);
 
 	err = crypto_sign_ed25519_detached(signature, signature_length, encoded_message, (unsigned long long) encoded_message_size, sk);
+	free(encoded_message);
 	if ( err ) {
 		ks_log(KS_LOG_ERROR, "Failed to sign message with provided secret key\n");
 		return 1;
 	}
-	free(encoded_message);
 
 	arg = ben_dict();
 
@@ -3243,14 +3245,14 @@ int ks_dht_generate_mutable_storage_args(struct bencode *data, int64_t sequence,
 	}
 
 	ben_dict_set(arg, ben_blob("id", 2), ben_blob(id, id_len));
-	ben_dict_set(arg, ben_blob("k", 1), ben_blob(pk, 32)); /* All ed25519 public keys are 32 bytes */
+	ben_dict_set(arg, ben_blob("k", 1), ben_blob(sodium_bin2hex(pk_hex, 64, pk, 32), 32)); /* All ed25519 public keys are 32 bytes */
 
 	if ( salt ) {
 		ben_dict_set(arg, ben_blob("salt", 4), ben_blob(salt, salt_length));
 	}
 	
 	ben_dict_set(arg, ben_blob("seq", 3), ben_int(sequence));
-	ben_dict_set(arg, ben_blob("sig", 3), ben_blob(signature, *signature_length));
+	ben_dict_set(arg, ben_blob("sig", 3), ben_blob(sodium_bin2hex(sig_hex, 128, signature, 64), 128));
 	ben_dict_set(arg, ben_blob("token", 5), ben_blob(token, token_length));
 	ben_dict_set(arg, ben_blob("v", 1), ben_blob(encoded_data, encoded_data_size));
 
@@ -3280,32 +3282,55 @@ int ks_dht_calculate_mutable_storage_target(unsigned char *pk, unsigned char *sa
 	return 0;
 }
 
-/*
+KS_DECLARE(int) ks_dht_send_message_mutable(dht_handle_t *h, unsigned char *sk, unsigned char *pk, const struct sockaddr *sa, int salen, char *message_id, int sequence, char *message)
+{
+	unsigned char target[40], signature[64];
+	unsigned long long signature_length = 64;
+	int message_length = strlen(message);
+	unsigned char tid[4];
+	unsigned char *salt = (unsigned char *)message_id;
+	int salt_length = strlen(message_id);
+	struct bencode *b_message = ben_blob(message, message_length);
+	struct bencode *args = NULL, *data = NULL;
+    char buf[1500];
+	size_t buf_len = 0;
+
+	make_tid(tid, "mm", 0);
+	
+	ks_dht_calculate_mutable_storage_target(pk, salt, salt_length, target, 40);
+
+	/*
 int ks_dht_generate_mutable_storage_args(struct bencode *data, int64_t sequence, int cas,
-										 unsigned char *id, int id_len,
+										 unsigned char *id, int id_len, 
 										 const unsigned char *sk, const unsigned char *pk,
 										 unsigned char *salt, unsigned long long salt_length,
 										 unsigned char *token, unsigned long long token_length,
-										 unsigned char *target, unsigned long long target_length,
 										 unsigned char *signature, unsigned long long *signature_length,
-										 struct bencode **arguments)
-
-*/
-
-KS_DECLARE(int) ks_dht_send_message_mutable(dht_handle_t *h, unsigned char *sk, unsigned char *pk, char *message_id, int sequence, char *message)
-{
-    char buf[512], target[40];
-	int message_length = strlen(message);
-	struct bencode *bencode_p = ben_blob(message, message_length);
-	
-	ks_dht_calculate_mutable_storage_target(pk, (unsigned char *)message_id, strlen(message_id), (unsigned char *)target, 40);
+										 struct bencode **arguments) */
 
 	
-	ben_free(bencode_p); /* This SHOULD free the bencode_a_p as well */
+	ks_dht_generate_mutable_storage_args(b_message, 1, 0,
+										 /*h->myid, 20, */ (unsigned char *)"asdfqwerty", 10,
+										 sk, pk,
+										 salt, salt_length,
+										 (unsigned char *)"asdf", 4,
+										 signature, &signature_length,
+										 &args);
+										 
+	data = ben_dict();
+	ben_dict_set(data, ben_blob("a", 1), args);
+	ben_dict_set(data, ben_blob("t", 1), ben_blob(tid, 4));
+	ben_dict_set(data, ben_blob("y", 1), ben_blob("q", 1));
+	ben_dict_set(data, ben_blob("q", 1), ben_blob("put", 3));
+
+	buf_len = ben_encode2(buf, 1500, data);
 	
-	ks_log(KS_LOG_DEBUG, "Encoded PING: %s\n\n", buf);
-	return 1;
-	//    return dht_send(h, buf, i, 0, sa, salen);
+	ks_log(KS_LOG_DEBUG, "Encoded data: %s\n", buf);
+	
+	ben_free(b_message);
+	ben_free(args);
+	
+	return dht_send(h, buf, buf_len, 0, sa, salen);
 }
 
 

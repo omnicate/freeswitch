@@ -19,6 +19,7 @@
 
 #include "ks_dht.h"
 #include "histedit.h"
+#include "sodium.h"
 
 #define MAX_BOOTSTRAP_NODES 20
 static struct sockaddr_storage bootstrap_nodes[MAX_BOOTSTRAP_NODES];
@@ -137,6 +138,10 @@ main(int argc, char **argv)
     static ks_thread_t *threads[1]; /* Main dht event thread */
     ks_pool_t *pool;
 
+    unsigned char alice_publickey[crypto_box_PUBLICKEYBYTES];
+    unsigned char alice_secretkey[crypto_box_SECRETKEYBYTES];
+    crypto_box_keypair(alice_publickey, alice_secretkey);
+    
     globals.s = -1;
     globals.s6 = -1;
     globals.exiting = 0;
@@ -360,10 +365,14 @@ main(int argc, char **argv)
        a dump) and you already know their ids, it's better to use
        dht_insert_node.  If the ids are incorrect, the DHT will recover. */
     for(i = 0; i < num_bootstrap_nodes; i++) {
-        dht_ping_node(h, (struct sockaddr*)&bootstrap_nodes[i],
-                      sizeof(bootstrap_nodes[i]));
+        dht_ping_node(h, (struct sockaddr*)&bootstrap_nodes[i], sizeof(bootstrap_nodes[i]));
         usleep(random() % 100000);
     }
+
+    printf("TESTING!!!\n");
+
+    //    return 0;
+
     while ( !globals.exiting ) {
 		line = el_gets(el, &count);
       
@@ -387,12 +396,28 @@ main(int argc, char **argv)
 			} else if (!strncmp(line, "print_identity_key", 18)) {
 				/* usage: print_identity_key [identity key] */
 			} else if (!strncmp(line, "message_mutable", 15)) {
+			  char *input = strdup(line);
+			  char *message_id = input + 17;
+			  char *message = NULL;
+			  int idx = 17; /* this should be the start of the message_id */
+			  for ( idx = 17; idx < 100 && input[idx] != '\0'; idx++ ) {
+			    if ( input[idx] == ' ' ) {
+			      input[idx] = '\0';
+			      message = input + 1 + idx;
+			      break;
+			    }
+			  }
 				/* usage: message_mutable [identity key] [message id: asdf] [your message: Hello from DHT example]*/
 				/*
 				  takes an identity, a message id(salt) and a message, then sends out the announcement.
 				 */
+			  
+			  ks_dht_send_message_mutable(h, alice_secretkey, alice_publickey,
+						      (struct sockaddr*)&bootstrap_nodes[0], sizeof(bootstrap_nodes[0]),
+						      message_id, 1, message);
+			  free(input);
 			} else if (!strncmp(line, "message_immutable", 15)) {
-				/* usage: message_immutable [identity key]
+			  /* usage: message_immutable [identity key] */
 				/*
 				  takes an identity, and a message, then sends out the announcement.
 				 */
