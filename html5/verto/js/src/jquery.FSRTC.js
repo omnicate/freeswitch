@@ -193,18 +193,18 @@
     };
 
     function setCompat() {
-        $.FSRTC.moz = !!navigator.mozGetUserMedia;
+        $.FSRTC.moz = null;//!!navigator.mozGetUserMedia;
         //navigator.getUserMedia || (navigator.getUserMedia = navigator.mozGetUserMedia || navigator.webkitGetUserMedia || navigator.msGetUserMedia);
-        if (!navigator.getUserMedia) {
-            navigator.getUserMedia = navigator.mozGetUserMedia || navigator.webkitGetUserMedia || navigator.msGetUserMedia;
-        }
+        //if (!navigator.getUserMedia) {
+          //  navigator.getUserMedia = navigator.mozGetUserMedia || navigator.webkitGetUserMedia || navigator.msGetUserMedia;
+        //}
     }
 
     function checkCompat() {
-        if (!navigator.getUserMedia) {
-            alert('This application cannot function in this browser.');
-            return false;
-        }
+        //if (!navigator.getUserMedia) {
+        //    alert('This application cannot function in this browser.');
+        //    return false;
+        //}
         return true;
     }
 
@@ -268,8 +268,8 @@
 
         if (typeof element.srcObject !== 'undefined') {
             element.srcObject = stream;
-        } else if (typeof element.mozSrcObject !== 'undefined') {
-            element.mozSrcObject = stream;
+        //} else if (typeof element.mozSrcObject !== 'undefined') {
+        //    element.mozSrcObject = stream;
         } else if (typeof element.src !== 'undefined') {
             element.src = URL.createObjectURL(stream);
         } else {
@@ -536,10 +536,8 @@
             getUserMedia({
 		constraints: {
                     audio: false,
-                    video: {
-			mandatory: obj.options.videoParams,
-			optional: []
-                    },
+                    video: obj.options.videoParams
+                    
 		},
 		localVideo: obj.options.localVideo,
 		onsuccess: function(e) {self.options.localVideoStream = e; console.log("local video ready");},
@@ -549,12 +547,16 @@
 
 	var video = {};
 	var bestFrameRate = obj.options.videoParams.vertoBestFrameRate;
+	var minFrameRate = obj.options.videoParams.minFrameRate || 15;
 	delete obj.options.videoParams.vertoBestFrameRate;
 
 	video = {
 	    mandatory: obj.options.videoParams,
-	    optional: []
-        }	    	    
+	    width: {min: obj.options.videoParams.minWidth, max: obj.options.videoParams.maxWidth},
+	    height: {min: obj.options.videoParams.minHeight, max: obj.options.videoParams.maxHeight}
+	};
+	    
+        	    	    
 	
 	var useVideo = obj.options.useVideo;
 
@@ -565,11 +567,13 @@
 
 	    if (obj.options.useCamera !== "any") {
 		video.optional.push({sourceId: obj.options.useCamera});
+		video.deviceId = obj.options.useCamera;
 	    }
 
 	    if (bestFrameRate) {
 		video.optional.push({minFrameRate: bestFrameRate});
 		video.optional.push({maxFrameRate: bestFrameRate});
+		video.frameRate = {ideal: bestFrameRate, min: minFrameRate, max: 30};
 	    }
 
 	} else {
@@ -671,15 +675,15 @@
     // 2013, @muazkh - github.com/muaz-khan
     // MIT License - https://www.webrtc-experiment.com/licence/
     // Documentation - https://github.com/muaz-khan/WebRTC-Experiment/tree/master/RTCPeerConnection
-    window.moz = !!navigator.mozGetUserMedia;
+    window.moz = null;//!!navigator.mozGetUserMedia;
 
     function RTCPeerConnection(options) {
 	var gathering = false, done = false;
 
         var w = window,
-        PeerConnection = w.mozRTCPeerConnection || w.webkitRTCPeerConnection,
-        SessionDescription = w.mozRTCSessionDescription || w.RTCSessionDescription,
-        IceCandidate = w.mozRTCIceCandidate || w.RTCIceCandidate;
+        PeerConnection = w.RTCPeerConnection || w.webkitRTCPeerConnection,
+        SessionDescription = w.RTCSessionDescription;//w.mozRTCSessionDescription || w.RTCSessionDescription,
+        IceCandidate = w.iceCandidate;//w.mozRTCIceCandidate || w.RTCIceCandidate;
 	
         var STUN = {
             url: !moz ? 'stun:stun.l.google.com:19302' : 'stun:23.21.150.121'
@@ -1120,11 +1124,13 @@
 	h = resList[resI][1];
 	resI++;
 
-	video.mandatory = {
-	    "minWidth": w,
-	    "minHeight": h,
-	    "maxWidth": w,
-	    "maxHeight": h
+	video = {
+	    width: w,
+	    height: h
+	    //"minWidth": w,
+	    //"minHeight": h,
+	    //"maxWidth": w,
+	    //"maxHeight": h
 	};
 
 	getUserMedia({
