@@ -988,10 +988,18 @@ static switch_status_t vlc_file_av_read(switch_file_handle_t *handle, void *data
 
 	while (!vcontext->err && vcontext->playing == 0) {
 		libvlc_media_t *newmedia;
+		switch_status_t st;
 
 		switch_mutex_lock(acontext->cond_mutex); 
-		switch_thread_cond_wait(acontext->cond, acontext->cond_mutex);		
+		st = switch_thread_cond_timedwait(acontext->cond, acontext->cond_mutex, 1000000);
 		switch_mutex_unlock(acontext->cond_mutex); 
+
+		if (st == SWITCH_STATUS_TIMEOUT) {
+			read = 1024;
+			memset(data, 0, read);
+			*len = read / 2 / handle->channels;
+			return SWITCH_STATUS_SUCCESS;
+		}
 
 		//switch_yield(50000);
 
