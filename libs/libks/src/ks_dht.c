@@ -1965,6 +1965,9 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
 		logmsg = calloc(1, buflen);
 
         switch(message) {
+		case DHT_MSG_STORE_PUT:
+			ks_log(KS_LOG_DEBUG, "Not yet implemented\n");
+			goto dontread;
 		case DHT_MSG_INVALID:
 		case DHT_MSG_ERROR:
             ks_log(KS_LOG_DEBUG, "Unparseable message: %s\n", debug_printable(buf, logmsg, buflen));
