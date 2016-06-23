@@ -1917,6 +1917,7 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
         int want = 0;
         unsigned short ttid;
 		struct bencode *msg_ben = NULL;
+		struct bencode *key_args = NULL;
 
         if (is_martian(from)) {
             goto dontread;
@@ -1953,6 +1954,8 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
             }
         }
 
+		key_args = ben_dict_get_by_str(msg_ben, "a");
+		
 		logmsg = calloc(1, buflen);
 		ks_log(KS_LOG_DEBUG, "Message type %d\n", message);
         switch(message) {
@@ -2135,10 +2138,30 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
             send_pong(h, from, fromlen, tid, tid_len);
             break;
         case DHT_MSG_FIND_NODE:
-            ks_log(KS_LOG_DEBUG, "Find node!\n");
-            new_node(h, id, from, fromlen, 1);
-            ks_log(KS_LOG_DEBUG, "Sending closest nodes (%d).\n", want);
-            send_closest_nodes(h, from, fromlen, tid, tid_len, target, want, 0, NULL, NULL, 0);
+			if ( key_args ) {
+				struct bencode *key_target = ben_dict_get_by_str(key_args, "target");
+				struct bencode *key_want = ben_dict_get_by_str(key_args, "want");
+
+				/* WIP build fixes until they're actually used. */
+				(void) key_args;
+				(void) key_target;
+				(void) key_want;
+				/* 
+				   http://www.bittorrent.org/beps/bep_0005.html
+				   http://www.bittorrent.org/beps/bep_0032.html
+				   
+				   find_node Query = {"t":"aa", "y":"q", "q":"find_node", "a": {"id":"abcdefghij0123456789", "target":"mnopqrstuvwxyz123456"}}
+				   bencoded = d1:ad2:id20:abcdefghij01234567896:target20:mnopqrstuvwxyz123456e1:q9:find_node1:t2:aa1:y1:qe
+				*/
+			
+				ks_log(KS_LOG_DEBUG, "Find node!\n");
+				/* Needs to fetch the from, and fromlen from the decoded message, as well as the target and want */
+				new_node(h, id, from, fromlen, 1);
+				ks_log(KS_LOG_DEBUG, "Sending closest nodes (%d).\n", want);
+				send_closest_nodes(h, from, fromlen, tid, tid_len, target, want, 0, NULL, NULL, 0);
+			} else {
+				goto dontread;
+			}
             break;
         case DHT_MSG_GET_PEERS:
             ks_log(KS_LOG_DEBUG, "Get_peers!\n");
