@@ -2824,25 +2824,41 @@ static dht_msg_type_t parse_message(struct bencode *bencode_p,
 									unsigned char *id_return)
 {
 	//    const unsigned char *p;
+	dht_msg_type_t type = DHT_MSG_INVALID;
 	struct bencode *b_tmp = NULL;
+	struct bencode *key_t = ben_dict_get_by_str(bencode_p, "t");
+	struct bencode *key_args = ben_dict_get_by_str(bencode_p, "a");
 
 	ks_log(KS_LOG_DEBUG, "decoded: %s \n", ben_print(bencode_p));
-
 	/* Need to set tid, tid_len, and id_return. Then return the message type or msg_error. */
-	
-	if ( ben_dict_get_by_str(bencode_p, "y") && ben_dict_get_by_str(bencode_p, "t") ){
-		/* This message is a KRPC message(aka DHT message) */
-		b_tmp = ben_dict_get_by_str(bencode_p, "t");
-		if ( b_tmp ) {
-			const char *val = ben_str_val(b_tmp);
-			ks_log(KS_LOG_DEBUG, "Message transaction [%02X%02X]\n", val[0], val[1]);
+
+	if ( key_t ) {
+		const char *tran = ben_str_val(key_t);
+		int tran_len = ben_str_len(key_t);
+
+		memcpy(tid_return, tran, (size_t) tran_len);
+		*tid_len = tran_len;
+		ks_log(KS_LOG_DEBUG, "Message transaction [%.*s]\n", tran_len, tran);
+	}
+
+	if ( key_args ) {
+		struct bencode *b_id = ben_dict_get_by_str( key_args, "id");
+		const char *id = b_id ? ben_str_val(b_id) : NULL;
+		int id_len = ben_str_len(b_id);
+		
+		if ( id ) {
+			memcpy(id_return, id, id_len);
 		}
+		ben_free(b_id);
+	}
+	
+	if ( ben_dict_get_by_str(bencode_p, "y") && key_t ){
+		/* This message is a KRPC message(aka DHT message) */
 
 		if ( ( b_tmp = ben_dict_get_by_str(bencode_p, "y") ) ) {
 			if ( !ben_cmp_with_str(b_tmp, "q") ) { /* Inbound queries */
 				struct bencode *b_query = NULL;
 				const char *val = ben_str_val(b_tmp);
-				struct bencode *b_args = ben_dict_get_by_str(bencode_p, "a");
 				ks_log(KS_LOG_DEBUG, "Message Query [%s]\n", val);
 
 				if ( !( b_query = ben_dict_get_by_str(bencode_p, "q") ) ) {
@@ -2850,9 +2866,7 @@ static dht_msg_type_t parse_message(struct bencode *bencode_p,
 				} else { /* Has a query type */
 					const char *query_type = ben_str_val(b_query);
 					if (!ben_cmp_with_str(b_query, "get_peers")) {
-						struct bencode *b_id = b_args ? ben_dict_get_by_str( b_args, "id") : NULL;
-						const char *id = b_id ? ben_str_val(b_id) : NULL;
-						struct bencode *b_infohash = b_args ? ben_dict_get_by_str( b_args, "info_hash") : NULL;
+						struct bencode *b_infohash = key_args ? ben_dict_get_by_str( key_args, "info_hash") : NULL;
 						const char *infohash = b_infohash ? ben_str_val(b_infohash) : NULL;
 						/*
 						  {
@@ -2867,10 +2881,8 @@ static dht_msg_type_t parse_message(struct bencode *bencode_p,
 						  }
 						 */
 						
-						ks_log(KS_LOG_DEBUG, "get_peers query recieved for info hash [%s] from client with id [%s]\n", infohash, id);
+						ks_log(KS_LOG_DEBUG, "get_peers query recieved for info hash [%s] from client with id [%s]\n", infohash, id_return);
 					} else if (!ben_cmp_with_str(b_query, "ping")) {
-						struct bencode *b_id = b_args ? ben_dict_get_by_str( b_args, "id") : NULL;
-						const char *id = b_id ? ben_str_val(b_id) : NULL;
 						/* 
 						   {'a': {
 						          'id': 'T\x1cd2\xc1\x85\xf4>?\x84#\xa8)\xd0`\x19y\xcf;\xda'
@@ -2881,11 +2893,9 @@ static dht_msg_type_t parse_message(struct bencode *bencode_p,
 							'y': 'q'
 						   }
 						*/
-						ks_log(KS_LOG_DEBUG, "ping query recieved from client with id [%s]\n", id);
+						ks_log(KS_LOG_DEBUG, "ping query recieved from client with id [%s]\n", id_return);
 					} else if (!ben_cmp_with_str(b_query, "find_node")) {
-						struct bencode *b_id = b_args ? ben_dict_get_by_str( b_args, "id") : NULL;
-						const char *id = b_id ? ben_str_val(b_id) : NULL;
-						struct bencode *b_target = b_args ? ben_dict_get_by_str( b_args, "target") : NULL;
+						struct bencode *b_target = key_args ? ben_dict_get_by_str( key_args, "target") : NULL;
 						const char *target = b_target ? ben_str_val(b_target) : NULL;
 						/*
 						  {'a': {
@@ -2898,19 +2908,15 @@ static dht_msg_type_t parse_message(struct bencode *bencode_p,
 						   'y': 'q'
 						  }
 						*/
-						ks_log(KS_LOG_DEBUG, "find_node query recieved from client with id [%s] for target [%s]\n", id, target);
+						ks_log(KS_LOG_DEBUG, "find_node query recieved from client with id [%s] for target [%s]\n", id_return, target);
+						
+						type = DHT_MSG_FIND_NODE;
+						goto done;
 					} else if (!ben_cmp_with_str(b_query, "put")) {
-						struct bencode *b_id = b_args ? ben_dict_get_by_str( b_args, "id") : NULL;
-						const char *id = b_id ? ben_str_val(b_id) : NULL;
-
-						if ( id ) {
-							memcpy(id_return, id, strlen(id));
-						}
-
 						ks_log(KS_LOG_DEBUG, "Recieved a store put request\n");
-						ks_log(KS_LOG_DEBUG, "message [%s]\n", id);
-						ben_free(bencode_p);
-						return DHT_MSG_STORE_PUT;
+						ks_log(KS_LOG_DEBUG, "message [%s]\n", id_return);
+						type = DHT_MSG_STORE_PUT;
+						goto done;
 					} else {
 						ks_log(KS_LOG_DEBUG, "Unknown query type field [%s]\n", query_type);
 					}
@@ -2940,8 +2946,16 @@ static dht_msg_type_t parse_message(struct bencode *bencode_p,
 
 	/* Default to MSG ERROR */
 	ks_log(KS_LOG_DEBUG, "Unknown or unsupported message type\n");
-	return DHT_MSG_INVALID;
+	return type;
 
+ done:
+	if ( key_t ) {
+		ben_free(key_t);
+	}
+	if ( key_args ) {
+		ben_free(key_args);
+	}
+	return type;
 
 	/*
     if (dht_memmem(buf, buflen, "1:q4:ping", 9)) {
