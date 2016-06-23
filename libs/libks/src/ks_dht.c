@@ -1946,6 +1946,7 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
                                 nodes, &nodes_len, nodes6, &nodes6_len,
                                 values, &values_len, values6, &values6_len,
                                 &want);
+		ks_log(KS_LOG_DEBUG, "Message type from parse_message %d\n", message);
 
         if (id_cmp(id, zeroes) == 0) {
 			message = DHT_MSG_INVALID;
@@ -1963,11 +1964,73 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
         }
 
 		logmsg = calloc(1, buflen);
-
+		ks_log(KS_LOG_DEBUG, "Message type %d\n", message);
         switch(message) {
 		case DHT_MSG_STORE_PUT:
-			ks_log(KS_LOG_DEBUG, "Not yet implemented\n");
-			goto dontread;
+			if ( buf ) {
+				struct bencode *bencode_p = ben_decode((const void *) buf, buflen);
+				struct bencode *bencode_a = ben_dict_get_by_str(bencode_p, "a");
+				struct bencode *sig = NULL, *salt = NULL;
+				struct bencode *sig_ben = NULL, *pk_ben = NULL;
+				unsigned char *data_sig = NULL;
+				const char *sig_hex = NULL, *pk_hex = NULL;
+				unsigned char sig_bin[crypto_sign_BYTES], pk_bin[crypto_sign_PUBLICKEYBYTES];
+				size_t data_sig_len = 0, sig_len = 0, pk_len = 0;
+
+				/* Handle checking callback handler, and response */
+				if ( !bencode_a ) {
+					ks_log(KS_LOG_DEBUG, "Failed to locate 'a' field in message\n");
+					goto dontread;
+				}
+
+				ks_log(KS_LOG_DEBUG, "Received bencode store PUT: \n\n%s\n", ben_print(bencode_p));
+
+				sig_ben = ben_dict_get_by_str(bencode_a, "sig");
+				sig_hex = ben_str_val(sig_ben);
+				if ( !sig_hex ) {
+					ks_log(KS_LOG_DEBUG, "Missing signature. Unable to verify message authentication.\n");
+					goto dontread;
+				}
+				sodium_hex2bin(sig_bin, crypto_sign_BYTES, sig_hex, strlen(sig_hex), ":", &sig_len, NULL);
+				ks_log(KS_LOG_DEBUG, "signature [%s] %d\n", sig_hex, sig_len);
+				
+				pk_ben = ben_dict_get_by_str(bencode_a, "k");
+				pk_hex = ben_str_val(pk_ben);
+				if ( !pk_hex ) {
+					ks_log(KS_LOG_DEBUG, "Missing public key. Unable to validate message without it.\n");
+					goto dontread;
+				}
+				sodium_hex2bin(pk_bin, crypto_sign_PUBLICKEYBYTES, pk_hex, strlen(pk_hex), ":", &pk_len, NULL);
+				ks_log(KS_LOG_DEBUG, "public key [%s] %d\n", pk_hex, pk_len);
+				
+				sig = ben_dict();
+
+				salt = ben_dict_get_by_str(bencode_a, "salt");
+				if ( salt ) {
+					ben_dict_set(sig, ben_blob("salt", 4), salt); /* May need to be dup'ed to avoid double reference */
+				}
+
+				ben_dict_set(sig, ben_blob("seq", 3), ben_dict_get_by_str(bencode_a, "seq"));
+				ben_dict_set(sig, ben_blob("v", 1), ben_dict_get_by_str(bencode_a, "v"));
+
+				data_sig = (unsigned char *) ben_encode(&data_sig_len, sig);
+				ks_log(KS_LOG_DEBUG, "Encoded data [%s] %d vs %d\n", data_sig, data_sig_len, strlen((char *)data_sig));
+				ks_log(KS_LOG_DEBUG, "Encoded data v [%s]\n", ben_encode(&pk_len, ben_dict_get_by_str(bencode_a, "v")));
+
+				if ( !data_sig ) {
+					ks_log(KS_LOG_DEBUG, "Failed to encode message for signature validation\n");
+					goto dontread;					
+				}
+
+				if (crypto_sign_verify_detached(sig_bin, data_sig, data_sig_len, pk_bin) != 0) {
+					ks_log(KS_LOG_DEBUG, "Signature failed to verify. Corrupted or malicious data suspected!\n");
+					goto dontread;										
+				} else {
+					ks_log(KS_LOG_DEBUG, "Valid message store signature.\n");
+				}
+			
+			}
+			break;
 		case DHT_MSG_INVALID:
 		case DHT_MSG_ERROR:
             ks_log(KS_LOG_DEBUG, "Unparseable message: %s\n", debug_printable(buf, logmsg, buflen));
@@ -2846,7 +2909,7 @@ static dht_msg_type_t parse_message(const unsigned char *buf, int buflen,
 						   }
 						*/
 						ks_log(KS_LOG_DEBUG, "ping query recieved from client with id [%s]\n", id);
-					} else if (!ben_cmp_with_str(b_query, "ping")) {
+					} else if (!ben_cmp_with_str(b_query, "find_node")) {
 						struct bencode *b_id = b_args ? ben_dict_get_by_str( b_args, "id") : NULL;
 						const char *id = b_id ? ben_str_val(b_id) : NULL;
 						struct bencode *b_target = b_args ? ben_dict_get_by_str( b_args, "target") : NULL;
@@ -2863,6 +2926,18 @@ static dht_msg_type_t parse_message(const unsigned char *buf, int buflen,
 						  }
 						*/
 						ks_log(KS_LOG_DEBUG, "find_node query recieved from client with id [%s] for target [%s]\n", id, target);
+					} else if (!ben_cmp_with_str(b_query, "put")) {
+						struct bencode *b_id = b_args ? ben_dict_get_by_str( b_args, "id") : NULL;
+						const char *id = b_id ? ben_str_val(b_id) : NULL;
+
+						if ( id ) {
+							memcpy(id_return, id, strlen(id));
+						}
+
+						ks_log(KS_LOG_DEBUG, "Recieved a store put request\n");
+						ks_log(KS_LOG_DEBUG, "message [%s]\n", id);
+						ben_free(bencode_p);
+						return DHT_MSG_STORE_PUT;
 					} else {
 						ks_log(KS_LOG_DEBUG, "Unknown query type field [%s]\n", query_type);
 					}
@@ -3214,7 +3289,7 @@ int ks_dht_generate_mutable_storage_args(struct bencode *data, int64_t sequence,
 	}
 
 	encoded_data = (unsigned char *) ben_encode(&encoded_data_size, data);
-
+	
 	if ( encoded_data_size > 1000 ) {
 		ks_log(KS_LOG_ERROR, "Message is too long. Max is 1000 bytes\n");
 		free(encoded_data);
@@ -3232,6 +3307,7 @@ int ks_dht_generate_mutable_storage_args(struct bencode *data, int64_t sequence,
 	ben_dict_set(sig, ben_blob("v", 1), ben_blob(encoded_data, encoded_data_size));
 
 	encoded_message = (unsigned char *) ben_encode(&encoded_message_size, sig);
+	ks_log(KS_LOG_DEBUG, "Encoded data [%s]\n", encoded_message);
 	ben_free(sig);
 
 	err = crypto_sign_ed25519_detached(signature, signature_length, encoded_message, (unsigned long long) encoded_message_size, sk);

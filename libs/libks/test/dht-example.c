@@ -397,7 +397,7 @@ main(int argc, char **argv)
 				/* usage: print_identity_key [identity key] */
 			} else if (!strncmp(line, "message_mutable", 15)) {
 			  char *input = strdup(line);
-			  char *message_id = input + 17;
+			  char *message_id = input + 16;
 			  char *message = NULL;
 			  int idx = 17; /* this should be the start of the message_id */
 			  for ( idx = 17; idx < 100 && input[idx] != '\0'; idx++ ) {
@@ -405,6 +405,13 @@ main(int argc, char **argv)
 			      input[idx] = '\0';
 			      message = input + 1 + idx;
 			      break;
+			    }
+			  }
+
+			  /* Hack for my testing, so that it chomps the new line. Makes debugging print nicer. */
+			  for ( idx++; input[idx] != '\0'; idx++) {
+			    if ( input[idx] == '\n' ) {
+			      input[idx] = '\0';
 			    }
 			  }
 				/* usage: message_mutable [identity key] [message id: asdf] [your message: Hello from DHT example]*/
