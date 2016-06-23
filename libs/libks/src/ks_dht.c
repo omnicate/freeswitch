@@ -255,18 +255,9 @@ typedef enum {
 #define WANT4 1
 #define WANT6 2
 
-static dht_msg_type_t parse_message(const unsigned char *buf, int buflen,
+static dht_msg_type_t parse_message(struct bencode *bencode_p,
 									unsigned char *tid_return, int *tid_len,
-									unsigned char *id_return,
-									unsigned char *info_hash_return,
-									unsigned char *target_return,
-									unsigned short *port_return,
-									unsigned char *token_return, int *token_len,
-									unsigned char *nodes_return, int *nodes_len,
-									unsigned char *nodes6_return, int *nodes6_len,
-									unsigned char *values_return, int *values_len,
-									unsigned char *values6_return, int *values6_len,
-									int *want_return);
+									unsigned char *id_return);
 
 static const unsigned char zeroes[20] = {0};
 static const unsigned char v4prefix[16] = {
@@ -1925,6 +1916,7 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
         int values_len = 2048, values6_len = 2048;
         int want = 0;
         unsigned short ttid;
+		struct bencode *msg_ben = NULL;
 
         if (is_martian(from)) {
             goto dontread;
@@ -1941,11 +1933,9 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
             return -1;
         }
 
-        message = parse_message(buf, buflen, tid, &tid_len, id, info_hash,
-                                target, &port, token, &token_len,
-                                nodes, &nodes_len, nodes6, &nodes6_len,
-                                values, &values_len, values6, &values6_len,
-                                &want);
+		msg_ben = ben_decode((const void *) buf, buflen);
+
+        message = parse_message(msg_ben, tid, &tid_len, id);
 		ks_log(KS_LOG_DEBUG, "Message type from parse_message %d\n", message);
 
         if (id_cmp(id, zeroes) == 0) {
@@ -1968,8 +1958,7 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
         switch(message) {
 		case DHT_MSG_STORE_PUT:
 			if ( buf ) {
-				struct bencode *bencode_p = ben_decode((const void *) buf, buflen);
-				struct bencode *bencode_a = ben_dict_get_by_str(bencode_p, "a");
+				struct bencode *bencode_a = ben_dict_get_by_str(msg_ben, "a");
 				struct bencode *sig = NULL, *salt = NULL;
 				struct bencode *sig_ben = NULL, *pk_ben = NULL;
 				unsigned char *data_sig = NULL;
@@ -1983,7 +1972,7 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
 					goto dontread;
 				}
 
-				ks_log(KS_LOG_DEBUG, "Received bencode store PUT: \n\n%s\n", ben_print(bencode_p));
+				ks_log(KS_LOG_DEBUG, "Received bencode store PUT: \n\n%s\n", ben_print(msg_ben));
 
 				sig_ben = ben_dict_get_by_str(bencode_a, "sig");
 				sig_hex = ben_str_val(sig_ben);
@@ -2799,6 +2788,8 @@ static int send_error(dht_handle_t *h, const struct sockaddr *sa, int salen,
 #undef COPY
 #undef ADD_V
 
+/*
+
 #ifdef HAVE_MEMMEM
 
 static void *dht_memmem(const void *haystack, size_t haystacklen, const void *needle, size_t needlelen)
@@ -2814,7 +2805,7 @@ static void *dht_memmem(const void *haystack, size_t haystacklen, const void *ne
     const char *n = needle;
     size_t i;
 
-    /* size_t is unsigned */
+  
     if (needlelen > haystacklen)
         return NULL;
 
@@ -2827,36 +2818,18 @@ static void *dht_memmem(const void *haystack, size_t haystacklen, const void *ne
 }
 
 #endif
-
-static dht_msg_type_t parse_message(const unsigned char *buf, int buflen,
+*/
+static dht_msg_type_t parse_message(struct bencode *bencode_p,
 									unsigned char *tid_return, int *tid_len,
-									unsigned char *id_return, unsigned char *info_hash_return,
-									unsigned char *target_return, unsigned short *port_return,
-									unsigned char *token_return, int *token_len,
-									unsigned char *nodes_return, int *nodes_len,
-									unsigned char *nodes6_return, int *nodes6_len,
-									unsigned char *values_return, int *values_len,
-									unsigned char *values6_return, int *values6_len,
-									int *want_return)
+									unsigned char *id_return)
 {
-    const unsigned char *p;
-	struct bencode *bencode_p = NULL;
+	//    const unsigned char *p;
 	struct bencode *b_tmp = NULL;
 
-    /* This code will happily crash if the buffer is not NUL-terminated. */
-    if (buf[buflen] != '\0') {
-        ks_log(KS_LOG_DEBUG, "Eek!  parse_message with unterminated buffer.\n");
-        return DHT_MSG_INVALID;
-    }
-
-#define CHECK(ptr, len) if (((unsigned char*)ptr) + (len) > (buf) + (buflen)) goto overflow;
-
-	ks_log(KS_LOG_DEBUG, "\n\nStarting Bencode decode of DHT message\n");	
-
-	bencode_p = ben_decode((const void *) buf, buflen);
-	
 	ks_log(KS_LOG_DEBUG, "decoded: %s \n", ben_print(bencode_p));
 
+	/* Need to set tid, tid_len, and id_return. Then return the message type or msg_error. */
+	
 	if ( ben_dict_get_by_str(bencode_p, "y") && ben_dict_get_by_str(bencode_p, "t") ){
 		/* This message is a KRPC message(aka DHT message) */
 		b_tmp = ben_dict_get_by_str(bencode_p, "t");
@@ -2964,6 +2937,12 @@ static dht_msg_type_t parse_message(const unsigned char *buf, int buflen,
 	} else {
 		ks_log(KS_LOG_DEBUG, "Message not a remote DHT request nor query\n");
 	}
+
+	/* Default to MSG ERROR */
+	ks_log(KS_LOG_DEBUG, "Unknown or unsupported message type\n");
+	return DHT_MSG_INVALID;
+
+
 	/*
     if (dht_memmem(buf, buflen, "1:q4:ping", 9)) {
         return DHT_MSG_PING;
@@ -2985,7 +2964,9 @@ static dht_msg_type_t parse_message(const unsigned char *buf, int buflen,
 
 	*/
 	
-    if (tid_return) {
+
+	/*
+	if (tid_return) {
         p = dht_memmem(buf, buflen, "1:t", 3);
         if (p) {
             long l;
@@ -3204,6 +3185,8 @@ static dht_msg_type_t parse_message(const unsigned char *buf, int buflen,
  overflow:
     ks_log(KS_LOG_DEBUG, "Truncated message.\n");
     return DHT_MSG_INVALID;
+	*/
+	
 }
 
 /* b64encode function taken from kws.c. Maybe worth exposing a function like this. */
