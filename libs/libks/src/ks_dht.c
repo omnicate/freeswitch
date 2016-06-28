@@ -1935,9 +1935,12 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
         }
 
 		msg_ben = ben_decode((const void *) buf, buflen);
+		ks_log(KS_LOG_DEBUG, "Received bencode store PUT: \n\n%s\n", ben_print(msg_ben));
+		ks_log(KS_LOG_DEBUG, "Received bencode store PUT: \n\n%s\n", ben_print(msg_ben));
 
         message = parse_message(msg_ben, tid, &tid_len, id);
 		ks_log(KS_LOG_DEBUG, "Message type from parse_message %d\n", message);
+		ks_log(KS_LOG_DEBUG, "Received bencode store PUT: \n\n%s\n", ben_print(msg_ben));
 
         if (id_cmp(id, zeroes) == 0) {
 			message = DHT_MSG_INVALID;
@@ -1973,6 +1976,8 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
 				if ( !bencode_a ) {
 					ks_log(KS_LOG_DEBUG, "Failed to locate 'a' field in message\n");
 					goto dontread;
+				} else {
+					ks_log(KS_LOG_DEBUG, "Successfully located 'a' field in message\n");
 				}
 
 				ks_log(KS_LOG_DEBUG, "Received bencode store PUT: \n\n%s\n", ben_print(msg_ben));
@@ -1983,7 +1988,7 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
 					ks_log(KS_LOG_DEBUG, "Missing signature. Unable to verify message authentication.\n");
 					goto dontread;
 				}
-				sodium_hex2bin(sig_bin, crypto_sign_BYTES, sig_hex, strlen(sig_hex), ":", &sig_len, NULL);
+				sodium_hex2bin(sig_bin, crypto_sign_BYTES, sig_hex, ben_str_len(sig_ben), ":", &sig_len, NULL);
 				ks_log(KS_LOG_DEBUG, "signature [%s] %d\n", sig_hex, sig_len);
 				
 				pk_ben = ben_dict_get_by_str(bencode_a, "k");
@@ -1992,7 +1997,7 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
 					ks_log(KS_LOG_DEBUG, "Missing public key. Unable to validate message without it.\n");
 					goto dontread;
 				}
-				sodium_hex2bin(pk_bin, crypto_sign_PUBLICKEYBYTES, pk_hex, strlen(pk_hex), ":", &pk_len, NULL);
+				sodium_hex2bin(pk_bin, crypto_sign_PUBLICKEYBYTES, pk_hex, ben_str_len(pk_ben), ":", &pk_len, NULL);
 				ks_log(KS_LOG_DEBUG, "public key [%s] %d\n", pk_hex, pk_len);
 				
 				sig = ben_dict();
@@ -2006,8 +2011,11 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
 				ben_dict_set(sig, ben_blob("v", 1), ben_dict_get_by_str(bencode_a, "v"));
 
 				data_sig = (unsigned char *) ben_encode(&data_sig_len, sig);
-				ks_log(KS_LOG_DEBUG, "Encoded data [%s] %d vs %d\n", data_sig, data_sig_len, strlen((char *)data_sig));
-				ks_log(KS_LOG_DEBUG, "Encoded data v [%s]\n", ben_encode(&pk_len, ben_dict_get_by_str(bencode_a, "v")));
+				ks_log(KS_LOG_DEBUG, "Encoded data [%.*s] %d vs %d\n", data_sig_len, data_sig, data_sig_len, strlen((char *)data_sig));
+				if ( 1) {
+					unsigned char *tmp = ben_encode(&pk_len, ben_dict_get_by_str(bencode_a, "v"));
+					ks_log(KS_LOG_DEBUG, "Encoded data v [%.*s]\n", pk_len, tmp); 
+				}
 
 				if ( !data_sig ) {
 					ks_log(KS_LOG_DEBUG, "Failed to encode message for signature validation\n");
@@ -2489,6 +2497,9 @@ int send_pong(dht_handle_t *h, const struct sockaddr *sa, int salen, const unsig
 {
     char buf[512];
     int i = 0, rc;
+
+	/* http://www.bittorrent.org/beps/bep_0005.html */
+
     rc = ks_snprintf(buf + i, 512 - i, "d1:rd2:id20:"); INC(i, rc, 512);
     COPY(buf, i, h->myid, 20, 512);
     rc = ks_snprintf(buf + i, 512 - i, "e1:t%d:", tid_len); INC(i, rc, 512);
@@ -2872,7 +2883,6 @@ static dht_msg_type_t parse_message(struct bencode *bencode_p,
 		if ( id ) {
 			memcpy(id_return, id, id_len);
 		}
-		ben_free(b_id);
 	}
 	
 	if ( ben_dict_get_by_str(bencode_p, "y") && key_t ){
@@ -2972,12 +2982,6 @@ static dht_msg_type_t parse_message(struct bencode *bencode_p,
 	return type;
 
  done:
-	if ( key_t ) {
-		ben_free(key_t);
-	}
-	if ( key_args ) {
-		ben_free(key_args);
-	}
 	return type;
 
 	/*
