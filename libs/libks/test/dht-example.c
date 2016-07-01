@@ -137,11 +137,12 @@ main(int argc, char **argv)
     ks_status_t status;
     static ks_thread_t *threads[1]; /* Main dht event thread */
     ks_pool_t *pool;
+	int err = 0;
+    unsigned char alice_publickey[crypto_box_PUBLICKEYBYTES] = {0};
+    unsigned char alice_secretkey[crypto_box_SECRETKEYBYTES] = {0};
 
-    unsigned char alice_publickey[crypto_box_PUBLICKEYBYTES];
-    unsigned char alice_secretkey[crypto_box_SECRETKEYBYTES];
-    crypto_box_keypair(alice_publickey, alice_secretkey);
-    
+	sodium_init();
+
     globals.s = -1;
     globals.s6 = -1;
     globals.exiting = 0;
@@ -370,6 +371,8 @@ main(int argc, char **argv)
     }
 
     printf("TESTING!!!\n");
+    err = crypto_sign_keypair(alice_publickey, alice_secretkey);
+	printf("Result of generating keypair %d\n", err);
 
     //    return 0;
 
