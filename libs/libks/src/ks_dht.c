@@ -1918,6 +1918,14 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
         unsigned short ttid;
 		struct bencode *msg_ben = NULL;
 		struct bencode *key_args = NULL;
+		struct bencode *key_info_hash = NULL;
+		struct bencode *key_want = NULL;
+		struct bencode *key_token = NULL;
+		struct bencode *key_port = NULL;
+		struct bencode *key_values = NULL;
+		struct bencode *key_values6 = NULL;
+		struct bencode *key_nodes = NULL;
+		struct bencode *key_nodes6 = NULL;
 
         if (is_martian(from)) {
             goto dontread;
@@ -1958,6 +1966,68 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
         }
 
 		key_args = ben_dict_get_by_str(msg_ben, "a");
+
+		if ( key_args ) {
+			key_info_hash = ben_dict_get_by_str(key_args, "info_hash");
+
+			if ( key_info_hash ) {
+				strcpy(info_hash, ben_str_val(key_info_hash));
+			}
+
+			key_want = ben_dict_get_by_str(key_args, "want");
+			
+			if ( key_want ) {
+				if ( !ben_cmp_with_str(key_want, "n4") ) {
+					want = WANT4;
+				} else if ( !ben_cmp_with_str(key_want, "n6") ) {
+					want = WANT6;
+				} else {
+					want = 0;
+				}
+			}
+
+			key_token = ben_dict_get_by_str(key_args, "token");
+
+			if ( key_token ) {
+				token_len = ben_str_len(key_token);
+				strncpy(token, ben_str_val(key_token), token_len);
+			}
+
+			key_port = ben_dict_get_by_str(key_args, "port");
+
+			if ( key_port ) {
+				port = ben_int(key_port);
+			}
+
+			/* values values6 nodes nodes6 */
+			key_values = ben_dict_get_by_str(key_args, "values");
+
+			if ( key_values ) {
+				values_len = ben_str_len(key_values);
+				strncpy(values, ben_str_val(key_values), values_len);
+			}
+
+			key_values6 = ben_dict_get_by_str(key_args, "values6");
+
+			if ( key_values6 ) {
+				values6_len = ben_str_len(key_values6);
+				strncpy(values6, ben_str_val(key_values6), values6_len);
+			}
+
+			key_nodes = ben_dict_get_by_str(key_args, "nodes");
+
+			if ( key_nodes ) {
+				nodes_len = ben_str_len(key_nodes);
+				strncpy(nodes, ben_str_val(key_nodes), nodes_len);
+			}
+
+			key_nodes6 = ben_dict_get_by_str(key_args, "nodes6");
+
+			if ( key_nodes6 ) {
+				nodes6_len = ben_str_len(key_nodes6);
+				strncpy(nodes6, ben_str_val(key_nodes6), nodes6_len);
+			}
+		}
 		
 		logmsg = calloc(1, buflen);
 		ks_log(KS_LOG_DEBUG, "Message type %d\n", message);
@@ -2148,12 +2218,13 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
         case DHT_MSG_FIND_NODE:
 			if ( key_args ) {
 				struct bencode *key_target = ben_dict_get_by_str(key_args, "target");
-				struct bencode *key_want = ben_dict_get_by_str(key_args, "want");
 
-				/* WIP build fixes until they're actually used. */
-				(void) key_args;
-				(void) key_target;
-				(void) key_want;
+				char *target_str = key_target ? ben_str_val(key_target) : NULL;
+
+				if ( target_str ) {
+					strcpy(target, target_str);
+				}
+
 				/* 
 				   http://www.bittorrent.org/beps/bep_0005.html
 				   http://www.bittorrent.org/beps/bep_0032.html
@@ -2172,6 +2243,13 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
 			}
             break;
         case DHT_MSG_GET_PEERS:
+			/* 
+			   http://www.bittorrent.org/beps/bep_0005.html
+
+			   get_peers Query = {"t":"aa", "y":"q", "q":"get_peers", "a": {"id":"abcdefghij0123456789", "info_hash":"mnopqrstuvwxyz123456"}}
+			   bencoded = d1:ad2:id20:abcdefghij01234567899:info_hash20:mnopqrstuvwxyz123456e1:q9:get_peers1:t2:aa1:y1:qe
+			 */
+
             ks_log(KS_LOG_DEBUG, "Get_peers!\n");
             new_node(h, id, from, fromlen, 1);
             if (id_cmp(info_hash, zeroes) == 0) {
