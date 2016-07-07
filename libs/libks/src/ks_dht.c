@@ -2919,6 +2919,7 @@ static dht_msg_type_t parse_message(struct bencode *bencode_p,
 	struct bencode *b_tmp = NULL;
 	struct bencode *key_t = ben_dict_get_by_str(bencode_p, "t");
 	struct bencode *key_args = ben_dict_get_by_str(bencode_p, "a");
+	struct bencode *key_resp = ben_dict_get_by_str(bencode_p, "r");
 
 	ks_log(KS_LOG_DEBUG, "decoded: %s \n", ben_print(bencode_p));
 	/* Need to set tid, tid_len, and id_return. Then return the message type or msg_error. */
@@ -2941,7 +2942,18 @@ static dht_msg_type_t parse_message(struct bencode *bencode_p,
 			memcpy(id_return, id, id_len);
 		}
 	}
+
+	if ( key_resp ) {
+		struct bencode *b_id = ben_dict_get_by_str( key_resp, "id");
+		const char *id = b_id ? ben_str_val(b_id) : NULL;
+		int id_len = ben_str_len(b_id);
+		
+		if ( id ) {
+			memcpy(id_return, id, id_len);
+		}
+	}
 	
+
 	if ( ben_dict_get_by_str(bencode_p, "y") && key_t ){
 		/* This message is a KRPC message(aka DHT message) */
 
