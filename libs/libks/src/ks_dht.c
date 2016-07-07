@@ -2561,9 +2561,8 @@ int send_pong(dht_handle_t *h, const struct sockaddr *sa, int salen, const unsig
 
 	ben_dict_set(bencode_p, ben_blob("t", 1), ben_blob(tid, tid_len));
 	ben_dict_set(bencode_p, ben_blob("y", 1), ben_blob("r", 1));
-	ben_dict_set(bencode_p, ben_blob("r", 1), bencode_a_p);
 	ben_dict_set(bencode_a_p, ben_blob("id", 2), ben_blob(h->myid, 20));
-	ben_dict_set(bencode_p, ben_blob("a", 1), bencode_a_p);
+	ben_dict_set(bencode_p, ben_blob("r", 1), bencode_a_p);
 
 	i = ben_encode2(buf, 512, bencode_p);
 	ben_free(bencode_p); /* This SHOULD free the bencode_a_p as well */
