@@ -3018,6 +3018,8 @@ static dht_msg_type_t parse_message(struct bencode *bencode_p,
 			} else if ( !ben_cmp_with_str(b_tmp, "r") ) { /* Responses */
 				const char *val = ben_str_val(b_tmp);
 				ks_log(KS_LOG_DEBUG, "Message Response [%s]\n", val);
+				type = DHT_MSG_REPLY;
+				goto done;
 			} else if ( !ben_cmp_with_str(b_tmp, "e") ) {
 				const char *val = ben_str_val(b_tmp);
 				ks_log(KS_LOG_DEBUG, "Message Error [%s]\n", val);
