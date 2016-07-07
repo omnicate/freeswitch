@@ -1917,16 +1917,18 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
         int want = 0;
         unsigned short ttid;
 		struct bencode *msg_ben = NULL;
-		struct bencode *key_args = NULL;
+		struct bencode *key_args = NULL; /* Request args */
 		struct bencode *key_info_hash = NULL;
 		struct bencode *key_want = NULL;
 		struct bencode *key_token = NULL;
 		struct bencode *key_port = NULL;
+		struct bencode *key_target = NULL;
+
+		struct bencode *key_resp = NULL; /* Response values */
 		struct bencode *key_values = NULL;
 		struct bencode *key_values6 = NULL;
 		struct bencode *key_nodes = NULL;
 		struct bencode *key_nodes6 = NULL;
-		struct bencode *key_target = NULL;
 
         if (is_martian(from)) {
             goto dontread;
@@ -1965,7 +1967,6 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
         }
 
 		key_args = ben_dict_get_by_str(msg_ben, "a");
-
 		if ( key_args ) {
 			key_info_hash = ben_dict_get_by_str(key_args, "info_hash");
 
@@ -2004,29 +2005,33 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
 			if ( key_port ) {
 				port = ben_int_val(key_port);
 			}
+		}
 
-			key_values = ben_dict_get_by_str(key_args, "values");
+		key_resp = ben_dict_get_by_str(msg_ben, "r");
+		if ( key_resp ) {
+			key_values = ben_dict_get_by_str(key_resp, "values");
 
 			if ( key_values ) {
 				values_len = ben_str_len(key_values);
 				memcpy(values, ben_str_val(key_values), values_len);
 			}
 
-			key_values6 = ben_dict_get_by_str(key_args, "values6");
+			key_values6 = ben_dict_get_by_str(key_resp, "values6");
 
 			if ( key_values6 ) {
 				values6_len = ben_str_len(key_values6);
 				memcpy(values6, ben_str_val(key_values6), values6_len);
 			}
 
-			key_nodes = ben_dict_get_by_str(key_args, "nodes");
+			key_nodes = ben_dict_get_by_str(key_resp, "nodes");
 
 			if ( key_nodes ) {
 				nodes_len = ben_str_len(key_nodes);
 				memcpy(nodes, ben_str_val(key_nodes), nodes_len);
+				ks_log(KS_LOG_DEBUG, "Parsed nodes from response with length %d\n", nodes_len);
 			}
 
-			key_nodes6 = ben_dict_get_by_str(key_args, "nodes6");
+			key_nodes6 = ben_dict_get_by_str(key_resp, "nodes6");
 
 			if ( key_nodes6 ) {
 				nodes6_len = ben_str_len(key_nodes6);
