@@ -1944,12 +1944,10 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
         }
 
 		msg_ben = ben_decode((const void *) buf, buflen);
-		ks_log(KS_LOG_DEBUG, "Received bencode store PUT: \n\n%s\n", ben_print(msg_ben));
-		ks_log(KS_LOG_DEBUG, "Received bencode store PUT: \n\n%s\n", ben_print(msg_ben));
+		ks_log(KS_LOG_DEBUG, "Received bencode message: \n\n%s\n", ben_print(msg_ben));
 
         message = parse_message(msg_ben, tid, &tid_len, id);
 		ks_log(KS_LOG_DEBUG, "Message type from parse_message %d\n", message);
-		ks_log(KS_LOG_DEBUG, "Received bencode store PUT: \n\n%s\n", ben_print(msg_ben));
 
         if (id_cmp(id, zeroes) == 0) {
 			message = DHT_MSG_INVALID;
@@ -2007,7 +2005,6 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
 				port = ben_int_val(key_port);
 			}
 
-			/* values values6 nodes nodes6 */
 			key_values = ben_dict_get_by_str(key_args, "values");
 
 			if ( key_values ) {
@@ -2502,6 +2499,8 @@ static int dht_send(dht_handle_t *h, const void *buf, size_t len, int flags, con
         abort();
 	}
 
+	ks_log(KS_LOG_DEBUG, "Sending %d [%.*s]\n", len, len, buf);
+
     if (node_blacklisted(h, sa, salen)) {
         ks_log(KS_LOG_DEBUG, "Attempting to send to blacklisted node.\n");
         errno = EPERM;
@@ -2537,10 +2536,12 @@ int send_ping(dht_handle_t *h, const struct sockaddr *sa, int salen, const unsig
 	ben_dict_set(bencode_p, ben_blob("y", 1), ben_blob("q", 1));	
 	ben_dict_set(bencode_p, ben_blob("q", 1), ben_blob("ping", 4));
 	ben_dict_set(bencode_a_p, ben_blob("id", 2), ben_blob(h->myid, 20));
-	ben_encode2(buf, 512, bencode_p);
+	ben_dict_set(bencode_p, ben_blob("a", 1), bencode_a_p);
+
+	i = ben_encode2(buf, 512, bencode_p);
 	ben_free(bencode_p); /* This SHOULD free the bencode_a_p as well */
 
-	ks_log(KS_LOG_DEBUG, "Encoded PING: %s\n\n", buf);
+	ks_log(KS_LOG_DEBUG, "Encoded PING %d: %.*s\n\n", i, i, buf);
     return dht_send(h, buf, i, 0, sa, salen);
 }
 
@@ -2555,10 +2556,11 @@ int send_pong(dht_handle_t *h, const struct sockaddr *sa, int salen, const unsig
 
 	ben_dict_set(bencode_p, ben_blob("t", 1), ben_blob(tid, tid_len));
 	ben_dict_set(bencode_p, ben_blob("y", 1), ben_blob("r", 1));
-	ben_dict_set(bencode_a_p, ben_blob("id", 2), ben_blob(h->myid, 20));
 	ben_dict_set(bencode_p, ben_blob("r", 1), bencode_a_p);
+	ben_dict_set(bencode_a_p, ben_blob("id", 2), ben_blob(h->myid, 20));
+	ben_dict_set(bencode_p, ben_blob("a", 1), bencode_a_p);
 
-	ben_encode2(buf, 512, bencode_p);
+	i = ben_encode2(buf, 512, bencode_p);
 	ben_free(bencode_p); /* This SHOULD free the bencode_a_p as well */
 
 	ks_log(KS_LOG_DEBUG, "Encoded PONG: %s\n\n", buf);
@@ -2595,7 +2597,7 @@ int send_find_node(dht_handle_t *h, const struct sockaddr *sa, int salen,
 
 	ben_dict_set(bencode_p, ben_blob("a", 1), bencode_a_p);
 
-	ben_encode2(buf, 512, bencode_p);
+	i = ben_encode2(buf, 512, bencode_p);
 	ben_free(bencode_p); /* This SHOULD free the bencode_a_p as well */
 
 	ks_log(KS_LOG_DEBUG, "Encoded FIND_NODE: %s\n\n", buf);
@@ -2612,10 +2614,10 @@ int send_nodes_peers(dht_handle_t *h, const struct sockaddr *sa, int salen,
                  const unsigned char *token, int token_len)
 {
     char buf[2048];
-    int i = 0;//, rc, j0, j, k, len;
+    int i = 0, j0, j, k, len;
 	struct bencode *bencode_p = ben_dict();
 	struct bencode *bencode_a_p = ben_dict();
-	//	struct bencode *ben_array = ben_list();
+	struct bencode *ben_array = ben_list();
 
 	ben_dict_set(bencode_p, ben_blob("t", 1), ben_blob(tid, tid_len));
 	ben_dict_set(bencode_p, ben_blob("y", 1), ben_blob("r", 1));
@@ -2624,12 +2626,10 @@ int send_nodes_peers(dht_handle_t *h, const struct sockaddr *sa, int salen,
 	if (nodes_len)  ben_dict_set(bencode_a_p, ben_blob("nodes",  5), ben_blob(nodes, nodes_len));
 	if (nodes6_len) ben_dict_set(bencode_a_p, ben_blob("nodes6", 6), ben_blob(nodes6, nodes6_len));
 
-	/* its an array, how do i do this??
-
-Response with peers = {"t":"aa", "y":"r", "r": {"id":"abcdefghij0123456789", "token":"aoeusnth", "values": ["axje.u", "idhtnm"]}}
+	/* 
+	   Response with peers = {"t":"aa", "y":"r", "r": {"id":"abcdefghij0123456789", "token":"aoeusnth", "values": ["axje.u", "idhtnm"]}}
 	*/
 	
-	/* TODO XXXXXX find docs and add "values" stuff into this encode
     if (st && st->numpeers > 0) {
         // We treat the storage as a circular list, and serve a randomly
         //   chosen slice.  In order to make sure we fit within 1024 octets,
@@ -2640,25 +2640,22 @@ Response with peers = {"t":"aa", "y":"r", "r": {"id":"abcdefghij0123456789", "to
         j = j0;
         k = 0;
 
-        rc = ks_snprintf(buf + i, 2048 - i, "6:valuesl"); INC(i, rc, 2048);
-        do {
+       do {
             if (st->peers[j].len == len) {
-                unsigned short swapped;
-                swapped = htons(st->peers[j].port);
-                rc = ks_snprintf(buf + i, 2048 - i, "%d:", len + 2);
-                INC(i, rc, 2048);
-                COPY(buf, i, st->peers[j].ip, len, 2048);
-                COPY(buf, i, &swapped, 2, 2048);
+				char data[18];
+				unsigned short swapped = htons(st->peers[j].port);
+				memcpy(data, st->peers[j].ip, len);
+				memcpy(data + len, &swapped, 2);
+				ben_list_append(ben_array, ben_blob(data, len + 2));
                 k++;
             }
             j = (j + 1) % st->numpeers;
         } while(j != j0 && k < 50);
-        rc = ks_snprintf(buf + i, 2048 - i, "e");
-		INC(i, rc, 2048);
+	   ben_dict_set(bencode_a_p, ben_blob("values", 6), ben_array);
     }
-*/
+
 	ben_dict_set(bencode_p, ben_blob("r", 1), bencode_a_p);
-	ben_encode2(buf, 512, bencode_p);
+	i = ben_encode2(buf, 512, bencode_p);
 	ben_free(bencode_p); /* This SHOULD free the bencode_a_p as well */
 	
 	ks_log(KS_LOG_DEBUG, "Encoded FIND_NODE: %s\n\n", buf);
@@ -2801,7 +2798,7 @@ int send_get_peers(dht_handle_t *h, const struct sockaddr *sa, int salen,
 	ben_dict_set(bencode_a_p, ben_blob("info_hash", 9), ben_blob(infohash, infohash_len));
 	ben_dict_set(bencode_p, ben_blob("a", 1), bencode_a_p);
 
-	ben_encode2(buf, 512, bencode_p);
+	i = ben_encode2(buf, 512, bencode_p);
 	ben_free(bencode_p); /* This SHOULD free the bencode_a_p as well */
 	
 	ks_log(KS_LOG_DEBUG, "Encoded GET_PEERS: %s\n\n", buf);
@@ -2828,7 +2825,7 @@ int send_announce_peer(dht_handle_t *h, const struct sockaddr *sa, int salen,
 	ben_dict_set(bencode_a_p, ben_blob("token", 5), ben_blob(token, token_len));
 	ben_dict_set(bencode_p, ben_blob("a", 1), bencode_a_p);
 
-	ben_encode2(buf, 512, bencode_p);
+	i = ben_encode2(buf, 512, bencode_p);
 	ben_free(bencode_p); /* This SHOULD free the bencode_a_p as well */
 	
 	ks_log(KS_LOG_DEBUG, "Encoded ANNOUNCE_PEERS: %s\n\n", buf);
@@ -2846,8 +2843,8 @@ static int send_peer_announced(dht_handle_t *h, const struct sockaddr *sa, int s
 	ben_dict_set(bencode_p, ben_blob("y", 1), ben_blob("r", 1));
 	ben_dict_set(bencode_a_p, ben_blob("id", 2), ben_blob(h->myid, 20));
 	ben_dict_set(bencode_p, ben_blob("r", 1), bencode_a_p);
-
-	ben_encode2(buf, 512, bencode_p);
+	
+	i = ben_encode2(buf, 512, bencode_p);
 	ben_free(bencode_p); /* This SHOULD free the bencode_a_p as well */
 	
 	ks_log(KS_LOG_DEBUG, "Encoded peer_announced: %s\n\n", buf);
@@ -2870,7 +2867,7 @@ static int send_error(dht_handle_t *h, const struct sockaddr *sa, int salen,
 	ben_list_append(ben_array, ben_blob(message, strlen(message)));
 	ben_dict_set(bencode_p, ben_blob("e", 1), ben_array);
 
-	ben_encode2(buf, 512, bencode_p);
+	i = ben_encode2(buf, 512, bencode_p);
 	ben_free(bencode_p);
 	
 	ks_log(KS_LOG_DEBUG, "Encoded error: %s\n\n", buf);
@@ -2975,6 +2972,8 @@ static dht_msg_type_t parse_message(struct bencode *bencode_p,
 						 */
 						
 						ks_log(KS_LOG_DEBUG, "get_peers query recieved for info hash [%s] from client with id [%s]\n", infohash, id_return);
+						type = DHT_MSG_GET_PEERS;
+						goto done;
 					} else if (!ben_cmp_with_str(b_query, "ping")) {
 						/* 
 						   {'a': {
@@ -2987,6 +2986,8 @@ static dht_msg_type_t parse_message(struct bencode *bencode_p,
 						   }
 						*/
 						ks_log(KS_LOG_DEBUG, "ping query recieved from client with id [%s]\n", id_return);
+						type = DHT_MSG_PING;
+						goto done;
 					} else if (!ben_cmp_with_str(b_query, "find_node")) {
 						struct bencode *b_target = key_args ? ben_dict_get_by_str( key_args, "target") : NULL;
 						const char *target = b_target ? ben_str_val(b_target) : NULL;
@@ -3002,7 +3003,6 @@ static dht_msg_type_t parse_message(struct bencode *bencode_p,
 						  }
 						*/
 						ks_log(KS_LOG_DEBUG, "find_node query recieved from client with id [%s] for target [%s]\n", id_return, target);
-						
 						type = DHT_MSG_FIND_NODE;
 						goto done;
 					} else if (!ben_cmp_with_str(b_query, "put")) {
