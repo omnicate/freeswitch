@@ -82,8 +82,7 @@ switch_state_handler_table_t baresip_state_handlers = {
 
 static switch_status_t baresip_on_init(switch_core_session_t *session)
 {
-	switch_channel_t *channel = switch_core_session_get_channel(session);
-	(void) channel;
+	(void) session;
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Baresip channel init\n");	
 	
 	return SWITCH_STATUS_SUCCESS;
@@ -92,10 +91,6 @@ static switch_status_t baresip_on_init(switch_core_session_t *session)
 static switch_status_t baresip_on_hangup(switch_core_session_t *session)
 {
 	baresip_techpvt_t *tech_pvt = switch_core_session_get_private_class(session, SWITCH_PVT_SECONDARY);
-
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Baresip channel hangup sipsess %d\n", (int) mem_nrefs(tech_pvt->sipsess));	
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Baresip channel hangup sipsess_listener %d\n", (int) mem_nrefs(tech_pvt->sipsess_listener));
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Baresip channel hangup invite %d\n", (int) mem_nrefs(tech_pvt->invite));	
 
 	if ( tech_pvt->sipsess ) {
 		tech_pvt->sipsess = mem_deref((void *)tech_pvt->sipsess);
@@ -107,17 +102,7 @@ static switch_status_t baresip_on_hangup(switch_core_session_t *session)
 static switch_status_t baresip_on_destroy(switch_core_session_t *session)
 {
 	baresip_techpvt_t *tech_pvt = switch_core_session_get_private_class(session, SWITCH_PVT_SECONDARY);
-
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Baresip channel destroy invite %d\n", (int) mem_nrefs(tech_pvt->invite));
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Baresip channel destroy sipsess_listener %d\n", (int) mem_nrefs(tech_pvt->sipsess_listener));
-
-	/*	tech_pvt->invite = mem_deref((void *)tech_pvt->invite);
-	tech_pvt->invite = mem_deref((void *)tech_pvt->invite); */
-	//	tech_pvt->sipsess_listener = mem_deref((void *)tech_pvt->sipsess_listener);
-	 /*
-	 
-	   tech_pvt->invite = mem_deref((void *)tech_pvt->invite); 
-	 */
+	(void) tech_pvt;
 
 	return SWITCH_STATUS_SUCCESS;
 }
@@ -206,7 +191,6 @@ static switch_call_cause_t baresip_outgoing_channel(switch_core_session_t *sessi
 		
 	switch_channel_set_state(channel, CS_INIT);
 	uuid = switch_core_session_get_uuid(*new_session);
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Session pinvite %p tech_pvt %p [%s]\n", (void *) *new_session, (void *) tech_pvt, uuid);
 
 	switch_core_media_prepare_codecs(*new_session, SWITCH_TRUE);
 	
@@ -260,7 +244,8 @@ static switch_call_cause_t baresip_outgoing_channel(switch_core_session_t *sessi
 						  "X-module: mod_bearsip\r\n");  /* Extra sip headers */
 
 	if ( err ) {
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Profile[%s] failed to create sip request[%d] %p\n", profile->name, err, (void *) sipsess);
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Profile[%s] failed to create sip request[%d][%s] %p\n",
+						  profile->name, err, strerror(err), (void *) sipsess);
 		cause = SWITCH_CAUSE_CHANNEL_UNACCEPTABLE;
 		goto end;
 	}

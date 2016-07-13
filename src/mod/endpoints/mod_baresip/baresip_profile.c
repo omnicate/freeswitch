@@ -169,13 +169,8 @@ static switch_status_t baresip_send_media_indication(switch_core_session_t *sess
 		return SWITCH_STATUS_FALSE;
 	}
 
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Baresip channel media_indication sipsess_listener %d\n", (int) mem_nrefs(tech_pvt->sipsess_listener));
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Baresip channel media_indication sipsess %d\n", (int) mem_nrefs(tech_pvt->sipsess));	
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Baresip channel media_indication invite %d\n", (int) mem_nrefs(tech_pvt->invite));	
 	return SWITCH_STATUS_SUCCESS;
-	
 }
-
 
 switch_status_t baresip_profile_messagehook (switch_core_session_t *session, switch_core_session_message_t *msg)
 {
@@ -212,11 +207,13 @@ static bool baresip_profile_process_invite(baresip_profile_t *profile, const str
 	switch_event_create_plain(&var_event, SWITCH_EVENT_CHANNEL_DATA);
 	switch_event_add_header_string(var_event, SWITCH_STACK_BOTTOM, "origination_uuid", call_id);
 
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "\n\nProfile[%s] recieved new call with call id of [%s]\n\n\n", profile->name, call_id);
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Profile[%s] recieved new call with call id of [%s]\n", profile->name, call_id);
 
 	if ((reason = switch_core_session_outgoing_channel(NULL, var_event, "rtc",
 													   NULL, &session, NULL, SOF_NONE, &cancel_cause)) != SWITCH_CAUSE_SUCCESS) {
 		
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Profile[%s] Failed to create channel\n", profile->name);
+		goto err;
 	}
 
     channel = switch_core_session_get_channel(session);
@@ -239,11 +236,11 @@ static bool baresip_profile_process_invite(baresip_profile_t *profile, const str
 	//add these to profile
 	tech_pvt->mparams->timer_name =  "soft";
 	tech_pvt->mparams->local_network = "localnet.auto";
-		
 
 	switch_core_session_set_private_class(session, tech_pvt, SWITCH_PVT_SECONDARY);
 	
-	destination_extension = switch_mprintf("%.*s", msg->uri.user.l, msg->uri.user.p);
+	destination_extension = calloc(1, msg->uri.user.l + 1);
+	memcpy(destination_extension, msg->uri.user.p, msg->uri.user.l);
 
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Remote SDP\n%s\n", tech_pvt->r_sdp);
 
@@ -273,9 +270,10 @@ static bool baresip_profile_process_invite(baresip_profile_t *profile, const str
 
 	switch_channel_set_state(channel, CS_INIT);
 	*uuid = switch_core_session_get_uuid(session);
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Session pinvite %p tech_pvt %p [%s]\n", (void *) session, (void *) tech_pvt, *uuid);
-
 	return true;
+
+ err:
+	return false;
 }
 
 int baresip_profile_session_auth_handler(char **username, char **password, const char *realm, void *arg)
@@ -304,7 +302,7 @@ int baresip_profile_session_answer_handler(const struct sip_msg *msg, void *arg)
 	baresip_techpvt_t *tech_pvt = NULL;
 	char *uuid = arg;
 
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "session answer handler called for [%s] msg %d\n", (char *) arg, mem_nrefs((void *)msg));
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "session answer handler called for [%s]\n", (char *) arg);
 
 	session = switch_core_session_locate(uuid);
 	channel = switch_core_session_get_channel(session);
@@ -346,7 +344,8 @@ void baresip_profile_session_progress_handler(const struct sip_msg *msg, void *a
 			switch_channel_mark_pre_answered(channel);
 			break;
 		default:
-			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "session progress handler called for [%s] with unknown progress code[%d]\n", (char *) arg, msg->scode);
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "session progress handler called for [%s] with unknown progress code[%d]\n",
+							  (char *) arg, msg->scode);
 		}
 	}
 		
@@ -381,7 +380,7 @@ void baresip_profile_session_close_handler(int err, const struct sip_msg *msg, v
 	switch_channel_t *channel = NULL;
 	char *uuid = arg;
 
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "session close handler called for [%s] msg %d\n", uuid, mem_nrefs((void *)msg));
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "session close handler called for [%s]\n", uuid);
 
 	session = switch_core_session_locate(uuid);
 	channel = switch_core_session_get_channel(session);
@@ -389,9 +388,6 @@ void baresip_profile_session_close_handler(int err, const struct sip_msg *msg, v
 	tech_pvt = switch_core_session_get_private_class(session, SWITCH_PVT_SECONDARY);
 	switch_channel_hangup(channel, SWITCH_CAUSE_NORMAL_CLEARING);
 	switch_core_session_rwunlock(session);
-
-	//tech_pvt->invite = mem_deref((void *)tech_pvt->invite);
-	//	mem_deref((void *)msg);
 
 	if ( tech_pvt->sipsess ) {
 		tech_pvt->sipsess = mem_deref(tech_pvt->sipsess);
@@ -414,7 +410,7 @@ static void baresip_profile_sipsess_handler(const struct sip_msg *msg, void *arg
 		baresip_profile_process_invite(profile, msg, &uuid);
 	}
 
-	sip_reply(profile->sip, msg, 100, "Trying");
+	//	sip_reply(profile->sip, msg, 100, "Trying");
 
 	/* sipsess_accept has to send a message with a status code between 101 and 299. So for now, just send a 101. */
 	err = sipsess_accept(&sipsess,
@@ -446,18 +442,8 @@ static void baresip_profile_sipsess_handler(const struct sip_msg *msg, void *arg
 	tech_pvt->sipsess = sipsess;
 	tech_pvt->sipsess_listener = profile->sipsess_listener;
 
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Profile[%s] err[%d] failed to accept sip session[%p] %p %p\n",
-					  profile->name, err, (void *) session, (void *)tech_pvt, (void *) tech_pvt->sipsess);
-
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Session %p\n", (void *) session);
-
 	switch_core_session_thread_launch(session);
 	switch_core_session_rwunlock(session);
-
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Baresip channel session_handler sipsess_listener %d\n", 
-					  (int) mem_nrefs(tech_pvt->sipsess_listener));
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Baresip channel session_handler sipsess %d\n", (int) mem_nrefs(tech_pvt->sipsess));	
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Baresip channel session_handler invite %d\n", (int) mem_nrefs(tech_pvt->invite));	
 }
 
 /*
