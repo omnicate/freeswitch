@@ -127,16 +127,17 @@ static switch_status_t baresip_send_media_indication(switch_core_session_t *sess
 	if ( status < tech_pvt->media ) {
 		return SWITCH_STATUS_SUCCESS;
 	}
-	
+
 	if (status != 180) {
-		if (baresip_tech_media(tech_pvt, tech_pvt->r_sdp,  SDP_TYPE_REQUEST) != SWITCH_STATUS_SUCCESS) {
+		if (switch_channel_test_flag(tech_pvt->channel, CF_PROXY_MODE)) {
+			switch_core_media_absorb_sdp(session);
+		} else if (baresip_tech_media(tech_pvt, tech_pvt->r_sdp,  SDP_TYPE_REQUEST) != SWITCH_STATUS_SUCCESS) {
 			return SWITCH_STATUS_FALSE;
 		}
 
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Profile[%s] callid[%s] %d %s\n", tech_pvt->profile->name, tech_pvt->call_id, status, phrase);
 		sdp = tech_pvt->mparams->local_sdp_str;
 	}
-
 	
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "LOCAL SDP:\n%s\n", sdp);
 
@@ -176,6 +177,7 @@ switch_status_t baresip_profile_messagehook (switch_core_session_t *session, swi
 {
 	baresip_techpvt_t *tech_pvt = switch_core_session_get_private_class(session, SWITCH_PVT_SECONDARY);
 
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Profile[%s] message\n", tech_pvt->profile->name);
 	// TODO: May need to queue these into the mqueue commands. To prevent concurrent access to the worker thread tmrl(timer list).
 	switch(msg->message_id) {
 	case SWITCH_MESSAGE_INDICATE_ANSWER:
@@ -268,6 +270,8 @@ static bool baresip_profile_process_invite(baresip_profile_t *profile, const str
 		switch_channel_set_caller_profile(channel, caller_profile);
 	}
 
+	switch_channel_set_cap(tech_pvt->channel, CC_BYPASS_MEDIA);
+	
 	switch_channel_set_state(channel, CS_INIT);
 	*uuid = switch_core_session_get_uuid(session);
 	return true;
@@ -309,6 +313,21 @@ int baresip_profile_session_answer_handler(const struct sip_msg *msg, void *arg)
 	tech_pvt = switch_core_session_get_private_class(session, SWITCH_PVT_SECONDARY);
 
 	tech_pvt->r_sdp = switch_core_session_sprintf(session, "%.*s", mbuf_get_left(msg->mb), mbuf_buf(msg->mb));
+
+	if (switch_true(switch_channel_get_variable(channel, SWITCH_BYPASS_MEDIA_VARIABLE))) {
+		switch_core_session_t *other_session = NULL;
+		switch_channel_t *other_channel = NULL;
+
+		if (switch_core_session_get_partner(tech_pvt->session, &other_session) == SWITCH_STATUS_SUCCESS) {
+			other_channel = switch_core_session_get_channel(other_session);
+			switch_channel_pass_sdp(tech_pvt->channel, other_channel, tech_pvt->r_sdp);
+
+			switch_channel_set_flag(other_channel, CF_PROXY_MODE);
+			switch_core_session_queue_indication(other_session, SWITCH_MESSAGE_INDICATE_ANSWER);
+			switch_core_session_rwunlock(other_session);
+		}
+	}
+
 	baresip_tech_media(tech_pvt, tech_pvt->r_sdp,  SDP_TYPE_RESPONSE);
 	switch_channel_mark_answered(channel);
 	switch_core_media_activate_rtp(session);
@@ -383,6 +402,10 @@ void baresip_profile_session_close_handler(int err, const struct sip_msg *msg, v
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "session close handler called for [%s]\n", uuid);
 
 	session = switch_core_session_locate(uuid);
+	if ( !session ) {
+		return;
+	}
+
 	channel = switch_core_session_get_channel(session);
 
 	tech_pvt = switch_core_session_get_private_class(session, SWITCH_PVT_SECONDARY);

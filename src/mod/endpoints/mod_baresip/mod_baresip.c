@@ -92,6 +92,8 @@ static switch_status_t baresip_on_hangup(switch_core_session_t *session)
 {
 	baresip_techpvt_t *tech_pvt = switch_core_session_get_private_class(session, SWITCH_PVT_SECONDARY);
 
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Baresip channel hangup [%p]\n", (void *) tech_pvt->sipsess);
+
 	if ( tech_pvt->sipsess ) {
 		tech_pvt->sipsess = mem_deref((void *)tech_pvt->sipsess);
 	}
@@ -153,7 +155,6 @@ static switch_call_cause_t baresip_outgoing_channel(switch_core_session_t *sessi
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Creating channel from event:\n%s\n", str);
 	switch_safe_free(str);
 
-
 	if ((cause = switch_core_session_outgoing_channel(session, var_event, "rtc",
 												  outbound_profile, new_session, NULL, SOF_NONE, cancel_cause)) != SWITCH_CAUSE_SUCCESS) {
 		goto end;
@@ -192,12 +193,26 @@ static switch_call_cause_t baresip_outgoing_channel(switch_core_session_t *sessi
 	switch_channel_set_state(channel, CS_INIT);
 	uuid = switch_core_session_get_uuid(*new_session);
 
-	switch_core_media_prepare_codecs(*new_session, SWITCH_TRUE);
+	if (session) {
+		switch_channel_t *ochannel = switch_core_session_get_channel(session);
+		baresip_techpvt_t *otech_pvt = switch_core_session_get_private_class(session, SWITCH_PVT_SECONDARY);
+
+		if (switch_true(switch_channel_get_variable(ochannel, SWITCH_BYPASS_MEDIA_VARIABLE))) {
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "BYPASS_MEDIA ENABLED\n");
+			switch_channel_set_flag(channel, CF_PROXY_MODE);
+			switch_channel_set_flag(ochannel, CF_PROXY_MODE);
+			switch_channel_set_cap(channel, CC_BYPASS_MEDIA);
+
+			/* A-leg to B-leg copy of SDP, then B leg absorb it */
+			switch_channel_pass_sdp(otech_pvt->channel, channel, otech_pvt->r_sdp);
+			switch_core_media_absorb_sdp(*new_session);
+		} else {
+			switch_core_media_prepare_codecs(*new_session, SWITCH_TRUE);
+			switch_core_media_choose_ports(*new_session, SWITCH_TRUE, SWITCH_FALSE);
+			switch_core_media_gen_local_sdp(*new_session, SDP_TYPE_REQUEST, tech_pvt->mparams->extrtpip, 0, NULL, 0);
+		}
+	}
 	
-	switch_core_media_choose_ports(*new_session, SWITCH_TRUE, SWITCH_FALSE);
-
-	switch_core_media_gen_local_sdp(*new_session, SDP_TYPE_REQUEST, tech_pvt->mparams->extrtpip, 0, NULL, 0);
-
 	if (tech_pvt->mparams->local_sdp_str) {
 		sdp_mbuf = mbuf_alloc(2048);
 		mbuf_printf(sdp_mbuf, "%s", tech_pvt->mparams->local_sdp_str);
