@@ -1723,7 +1723,7 @@ static int ks_dht_store_entry_create(ks_pool_t *pool, struct bencode *msg, struc
 			goto err;
 		}
 
-		key_token = ben_dict_get_by_str(msg, "token");
+		key_token = ben_dict_get_by_str(key_args, "token");
 		if ( !key_token ) {
 			ks_log(KS_LOG_ERROR, "dht_store_entry requires an 'token' key in the message\n");
 			goto err;
@@ -1794,6 +1794,7 @@ static void ks_dht_store_prune(struct ks_dht_store_s *store, ks_time_t now)
 	return;
 }
 
+/* TODO: Look into using the ks_hash automatic destructor functionality. */
 static int ks_dht_store_create(ks_pool_t *pool, struct ks_dht_store_s **new_store)
 {
 	struct ks_dht_store_s *store = NULL;
@@ -1802,7 +1803,7 @@ static int ks_dht_store_create(ks_pool_t *pool, struct ks_dht_store_s **new_stor
 	store->next_expiring = 0;
 	store->pool = pool;
 
-	ks_hash_create(&store->hash, KS_HASH_MODE_DEFAULT, KS_HASH_FREE_BOTH | KS_HASH_FLAG_RWLOCK, pool);
+	ks_hash_create(&store->hash, KS_HASH_MODE_DEFAULT, KS_HASH_FLAG_RWLOCK, pool);
 
 	*new_store = store;
 	return 0;
@@ -3709,12 +3710,10 @@ int ks_dht_generate_mutable_storage_args(struct bencode *data, int64_t sequence,
 
 	buf_len = ben_encode2(buf, 1500, data);
 	
-	ks_log(KS_LOG_DEBUG, "Encoded data: %s\n", buf);
-	
-	ks_dht_store_entry_create(h->pool, data, &entry, life, 1);
-	ks_dht_store_insert(h->store, entry, h->now);
+	//	ks_dht_store_entry_create(h->pool, data, &entry, life, 1);
+	// ks_dht_store_insert(h->store, entry, h->now);
 	/* TODO: dht_search() announce of this hash */
-	
+	(void)entry;
 	return dht_send(h, buf, buf_len, 0, sa, salen);
 }
 
