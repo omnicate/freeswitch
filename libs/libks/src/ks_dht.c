@@ -280,13 +280,13 @@ struct ks_dht_store_entry_s {
 	ks_time_t expiration; /* When should 'my' message be automatically expired. If not set will be expired after 10 minutes */
 
 	/* Top level struct pointers. Will need to be freed */
-	char *bencode_message_raw;
-	cJSON *payload_raw;
+	struct bencode *bencode_message_raw;
+	struct bencode *payload_bencode;
+	cJSON *body;
 
 	/* Short cut accessor pointers. Do not free these. */
 	char *content_type;
-	char *bencode_payload;
-	cJSON *body;
+	char *payload_raw;
 
 	unsigned int serial;
 	ks_bool_t mine;
@@ -1659,31 +1659,126 @@ KS_DECLARE(void) dht_dump_tables(dht_handle_t *h, FILE *f)
     fflush(f);
 }
 
-static int ks_dht_store_entry_create(ks_pool_t *pool, struct bencode *msg, struct ks_dht_store_entry_s **new_entry, ks_time_t life)
-{
-	struct ks_dht_store_entry_s *entry = NULL;
-
-	entry = ks_pool_alloc(pool, sizeof(struct ks_dht_store_entry_s));
-	entry->pool = pool;
-	
-	/* TODO: Fill in create body */
-	(void) msg;
-	(void) life;
-
-	*new_entry = entry;
-	return 0;
-}
-
 static void ks_dht_store_entry_destroy(struct ks_dht_store_entry_s **old_entry)
 {
 	struct ks_dht_store_entry_s *entry = *old_entry;
 	ks_pool_t *pool = entry->pool;
 	*old_entry = NULL;
+
+	/* While setting these members to NULL is not required, defaulting to including them for easier debugging */
+	entry->key = NULL;
+	entry->content_type = NULL;
+	entry->payload_raw = NULL;
+	entry->pool = NULL;
+	
+	if ( entry->bencode_message_raw ) {
+		ben_free(entry->bencode_message_raw);
+		entry->bencode_message_raw = NULL;
+	}
+
+	if ( entry->payload_bencode ) {
+		ben_free(entry->payload_bencode);
+		entry->payload_bencode = NULL;
+	}
+
+	if ( entry->body ) {
+		cJSON_free(entry->body);
+		entry->body = NULL;
+	}
 	
 	ks_pool_free(pool, entry);	
 	return;
 }
 
+/* Entries can be created by a remote system 'pushing' a message to us, or the local system creating and sending the message. */
+
+static int ks_dht_store_entry_create(ks_pool_t *pool, struct bencode *msg, struct ks_dht_store_entry_s **new_entry, ks_time_t life, ks_bool_t mine)
+{
+	struct ks_dht_store_entry_s *entry = NULL;
+	ks_time_t now = ks_time_now_sec();
+
+	entry = ks_pool_alloc(pool, sizeof(struct ks_dht_store_entry_s));
+	entry->pool = pool;
+	entry->received = now;
+	entry->expiration = now + life;
+	entry->last_announce = 0; /* TODO: Instead we should announce this one, and set to now */
+	entry->serial = 1;
+	entry->mine = mine;
+
+	entry->bencode_message_raw = msg;
+	entry->payload_raw = NULL;
+
+	entry->content_type = NULL;
+	entry->bencode_payload = NULL;
+	entry->body = NULL;
+	
+	if ( msg ) {
+		struct bencode *key_args = ben_dict_get_by_str(msg, "a");
+		struct bencode *key_token = NULL;
+		struct bencode *key_v = NULL;
+		struct bencode *key_ct = NULL;
+
+		if ( !key_args ) {
+			ks_log(KS_LOG_ERROR, "dht_store_entry requires an 'a' key in the message\n");
+			goto err;
+		}
+
+		key_token = ben_dict_get_by_str(msg, "token");
+		if ( !key_token ) {
+			ks_log(KS_LOG_ERROR, "dht_store_entry requires an 'token' key in the message\n");
+			goto err;
+		}
+		entry->key = ben_str_val(key_token);		
+		
+		key_v = ben_dict_get_by_str(key_args, "v");
+		if ( !key_v ) {
+			ks_log(KS_LOG_ERROR, "dht_store_entry requires an 'v' key in the message\n");
+			goto err;
+		}
+
+		entry->payload_raw = ben_str_val(key_v);
+		entry->payload_bencode = ben_decode(entry->payload_raw, ben_str_len(key_v));
+		
+		/* 
+		   This is a custom key that SWITCHBLADE is adding to give the protocol decoder a hint as to the payload type. 
+		   If this key is not set, then we need to assume that the payload is binary buffer of a known length, likely not from SWITCHBLADE.
+		 */
+		key_ct = ben_dict_get_by_str(entry->payload_bencode, "ct");
+		if ( !key_ct ) {
+			ks_log(KS_LOG_DEBUG, "dht_store_entry without a 'ct' key to hint at payload content type. Legal, just not likely one of ours.\n");
+			goto done;
+		}
+
+		entry->content_type = ben_str_val(key_ct);
+		
+		if ( !ben_cmp_with_str(key_ct, "json") ) {
+			struct bencode *key_b = ben_dict_get_by_str(entry->payload_bencode, "b");
+			int buf_len = ben_str_len(key_b);
+			char *buf = NULL;
+
+			buf = calloc(1, buf_len);
+			memcpy(buf, ben_str_val(key_b), buf_len);
+
+			entry->body = cJSON_Parse(buf);
+			free(buf);
+			buf = NULL;
+
+			if ( !entry->body ) {
+				ks_log(KS_LOG_ERROR, "dht_store_entry with json payload failed to json parse. Someone sent and signed an invalid message.\n");
+				goto err;
+			}
+		}
+		
+	}
+	
+ done:
+	*new_entry = entry;
+	return 0;
+ err:
+	ks_dht_store_entry_destroy(&entry);
+	ben_free(msg);
+	return -1;	
+}
 
 static int ks_dht_store_insert(struct ks_dht_store_s *store, struct ks_dht_store_entry_s *entry, ks_time_t now)
 {
@@ -2190,6 +2285,7 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
 					ben_dict_set(sig, ben_blob("salt", 4), ben_blob(ben_str_val(salt), ben_str_len(salt)));
 				}
 
+				/* TODO: fix double reference here. Need to bencode duplicate these values, and then free sig when finished encoding it */
 				ben_dict_set(sig, ben_blob("seq", 3), ben_dict_get_by_str(key_args, "seq"));
 				ben_dict_set(sig, ben_blob("v", 1), ben_dict_get_by_str(key_args, "v"));
 
@@ -2207,7 +2303,7 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
 					ks_log(KS_LOG_DEBUG, "Valid message store signature.\n");
 				}
 
-				ks_dht_store_entry_create(h->pool, msg_ben, &entry, 600);
+				ks_dht_store_entry_create(h->pool, msg_ben, &entry, 600, 0);
 				ks_dht_store_insert(h->store, entry, h->now);
 			}
 			break;
@@ -3594,12 +3690,12 @@ int ks_dht_generate_mutable_storage_args(struct bencode *data, int64_t sequence,
 
 	
 	err = ks_dht_generate_mutable_storage_args(b_message, 1, 0,
-										 /*h->myid, 20, */ (unsigned char *)"asdfqwerty", 10,
-										 sk, pk,
-										 salt, salt_length,
-										 (unsigned char *)"asdf", 4,
-										 signature, &signature_length,
-										 &args);
+											   h->myid, 20,
+											   sk, pk,
+											   salt, salt_length,
+											   (unsigned char *) token, 40
+											   signature, &signature_length,
+											   &args);
 										 
 	if ( err ) {
 		return err;
@@ -3615,7 +3711,7 @@ int ks_dht_generate_mutable_storage_args(struct bencode *data, int64_t sequence,
 	
 	ks_log(KS_LOG_DEBUG, "Encoded data: %s\n", buf);
 	
-	ks_dht_store_entry_create(h->pool, data, &entry, life);
+	ks_dht_store_entry_create(h->pool, data, &entry, life, 1);
 	ks_dht_store_insert(h->store, entry, h->now);
 	/* TODO: dht_search() announce of this hash */
 	
