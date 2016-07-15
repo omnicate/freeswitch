@@ -273,7 +273,7 @@ static const unsigned char v4prefix[16] = {
 #endif
 
 struct ks_dht_store_entry_s {
-    char *key;
+    const char *key;
 
 	ks_time_t received; /* recieved timestamp */
 	ks_time_t last_announce;
@@ -285,8 +285,8 @@ struct ks_dht_store_entry_s {
 	cJSON *body;
 
 	/* Short cut accessor pointers. Do not free these. */
-	char *content_type;
-	char *payload_raw;
+	const char *content_type;
+	const char *payload_raw;
 
 	unsigned int serial;
 	ks_bool_t mine;
@@ -1682,7 +1682,7 @@ static void ks_dht_store_entry_destroy(struct ks_dht_store_entry_s **old_entry)
 	}
 
 	if ( entry->body ) {
-		cJSON_free(entry->body);
+		cJSON_Delete(entry->body);
 		entry->body = NULL;
 	}
 	
@@ -1709,7 +1709,7 @@ static int ks_dht_store_entry_create(ks_pool_t *pool, struct bencode *msg, struc
 	entry->payload_raw = NULL;
 
 	entry->content_type = NULL;
-	entry->bencode_payload = NULL;
+	entry->payload_bencode = NULL;
 	entry->body = NULL;
 	
 	if ( msg ) {
@@ -3693,7 +3693,7 @@ int ks_dht_generate_mutable_storage_args(struct bencode *data, int64_t sequence,
 											   h->myid, 20,
 											   sk, pk,
 											   salt, salt_length,
-											   (unsigned char *) token, 40
+											   (unsigned char *) target, 40,
 											   signature, &signature_length,
 											   &args);
 										 
