@@ -2161,16 +2161,14 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
 		case DHT_MSG_STORE_PUT:
 			if ( buf ) {
 				struct ks_dht_store_entry_s *entry = NULL;
-				struct bencode *bencode_a = ben_dict_get_by_str(msg_ben, "a");
 				struct bencode *sig = NULL, *salt = NULL;
 				struct bencode *sig_ben = NULL, *pk_ben = NULL;
 				unsigned char *data_sig = NULL;
-				const char *sig_hex = NULL, *pk_hex = NULL;
-				unsigned char sig_bin[crypto_sign_BYTES], pk_bin[crypto_sign_PUBLICKEYBYTES];
-				size_t data_sig_len = 0, sig_len = 0, pk_len = 0;
+				const char *sig_binary = NULL, *pk_binary = NULL;
+				size_t data_sig_len = 0;
 
 				/* Handle checking callback handler, and response */
-				if ( !bencode_a ) {
+				if ( !key_args ) {
 					ks_log(KS_LOG_DEBUG, "Failed to locate 'a' field in message\n");
 					goto dontread;
 				} else {
@@ -2179,47 +2177,30 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
 
 				ks_log(KS_LOG_DEBUG, "Received bencode store PUT: \n\n%s\n", ben_print(msg_ben));
 
-				sig_ben = ben_dict_get_by_str(bencode_a, "sig");
-				sig_hex = ben_str_val(sig_ben);
-				if ( !sig_hex ) {
-					ks_log(KS_LOG_DEBUG, "Missing signature. Unable to verify message authentication.\n");
-					goto dontread;
-				}
-				sodium_hex2bin(sig_bin, crypto_sign_BYTES, sig_hex, ben_str_len(sig_ben), ":", &sig_len, NULL);
-				ks_log(KS_LOG_DEBUG, "signature [%s] %d\n", sig_hex, sig_len);
+				sig_ben = ben_dict_get_by_str(key_args, "sig");
+				sig_binary = ben_str_val(sig_ben);
 				
-				pk_ben = ben_dict_get_by_str(bencode_a, "k");
-				pk_hex = ben_str_val(pk_ben);
-				if ( !pk_hex ) {
-					ks_log(KS_LOG_DEBUG, "Missing public key. Unable to validate message without it.\n");
-					goto dontread;
-				}
-				sodium_hex2bin(pk_bin, crypto_sign_PUBLICKEYBYTES, pk_hex, ben_str_len(pk_ben), ":", &pk_len, NULL);
-				ks_log(KS_LOG_DEBUG, "public key [%s] %d\n", pk_hex, pk_len);
+				pk_ben = ben_dict_get_by_str(key_args, "k");
+				pk_binary = ben_str_val(pk_ben);
 				
 				sig = ben_dict();
 
-				salt = ben_dict_get_by_str(bencode_a, "salt");
+				salt = ben_dict_get_by_str(key_args, "salt");
 				if ( salt ) {
-					ben_dict_set(sig, ben_blob("salt", 4), salt); /* May need to be dup'ed to avoid double reference */
+					ben_dict_set(sig, ben_blob("salt", 4), ben_blob(ben_str_val(salt), ben_str_len(salt)));
 				}
 
-				ben_dict_set(sig, ben_blob("seq", 3), ben_dict_get_by_str(bencode_a, "seq"));
-				ben_dict_set(sig, ben_blob("v", 1), ben_dict_get_by_str(bencode_a, "v"));
+				ben_dict_set(sig, ben_blob("seq", 3), ben_dict_get_by_str(key_args, "seq"));
+				ben_dict_set(sig, ben_blob("v", 1), ben_dict_get_by_str(key_args, "v"));
 
 				data_sig = (unsigned char *) ben_encode(&data_sig_len, sig);
-				ks_log(KS_LOG_DEBUG, "Encoded data [%.*s] %d\n", data_sig_len, data_sig, data_sig_len);
-				if ( 1) {
-					unsigned char *tmp = ben_encode(&pk_len, ben_dict_get_by_str(bencode_a, "v"));
-					ks_log(KS_LOG_DEBUG, "Encoded data v [%.*s]\n", pk_len, tmp); 
-				}
 
 				if ( !data_sig ) {
 					ks_log(KS_LOG_DEBUG, "Failed to encode message for signature validation\n");
 					goto dontread;					
 				}
 
-				if (crypto_sign_verify_detached(sig_bin, data_sig, data_sig_len, pk_bin) != 0) {
+				if (crypto_sign_verify_detached((unsigned char *)sig_binary, data_sig, data_sig_len, (unsigned char *) pk_binary) != 0) {
 					ks_log(KS_LOG_DEBUG, "Signature failed to verify. Corrupted or malicious data suspected!\n");
 					goto dontread;										
 				} else {
@@ -3477,7 +3458,6 @@ int ks_dht_generate_mutable_storage_args(struct bencode *data, int64_t sequence,
 										 struct bencode **arguments)
 {
 	struct bencode *arg = NULL, *sig = NULL;
-	char pk_hex[65], sig_hex[129];
 	unsigned char *encoded_message = NULL, *encoded_data = NULL;
 	size_t encoded_message_size = 0, encoded_data_size = 0;
 	int err = 0;
@@ -3540,16 +3520,14 @@ int ks_dht_generate_mutable_storage_args(struct bencode *data, int64_t sequence,
 	}
 
 	ben_dict_set(arg, ben_blob("id", 2), ben_blob(id, id_len));
-	ben_dict_set(arg, ben_blob("k", 1), ben_blob(sodium_bin2hex(pk_hex, 64, pk, 32), 64)); /* All ed25519 public keys are 32 bytes */
-
-	ks_log(KS_LOG_DEBUG, "Public Key [%.*s]\n", 64, pk_hex);
+	ben_dict_set(arg, ben_blob("k", 1), ben_blob(pk, 32)); /* All ed25519 public keys are 32 bytes */
 
 	if ( salt ) {
 		ben_dict_set(arg, ben_blob("salt", 4), ben_blob(salt, salt_length));
 	}
 	
 	ben_dict_set(arg, ben_blob("seq", 3), ben_int(sequence));
-	ben_dict_set(arg, ben_blob("sig", 3), ben_blob(sodium_bin2hex(sig_hex, 128, signature, (size_t) *signature_length), 128));
+	ben_dict_set(arg, ben_blob("sig", 3), ben_blob(signature, (size_t) *signature_length));
 	ben_dict_set(arg, ben_blob("token", 5), ben_blob(token, token_length));
 	ben_dict_set(arg, ben_blob("v", 1), ben_blob(encoded_data, encoded_data_size));
 
