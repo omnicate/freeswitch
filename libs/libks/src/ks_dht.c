@@ -2504,8 +2504,6 @@ static int dht_send(dht_handle_t *h, const void *buf, size_t len, int flags, con
         abort();
 	}
 
-	ks_log(KS_LOG_DEBUG, "Sending %d [%.*s]\n", len, len, buf);
-
     if (node_blacklisted(h, sa, salen)) {
         ks_log(KS_LOG_DEBUG, "Attempting to send to blacklisted node.\n");
         errno = EPERM;
@@ -2546,7 +2544,6 @@ int send_ping(dht_handle_t *h, const struct sockaddr *sa, int salen, const unsig
 	i = ben_encode2(buf, 512, bencode_p);
 	ben_free(bencode_p); /* This SHOULD free the bencode_a_p as well */
 
-	ks_log(KS_LOG_DEBUG, "Encoded PING %d: %.*s\n\n", i, i, buf);
     return dht_send(h, buf, i, 0, sa, salen);
 }
 
@@ -2604,7 +2601,6 @@ int send_find_node(dht_handle_t *h, const struct sockaddr *sa, int salen,
 	i = ben_encode2(buf, 512, bencode_p);
 	ben_free(bencode_p); /* This SHOULD free the bencode_a_p as well */
 
-	ks_log(KS_LOG_DEBUG, "Encoded FIND_NODE: %s\n\n", buf);
     return dht_send(h, buf, i, confirm ? MSG_CONFIRM : 0, sa, salen);
 }
 
@@ -2662,7 +2658,6 @@ int send_nodes_peers(dht_handle_t *h, const struct sockaddr *sa, int salen,
 	i = ben_encode2(buf, 512, bencode_p);
 	ben_free(bencode_p); /* This SHOULD free the bencode_a_p as well */
 	
-	ks_log(KS_LOG_DEBUG, "Encoded FIND_NODE: %s\n\n", buf);
 	return dht_send(h, buf, i, 0, sa, salen);
 }
 
@@ -3005,8 +3000,6 @@ static dht_msg_type_t parse_message(struct bencode *bencode_p,
 						type = DHT_MSG_PING;
 						goto done;
 					} else if (!ben_cmp_with_str(b_query, "find_node")) {
-						struct bencode *b_target = key_args ? ben_dict_get_by_str( key_args, "target") : NULL;
-						const char *target = b_target ? ben_str_val(b_target) : NULL;
 						/*
 						  {'a': {
 						         'id': 'T\x1cq\x7f\xa9^\xf2\x97S\xceE\xad\xc9S\x9b\xa1\x1cCX\x8d',
@@ -3018,7 +3011,6 @@ static dht_msg_type_t parse_message(struct bencode *bencode_p,
 						   'y': 'q'
 						  }
 						*/
-						ks_log(KS_LOG_DEBUG, "find_node query recieved from client with id [%s] for target [%s]\n", id_return, target);
 						type = DHT_MSG_FIND_NODE;
 						goto done;
 					} else if (!ben_cmp_with_str(b_query, "put")) {
