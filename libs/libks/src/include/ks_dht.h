@@ -56,7 +56,7 @@ void dht_hash(void *hash_return, int hash_size, const void *v1, int len1, const 
 int dht_random_bytes(void *buf, size_t size);
 
 KS_DECLARE(int) ks_dht_send_message_mutable(dht_handle_t *h, unsigned char *sk, unsigned char *pk, const struct sockaddr *sa, int salen,
-											char *message_id, int sequence, char *message);
+											char *message_id, int sequence, char *message, ks_time_t life);
 
 KS_END_EXTERN_C
 

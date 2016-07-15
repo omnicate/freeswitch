@@ -272,6 +272,33 @@ static const unsigned char v4prefix[16] = {
 #define DHT_MAX_BLACKLISTED 10
 #endif
 
+struct ks_dht_store_entry_s {
+    char *key;
+
+	ks_time_t received; /* recieved timestamp */
+	ks_time_t last_announce;
+	ks_time_t expiration; /* When should 'my' message be automatically expired. If not set will be expired after 10 minutes */
+
+	/* Top level struct pointers. Will need to be freed */
+	char *bencode_message_raw;
+	cJSON *payload_raw;
+
+	/* Short cut accessor pointers. Do not free these. */
+	char *content_type;
+	char *bencode_payload;
+	cJSON *body;
+
+	unsigned int serial;
+	ks_bool_t mine;
+	ks_pool_t *pool;
+};
+
+struct ks_dht_store_s {
+    ks_time_t next_expiring;
+	ks_hash_t *hash;
+	ks_pool_t *pool;
+};
+
 struct dht_handle_s {
 	int dht_socket;
 	int dht_socket6;
@@ -304,6 +331,9 @@ struct dht_handle_s {
 
 	time_t token_bucket_time;
 	int token_bucket_tokens;
+
+	ks_pool_t *pool;
+	struct ks_dht_store_s *store;
 };
 
 static unsigned char *debug_printable(const unsigned char *buf, unsigned char *out, int buflen)
@@ -1629,6 +1659,86 @@ KS_DECLARE(void) dht_dump_tables(dht_handle_t *h, FILE *f)
     fflush(f);
 }
 
+static int ks_dht_store_entry_create(ks_pool_t *pool, struct bencode *msg, struct ks_dht_store_entry_s **new_entry, ks_time_t life)
+{
+	struct ks_dht_store_entry_s *entry = NULL;
+
+	entry = ks_pool_alloc(pool, sizeof(struct ks_dht_store_entry_s));
+	entry->pool = pool;
+	
+	/* TODO: Fill in create body */
+	(void) msg;
+	(void) life;
+
+	*new_entry = entry;
+	return 0;
+}
+
+static void ks_dht_store_entry_destroy(struct ks_dht_store_entry_s **old_entry)
+{
+	struct ks_dht_store_entry_s *entry = *old_entry;
+	ks_pool_t *pool = entry->pool;
+	*old_entry = NULL;
+	
+	ks_pool_free(pool, entry);	
+	return;
+}
+
+
+static int ks_dht_store_insert(struct ks_dht_store_s *store, struct ks_dht_store_entry_s *entry, ks_time_t now)
+{
+	(void) store;
+	(void) entry;
+	(void) now;
+	return 0;
+}
+static void ks_dht_store_prune(struct ks_dht_store_s *store, ks_time_t now)
+{
+	(void) store;
+	(void) now;
+	return;
+}
+
+static int ks_dht_store_create(ks_pool_t *pool, struct ks_dht_store_s **new_store)
+{
+	struct ks_dht_store_s *store = NULL;
+
+	store = ks_pool_alloc(pool, sizeof(struct ks_dht_store_s));
+	store->next_expiring = 0;
+	store->pool = pool;
+
+	ks_hash_create(&store->hash, KS_HASH_MODE_DEFAULT, KS_HASH_FREE_BOTH | KS_HASH_FLAG_RWLOCK, pool);
+
+	*new_store = store;
+	return 0;
+}
+
+static void ks_dht_store_destroy(struct ks_dht_store_s **old_store)
+{
+	struct ks_dht_store_s *store = *old_store;
+	ks_hash_iterator_t *itt = NULL;
+	ks_pool_t *pool = store->pool;
+	*old_store = NULL;
+
+	ks_hash_write_lock(store->hash);
+	for (itt = ks_hash_first(store->hash, KS_UNLOCKED); itt; itt = ks_hash_next(&itt)) {
+		const void *key = NULL;
+		struct ks_dht_store_entry_s *val = NULL;
+
+		ks_hash_this(itt, &key, NULL, (void **) &val);
+		ks_hash_remove(store->hash, (char *)key);
+
+		ks_dht_store_entry_destroy(&val);
+	}
+	ks_hash_write_unlock(store->hash);
+
+	ks_hash_destroy(&store->hash);
+
+	ks_pool_free(pool, store);
+	
+	return;
+}
+
 KS_DECLARE(int) dht_init(dht_handle_t **handle, int s, int s6, const unsigned char *id, const unsigned char *v)
 {
     int rc;
@@ -1704,6 +1814,9 @@ KS_DECLARE(int) dht_init(dht_handle_t **handle, int s, int s6, const unsigned ch
     expire_buckets(h, h->buckets);
     expire_buckets(h, h->buckets6);
 
+	ks_pool_open(&h->pool);
+	ks_dht_store_create(h->pool, &h->store);
+
     return 1;
 
  fail:
@@ -1762,6 +1875,9 @@ KS_DECLARE(int) dht_uninit(dht_handle_t **handle)
         free(sr);
     }
 
+	ks_dht_store_destroy(&h->store);
+	ks_pool_close(&h->pool);
+	
 	free(h);
     return 1;
 }
@@ -2044,6 +2160,7 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
         switch(message) {
 		case DHT_MSG_STORE_PUT:
 			if ( buf ) {
+				struct ks_dht_store_entry_s *entry = NULL;
 				struct bencode *bencode_a = ben_dict_get_by_str(msg_ben, "a");
 				struct bencode *sig = NULL, *salt = NULL;
 				struct bencode *sig_ben = NULL, *pk_ben = NULL;
@@ -2108,7 +2225,9 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
 				} else {
 					ks_log(KS_LOG_DEBUG, "Valid message store signature.\n");
 				}
-			
+
+				ks_dht_store_entry_create(h->pool, msg_ben, &entry, 600);
+				ks_dht_store_insert(h->store, entry, h->now);
 			}
 			break;
 		case DHT_MSG_INVALID:
@@ -2370,6 +2489,8 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
 		}
     }
 	free(logmsg);
+
+	ks_dht_store_prune(h->store, h->now);
 
     return 1;
 }
@@ -3458,7 +3579,8 @@ int ks_dht_calculate_mutable_storage_target(unsigned char *pk, unsigned char *sa
 	return 0;
 }
 
-KS_DECLARE(int) ks_dht_send_message_mutable(dht_handle_t *h, unsigned char *sk, unsigned char *pk, const struct sockaddr *sa, int salen, char *message_id, int sequence, char *message)
+KS_DECLARE(int) ks_dht_send_message_mutable(dht_handle_t *h, unsigned char *sk, unsigned char *pk, const struct sockaddr *sa, int salen,
+											char *message_id, int sequence, char *message, ks_time_t life)
 {
 	unsigned char target[40], signature[crypto_sign_BYTES];
 	unsigned long long signature_length = crypto_sign_BYTES;
@@ -3466,11 +3588,18 @@ KS_DECLARE(int) ks_dht_send_message_mutable(dht_handle_t *h, unsigned char *sk, 
 	unsigned char tid[4];
 	unsigned char *salt = (unsigned char *)message_id;
 	int salt_length = strlen(message_id);
+	struct ks_dht_store_entry_s *entry = NULL;
 	struct bencode *b_message = ben_blob(message, message_length);
 	struct bencode *args = NULL, *data = NULL;
     char buf[1500];
 	size_t buf_len = 0;
 	int err = 0;
+	h->now = ks_time_now_sec();
+
+	if ( !life ) {
+		/* Default to now plus 10 minutes */
+		life = 600;
+	}
 
 	make_tid(tid, "mm", 0);
 	
@@ -3508,8 +3637,9 @@ int ks_dht_generate_mutable_storage_args(struct bencode *data, int64_t sequence,
 	
 	ks_log(KS_LOG_DEBUG, "Encoded data: %s\n", buf);
 	
-	ben_free(b_message);
-	ben_free(args);
+	ks_dht_store_entry_create(h->pool, data, &entry, life);
+	ks_dht_store_insert(h->store, entry, h->now);
+	/* TODO: dht_search() announce of this hash */
 	
 	return dht_send(h, buf, buf_len, 0, sa, salen);
 }

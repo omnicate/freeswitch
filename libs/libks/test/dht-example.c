@@ -342,7 +342,7 @@ main(int argc, char **argv)
     }
 
     /* Init the dht.  This sets the socket into non-blocking mode. */
-    rc = dht_init(&h, globals.s, globals.s6, myid, (unsigned char*)"JC\0\0");
+    rc = dht_init(&h, globals.s, globals.s6, myid, (unsigned char*)"LIBKS");
     if(rc < 0) {
         perror("dht_init");
         exit(1);
@@ -424,7 +424,7 @@ main(int argc, char **argv)
 			  
 			  ks_dht_send_message_mutable(h, alice_secretkey, alice_publickey,
 						      (struct sockaddr*)&bootstrap_nodes[0], sizeof(bootstrap_nodes[0]),
-						      message_id, 1, message);
+						      message_id, 1, message, 600);
 			  free(input);
 			} else if (!strncmp(line, "message_immutable", 15)) {
 			  /* usage: message_immutable [identity key] */
