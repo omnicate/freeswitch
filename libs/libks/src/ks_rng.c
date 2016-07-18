@@ -18,6 +18,7 @@
  */
 
 #include "ks.h"
+#include "sodium.h"
 #include <aes.h>
 #include <sha2.h>
 
@@ -70,6 +71,7 @@ KS_DECLARE(char *) ks_uuid_str(ks_pool_t *pool, uuid_t *uuid)
 KS_DECLARE(ks_status_t) ks_rng_init(void)
 {
 	if (!initialized) {
+		randombytes_random();
 		ks_aes_init();
 		ks_mutex_create(&rng_mutex, KS_MUTEX_FLAG_DEFAULT, ks_global_pool());
 #ifdef __WINDOWS__
@@ -168,6 +170,14 @@ KS_DECLARE(size_t) ks_rng_add_entropy(const uint8_t *buffer, size_t length)
 }
 
 KS_DECLARE(size_t) ks_rng_get_data(uint8_t* buffer, size_t length) {
+	randombytes_buf(buffer, length);
+	return length;
+}
+
+
+#if 0
+
+KS_DECLARE(size_t) ks_rng_get_data(uint8_t* buffer, size_t length) {
 
 	aes_encrypt_ctx cx[1];
     sha512_ctx random_context;
@@ -221,6 +231,8 @@ KS_DECLARE(size_t) ks_rng_get_data(uint8_t* buffer, size_t length) {
 
     return generated;
 }
+
+#endif
 
 /* For Emacs:
  * Local Variables:

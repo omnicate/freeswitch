@@ -1876,7 +1876,12 @@ KS_DECLARE(int) dht_init(dht_handle_t **handle, int s, int s6, const unsigned ch
 		}
     }
 
-    memcpy(h->myid, id, 20);
+	if (!id) {
+		randombytes_buf(h->myid, 20);
+	} else {
+		memcpy(h->myid, id, 20);
+	}
+
     if (v) {
         memcpy(h->my_v, "1:v4:", 5);
         memcpy(h->my_v + 5, v, 4);

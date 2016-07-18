@@ -17,7 +17,7 @@
 #include <netdb.h>
 #include <sys/signal.h>
 
-#include "ks_dht.h"
+#include "ks.h"
 #include "histedit.h"
 #include "sodium.h"
 
@@ -121,10 +121,9 @@ int
 main(int argc, char **argv)
 {
   dht_globals_t globals = {0};
-    int i, rc, fd;
-    int have_id = 0;
-    unsigned char myid[20];
-    char *id_file = "dht-example.id";
+    int i, rc;
+    //int have_id = 0;
+    //char *id_file = "dht-example.id";
     int opt;
     int ipv4 = 1, ipv6 = 1;
     struct sockaddr_in sin;
@@ -187,58 +186,13 @@ main(int argc, char **argv)
             goto usage;
         }
             break;
-        case 'i':
-            id_file = optarg;
+			//case 'i':
+            //id_file = optarg;
             break;
         default:
             goto usage;
         }
     }
-
-    /* Ids need to be distributed evenly, so you cannot just use your
-       bittorrent id.  Either generate it randomly, or take the SHA-1 of
-       something. */
-    fd = open(id_file, O_RDONLY);
-    if(fd >= 0) {
-        rc = read(fd, myid, 20);
-        if(rc == 20)
-            have_id = 1;
-        close(fd);
-    }
-    
-    fd = open("/dev/urandom", O_RDONLY);
-    if(fd < 0) {
-        perror("open(random)");
-        exit(1);
-    }
-
-    if(!have_id) {
-        int ofd;
-
-        rc = read(fd, myid, 20);
-        if(rc < 0) {
-            perror("read(random)");
-            exit(1);
-        }
-        have_id = 1;
-        close(fd);
-
-        ofd = open(id_file, O_WRONLY | O_CREAT | O_TRUNC, 0666);
-        if(ofd >= 0) {
-            rc = write(ofd, myid, 20);
-            if(rc < 20)
-                unlink(id_file);
-            close(ofd);
-        }
-    }
-
-    {
-        unsigned seed;
-        read(fd, &seed, sizeof(seed));
-        srandom(seed);
-    }
-
-    close(fd);
 
     if(argc < 2)
         goto usage;
@@ -342,7 +296,7 @@ main(int argc, char **argv)
     }
 
     /* Init the dht.  This sets the socket into non-blocking mode. */
-    rc = dht_init(&h, globals.s, globals.s6, myid, (unsigned char*)"LIBKS");
+    rc = dht_init(&h, globals.s, globals.s6, NULL, (unsigned char*)"LIBKS");
     if(rc < 0) {
         perror("dht_init");
         exit(1);

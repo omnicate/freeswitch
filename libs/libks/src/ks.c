@@ -45,7 +45,7 @@ KS_DECLARE(ks_status_t) ks_init(void)
 
 	ks_ssl_init_ssl_locks();
 	ks_global_pool();
-	//ks_rng_init();
+	ks_rng_init();
 	
 	return KS_STATUS_SUCCESS;
 }
