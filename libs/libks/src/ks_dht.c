@@ -1738,6 +1738,18 @@ static int ks_dht_store_entry_create(ks_pool_t *pool, struct bencode *msg, struc
 
 		entry->payload_raw = ben_str_val(key_v);
 		entry->payload_bencode = ben_decode(entry->payload_raw, ben_str_len(key_v));
+
+		if ( !entry->payload_bencode ) {
+			ks_log(KS_LOG_WARNING, "dht_store_entry payload failed to parse as bencode object\n");
+			goto err;
+		}
+
+		ks_log(KS_LOG_DEBUG, "Payload: %s", ben_print(entry->payload_bencode));
+
+		if ( ! ben_is_dict( entry->payload_bencode ) ) {
+			ks_log(KS_LOG_DEBUG, "dht_store_entry is not a bencode dict. Legal, just not likely one of ours.\n");
+			goto done;			
+		}
 		
 		/* 
 		   This is a custom key that SWITCHBLADE is adding to give the protocol decoder a hint as to the payload type. 
