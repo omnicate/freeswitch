@@ -41,7 +41,7 @@ typedef struct dht_handle_s dht_handle_t;
 
 KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, const struct sockaddr *from, int fromlen,
 				 time_t *tosleep, dht_callback *callback, void *closure);
-KS_DECLARE(int) dht_init(dht_handle_t **h, int s, int s6, const unsigned char *id, const unsigned char *v);
+KS_DECLARE(int) dht_init(dht_handle_t **h, int s, int s6, const unsigned char *id, const unsigned char *v, unsigned int port);
 KS_DECLARE(int) dht_insert_node(dht_handle_t *h, const unsigned char *id, struct sockaddr *sa, int salen);
 KS_DECLARE(int) dht_ping_node(dht_handle_t *h, struct sockaddr *sa, int salen);
 KS_DECLARE(int) dht_search(dht_handle_t *h, const unsigned char *id, int port, int af, dht_callback *callback, void *closure);
@@ -58,6 +58,8 @@ int dht_random_bytes(void *buf, size_t size);
 KS_DECLARE(int) ks_dht_send_message_mutable(dht_handle_t *h, unsigned char *sk, unsigned char *pk, const struct sockaddr *sa, int salen,
 											char *message_id, int sequence, char *message, ks_time_t life);
 
+KS_DECLARE(int) ks_dht_send_message_mutable_cjson(dht_handle_t *h, unsigned char *sk, unsigned char *pk, const struct sockaddr *sa, int salen,
+												  char *message_id, int sequence, cJSON *message, ks_time_t life);
 KS_END_EXTERN_C
 
 #endif /* _KS_DHT_H */

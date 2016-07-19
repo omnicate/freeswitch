@@ -312,6 +312,7 @@ struct dht_handle_s {
 	unsigned char my_v[9];
 	unsigned char secret[8];
 	unsigned char oldsecret[8];
+	unsigned int port;
 
 	struct bucket *buckets;
 	struct bucket *buckets6;
@@ -1717,6 +1718,7 @@ static int ks_dht_store_entry_create(ks_pool_t *pool, struct bencode *msg, struc
 		struct bencode *key_token = NULL;
 		struct bencode *key_v = NULL;
 		struct bencode *key_ct = NULL;
+		struct bencode *tmp_v = NULL;
 
 		if ( !key_args ) {
 			ks_log(KS_LOG_ERROR, "dht_store_entry requires an 'a' key in the message\n");
@@ -1736,15 +1738,17 @@ static int ks_dht_store_entry_create(ks_pool_t *pool, struct bencode *msg, struc
 			goto err;
 		}
 
-		entry->payload_raw = ben_str_val(key_v);
-		entry->payload_bencode = ben_decode(entry->payload_raw, ben_str_len(key_v));
+		tmp_v = ben_decode(ben_str_val(key_v), ben_str_len(key_v));
+
+		entry->payload_raw = ben_str_val(tmp_v);
+		entry->payload_bencode = ben_decode(entry->payload_raw, ben_str_len(tmp_v));
 
 		if ( !entry->payload_bencode ) {
 			ks_log(KS_LOG_WARNING, "dht_store_entry payload failed to parse as bencode object\n");
 			goto err;
 		}
 
-		ks_log(KS_LOG_DEBUG, "Payload: %s", ben_print(entry->payload_bencode));
+		ks_log(KS_LOG_DEBUG, "Payload: %s\n", ben_print(entry->payload_bencode));
 
 		if ( ! ben_is_dict( entry->payload_bencode ) ) {
 			ks_log(KS_LOG_DEBUG, "dht_store_entry is not a bencode dict. Legal, just not likely one of ours.\n");
@@ -1847,7 +1851,7 @@ static void ks_dht_store_destroy(struct ks_dht_store_s **old_store)
 	return;
 }
 
-KS_DECLARE(int) dht_init(dht_handle_t **handle, int s, int s6, const unsigned char *id, const unsigned char *v)
+KS_DECLARE(int) dht_init(dht_handle_t **handle, int s, int s6, const unsigned char *id, const unsigned char *v, unsigned int port)
 {
     int rc;
 	dht_handle_t *h;
@@ -1855,6 +1859,7 @@ KS_DECLARE(int) dht_init(dht_handle_t **handle, int s, int s6, const unsigned ch
 	*handle = h = calloc(sizeof(dht_handle_t), 1);
     h->searches = NULL;
     h->numsearches = 0;
+	h->port = port;
 
     h->storage = NULL;
     h->numstorage = 0;
@@ -3671,6 +3676,28 @@ int ks_dht_calculate_mutable_storage_target(unsigned char *pk, unsigned char *sa
 	return 0;
 }
 
+KS_DECLARE(int) ks_dht_send_message_mutable_cjson(dht_handle_t *h, unsigned char *sk, unsigned char *pk, const struct sockaddr *sa, int salen,
+											char *message_id, int sequence, cJSON *message, ks_time_t life)
+{
+	struct bencode *body = ben_dict();
+	char *output = NULL;
+	char *json = cJSON_PrintUnformatted(message);
+	int err = 0;
+	size_t output_len = 0;
+
+	ben_dict_set(body, ben_blob("ct", 2), ben_blob("json", 4));
+	ben_dict_set(body, ben_blob("b", 1), ben_blob(json, strlen(json)));
+
+	output = (char *)ben_encode(&output_len, body);
+
+	err = ks_dht_send_message_mutable(h, sk, pk, sa, salen, message_id, sequence, output, life);
+	free(json);
+	free(output);
+	ben_free(body);
+
+	return err;
+}
+
 KS_DECLARE(int) ks_dht_send_message_mutable(dht_handle_t *h, unsigned char *sk, unsigned char *pk, const struct sockaddr *sa, int salen,
 											char *message_id, int sequence, char *message, ks_time_t life)
 {
@@ -3727,10 +3754,12 @@ int ks_dht_generate_mutable_storage_args(struct bencode *data, int64_t sequence,
 
 	buf_len = ben_encode2(buf, 1500, data);
 	
-	//	ks_dht_store_entry_create(h->pool, data, &entry, life, 1);
-	// ks_dht_store_insert(h->store, entry, h->now);
+	ks_dht_store_entry_create(h->pool, data, &entry, life, 1);
+	ks_dht_store_insert(h->store, entry, h->now);
 	/* TODO: dht_search() announce of this hash */
-	(void)entry;
+	
+	dht_search(h, (const unsigned char *)entry->key, h->port, AF_INET, NULL, NULL);
+
 	return dht_send(h, buf, buf_len, 0, sa, salen);
 }
 

@@ -296,7 +296,7 @@ main(int argc, char **argv)
     }
 
     /* Init the dht.  This sets the socket into non-blocking mode. */
-    rc = dht_init(&h, globals.s, globals.s6, NULL, (unsigned char*)"LIBKS");
+    rc = dht_init(&h, globals.s, globals.s6, NULL, (unsigned char*)"LIBKS", globals.port);
     if(rc < 0) {
         perror("dht_init");
         exit(1);
@@ -356,6 +356,7 @@ main(int argc, char **argv)
 			  char *input = strdup(line);
 			  char *message_id = input + 16;
 			  char *message = NULL;
+			  cJSON *output = NULL;
 			  int idx = 17; /* this should be the start of the message_id */
 			  for ( idx = 17; idx < 100 && input[idx] != '\0'; idx++ ) {
 			    if ( input[idx] == ' ' ) {
@@ -375,11 +376,13 @@ main(int argc, char **argv)
 				/*
 				  takes an identity, a message id(salt) and a message, then sends out the announcement.
 				 */
-			  
-			  ks_dht_send_message_mutable(h, alice_secretkey, alice_publickey,
+			  output = cJSON_CreateString(message);
+
+			  ks_dht_send_message_mutable_cjson(h, alice_secretkey, alice_publickey,
 						      (struct sockaddr*)&bootstrap_nodes[0], sizeof(bootstrap_nodes[0]),
-						      message_id, 1, message, 600);
+						      message_id, 1, output, 600);
 			  free(input);
+			  cJSON_Delete(output);
 			} else if (!strncmp(line, "message_immutable", 15)) {
 			  /* usage: message_immutable [identity key] */
 				/*
