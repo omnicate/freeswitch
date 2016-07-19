@@ -1731,6 +1731,7 @@ static int ks_dht_store_entry_create(ks_pool_t *pool, struct bencode *msg, struc
 			goto err;
 		}
 		entry->key = ben_str_val(key_token);		
+		ks_log(KS_LOG_INFO, "dht_store_entry now with new key[%s]\n", entry->key);
 		
 		key_v = ben_dict_get_by_str(key_args, "v");
 		if ( !key_v ) {
