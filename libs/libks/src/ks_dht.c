@@ -999,6 +999,7 @@ found:
     if (token) {
         if (token_len >= 40) {
             ks_log(KS_LOG_DEBUG, "Eek!  Overlong token.\n");
+			assert(0);
         } else {
             memcpy(n->token, token, token_len);
             n->token_len = token_len;
@@ -2143,8 +2144,8 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
     if (buflen > 0) {
         dht_msg_type_t message;
         unsigned char tid[16], id[20], info_hash[20], target[20];
-        unsigned char nodes[26*16], nodes6[38*16], token[128];
-        int tid_len = 16, token_len = 128;
+        unsigned char nodes[26*16], nodes6[38*16], token[128] = {0};
+        int tid_len = 16, token_len = 0;
         int nodes_len = 26*16, nodes6_len = 38*16;
         unsigned short port = 0;
         unsigned char values[2048], values6[2048];
@@ -2400,6 +2401,7 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
 					}
                 }
                 if (sr) {
+					ks_log(KS_LOG_ERROR, "token %d [%.*s]\n", token_len, token);
                     insert_search_node(h, id, from, fromlen, sr, 1, token, token_len);
                     if (values_len > 0 || values6_len > 0) {
                         ks_log(KS_LOG_DEBUG, "Got values (%d+%d)!\n", values_len / 6, values6_len / 18);
@@ -3022,7 +3024,8 @@ int send_get_peers(dht_handle_t *h, const struct sockaddr *sa, int salen,
 	i = ben_encode2(buf, 512, bencode_p);
 	ben_free(bencode_p); /* This SHOULD free the bencode_a_p as well */
 	
-	ks_log(KS_LOG_DEBUG, "Encoded GET_PEERS: %s\n\n", buf);
+	ks_log(KS_LOG_DEBUG, "Encoded GET_PEERS\n");
+
     return dht_send(h, buf, i, confirm ? MSG_CONFIRM : 0, sa, salen);
 }
 /* '{"t":"aa", "y":"q", "q":"announce_peer", "a": {"id":"abcdefghij0123456789", "implied_port": 1, "info_hash":"mnopqrstuvwxyz123456", "port": 6881, "token": "aoeusnth"}}'*/
@@ -3049,7 +3052,7 @@ int send_announce_peer(dht_handle_t *h, const struct sockaddr *sa, int salen,
 	i = ben_encode2(buf, 512, bencode_p);
 	ben_free(bencode_p); /* This SHOULD free the bencode_a_p as well */
 	
-	ks_log(KS_LOG_DEBUG, "Encoded ANNOUNCE_PEERS: %s\n\n", buf);
+	ks_log(KS_LOG_DEBUG, "Encoded ANNOUNCE_PEERS\n");
     return dht_send(h, buf, i, confirm ? MSG_CONFIRM : 0, sa, salen);
 }
 /* '{"t":"aa", "y":"r", "r": {"id":"mnopqrstuvwxyz123456"}}'*/
