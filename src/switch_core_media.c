@@ -13048,10 +13048,12 @@ SWITCH_DECLARE(switch_status_t) switch_core_session_read_video_frame(switch_core
 		}
 	}
 
-	if (patchers) {
-		switch_set_flag((*frame)->codec, SWITCH_CODEC_FLAG_VIDEO_PATCHING);
-	} else {
-		switch_clear_flag((*frame)->codec, SWITCH_CODEC_FLAG_VIDEO_PATCHING);
+	if ((*frame)->codec) {
+		if (patchers) {
+			switch_set_flag((*frame)->codec, SWITCH_CODEC_FLAG_VIDEO_PATCHING);
+		} else {
+			switch_clear_flag((*frame)->codec, SWITCH_CODEC_FLAG_VIDEO_PATCHING);
+		}
 	}
 
 	if (status == SWITCH_STATUS_SUCCESS) {
@@ -13182,7 +13184,9 @@ SWITCH_DECLARE(switch_status_t) switch_core_session_read_text_frame(switch_core_
 	}
 
 	if (!(read_text_frame = session->endpoint_interface->io_routines->read_text_frame)) {
-		read_text_frame = session->io_override->read_text_frame;
+		if (session->io_override) {
+			read_text_frame = session->io_override->read_text_frame;
+		}
 	}
 
 	if (read_text_frame) {
@@ -13491,7 +13495,9 @@ SWITCH_DECLARE(switch_status_t) switch_core_session_write_text_frame(switch_core
 	}
 
 	if (!(write_text_frame = session->endpoint_interface->io_routines->write_text_frame)) {
-		write_text_frame = session->io_override->write_text_frame;
+		if (session->io_override) {
+			write_text_frame = session->io_override->write_text_frame;
+		}
 	}
 
 	if (write_text_frame) {
