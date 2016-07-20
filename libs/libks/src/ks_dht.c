@@ -1794,17 +1794,32 @@ static int ks_dht_store_entry_create(ks_pool_t *pool, struct bencode *msg, struc
 	return 0;
  err:
 	ks_dht_store_entry_destroy(&entry);
-	ben_free(msg);
 	return -1;	
+}
+
+static struct ks_dht_store_entry_s *ks_dht_store_fetch(struct ks_dht_store_s *store, char *key)
+{
+	assert(store != NULL);
+
+	return ks_hash_search(store->hash, (void *)key, 0);
 }
 
 static int ks_dht_store_insert(struct ks_dht_store_s *store, struct ks_dht_store_entry_s *entry, ks_time_t now)
 {
-	(void) store;
-	(void) entry;
-	(void) now;
-	return 0;
+	return ks_hash_insert(store->hash, (void *)entry->key, entry);
 }
+
+static int ks_dht_store_replace(struct ks_dht_store_s *store, struct ks_dht_store_entry_s *entry)
+{
+	struct ks_dht_store_entry_s *val = ks_hash_remove(store->hash, (void *) entry->key);
+
+	if ( val ) {
+		ks_dht_store_entry_destroy(&val);
+	}
+	
+	return ks_hash_insert(store->hash, (void *) entry->key, entry);
+}
+
 static void ks_dht_store_prune(struct ks_dht_store_s *store, ks_time_t now)
 {
 	(void) store;
@@ -3728,6 +3743,13 @@ KS_DECLARE(int) ks_dht_send_message_mutable(dht_handle_t *h, unsigned char *sk, 
 	
 	ks_dht_calculate_mutable_storage_target(pk, salt, salt_length, target, 40);
 
+	if ( (entry = ks_dht_store_fetch(h->store, (char *)target)) ) {
+		if ( sequence < entry->serial ) {
+			sequence = entry->serial;
+		}
+	}
+
+
 	/*
 int ks_dht_generate_mutable_storage_args(struct bencode *data, int64_t sequence, int cas,
 										 unsigned char *id, int id_len, 
@@ -3738,14 +3760,14 @@ int ks_dht_generate_mutable_storage_args(struct bencode *data, int64_t sequence,
 										 struct bencode **arguments) */
 
 	
-	err = ks_dht_generate_mutable_storage_args(b_message, 1, 0,
+	err = ks_dht_generate_mutable_storage_args(b_message, sequence, 1,
 											   h->myid, 20,
 											   sk, pk,
 											   salt, salt_length,
 											   (unsigned char *) target, 40,
 											   signature, &signature_length,
 											   &args);
-										 
+
 	if ( err ) {
 		return err;
 	}
@@ -3758,8 +3780,12 @@ int ks_dht_generate_mutable_storage_args(struct bencode *data, int64_t sequence,
 
 	buf_len = ben_encode2(buf, 1500, data);
 	
-	ks_dht_store_entry_create(h->pool, data, &entry, life, 1);
-	ks_dht_store_insert(h->store, entry, h->now);
+	err = ks_dht_store_entry_create(h->pool, data, &entry, life, 1);
+	if ( err ) {
+		return err;
+	}
+
+	ks_dht_store_replace(h->store, entry);
 	/* TODO: dht_search() announce of this hash */
 	
 	dht_search(h, (const unsigned char *)entry->key, h->port, AF_INET, NULL, NULL);
