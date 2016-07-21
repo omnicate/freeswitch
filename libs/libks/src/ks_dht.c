@@ -3239,7 +3239,7 @@ static dht_msg_type_t parse_message(struct bencode *bencode_p,
 						  }
 						 */
 						
-						ks_log(KS_LOG_DEBUG, "get_peers query recieved for info hash [%s] from client with id [%s]\n", infohash, id_return);
+						ks_log(KS_LOG_DEBUG, "get_peers query recieved for info hash [%s] from client\n", infohash);
 						type = DHT_MSG_GET_PEERS;
 						goto done;
 					} else if (!ben_cmp_with_str(b_query, "ping")) {
@@ -3253,7 +3253,7 @@ static dht_msg_type_t parse_message(struct bencode *bencode_p,
 							'y': 'q'
 						   }
 						*/
-						ks_log(KS_LOG_DEBUG, "ping query recieved from client with id [%s]\n", id_return);
+						ks_log(KS_LOG_DEBUG, "ping query recieved from client \n");
 						type = DHT_MSG_PING;
 						goto done;
 					} else if (!ben_cmp_with_str(b_query, "find_node")) {
