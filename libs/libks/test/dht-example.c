@@ -149,6 +149,8 @@ main(int argc, char **argv)
     unsigned char alice_publickey[crypto_box_PUBLICKEYBYTES] = {0};
     unsigned char alice_secretkey[crypto_box_SECRETKEYBYTES] = {0};
 
+    ks_init();
+
     globals.s = -1;
     globals.s6 = -1;
     globals.exiting = 0;
@@ -452,6 +454,7 @@ main(int argc, char **argv)
     history_end(myhistory);
     el_end(el);
     dht_uninit(&h);
+    ks_shutdown();
     return 0;
     
  usage:
