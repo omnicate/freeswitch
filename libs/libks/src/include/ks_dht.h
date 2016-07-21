@@ -60,6 +60,10 @@ KS_DECLARE(int) ks_dht_send_message_mutable(dht_handle_t *h, unsigned char *sk, 
 
 KS_DECLARE(int) ks_dht_send_message_mutable_cjson(dht_handle_t *h, unsigned char *sk, unsigned char *pk, const struct sockaddr *sa, int salen,
 												  char *message_id, int sequence, cJSON *message, ks_time_t life);
+
+typedef void (ks_dht_store_entry_json_cb)(struct dht_handle_s *h, const cJSON *msg, void *obj);
+KS_DECLARE(void) ks_dht_store_entry_json_cb_set(struct dht_handle_s *h, ks_dht_store_entry_json_cb *store_json_cb, void *arg);
+
 KS_END_EXTERN_C
 
 #endif /* _KS_DHT_H */

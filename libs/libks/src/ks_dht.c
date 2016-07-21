@@ -333,9 +333,18 @@ struct dht_handle_s {
 	time_t token_bucket_time;
 	int token_bucket_tokens;
 
+	ks_dht_store_entry_json_cb *store_json_cb;
+	void *store_json_cb_arg;
+	
 	ks_pool_t *pool;
 	struct ks_dht_store_s *store;
 };
+
+void ks_dht_store_entry_json_cb_set(struct dht_handle_s *h, ks_dht_store_entry_json_cb *store_json_cb, void *arg)
+{
+	h->store_json_cb = store_json_cb;
+	h->store_json_cb_arg = arg;
+}
 
 static unsigned char *debug_printable(const unsigned char *buf, unsigned char *out, int buflen)
 {
@@ -1694,13 +1703,13 @@ static void ks_dht_store_entry_destroy(struct ks_dht_store_entry_s **old_entry)
 
 /* Entries can be created by a remote system 'pushing' a message to us, or the local system creating and sending the message. */
 
-static int ks_dht_store_entry_create(ks_pool_t *pool, struct bencode *msg, struct ks_dht_store_entry_s **new_entry, ks_time_t life, ks_bool_t mine)
+static int ks_dht_store_entry_create(struct dht_handle_s *h, struct bencode *msg, struct ks_dht_store_entry_s **new_entry, ks_time_t life, ks_bool_t mine)
 {
 	struct ks_dht_store_entry_s *entry = NULL;
 	ks_time_t now = ks_time_now_sec();
 
-	entry = ks_pool_alloc(pool, sizeof(struct ks_dht_store_entry_s));
-	entry->pool = pool;
+	entry = ks_pool_alloc(h->pool, sizeof(struct ks_dht_store_entry_s));
+	entry->pool = h->pool;
 	entry->received = now;
 	entry->expiration = now + life;
 	entry->last_announce = 0; /* TODO: Instead we should announce this one, and set to now */
@@ -1785,8 +1794,11 @@ static int ks_dht_store_entry_create(ks_pool_t *pool, struct bencode *msg, struc
 				ks_log(KS_LOG_ERROR, "dht_store_entry with json payload failed to json parse. Someone sent and signed an invalid message.\n");
 				goto err;
 			}
-		}
-		
+
+			if ( h->store_json_cb ) {
+				h->store_json_cb(h, entry->body, h->store_json_cb_arg);
+			}
+		}		
 	}
 	
  done:
@@ -1878,6 +1890,9 @@ KS_DECLARE(int) dht_init(dht_handle_t **handle, int s, int s6, const unsigned ch
     h->numsearches = 0;
 	h->port = port;
 
+	h->store_json_cb = NULL;
+	h->store_json_cb_arg = NULL;
+	
     h->storage = NULL;
     h->numstorage = 0;
 
@@ -2343,7 +2358,7 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
 					ks_log(KS_LOG_DEBUG, "Valid message store signature.\n");
 				}
 
-				ks_dht_store_entry_create(h->pool, msg_ben, &entry, 600, 0);
+				ks_dht_store_entry_create(h, msg_ben, &entry, 600, 0);
 				ks_dht_store_insert(h->store, entry, h->now);
 			}
 			break;
@@ -3780,7 +3795,7 @@ int ks_dht_generate_mutable_storage_args(struct bencode *data, int64_t sequence,
 
 	buf_len = ben_encode2(buf, 1500, data);
 	
-	err = ks_dht_store_entry_create(h->pool, data, &entry, life, 1);
+	err = ks_dht_store_entry_create(h, data, &entry, life, 1);
 	if ( err ) {
 		return err;
 	}

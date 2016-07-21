@@ -43,6 +43,15 @@ static void callback(void *closure, ks_dht_event_t event, const unsigned char *i
   }
 }
 
+void json_cb(struct dht_handle_s *h, const cJSON *msg, void *arg)
+{
+  char *pretty = cJSON_Print((cJSON *)msg);
+  
+  printf("Received json msg: %s\n", pretty);
+
+  free(pretty);
+}
+
 static char * prompt(EditLine *e) {
   return "dht> ";
 }
@@ -326,10 +335,10 @@ main(int argc, char **argv)
 
     printf("TESTING!!!\n");
     err = crypto_sign_keypair(alice_publickey, alice_secretkey);
-	printf("Result of generating keypair %d\n", err);
+    printf("Result of generating keypair %d\n", err);
 
-    //    return 0;
-
+    ks_dht_store_entry_json_cb_set(h, json_cb, NULL);
+	
     while ( !globals.exiting ) {
 		line = el_gets(el, &count);
       
