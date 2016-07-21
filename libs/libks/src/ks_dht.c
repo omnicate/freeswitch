@@ -2820,7 +2820,7 @@ int send_pong(dht_handle_t *h, const struct sockaddr *sa, int salen, const unsig
 	i = ben_encode2(buf, 512, bencode_p);
 	ben_free(bencode_p); /* This SHOULD free the bencode_a_p as well */
 
-	ks_log(KS_LOG_DEBUG, "Encoded PONG: %s\n\n", buf);
+	ks_log(KS_LOG_DEBUG, "Encoded PONG\n");
     return dht_send(h, buf, i, 0, sa, salen);
 }
 
