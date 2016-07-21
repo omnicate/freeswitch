@@ -71,6 +71,11 @@ KS_DECLARE(char *) ks_uuid_str(ks_pool_t *pool, uuid_t *uuid)
 KS_DECLARE(ks_status_t) ks_rng_init(void)
 {
 	if (!initialized) {
+		if (sodium_init() == -1) {
+			abort();
+		}
+		
+
 		randombytes_random();
 		ks_aes_init();
 		ks_mutex_create(&rng_mutex, KS_MUTEX_FLAG_DEFAULT, ks_global_pool());
