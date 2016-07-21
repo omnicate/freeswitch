@@ -40,7 +40,7 @@ int fd = -1;
  * memset(buf, val, len), but the use of a volatile pointer
  * guarantees that the compiler will not optimise the call away.
  */
-static void * (*volatile memset_volatile)(void *, int, size_t) = memset;
+//static void * (*volatile memset_volatile)(void *, int, size_t) = memset;
 
 KS_DECLARE(uuid_t *) ks_uuid(uuid_t *uuid)
 {
