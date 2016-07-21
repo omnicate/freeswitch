@@ -452,7 +452,6 @@ struct switch_rtp {
 	uint8_t has_ice;
 	uint8_t punts;
 	uint8_t clean;
-	uint8_t nack_cant_count;
 #ifdef ENABLE_ZRTP
 	zrtp_session_t *zrtp_session;
 	zrtp_profile_t *zrtp_profile;
@@ -5817,10 +5816,8 @@ static void handle_nack(switch_rtp_t *rtp_session, uint32_t nack)
 		}
 		//switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG1, "RE----SEND %u\n", ntohs(send_msg->header.seq));
 		switch_rtp_write_raw(rtp_session, (void *) send_msg, &bytes, SWITCH_FALSE);
-		rtp_session->nack_cant_count = 0;
 	} else {
 		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(rtp_session->session), SWITCH_LOG_DEBUG1, "Cannot send NACK for seq %u\n", ntohs(seq));
-		rtp_session->nack_cant_count++;
 	}
 
 	blp = ntohs(blp);
@@ -5841,23 +5838,14 @@ static void handle_nack(switch_rtp_t *rtp_session, uint32_t nack)
 									  send_msg->header.pt, ntohl(send_msg->header.ts), ntohs(send_msg->header.seq), send_msg->header.m);
 					
 				}
-
 				//switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG1, "RE----SEND %u\n", ntohs(send_msg->header.seq));
-				rtp_session->nack_cant_count = 0;
+
 				switch_rtp_write_raw(rtp_session, (void *) &send_msg, &bytes, SWITCH_FALSE);
 			} else {
 				switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(rtp_session->session), SWITCH_LOG_DEBUG1, "Cannot send NACK for seq %u\n", ntohs(seq) + i);
-				rtp_session->nack_cant_count++;
 			}
 		}
 	}
-
-	if (rtp_session->nack_cant_count > 5) {
-		rtp_session->nack_cant_count = 0;
-		switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(rtp_session->session), SWITCH_LOG_DEBUG1, "Too many nacks that cannot be answered, sending key frame.\n");
-		switch_core_media_gen_key_frame(rtp_session->session);
-	}
-
 }
 
 static switch_status_t process_rtcp_report(switch_rtp_t *rtp_session, rtcp_msg_t *msg, switch_size_t bytes)
