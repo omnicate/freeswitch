@@ -18,7 +18,7 @@ libks_la_SOURCES += crypt/aeskey.c crypt/aestab.c crypt/sha2.c crypt/twofish.c c
 
 libks_la_CFLAGS	  = $(AM_CFLAGS)
 libks_la_CPPFLAGS = -DPOSIX
-libks_la_LDFLAGS  = $(AM_LDFLAGS) -version-info 0:1:0 -lncurses -lpthread -lm -luuid -L/usr/local/Cellar/ossp-uuid/1.6.2_2/lib
+libks_la_LDFLAGS  = $(AM_LDFLAGS) -version-info 0:1:0 -lncurses -lpthread -lm
 
 library_includedir	= $(prefix)/include
 library_include_HEADERS = src/include/ks_config.h src/include/ks.h src/include/ks_threadmutex.h src/include/ks_json.h src/include/ks_buffer.h
