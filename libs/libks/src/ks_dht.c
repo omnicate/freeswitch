@@ -2180,7 +2180,7 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
         unsigned short port = 0;
         unsigned char values[2048], values6[2048];
         int values_len = 2048, values6_len = 2048;
-        int want = 0;
+        int want = -1;
         unsigned short ttid;
 		struct bencode *msg_ben = NULL;
 		struct bencode *key_args = NULL; /* Request args */
@@ -2248,7 +2248,7 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
 				} else if ( !ben_cmp_with_str(key_want, "n6") ) {
 					want = WANT6;
 				} else {
-					want = 0;
+					want = -1;
 				}
 			}
 
@@ -3004,7 +3004,9 @@ int send_closest_nodes(dht_handle_t *h, const struct sockaddr *sa, int salen,
             if ((b = previous_bucket(h, b))) {
                 numnodes = buffer_closest_nodes(h, nodes, numnodes, id, b);
 			}
-        }
+        } else {
+			ks_log(KS_LOG_DEBUG, "send_closest_nodes did not find a 'close' ipv4 bucket\n");
+		}
     }
 
     if ((want & WANT6)) {
@@ -3016,9 +3018,11 @@ int send_closest_nodes(dht_handle_t *h, const struct sockaddr *sa, int salen,
             if ((b = previous_bucket(h, b))) {
                 numnodes6 = buffer_closest_nodes(h, nodes6, numnodes6, id, b);
 			}
-        }
+        } else {
+			ks_log(KS_LOG_DEBUG, "send_closest_nodes did not find a 'close' ipv6 bucket\n");
+		}
     }
-    ks_log(KS_LOG_DEBUG, "  (%d+%d nodes.)\n", numnodes, numnodes6);
+    ks_log(KS_LOG_DEBUG, "send_closest_nodes  (%d+%d nodes.)\n", numnodes, numnodes6);
 
     return send_nodes_peers(h, sa, salen, tid, tid_len,
                             nodes, numnodes * 26,
