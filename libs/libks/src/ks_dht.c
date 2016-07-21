@@ -2431,7 +2431,9 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
 					}
                 }
                 if (sr) {
-					ks_log(KS_LOG_ERROR, "token %d [%.*s]\n", token_len, token);
+					if ( token_len ) {
+						ks_log(KS_LOG_DEBUG, "token %d [%.*s]\n", token_len, token);
+					}
                     insert_search_node(h, id, from, fromlen, sr, 1, token, token_len);
                     if (values_len > 0 || values6_len > 0) {
                         ks_log(KS_LOG_DEBUG, "Got values (%d+%d)!\n", values_len / 6, values6_len / 18);
