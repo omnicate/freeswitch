@@ -460,5 +460,5 @@ main(int argc, char **argv)
  usage:
     printf("Usage: dht-example [-4] [-6] [-i filename] [-b address]...\n"
            "                   port [address port]...\n");
-    exit(1);
+    exit(0);
 }

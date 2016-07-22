@@ -676,10 +676,23 @@ static int get_netmask(struct sockaddr_in *me, int *mask)
 #endif
 
 
-KS_DECLARE(ks_status_t) ks_find_local_ip(char *buf, int len, int *mask, int family)
+KS_DECLARE(ks_status_t) ks_ip_route(char *buf, int len, const char *route_ip)
+{
+	int family = AF_INET;
+
+	ks_assert(route_ip);
+
+	if (strchr(route_ip, ':')) {
+		family = AF_INET6;
+	}
+
+	return ks_find_local_ip(buf, len, NULL, family, route_ip);
+}
+
+KS_DECLARE(ks_status_t) ks_find_local_ip(char *buf, int len, int *mask, int family, const char *route_ip)
 {
 	ks_status_t status = KS_STATUS_FAIL;
-	char *base;
+	char *base = (char *)route_ip;
 
 #ifdef WIN32
 	SOCKET tmp_socket;
@@ -703,11 +716,15 @@ KS_DECLARE(ks_status_t) ks_find_local_ip(char *buf, int len, int *mask, int fami
 	switch (family) {
 	case AF_INET:
 		ks_copy_string(buf, "127.0.0.1", len);
-		base = "82.45.148.209";
+		if (!base) {
+			base = "82.45.148.209";
+		}
 		break;
 	case AF_INET6:
 		ks_copy_string(buf, "::1", len);
-		base = "2001:503:BA3E::2:30";	/* DNS Root server A */
+		if (!base) {
+			base = "2001:503:BA3E::2:30";	/* DNS Root server A */
+		}
 		break;
 	default:
 		base = "127.0.0.1";

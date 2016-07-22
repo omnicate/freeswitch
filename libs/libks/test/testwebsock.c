@@ -250,8 +250,8 @@ static int test_ws(char *ip, int ssl)
 int main(void)
 {
 	int have_v4 = 0, have_v6 = 0;
-	ks_find_local_ip(v4, sizeof(v4), &mask, AF_INET);
-	ks_find_local_ip(v6, sizeof(v6), NULL, AF_INET6);
+	ks_find_local_ip(v4, sizeof(v4), &mask, AF_INET, NULL);
+	ks_find_local_ip(v6, sizeof(v6), NULL, AF_INET6, NULL);
 	ks_init();
 
 	printf("IPS: v4: [%s] v6: [%s]\n", v4, v6);

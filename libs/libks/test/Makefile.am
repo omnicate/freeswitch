@@ -34,6 +34,11 @@ testsock_SOURCES = testsock.c tap.c
 testsock_CFLAGS = $(AM_CFLAGS)
 testsock_LDADD = $(TEST_LDADD)
 
+check_PROGRAMS += testsock2
+testsock2_SOURCES = testsock2.c tap.c
+testsock2_CFLAGS = $(AM_CFLAGS)
+testsock2_LDADD = $(TEST_LDADD)
+
 check_PROGRAMS += testwebsock
 testwebsock_SOURCES = testwebsock.c tap.c
 testwebsock_CFLAGS = $(AM_CFLAGS)

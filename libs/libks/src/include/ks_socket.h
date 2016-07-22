@@ -107,7 +107,8 @@ KS_DECLARE(ks_status_t) ks_addr_set(ks_sockaddr_t *addr, const char *host, ks_po
 KS_DECLARE(ks_status_t) ks_listen(const char *host, ks_port_t port, int family, int backlog, ks_listen_callback_t callback, void *user_data);
 KS_DECLARE(ks_status_t) ks_socket_shutdown(ks_socket_t sock, int how);
 KS_DECLARE(ks_status_t) ks_socket_close(ks_socket_t *sock);
-KS_DECLARE(ks_status_t) ks_find_local_ip(char *buf, int len, int *mask, int family);
+KS_DECLARE(ks_status_t) ks_ip_route(char *buf, int len, const char *route_ip);
+KS_DECLARE(ks_status_t) ks_find_local_ip(char *buf, int len, int *mask, int family, const char *route_ip);
 KS_DECLARE(ks_status_t) ks_listen_sock(ks_socket_t server_sock, ks_sockaddr_t *addr, int backlog, ks_listen_callback_t callback, void *user_data);
 KS_END_EXTERN_C
 

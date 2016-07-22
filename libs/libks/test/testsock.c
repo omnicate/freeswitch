@@ -353,8 +353,8 @@ int main(void)
 
 	ks_init();
 
-	ks_find_local_ip(v4, sizeof(v4), &mask, AF_INET);
-	ks_find_local_ip(v6, sizeof(v6), NULL, AF_INET6);
+	ks_find_local_ip(v4, sizeof(v4), &mask, AF_INET, NULL);
+	ks_find_local_ip(v6, sizeof(v6), NULL, AF_INET6, NULL);
 	
 	printf("IPS: v4: [%s] v6: [%s]\n", v4, v6);
 
