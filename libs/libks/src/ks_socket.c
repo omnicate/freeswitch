@@ -296,6 +296,29 @@ KS_DECLARE(int) ks_addr_cmp(const ks_sockaddr_t *sa1, const ks_sockaddr_t *sa2)
 	return 0;
 }
 
+KS_DECLARE(ks_status_t) ks_addr_copy(ks_sockaddr_t *addr, const ks_sockaddr_t *src_addr)
+{
+	ks_status_t status = KS_STATUS_SUCCESS;
+
+	ks_assert(addr);
+	ks_assert(src_addr);
+	ks_assert(src_addr->family == AF_INET || src_addr->family == AF_INET6);
+
+	addr->family = src_addr->family;
+
+	if (src_addr->family == AF_INET) {
+		memcpy(&addr->v.v4, &src_addr->v.v4, sizeof(src_addr->v.v4));
+	} else {
+		memcpy(&addr->v.v6, &src_addr->v.v6, sizeof(src_addr->v.v6));
+	}
+
+	ks_addr_get_host(addr);
+	ks_addr_get_port(addr);
+
+	return status;
+}
+
+
 KS_DECLARE(ks_status_t) ks_addr_set(ks_sockaddr_t *addr, const char *host, ks_port_t port, int family)
 {
 	ks_status_t status = KS_STATUS_SUCCESS;

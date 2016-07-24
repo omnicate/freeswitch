@@ -61,7 +61,7 @@ static void *tcp_sock_server(ks_thread_t *thread, void *thread_data)
 
 static int test_addr(int v)
 {
-	ks_sockaddr_t addr1, addr2, addr3, addr4;
+	ks_sockaddr_t addr1, addr2, addr3, addr4, addr5;
 
 	printf("TESTING ADDR v%d\n", v);
 
@@ -81,6 +81,7 @@ static int test_addr(int v)
 		if (ks_addr_set(&addr4, "10.199.200.5", 2467, AF_INET) != KS_STATUS_SUCCESS) {
 			return 0;
 		}
+
 	} else {
 		if (ks_addr_set(&addr1, "1607:f418:1210::1", 2467, AF_INET6) != KS_STATUS_SUCCESS) {
 			return 0;
@@ -99,6 +100,11 @@ static int test_addr(int v)
 		}
 	}
 
+	
+	if (ks_addr_copy(&addr5, &addr4) != KS_STATUS_SUCCESS) {
+		return 0;
+	}
+
 	if (!ks_addr_cmp(&addr1, &addr2)) {
 		return 0;
 	}
@@ -110,6 +116,15 @@ static int test_addr(int v)
 	if (ks_addr_cmp(&addr1, &addr4)) {
 		return 0;
 	}
+
+	if (!ks_addr_cmp(&addr4, &addr5)) {
+		return 0;
+	}
+
+	if (ks_addr_cmp(&addr1, &addr5)) {
+		return 0;
+	}
+
 
 	return 1;
 }
