@@ -35,6 +35,13 @@ typedef enum {
 	KS_DHT_EVENT_SEARCH_DONE6 = 4
 } ks_dht_event_t;
 
+
+typedef enum {
+	KS_DHT_AF_INET4 = (1 << 0),
+	KS_DHT_AF_INET6 = (1 << 1)
+} ks_dht_af_flag_t;
+
+
 typedef void dht_callback(void *closure, ks_dht_event_t event, const unsigned char *info_hash, const void *data, size_t data_len);
 
 typedef struct dht_handle_s dht_handle_t;

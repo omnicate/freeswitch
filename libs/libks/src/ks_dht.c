@@ -28,6 +28,10 @@ THE SOFTWARE.
    gratuitious changes to the coding style.  And please send back any
    improvements to the author. */
 
+/* Sorry dude, we hacked up this code pretty good but its not C++ and the license is pure BSD.
+Like Meatloaf says, 2 out of 3 ain't bad! But we needed a good base for some additions we needed */
+
+
 #include "ks.h"
 #include "sodium.h"
 
@@ -300,8 +304,13 @@ struct ks_dht_store_s {
 };
 
 struct dht_handle_s {
-	int dht_socket;
-	int dht_socket6;
+	ks_pool_t *pool;
+
+	struct pollfd *pollsocks;
+	uint32_t num_pollsocks;
+
+	//int dht_socket;
+	//int dht_socket6;
 
 	time_t search_time;
 	time_t confirm_nodes_time;
@@ -336,7 +345,8 @@ struct dht_handle_s {
 	ks_dht_store_entry_json_cb *store_json_cb;
 	void *store_json_cb_arg;
 	
-	ks_pool_t *pool;
+	ks_hash_t *iphash;
+
 	struct ks_dht_store_s *store;
 };
 
@@ -730,9 +740,7 @@ static struct bucket *split_bucket(dht_handle_t *h, struct bucket *b)
         return NULL;
 	}
 
-    if (!(new = calloc(1, sizeof(struct bucket)))) {
-        return NULL;
-	}
+	new = ks_pool_alloc(h->pool, sizeof(struct bucket));
 
     new->af = b->af;
 
@@ -878,11 +886,9 @@ static struct node *new_node(dht_handle_t *h, const unsigned char *id, const str
 
         return NULL;
     }
-
+	
     /* Create a new node. */
-    if (!(n = calloc(1, sizeof(struct node)))) {
-        return NULL;
-	}
+    n = ks_pool_alloc(h->pool, sizeof(struct node));
 
     memcpy(n->id, id, 20);
     memcpy(&n->ss, sa, salen);
@@ -909,7 +915,7 @@ static int expire_buckets(dht_handle_t *h, struct bucket *b)
             b->nodes = n->next;
             b->count--;
             changed = 1;
-            free(n);
+            ks_pool_free(h->pool, n);
         }
 
         p = b->nodes;
@@ -919,7 +925,7 @@ static int expire_buckets(dht_handle_t *h, struct bucket *b)
                 p->next = n->next;
                 b->count--;
                 changed = 1;
-                free(n);
+                ks_pool_free(h->pool, n);
             }
             p = p->next;
         }
@@ -1039,7 +1045,7 @@ static void expire_searches(dht_handle_t *h)
             } else {
                 h->searches = next;
 			}
-            free(sr);
+            ks_pool_free(h->pool, sr);
             h->numsearches--;
         } else {
             previous = sr;
@@ -1186,12 +1192,11 @@ static struct search *new_search(dht_handle_t *h)
 
     /* Allocate a new slot. */
     if (h->numsearches < DHT_MAX_SEARCHES) {
-        if ((sr = calloc(1, sizeof(struct search)))) {
-            sr->next = h->searches;
-            h->searches = sr;
-            h->numsearches++;
-            return sr;
-        }
+		sr = ks_pool_alloc(h->pool, sizeof(struct search));
+		sr->next = h->searches;
+		h->searches = sr;
+		h->numsearches++;
+		return sr;
     }
 
     /* Oh, well, never mind.  Reuse the oldest slot. */
@@ -1352,9 +1357,8 @@ static int storage_store(dht_handle_t *h, const unsigned char *id, const struct 
         if (h->numstorage >= DHT_MAX_HASHES) {
             return -1;
 		}
-        if (!(st = calloc(1, sizeof(struct storage)))) {
-			return -1;
-		}
+
+		st = ks_pool_alloc(h->pool, sizeof(struct storage));
         memcpy(st->id, id, 20);
         st->next = h->storage;
         h->storage = st;
@@ -1418,11 +1422,11 @@ static int expire_storage(dht_handle_t *h)
             free(st->peers);
             if (previous) {
                 previous->next = st->next;
-				free(st);
+				ks_pool_free(h->pool, st);
                 st = previous->next;
 			} else {
                 h->storage = st->next;
-				free(st);
+				ks_pool_free(h->pool, st);
                 st = h->storage;
 			}
 
@@ -1880,15 +1884,200 @@ static void ks_dht_store_destroy(struct ks_dht_store_s **old_store)
 	return;
 }
 
-KS_DECLARE(int) dht_init(dht_handle_t **handle, int s, int s6, const unsigned char *id, const unsigned char *v, unsigned int port)
+typedef struct {
+	char ip[80];
+	ks_sockaddr_t addr;
+	ks_socket_t sock;
+} ks_ip_t;
+
+
+static void clear_all_ip(dht_handle_t *h)
+{
+	ks_hash_iterator_t *itt;
+
+	if (!h->iphash) return;
+
+	ks_hash_write_lock(h->iphash);
+	for (itt = ks_hash_first(h->iphash, KS_UNLOCKED); itt; itt = ks_hash_next(&itt)) {
+		const void *key;
+		void *val;
+		ks_ip_t *ipt;
+
+		ks_hash_this(itt, &key, NULL, &val);
+
+		ipt = (ks_ip_t *) val;
+
+		ks_socket_close(&ipt->sock);
+		ks_pool_free(h->pool, ipt);
+
+		if (ipt->addr.family == AF_INET) {
+			h->ip4s--;
+		} else {
+			h->ip6s--;
+		}
+
+		ks_hash_remove(h->iphash, (char *)key);
+	}
+	ks_hash_write_unlock(h->iphash);
+
+	ks_hash_destroy(&h->iphash);
+
+}
+
+static void reset_poll(dht_handle_t *h)
+{
+	int i = 0, socks = h->ip4s + h->ip6s;
+	ks_hash_iterator_t *itt;
+
+	if (!h->iphash) return;
+
+	if (h->num_pollsocks < socks) {
+		h->num_pollsocks = socks;
+		ks_pool_resize(h->pool, (void *)h->pollsocks, sizeof(struct pollfd) * h->num_pollsocks);
+	}
+
+	for (itt = ks_hash_first(h->iphash, KS_UNLOCKED); itt; itt = ks_hash_next(&itt)) {
+		const void *key;
+		void *val;
+		ks_ip_t *ipt;
+		
+		ks_hash_this(itt, &key, NULL, &val);
+		
+		ipt = (ks_ip_t *) val;
+		
+		h->pollsocks[i].sock = ipt->sock;
+		h->pollsocks[i].events = POLLIN | POLLERR;
+		i++;
+	}
+}
+
+static ks_status_t add_ip(dht_handle_t *h, const char *ip, int family)
+{
+	ks_ip_t *ipt;
+	ks_status_t status = KS_STATUS_SUCCESS;
+
+	ks_assert(h);
+	ks_assert(ip);
+	
+	ipt = ks_pool_alloc(h->pool, sizeof(*ipt));
+	ks_set_string(ipt->ip, ip);
+	
+	ks_addr_set(&ipt->addr, ip, h->port, family);
+
+	if (ks_addr_bind(ipt->sock, &ipt->addr) != KS_STATUS_SUCCESS) {
+		ks_socket_close(&ipt->sock);
+		ks_pool_free(h->pool, ipt);
+		return KS_STATUS_FAIL;
+	}
+
+	ks_socket_option(ipt->sock, SO_REUSEADDR, KS_TRUE);
+	ks_socket_option(ipt->sock, KS_SO_NONBLOCK, KS_TRUE);
+
+	ks_hash_insert(h->iphash, (void *)ipt->ip, ipt);
+
+	if (family == AF_INET) {
+		h->ip4s++;
+	} else {
+		h->ip6s++;
+	}
+
+	reset_poll(h);
+
+	return KS_STATUS_SUCCESS;
+}
+
+KS_DECLARE(void) ks_dht_set_port(dht_handle_t *h, unsigned int port)
+{
+	h->port = port;
+}
+
+KS_DECLARE(void) ks_dht_set_v(dht_handle_t *h, const unsigned char *v)
+{
+    if (v) {
+        memcpy(h->my_v, "1:v4:", 5);
+        memcpy(h->my_v + 5, v, 4);
+        h->have_v = 1;
+    } else {
+        h->have_v = 0;
+    }
+}
+
+KS_DECLARE(ks_status_t) ks_dht_add_ip(dht_handle_t *h, const char *ip)
+{
+	int family = AF_INET;
+	int mast = 0;
+
+	if (strchr(ip, ':')) {
+		family = AF_INET6;
+	}
+
+	ks_find_local_ip(ip, sizeof(ip), &mask, family, NULL);
+	add_ip(h, ip, AF_INET);
+}
+
+
+
+KS_DECLARE(ks_status_t) ks_dht_one_loop(dht_handle_t *h, int timeout)
+{
+	ks_status_t status;
+	int s, i;
+	unsigned char buf[65536] = {0};
+	ks_ssize_t bytes;
+	ks_sockaddr_t remote_addr;
+
+	reset_poll(h);
+
+	s = ks_poll(h->pollsocks, h->num_pollsocks, timeout);
+	
+	if (s < 0) {
+		return KS_STATUS_FAIL;
+	}
+
+	if (s == 0) {
+		return KS_STATUS_TIMEOUT;
+	}
+
+	for (i = 0; i < h->num_pollsocks, i++) {
+		if ((h->pollsocks[i].revents & POLLIN)) {
+			if ((status = ks_socket_recvfrom(h->pollsocks[i].sock, buf, &bytes, &remote_addr)) == KS_STATUS_SUCCESS) {
+				// git rid of tosleep and convert it to non-blocking counter so you can still call this in a loop and just return timeout till tosleep expired
+				// beginning of rabbit hole to change references to addrs to ks_addrs instead and stop passing sockaddr and len all over the place.
+				rc = dht_periodic(h, buf, bytes, &remote_addr, &tosleep, callback, NULL);
+			}
+		}
+	}
+}
+
+//KS_DECLARE(int) dht_init(dht_handle_t **handle, int s, int s6, const unsigned char *id, const unsigned char *v, unsigned int port)
+KS_DECLARE(ks_status_t) ks_dht_init(dht_handle_t **handle, ks_dht_af_flag_t af_flags, const unsigned char *id)
 {
     int rc;
 	dht_handle_t *h;
+	ks_pool_t *pool;
+	char ip[80] = "";
+	int mask = 0;
 
-	*handle = h = calloc(sizeof(dht_handle_t), 1);
+	ks_pool_open(&pool);
+	h->pool = pool;
+
+	*handle = h = ks_pool_alloc(h->pool, sizeof(*h));
     h->searches = NULL;
     h->numsearches = 0;
-	h->port = port;
+	h->port = 5309;
+
+    if ((h->af_flags & KS_DHT_AF_INET4)) {
+        h->buckets = ks_pool_alloc(h->pool, sizeof(*h->buckets));
+        h->buckets->af = AF_INET;
+		ks_find_local_ip(ip, sizeof(ip), &mask, AF_INET, NULL);
+		add_ip(h, ip, AF_INET);
+    }
+
+	if ((h->af_flags & KS_DHT_AF_INET6)) {
+        h->buckets6 = ks_pool_alloc(h->pool, sizeof(*h->buckets6));
+        h->buckets6->af = AF_INET6;
+		ks_find_local_ip(ip, sizeof(ip), &mask, AF_INET6, NULL);
+		add_ip(h, ip, AF_INET6);
+    }
 
 	h->store_json_cb = NULL;
 	h->store_json_cb_arg = NULL;
@@ -1899,31 +2088,8 @@ KS_DECLARE(int) dht_init(dht_handle_t **handle, int s, int s6, const unsigned ch
 	h->buckets = NULL;
 	h->buckets6 = NULL;
 
-    if (s >= 0) {
-        h->buckets = calloc(sizeof(struct bucket), 1);
-        if (h->buckets == NULL) {
-            return -1;
-		}
-        h->buckets->af = AF_INET;
+	ks_hash_create(&h->iphash, KS_HASH_MODE_DEFAULT, KS_HASH_FLAG_RWLOCK, h->pool);
 
-        rc = set_nonblocking(s, 1);
-        if (rc < 0) {
-            goto fail;
-		}
-    }
-
-    if (s6 >= 0) {
-        h->buckets6 = calloc(sizeof(struct bucket), 1);
-        if (h->buckets6 == NULL) {
-            return -1;
-		}
-        h->buckets6->af = AF_INET6;
-
-        rc = set_nonblocking(s6, 1);
-        if (rc < 0) {
-            goto fail;
-		}
-    }
 
 	if (!id) {
 		randombytes_buf(h->myid, 20);
@@ -1931,13 +2097,7 @@ KS_DECLARE(int) dht_init(dht_handle_t **handle, int s, int s6, const unsigned ch
 		memcpy(h->myid, id, 20);
 	}
 
-    if (v) {
-        memcpy(h->my_v, "1:v4:", 5);
-        memcpy(h->my_v + 5, v, 4);
-        h->have_v = 1;
-    } else {
-        h->have_v = 0;
-    }
+	h->have_v = 0;
 
 	h->now = ks_time_now_sec();
 
@@ -1964,15 +2124,15 @@ KS_DECLARE(int) dht_init(dht_handle_t **handle, int s, int s6, const unsigned ch
     expire_buckets(h, h->buckets);
     expire_buckets(h, h->buckets6);
 
-	ks_pool_open(&h->pool);
+
 	ks_dht_store_create(h->pool, &h->store);
 
     return 1;
 
  fail:
-    free(h->buckets);
+    ks_pool_free(h->pool, h->buckets);
     h->buckets = NULL;
-    free(h->buckets6);
+    ks_pool_free(h->pool, h->buckets6);
     h->buckets6 = NULL;
     return -1;
 }
@@ -1980,7 +2140,12 @@ KS_DECLARE(int) dht_init(dht_handle_t **handle, int s, int s6, const unsigned ch
 KS_DECLARE(int) dht_uninit(dht_handle_t **handle)
 {
 	dht_handle_t *h = *handle;
+	ks_pool_t *pool;
+
 	*handle = NULL;
+
+	clear_all_ip(h);
+	
 
     if (h->dht_socket < 0 && h->dht_socket6 < 0) {
         errno = EINVAL;
@@ -1996,9 +2161,9 @@ KS_DECLARE(int) dht_uninit(dht_handle_t **handle)
         while (b->nodes) {
             struct node *n = b->nodes;
             b->nodes = n->next;
-            free(n);
+            ks_pool_free(h->pool, n);
         }
-        free(b);
+        ks_pool_free(h->pool, b);
     }
 
     while (h->buckets6) {
@@ -2007,28 +2172,30 @@ KS_DECLARE(int) dht_uninit(dht_handle_t **handle)
         while (b->nodes) {
             struct node *n = b->nodes;
             b->nodes = n->next;
-            free(n);
+            ks_pool_free(h->pool, n);
         }
-        free(b);
+        ks_pool_free(h->pool, b);
     }
 
     while (h->storage) {
         struct storage *st = h->storage;
         h->storage = h->storage->next;
-        free(st->peers);
-        free(st);
+        ks_pool_free(h->pool, st->peers);
+        ks_pool_free(h->pool, st);
     }
 
     while (h->searches) {
         struct search *sr = h->searches;
         h->searches = h->searches->next;
-        free(sr);
+        ks_pool_free(h->pool, sr);
     }
 
 	ks_dht_store_destroy(&h->store);
-	ks_pool_close(&h->pool);
-	
-	free(h);
+	pool = h->pool;
+	h->pool = NULL;
+	ks_pool_free(pool, h);
+	ks_pool_close(&pool);
+
     return 1;
 }
 
@@ -2623,7 +2790,7 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
             *tosleep = h->search_time - h->now;
 		}
     }
-	free(logmsg);
+	ks_safe_free(logmsg);
 
 	ks_dht_store_prune(h->store, h->now);
 
