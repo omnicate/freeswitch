@@ -235,9 +235,6 @@ main(int argc, char **argv)
     while ( !globals.exiting ) {
 		line = el_gets(el, &count);
 
-		printf("WTF [%s] %d (%s)\n", line, count, strerror(errno));
-		ks_sleep(1000000);
-
 		if (count > 1) {
 			int line_len = (int)strlen(line) - 1;
 			history(myhistory, &ev, H_ENTER, line);

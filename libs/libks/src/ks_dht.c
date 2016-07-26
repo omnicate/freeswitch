@@ -1817,7 +1817,8 @@ static void reset_poll(dht_handle_t *h)
 
 	if (h->num_pollsocks < socks) {
 		h->num_pollsocks = socks;
-		ks_pool_resize(h->pool, (void *)h->pollsocks, sizeof(struct pollfd) * h->num_pollsocks);
+		h->pollsocks = (struct pollfd *)ks_pool_resize(h->pool, (void *)h->pollsocks, sizeof(struct pollfd) * h->num_pollsocks);
+		ks_log(KS_LOG_DEBUG, "Resize poll array to %d\n", h->num_pollsocks);
 	}
 
 	for (itt = ks_hash_first(h->iphash, KS_UNLOCKED); itt; itt = ks_hash_next(&itt)) {
@@ -1915,11 +1916,20 @@ static ks_ip_t *add_ip(dht_handle_t *h, const char *ip, int family)
 	ks_log(KS_LOG_DEBUG, "Adding bind ip: %s port: %d\n", ip, h->port);
 
 	ipt = ks_pool_alloc(h->pool, sizeof(*ipt));
+	ipt->sock = KS_SOCK_INVALID;
+
 	ks_set_string(ipt->ip, ip);
 	
 	ks_addr_set(&ipt->addr, ip, h->port, family);
 
+	if ((ipt->sock = socket(family, SOCK_DGRAM, IPPROTO_UDP)) == KS_SOCK_INVALID) {
+		ks_log(KS_LOG_ERROR, "Socket Error\n");
+		ks_pool_free(h->pool, ipt);
+		return NULL;
+	}
+
 	if (ks_addr_bind(ipt->sock, &ipt->addr) != KS_STATUS_SUCCESS) {
+		ks_log(KS_LOG_ERROR, "Error Adding bind ip: %s port: %d sock: %d\n", ip, h->port, ipt->sock);
 		ks_socket_close(&ipt->sock);
 		ks_pool_free(h->pool, ipt);
 		return NULL;
@@ -2001,6 +2011,9 @@ KS_DECLARE(ks_status_t) ks_dht_init(dht_handle_t **handle, ks_dht_af_flag_t af_f
 
 	h->af_flags = af_flags;
 
+
+	ks_hash_create(&h->iphash, KS_HASH_MODE_DEFAULT, KS_HASH_FLAG_RWLOCK, h->pool);
+
     if ((h->af_flags & KS_DHT_AF_INET4)) {
         h->buckets = ks_pool_alloc(h->pool, sizeof(*h->buckets));
         h->buckets->af = AF_INET;
@@ -2023,9 +2036,6 @@ KS_DECLARE(ks_status_t) ks_dht_init(dht_handle_t **handle, ks_dht_af_flag_t af_f
 
 	h->buckets = NULL;
 	h->buckets6 = NULL;
-
-	ks_hash_create(&h->iphash, KS_HASH_MODE_DEFAULT, KS_HASH_FLAG_RWLOCK, h->pool);
-
 
 	if (!id) {
 		randombytes_buf(h->myid, 20);
