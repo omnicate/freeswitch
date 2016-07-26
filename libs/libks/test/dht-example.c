@@ -75,55 +75,11 @@ void *dht_event_thread(ks_thread_t *thread, void *data)
   dht_globals_t *globals = data;
   
   while(!globals->exiting) {
-        struct timeval tv;
-        fd_set readfds;
-        tv.tv_sec = tosleep;
-        tv.tv_usec = random() % 1000000;
 
-        FD_ZERO(&readfds);
-        if(globals->s >= 0)
-            FD_SET(globals->s, &readfds);
-        if(globals->s6 >= 0)
-            FD_SET(globals->s6, &readfds);
-        rc = select(globals->s > globals->s6 ? globals->s + 1 : globals->s6 + 1, &readfds, NULL, NULL, &tv);
-        if(rc < 0) {
-            if(errno != EINTR) {
-                perror("select");
-                sleep(1);
-            }
-        }
-        
-        if(rc > 0) {
-            fromlen = sizeof(from);
-            if(globals->s >= 0 && FD_ISSET(globals->s, &readfds))
-                rc = recvfrom(globals->s, buf, sizeof(buf) - 1, 0,
-                              (struct sockaddr*)&from, &fromlen);
-            else if(globals->s6 >= 0 && FD_ISSET(globals->s6, &readfds))
-                rc = recvfrom(globals->s6, buf, sizeof(buf) - 1, 0,
-                              (struct sockaddr*)&from, &fromlen);
-            else
-                abort();
-        }
+	  ks_dht_one_loop(h, h->tosleep * 1000);
+  }
 
-        if(rc > 0) {
-            buf[rc] = '\0';
-            rc = dht_periodic(h, buf, rc, (struct sockaddr*)&from, fromlen,
-                              &tosleep, callback, NULL);
-        } else {
-            rc = dht_periodic(h, NULL, 0, NULL, 0, &tosleep, callback, NULL);
-        }
-        if(rc < 0) {
-            if(errno == EINTR) {
-                continue;
-            } else {
-                perror("dht_periodic");
-                if(rc == EINVAL || rc == EFAULT)
-                    abort();
-                tosleep = 1;
-            }
-        }
-    }
-      return NULL;
+  return NULL;
 }
 
 int
@@ -249,67 +205,27 @@ main(int argc, char **argv)
         i++;
     }
 
-    /* We need an IPv4 and an IPv6 socket, bound to a stable port.  Rumour
-       has it that uTorrent works better when it is the same as your
-       Bittorrent port. */
-    if(ipv4) {
-        globals.s = socket(PF_INET, SOCK_DGRAM, 0);
-        if(globals.s < 0) {
-            perror("socket(IPv4)");
-        }
-    }
+	af_flags_t af_flags = 0;
 
-    if(ipv6) {
-      globals.s6 = socket(PF_INET6, SOCK_DGRAM, 0);
-        if(globals.s6 < 0) {
-            perror("socket(IPv6)");
-        }
-    }
+	if (ipv4) {
+		af_flags |= KS_DHT_AF_INET4;
+	}
 
-    if(globals.s < 0 && globals.s6 < 0) {
-        fprintf(stderr, "Eek!");
-        exit(1);
-    }
-
-
-    if(globals.s >= 0) {
-        sin.sin_port = htons(globals.port);
-        rc = bind(globals.s, (struct sockaddr*)&sin, sizeof(sin));
-        if(rc < 0) {
-            perror("bind(IPv4)");
-            exit(1);
-        }
-    }
-
-    if(globals.s6 >= 0) {
-        int rc;
-        int val = 1;
-
-        rc = setsockopt(globals.s6, IPPROTO_IPV6, IPV6_V6ONLY,
-                        (char *)&val, sizeof(val));
-        if(rc < 0) {
-            perror("setsockopt(IPV6_V6ONLY)");
-            exit(1);
-        }
-
-        /* BEP-32 mandates that we should bind this socket to one of our
-           global IPv6 addresses.  In this simple example, this only
-           happens if the user used the -b flag. */
-
-        sin6.sin6_port = htons(globals.port);
-        rc = bind(globals.s6, (struct sockaddr*)&sin6, sizeof(sin6));
-        if(rc < 0) {
-            perror("bind(IPv6)");
-            exit(1);
-        }
-    }
+	if (ipv6) {
+		af_flags |= KS_DHT_AF_INET6;
+	}
 
     /* Init the dht.  This sets the socket into non-blocking mode. */
-    rc = dht_init(&h, globals.s, globals.s6, NULL, (unsigned char*)"LIBKS", globals.port);
+    rc = dht_init(&h, af_flags, (unsigned char*)"LIBKS");
+
     if(rc < 0) {
         perror("dht_init");
         exit(1);
     }
+
+	ks_dht_set_port(h, globals.port);
+	ks_dht_set_callback(h, callback, NULL);
+
 
     ks_pool_open(&pool);
     status = ks_thread_create_ex(&threads[0], dht_event_thread, &globals, KS_THREAD_FLAG_DETATCHED, KS_THREAD_DEFAULT_STACK, KS_PRI_NORMAL, pool);
