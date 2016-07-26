@@ -195,7 +195,7 @@ main(int argc, char **argv)
 	}
 
     /* Init the dht. */
-    rc = ks_dht_init(&h, af_flags, (unsigned char*)"LIBKS", globals.port);
+    rc = ks_dht_init(&h, af_flags, NULL, globals.port);
 
     if(rc < 0) {
         perror("dht_init");
@@ -241,6 +241,11 @@ main(int argc, char **argv)
 
 			if (!strncmp(line, "quit", 4)) {
 				globals.exiting = 1;
+			} else if (!strncmp(line, "ping ", 5)) {
+				const char *ip = line + 5;
+				ks_sockaddr_t tmp;
+				ks_addr_set(&tmp, ip, globals.port, 0);
+				dht_ping_node(h, &tmp);
 			} else if (!strncmp(line, "loglevel", 8)) {
 				ks_global_set_default_logger(atoi(line + 9));
 			} else if (!strncmp(line, "peer_dump", 9)) {
@@ -279,7 +284,7 @@ main(int argc, char **argv)
 				  takes an identity, a message id(salt) and a message, then sends out the announcement.
 				 */
 			  output = cJSON_CreateString(message);
-
+			  
 			  ks_dht_send_message_mutable_cjson(h, alice_secretkey, alice_publickey,
 												&bootstrap_nodes[0],
 												message_id, 1, output, 600);
