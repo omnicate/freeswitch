@@ -233,9 +233,7 @@ static dht_msg_type_t parse_message(struct bencode *bencode_p,
 									unsigned char *id_return);
 
 static const unsigned char zeroes[20] = {0};
-static const unsigned char v4prefix[16] = {
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xFF, 0xFF, 0, 0, 0, 0
-};
+//static const unsigned char v4prefix[16] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xFF, 0xFF, 0, 0, 0, 0 };
 
 #define MAX_TOKEN_BUCKET_TOKENS 400
 
