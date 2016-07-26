@@ -47,8 +47,8 @@ typedef void (*dht_callback_t)(void *closure, ks_dht_event_t event, const unsign
 typedef struct dht_handle_s dht_handle_t;
 
 KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, ks_sockaddr_t *from);
-KS_DECLARE(ks_status_t) ks_dht_init(dht_handle_t **handle, ks_dht_af_flag_t af_flags, const unsigned char *id);
-
+KS_DECLARE(ks_status_t) ks_dht_init(dht_handle_t **handle, ks_dht_af_flag_t af_flags, const unsigned char *id, unsigned int port);
+KS_DECLARE(ks_status_t) ks_dht_start(dht_handle_t *h);
 KS_DECLARE(int) dht_insert_node(dht_handle_t *h, const unsigned char *id, ks_sockaddr_t *sa);
 KS_DECLARE(int) dht_ping_node(dht_handle_t *h, ks_sockaddr_t *sa);
 KS_DECLARE(int) dht_search(dht_handle_t *h, const unsigned char *id, int port, int af, dht_callback_t callback, void *closure);

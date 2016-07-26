@@ -1978,7 +1978,7 @@ KS_DECLARE(void) ks_dht_set_callback(dht_handle_t *h, dht_callback_t callback, v
 }
 
 //KS_DECLARE(int) dht_init(dht_handle_t **handle, int s, int s6, const unsigned char *id, const unsigned char *v, unsigned int port)
-KS_DECLARE(ks_status_t) ks_dht_init(dht_handle_t **handle, ks_dht_af_flag_t af_flags, const unsigned char *id)
+KS_DECLARE(ks_status_t) ks_dht_init(dht_handle_t **handle, ks_dht_af_flag_t af_flags, const unsigned char *id, unsigned int port)
 {
     int rc;
 	dht_handle_t *h;
@@ -1992,7 +1992,13 @@ KS_DECLARE(ks_status_t) ks_dht_init(dht_handle_t **handle, ks_dht_af_flag_t af_f
 	h->pool = pool;
     h->searches = NULL;
     h->numsearches = 0;
-	h->port = 5309;
+
+	if (port) {
+		h->port = port;
+	} else {
+		h->port = 5309;
+	}
+
 	h->af_flags = af_flags;
 
     if ((h->af_flags & KS_DHT_AF_INET4)) {

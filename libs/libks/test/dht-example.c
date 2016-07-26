@@ -72,6 +72,7 @@ void *dht_event_thread(ks_thread_t *thread, void *data)
   
   while(!globals->exiting) {
 	  ks_dht_one_loop(h, 0);
+	  ks_sleep(1000000);
   }
 
   return NULL;
@@ -194,16 +195,14 @@ main(int argc, char **argv)
 	}
 
     /* Init the dht. */
-    rc = ks_dht_init(&h, af_flags, (unsigned char*)"LIBKS");
+    rc = ks_dht_init(&h, af_flags, (unsigned char*)"LIBKS", globals.port);
 
     if(rc < 0) {
         perror("dht_init");
         exit(1);
     }
 
-	ks_dht_set_port(h, globals.port);
 	ks_dht_set_callback(h, callback, NULL);
-
 
     ks_pool_open(&pool);
     status = ks_thread_create_ex(&threads[0], dht_event_thread, &globals, KS_THREAD_FLAG_DETATCHED, KS_THREAD_DEFAULT_STACK, KS_PRI_NORMAL, pool);
@@ -235,7 +234,10 @@ main(int argc, char **argv)
 	
     while ( !globals.exiting ) {
 		line = el_gets(el, &count);
-      
+
+		printf("WTF [%s] %d (%s)\n", line, count, strerror(errno));
+		ks_sleep(1000000);
+
 		if (count > 1) {
 			int line_len = (int)strlen(line) - 1;
 			history(myhistory, &ev, H_ENTER, line);
