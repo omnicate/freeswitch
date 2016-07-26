@@ -2044,7 +2044,8 @@ KS_DECLARE(ks_status_t) ks_dht_init(dht_handle_t **handle, ks_dht_af_flag_t af_f
 	h->buckets6 = NULL;
 
 	if (!id) {
-		randombytes_buf(h->myid, 20);
+		ks_random_string((char *)h->myid, 20, NULL);
+		//randombytes_buf(h->myid, 20);
 	} else {
 		memcpy(h->myid, id, 20);
 	}

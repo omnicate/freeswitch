@@ -35,6 +35,27 @@
 
 static ks_pool_t *pool = NULL;
 
+
+
+KS_DECLARE(void) ks_random_string(char *buf, uint16_t len, char *set)
+{
+	char chars[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+	int max;
+	uint16_t x;
+
+	if (!set) {
+		set = chars;
+	}
+
+	max = (int) strlen(set);
+
+	for (x = 0; x < len; x++) {
+		int j = (int) (max * 1.0 * rand() / (RAND_MAX + 1.0));
+		buf[x] = set[j];
+	}
+}
+
+
 KS_DECLARE(ks_status_t) ks_global_set_cleanup(ks_pool_cleanup_fn_t fn, void *arg)
 {
 	return ks_pool_set_cleanup(ks_global_pool(), NULL, arg, 0, fn);

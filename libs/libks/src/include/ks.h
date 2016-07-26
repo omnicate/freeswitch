@@ -108,6 +108,9 @@ KS_DECLARE(int) ks_cpu_count(void);
 		return strcasecmp(s1, s2);
 	}
 
+
+KS_DECLARE(void) ks_random_string(char *buf, uint16_t len, char *set);
+
 #include "ks_pool.h"
 #include "ks_printf.h"
 #include "ks_json.h"
