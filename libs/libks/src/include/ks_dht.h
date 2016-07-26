@@ -42,16 +42,16 @@ typedef enum {
 } ks_dht_af_flag_t;
 
 
-typedef void dht_callback(void *closure, ks_dht_event_t event, const unsigned char *info_hash, const void *data, size_t data_len);
+typedef void (*dht_callback_t)(void *closure, ks_dht_event_t event, const unsigned char *info_hash, const void *data, size_t data_len);
 
 typedef struct dht_handle_s dht_handle_t;
 
-KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, const struct sockaddr *from, int fromlen,
-				 time_t *tosleep, dht_callback *callback, void *closure);
-KS_DECLARE(int) dht_init(dht_handle_t **h, int s, int s6, const unsigned char *id, const unsigned char *v, unsigned int port);
-KS_DECLARE(int) dht_insert_node(dht_handle_t *h, const unsigned char *id, struct sockaddr *sa, int salen);
-KS_DECLARE(int) dht_ping_node(dht_handle_t *h, struct sockaddr *sa, int salen);
-KS_DECLARE(int) dht_search(dht_handle_t *h, const unsigned char *id, int port, int af, dht_callback *callback, void *closure);
+KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, ks_sockaddr_t *from);
+KS_DECLARE(ks_status_t) ks_dht_init(dht_handle_t **handle, ks_dht_af_flag_t af_flags, const unsigned char *id);
+
+KS_DECLARE(int) dht_insert_node(dht_handle_t *h, const unsigned char *id, ks_sockaddr_t *sa);
+KS_DECLARE(int) dht_ping_node(dht_handle_t *h, ks_sockaddr_t *sa);
+KS_DECLARE(int) dht_search(dht_handle_t *h, const unsigned char *id, int port, int af, dht_callback_t callback, void *closure);
 KS_DECLARE(int) dht_nodes(dht_handle_t *h, int af, int *good_return, int *dubious_return, int *cached_return, int *incoming_return);
 KS_DECLARE(void) dht_dump_tables(dht_handle_t *h, FILE *f);
 KS_DECLARE(int) dht_get_nodes(dht_handle_t *h, struct sockaddr_in *sin, int *num, struct sockaddr_in6 *sin6, int *num6);
@@ -62,10 +62,10 @@ int dht_blacklisted(const ks_sockaddr_t *sa);
 void dht_hash(void *hash_return, int hash_size, const void *v1, int len1, const void *v2, int len2, const void *v3, int len3);
 int dht_random_bytes(void *buf, size_t size);
 
-KS_DECLARE(int) ks_dht_send_message_mutable(dht_handle_t *h, unsigned char *sk, unsigned char *pk, const struct sockaddr *sa, int salen,
+KS_DECLARE(int) ks_dht_send_message_mutable(dht_handle_t *h, unsigned char *sk, unsigned char *pk, const ks_sockaddr_t *sa,
 											char *message_id, int sequence, char *message, ks_time_t life);
 
-KS_DECLARE(int) ks_dht_send_message_mutable_cjson(dht_handle_t *h, unsigned char *sk, unsigned char *pk, const struct sockaddr *sa, int salen,
+KS_DECLARE(int) ks_dht_send_message_mutable_cjson(dht_handle_t *h, unsigned char *sk, unsigned char *pk, const ks_sockaddr_t *sa,
 												  char *message_id, int sequence, cJSON *message, ks_time_t life);
 
 typedef void (ks_dht_store_entry_json_cb)(struct dht_handle_s *h, const cJSON *msg, void *obj);

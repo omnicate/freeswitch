@@ -64,19 +64,6 @@ void dht_hash(void *hash_return, int hash_size, const void *v1, int len1, const 
 #define EAFNOSUPPORT WSAEAFNOSUPPORT
 
 static int
-set_nonblocking(int fd, int nonblocking)
-{
-    int rc;
-
-    unsigned long mode = !!nonblocking;
-    rc = ioctlsocket(fd, FIONBIO, &mode);
-    if (rc != 0) {
-        errno = WSAGetLastError();
-	}
-    return (rc == 0 ? 0 : -1);
-}
-
-static int
 random(void)
 {
     return rand();
@@ -88,20 +75,6 @@ extern const char *inet_ntop(int, const void *, char *, socklen_t);
 #endif
 
 #else
-
-static int
-set_nonblocking(int fd, int nonblocking)
-{
-    int rc;
-    rc = fcntl(fd, F_GETFL, 0);
-    if (rc < 0) return -1;
-
-    rc = fcntl(fd, F_SETFL, nonblocking?(rc | O_NONBLOCK):(rc & ~O_NONBLOCK));
-    if (rc < 0) return -1;
-
-    return 0;
-}
-
 #endif
 
 /* We set sin_family to 0 to mark unused slots. */
@@ -299,6 +272,14 @@ struct ks_dht_store_s {
 	ks_pool_t *pool;
 };
 
+typedef struct {
+	char ip[80];
+	ks_sockaddr_t addr;
+	ks_socket_t sock;
+} ks_ip_t;
+
+
+
 struct dht_handle_s {
 	ks_pool_t *pool;
 
@@ -344,6 +325,16 @@ struct dht_handle_s {
 	ks_hash_t *iphash;
 
 	struct ks_dht_store_s *store;
+
+	dht_callback_t callback;
+	void *closure;
+
+	uint32_t ip4s;
+	uint32_t ip6s;
+
+	int af_flags;
+
+	int tosleep;
 };
 
 void ks_dht_store_entry_json_cb_set(struct dht_handle_s *h, ks_dht_store_entry_json_cb *store_json_cb, void *arg)
@@ -369,30 +360,18 @@ static void print_hex(FILE *f, const unsigned char *buf, int buflen)
 	}
 }
 
-static int is_martian(const struct sockaddr *sa)
+static int is_martian(const ks_sockaddr_t *sa)
 {
-    switch(sa->sa_family) {
+    switch(sa->family) {
     case AF_INET: {
-        struct sockaddr_in *sin = (struct sockaddr_in*)sa;
-        const unsigned char *address = (const unsigned char*)&sin->sin_addr;
-        return sin->sin_port == 0 ||
-            (address[0] == 0) ||
-            (address[0] == 127) ||
-            ((address[0] & 0xE0) == 0xE0);
+		return (sa->port == 0);
     }
     case AF_INET6: {
-        struct sockaddr_in6 *sin6 = (struct sockaddr_in6*)sa;
-        const unsigned char *address = (const unsigned char*)&sin6->sin6_addr;
-        return sin6->sin6_port == 0 ||
-            (address[0] == 0xFF) ||
-            (address[0] == 0xFE && (address[1] & 0xC0) == 0x80) ||
-            (memcmp(address, zeroes, 15) == 0 &&
-             (address[15] == 0 || address[15] == 1)) ||
-            (memcmp(address, v4prefix, 12) == 0);
+		return (sa->port == 0);
     }
 
     default:
-        return 0;
+        return 1;
     }
 }
 
@@ -1156,7 +1135,7 @@ static void search_step(dht_handle_t *h, struct search *sr)
  done:
     sr->done = 1;
     if (h->callback) {
-        h->callback(closure, sr->af == AF_INET ? KS_DHT_EVENT_SEARCH_DONE : KS_DHT_EVENT_SEARCH_DONE6, sr->id, NULL, 0);
+        h->callback(h->closure, sr->af == AF_INET ? KS_DHT_EVENT_SEARCH_DONE : KS_DHT_EVENT_SEARCH_DONE6, sr->id, NULL, 0);
 	}
     sr->step_time = h->now;
 }
@@ -1205,7 +1184,7 @@ static void insert_search_bucket(dht_handle_t *h, struct bucket *b, struct searc
 
 /* Start a search.  If port is non-zero, perform an announce when the
    search is complete. */
-KS_DECLARE(int) dht_search(dht_handle_t *h, const unsigned char *id, int port, int af, dht_callback *callback, void *closure)
+KS_DECLARE(int) dht_search(dht_handle_t *h, const unsigned char *id, int port, int af, dht_callback_t callback, void *closure)
 {
     struct search *sr;
     struct storage *st;
@@ -1216,6 +1195,9 @@ KS_DECLARE(int) dht_search(dht_handle_t *h, const unsigned char *id, int port, i
         return -1;
     }
 
+	if (!callback) callback = h->callback;
+	if (!closure) closure = h->closure;
+
     /* Try to answer this search locally.  In a fully grown DHT this
        is very unlikely, but people are running modified versions of
        this code in private DHTs with very few nodes.  What's wrong
@@ -1223,23 +1205,12 @@ KS_DECLARE(int) dht_search(dht_handle_t *h, const unsigned char *id, int port, i
     if (callback) {
         st = find_storage(h, id);
         if (st) {
-            unsigned short swapped;
-            unsigned char buf[18];
             int i;
 
             ks_log(KS_LOG_DEBUG, "Found local data (%d peers).\n", st->numpeers);
 
             for (i = 0; i < st->numpeers; i++) {
-                swapped = htons(st->peers[i].addr.port);
-                if (st->peers[i].addr.family == AF_INET) {
-                    memcpy(buf, st->peers[i].addr.ip, 4);
-                    memcpy(buf + 4, &swapped, 2);
-                    (*callback)(closure, KS_DHT_EVENT_VALUES, id, (void*)buf, 6);
-                } else if (st->peers[i].addr.family == AF_INET6) {
-                    memcpy(buf, st->peers[i].addr.ip, 16);
-                    memcpy(buf + 16, &swapped, 2);
-                    (*callback)(closure, KS_DHT_EVENT_VALUES6, id, (void*)buf, 18);
-                }
+				(*callback)(closure, st->peers[i].addr.family == AF_INET ? KS_DHT_EVENT_VALUES : KS_DHT_EVENT_VALUES6, id, (void *)&st->peers[i].addr, sizeof(st->peers[i].addr));
             }
         }
     }
@@ -1302,7 +1273,7 @@ KS_DECLARE(int) dht_search(dht_handle_t *h, const unsigned char *id, int port, i
         insert_search_bucket(h, find_bucket(h, h->myid, af), sr);
 	}
 
-    search_step(h, sr, callback, closure);
+    search_step(h, sr);
     h->search_time = h->now;
     return 1;
 }
@@ -1322,11 +1293,10 @@ static struct storage *find_storage(dht_handle_t *h, const unsigned char *id)
     return st;
 }
 
-static int storage_store(dht_handle_t *h, const unsigned char *id, const struct sockaddr *sa, unsigned short port)
+static int storage_store(dht_handle_t *h, const unsigned char *id, const ks_sockaddr_t *sa, unsigned short port)
 {
     int i;
     struct storage *st;
-    unsigned char *ip;
 
     st = find_storage(h, id);
 
@@ -1372,7 +1342,7 @@ static int storage_store(dht_handle_t *h, const unsigned char *id, const struct 
         }
         p = &st->peers[st->numpeers++];
         p->time = h->now;
-		ks_addr_copy(p->addr, sa);
+		ks_addr_copy(&p->addr, sa);
         return 1;
     }
 }
@@ -1432,30 +1402,19 @@ static int rotate_secrets(dht_handle_t *h)
 #define TOKEN_SIZE 8
 #endif
 
-static void make_token(dht_handle_t *h, const struct sockaddr *sa, int old, unsigned char *token_return)
+static void make_token(dht_handle_t *h, const ks_sockaddr_t *sa, int old, unsigned char *token_return)
 {
     void *ip;
-    int iplen;
+    ks_size_t iplen;
     unsigned short port;
 
-    if (sa->family == AF_INET) {
-        struct sockaddr_in *sin = (struct sockaddr_in*)sa;
-        ip = &sin->sin_addr;
-        iplen = 4;
-        port = htons(sin->sin_port);
-    } else if (sa->sa_family == AF_INET6) {
-        struct sockaddr_in6 *sin6 = (struct sockaddr_in6*)sa;
-        ip = &sin6->sin6_addr;
-        iplen = 16;
-        port = htons(sin6->sin6_port);
-    } else {
-        abort();
-    }
+	ks_addr_raw_data(sa, &ip, &iplen);
+	port = htons(sa->port);
 
     dht_hash(token_return, TOKEN_SIZE, old ? h->oldsecret : h->secret, sizeof(h->secret), ip, iplen, (unsigned char*)&port, 2);
 }
 
-static int token_match(dht_handle_t *h, const unsigned char *token, int token_len, const struct sockaddr *sa)
+static int token_match(dht_handle_t *h, const unsigned char *token, int token_len, const ks_sockaddr_t *sa)
 {
     unsigned char t[TOKEN_SIZE];
 
@@ -1626,11 +1585,9 @@ KS_DECLARE(void) dht_dump_tables(dht_handle_t *h, FILE *f)
         for (i = 0; i < st->numpeers; i++) {
             char buf[100];
             if (st->peers[i].addr.family == AF_INET) {
-                inet_ntop(AF_INET, st->peers[i].addr.ip, buf, 100);
+				ks_snprintf(buf, sizeof(buf), "%s", st->peers[i].addr.host);
             } else if (st->peers[i].addr.family == AF_INET6) {
-                buf[0] = '[';
-                inet_ntop(AF_INET6, st->peers[i].addr.ip, buf + 1, 98);
-                strcat(buf, "]");
+				ks_snprintf(buf, sizeof(buf), "[%s]", st->peers[i].addr.host);
             } else {
                 strcpy(buf, "???");
             }
@@ -1853,13 +1810,40 @@ static void ks_dht_store_destroy(struct ks_dht_store_s **old_store)
 	return;
 }
 
+static void reset_poll(dht_handle_t *h)
+{
+	int i = 0, socks = h->ip4s + h->ip6s;
+	ks_hash_iterator_t *itt;
+
+	if (!h->iphash) return;
+
+	if (h->num_pollsocks < socks) {
+		h->num_pollsocks = socks;
+		ks_pool_resize(h->pool, (void *)h->pollsocks, sizeof(struct pollfd) * h->num_pollsocks);
+	}
+
+	for (itt = ks_hash_first(h->iphash, KS_UNLOCKED); itt; itt = ks_hash_next(&itt)) {
+		const void *key;
+		void *val;
+		ks_ip_t *ipt;
+		
+		ks_hash_this(itt, &key, NULL, &val);
+		
+		ipt = (ks_ip_t *) val;
+		
+		h->pollsocks[i].fd = ipt->sock;
+		h->pollsocks[i].events = POLLIN | POLLERR;
+		i++;
+	}
+}
+
 
 KS_DECLARE(ks_status_t) ks_dht_one_loop(dht_handle_t *h, int timeout)
 {
 	ks_status_t status;
 	int s, i;
 	unsigned char buf[65536] = {0};
-	ks_ssize_t bytes;
+	ks_size_t bytes = sizeof(buf);
 	ks_sockaddr_t remote_addr;
 
 	reset_poll(h);
@@ -1874,23 +1858,18 @@ KS_DECLARE(ks_status_t) ks_dht_one_loop(dht_handle_t *h, int timeout)
 		return KS_STATUS_TIMEOUT;
 	}
 
-	for (i = 0; i < h->num_pollsocks, i++) {
+	for (i = 0; i < h->num_pollsocks; i++) {
 		if ((h->pollsocks[i].revents & POLLIN)) {
-			if ((status = ks_socket_recvfrom(h->pollsocks[i].sock, buf, &bytes, &remote_addr)) == KS_STATUS_SUCCESS) {
+			if ((status = ks_socket_recvfrom(h->pollsocks[i].fd, buf, &bytes, &remote_addr)) == KS_STATUS_SUCCESS) {
 				// git rid of tosleep and convert it to non-blocking counter so you can still call this in a loop and just return timeout till tosleep expired
 				// beginning of rabbit hole to change references to addrs to ks_addrs instead and stop passing sockaddr and len all over the place.
-				rc = dht_periodic(h, buf, bytes, &remote_addr, &tosleep, callback, NULL);
+				dht_periodic(h, buf, bytes, &remote_addr);
 			}
 		}
 	}
+
+	return KS_STATUS_SUCCESS;
 }
-
-typedef struct {
-	char ip[80];
-	ks_sockaddr_t addr;
-	ks_socket_t sock;
-} ks_ip_t;
-
 
 static void clear_all_ip(dht_handle_t *h)
 {
@@ -1925,37 +1904,9 @@ static void clear_all_ip(dht_handle_t *h)
 
 }
 
-static void reset_poll(dht_handle_t *h)
-{
-	int i = 0, socks = h->ip4s + h->ip6s;
-	ks_hash_iterator_t *itt;
-
-	if (!h->iphash) return;
-
-	if (h->num_pollsocks < socks) {
-		h->num_pollsocks = socks;
-		ks_pool_resize(h->pool, (void *)h->pollsocks, sizeof(struct pollfd) * h->num_pollsocks);
-	}
-
-	for (itt = ks_hash_first(h->iphash, KS_UNLOCKED); itt; itt = ks_hash_next(&itt)) {
-		const void *key;
-		void *val;
-		ks_ip_t *ipt;
-		
-		ks_hash_this(itt, &key, NULL, &val);
-		
-		ipt = (ks_ip_t *) val;
-		
-		h->pollsocks[i].sock = ipt->sock;
-		h->pollsocks[i].events = POLLIN | POLLERR;
-		i++;
-	}
-}
-
 static ks_ip_t *add_ip(dht_handle_t *h, const char *ip, int family)
 {
 	ks_ip_t *ipt;
-	ks_status_t status = KS_STATUS_SUCCESS;
 
 	ks_assert(h);
 	ks_assert(ip);
@@ -2005,21 +1956,21 @@ KS_DECLARE(void) ks_dht_set_v(dht_handle_t *h, const unsigned char *v)
     }
 }
 
-KS_DECLARE(ks_status_t) ks_dht_add_ip(dht_handle_t *h, const char *ip)
+KS_DECLARE(ks_status_t) ks_dht_add_ip(dht_handle_t *h, char *ip, ks_size_t iplen)
 {
 	int family = AF_INET;
-	int mast = 0;
+	int mask = 0;
 
 	if (strchr(ip, ':')) {
 		family = AF_INET6;
 	}
 
-	ks_find_local_ip(ip, sizeof(ip), &mask, family, NULL);
-	add_ip(h, ip, AF_INET);
+	ks_find_local_ip(ip, iplen, &mask, family, NULL);
+	return add_ip(h, ip, AF_INET) ? KS_STATUS_SUCCESS : KS_STATUS_FAIL;
 }
 
 
-KS_DECLARE(void) ks_dht_set_callback(dht_callback *callback, void *closure)
+KS_DECLARE(void) ks_dht_set_callback(dht_handle_t *h, dht_callback_t callback, void *closure)
 {
 	h->callback = callback;
 	h->closure = closure;
@@ -2035,12 +1986,13 @@ KS_DECLARE(ks_status_t) ks_dht_init(dht_handle_t **handle, ks_dht_af_flag_t af_f
 	int mask = 0;
 
 	ks_pool_open(&pool);
-	h->pool = pool;
+	*handle = h = ks_pool_alloc(pool, sizeof(dht_handle_t));
 
-	*handle = h = ks_pool_alloc(h->pool, sizeof(*h));
+	h->pool = pool;
     h->searches = NULL;
     h->numsearches = 0;
 	h->port = 5309;
+	h->af_flags = af_flags;
 
     if ((h->af_flags & KS_DHT_AF_INET4)) {
         h->buckets = ks_pool_alloc(h->pool, sizeof(*h->buckets));
@@ -2095,8 +2047,6 @@ KS_DECLARE(ks_status_t) ks_dht_init(dht_handle_t **handle, ks_dht_af_flag_t af_f
     if (rc < 0)
         goto fail;
 
-    h->dht_socket = s;
-    h->dht_socket6 = s6;
 
     expire_buckets(h, h->buckets);
     expire_buckets(h, h->buckets6);
@@ -2116,22 +2066,16 @@ KS_DECLARE(ks_status_t) ks_dht_init(dht_handle_t **handle, ks_dht_af_flag_t af_f
 
 KS_DECLARE(int) dht_uninit(dht_handle_t **handle)
 {
-	dht_handle_t *h = *handle;
+	dht_handle_t *h;
 	ks_pool_t *pool;
 
+	ks_assert(handle && *handle);
+	
+	h = *handle;
 	*handle = NULL;
 
 	clear_all_ip(h);
 	
-
-    if (h->dht_socket < 0 && h->dht_socket6 < 0) {
-        errno = EINVAL;
-        return -1;
-    }
-
-    h->dht_socket = -1;
-    h->dht_socket6 = -1;
-
     while (h->buckets) {
         struct bucket *b = h->buckets;
         h->buckets = b->next;
@@ -2223,7 +2167,8 @@ static int neighbourhood_maintenance(dht_handle_t *h, int af)
     if (q) {
         /* Since our node-id is the same in both DHTs, it's probably
            profitable to query both families. */
-        int want = h->dht_socket >= 0 && h->dht_socket6 >= 0 ? (WANT4 | WANT6) : -1;
+
+		int want = (h->af_flags & KS_DHT_AF_INET6) ? (WANT4 | WANT6) : -1;
         n = random_node(q);
         if (n) {
             unsigned char tid[4];
@@ -2280,7 +2225,7 @@ static int bucket_maintenance(dht_handle_t *h, int af)
                     unsigned char tid[4];
                     int want = -1;
 
-                    if (h->dht_socket >= 0 && h->dht_socket6 >= 0) {
+					if ((h->af_flags & KS_DHT_AF_INET4) && (h->af_flags & KS_DHT_AF_INET6)) {
                         struct bucket *otherbucket;
                         otherbucket = find_bucket(h, id, af == AF_INET ? AF_INET6 : AF_INET);
                         if (otherbucket && otherbucket->count < 8) {
@@ -2310,7 +2255,7 @@ static int bucket_maintenance(dht_handle_t *h, int af)
 }
 
 
-KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, ks_sockaddr_t from) 
+KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, ks_sockaddr_t *from) 
 //KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, const struct sockaddr *from, int fromlen,
 //           time_t *tosleep, dht_callback *callback, void *closure)
 {
@@ -2529,7 +2474,7 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, ks
                 struct search *sr = NULL;
                 if (tid_match(tid, "gp", &ttid)) {
                     gp = 1;
-                    sr = find_search(h, ttid, from->sa_family);
+                    sr = find_search(h, ttid, from->family);
                 }
                 ks_log(KS_LOG_DEBUG, "Nodes found (%d+%d)%s!\n", nodes_len/26, nodes6_len/38, gp ? " for get_peers" : "");
                 if (nodes_len % 26 != 0 || nodes6_len % 38 != 0) {
@@ -2544,6 +2489,8 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, ks
                     for (i = 0; i < nodes_len / 26; i++) {
                         unsigned char *ni = nodes + i * 26;
                         struct sockaddr_in sin;
+						ks_sockaddr_t addr = { 0 };
+
                         if (id_cmp(ni, h->myid) == 0) {
                             continue;
 						}
@@ -2551,14 +2498,18 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, ks
                         sin.sin_family = AF_INET;
                         memcpy(&sin.sin_addr, ni + 20, 4);
                         memcpy(&sin.sin_port, ni + 24, 2);
-                        new_node(h, ni, (struct sockaddr*)&sin, sizeof(sin), 0);
+
+						ks_addr_set_raw(&addr, &sin.sin_addr, sin.sin_port, AF_INET);
+                        new_node(h, ni, &addr, 0);
                         if (sr && sr->af == AF_INET) {
-                            insert_search_node(h, ni, (struct sockaddr*)&sin, sizeof(sin), sr, 0, NULL, 0);
+                            insert_search_node(h, ni, &addr, sr, 0, NULL, 0);
                         }
                     }
                     for (i = 0; i < nodes6_len / 38; i++) {
                         unsigned char *ni = nodes6 + i * 38;
                         struct sockaddr_in6 sin6;
+						ks_sockaddr_t addr = { 0 };
+
                         if (id_cmp(ni, h->myid) == 0) {
                             continue;
 						}
@@ -2566,9 +2517,12 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, ks
                         sin6.sin6_family = AF_INET6;
                         memcpy(&sin6.sin6_addr, ni + 20, 16);
                         memcpy(&sin6.sin6_port, ni + 36, 2);
-                        new_node(h, ni, (struct sockaddr*)&sin6, sizeof(sin6), 0);
+
+						ks_addr_set_raw(&addr, &sin6.sin6_addr, sin6.sin6_port, AF_INET6);
+
+                        new_node(h, ni, &addr, 0);
                         if (sr && sr->af == AF_INET6) {
-                            insert_search_node(h, ni, (struct sockaddr*)&sin6, sizeof(sin6), sr, 0, NULL, 0);
+                            insert_search_node(h, ni, &addr, sr, 0, NULL, 0);
                         }
                     }
                     if (sr) {
@@ -2585,10 +2539,10 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, ks
                         ks_log(KS_LOG_DEBUG, "Got values (%d+%d)!\n", values_len / 6, values6_len / 18);
                         if (h->callback) {
                             if (values_len > 0) {
-                                h->callback(closure, KS_DHT_EVENT_VALUES, sr->id, (void*)values, values_len);
+                                h->callback(h->closure, KS_DHT_EVENT_VALUES, sr->id, (void*)values, values_len);
 							}
                             if (values6_len > 0) {
-                                h->callback(closure, KS_DHT_EVENT_VALUES6, sr->id, (void*)values6, values6_len);
+                                h->callback(h->closure, KS_DHT_EVENT_VALUES6, sr->id, (void*)values6, values6_len);
 							}
                         }
                     }
@@ -2596,7 +2550,7 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, ks
             } else if (tid_match(tid, "ap", &ttid)) {
                 struct search *sr;
                 ks_log(KS_LOG_DEBUG, "Got reply to announce_peer.\n");
-                sr = find_search(h, ttid, from->sa_family);
+                sr = find_search(h, ttid, from->family);
                 if (!sr) {
                     ks_log(KS_LOG_DEBUG, "Unknown search!\n");
                     new_node(h, id, from, 1);
@@ -2663,8 +2617,8 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, ks
                 unsigned char token[TOKEN_SIZE];
                 make_token(h, from, 0, token);
                 if (st && st->numpeers > 0) {
-                     ks_log(KS_LOG_DEBUG, "Sending found%s peers.\n", from->sa_family == AF_INET6 ? " IPv6" : "");
-                     send_closest_nodes(h, from, tid, tid_len, info_hash, want, from->sa_family, st, token, TOKEN_SIZE);
+                     ks_log(KS_LOG_DEBUG, "Sending found%s peers.\n", from->family == AF_INET6 ? " IPv6" : "");
+                     send_closest_nodes(h, from, tid, tid_len, info_hash, want, from->family, st, token, TOKEN_SIZE);
                 } else {
                     ks_log(KS_LOG_DEBUG, "Sending nodes for get_peers.\n");
                     send_closest_nodes(h, from, tid, tid_len, info_hash, want, 0, NULL, token, TOKEN_SIZE);
@@ -2765,7 +2719,7 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, ks
     if (h->search_time > 0) {
         if (h->search_time <= h->now) {
             h->tosleep = 0;
-        } else if (*tosleep > h->search_time - h->now) {
+        } else if (h->tosleep > h->search_time - h->now) {
             h->tosleep = h->search_time - h->now;
 		}
     }
@@ -2900,7 +2854,6 @@ KS_DECLARE(int) dht_ping_node(dht_handle_t *h, ks_sockaddr_t *sa)
 
 static int dht_send(dht_handle_t *h, const void *buf, size_t len, int flags, const ks_sockaddr_t *sa)
 {
-    int s;
 	char ip[80] = "";
 	ks_ip_t *ipt;
 
@@ -2910,7 +2863,7 @@ static int dht_send(dht_handle_t *h, const void *buf, size_t len, int flags, con
         return -1;
     }
 
-	ks_ip_route(ip, sizeof(ip), addr->host);
+	ks_ip_route(ip, sizeof(ip), sa->host);
 
 	if (!(ipt = ks_hash_search(h->iphash, ip, KS_UNLOCKED))) {
 		ipt = add_ip(h, ip, AF_INET);
@@ -2921,7 +2874,7 @@ static int dht_send(dht_handle_t *h, const void *buf, size_t len, int flags, con
 		return -1;
 	}
 
-	if (ks_socket_sendto(ipt->sock, buf, len, sa) != KS_STATUS_SUCCESS) {
+	if (ks_socket_sendto(ipt->sock, (void *)buf, &len, (ks_sockaddr_t *)sa) != KS_STATUS_SUCCESS) {
 		return -1;
 	}
 
@@ -3016,7 +2969,7 @@ int send_nodes_peers(dht_handle_t *h, const ks_sockaddr_t *sa,
                  const unsigned char *token, int token_len)
 {
     char buf[2048];
-    int i = 0, j0, j, k, len;
+    int i = 0, j0, j, k;
 	struct bencode *bencode_p = ben_dict();
 	struct bencode *bencode_a_p = ben_dict();
 	struct bencode *ben_array = ben_list();
@@ -3037,7 +2990,6 @@ int send_nodes_peers(dht_handle_t *h, const ks_sockaddr_t *sa,
         //   chosen slice.  In order to make sure we fit within 1024 octets,
         //   we limit ourselves to 50 peers.
 
-        len = af == AF_INET ? 4 : 16;
         j0 = random() % st->numpeers;
         j = j0;
         k = 0;
@@ -3046,9 +2998,14 @@ int send_nodes_peers(dht_handle_t *h, const ks_sockaddr_t *sa,
             if (st->peers[j].addr.family == af) {
 				char data[18];
 				unsigned short swapped = htons(st->peers[j].addr.port);
-				memcpy(data, st->peers[j].addr.ip, len);
-				memcpy(data + len, &swapped, 2);
-				ben_list_append(ben_array, ben_blob(data, len + 2));
+				void *ip = NULL;
+				ks_size_t iplen = 0;
+
+				ks_addr_raw_data(&st->peers[j].addr, &ip, &iplen);
+
+				memcpy(data, ip, iplen);
+				memcpy(data + iplen, &swapped, 2);
+				ben_list_append(ben_array, ben_blob(data, iplen + 2));
                 k++;
             }
             j = (j + 1) % st->numpeers;
@@ -3138,7 +3095,7 @@ int send_closest_nodes(dht_handle_t *h, const ks_sockaddr_t *sa,
     struct bucket *b;
 
     if (want < 0) {
-        want = sa->sa_family == AF_INET ? WANT4 : WANT6;
+        want = sa->family == AF_INET ? WANT4 : WANT6;
 	}
 
     if ((want & WANT4)) {
@@ -3170,7 +3127,7 @@ int send_closest_nodes(dht_handle_t *h, const ks_sockaddr_t *sa,
     }
     ks_log(KS_LOG_DEBUG, "send_closest_nodes  (%d+%d nodes.)\n", numnodes, numnodes6);
 
-    return send_nodes_peers(h, sa, salen, tid, tid_len,
+    return send_nodes_peers(h, sa, tid, tid_len,
                             nodes, numnodes * 26,
                             nodes6, numnodes6 * 38,
                             af, st, token, token_len);
@@ -3876,7 +3833,7 @@ KS_DECLARE(int) ks_dht_send_message_mutable_cjson(dht_handle_t *h, unsigned char
 
 	output = (char *)ben_encode(&output_len, body);
 
-	err = ks_dht_send_message_mutable(h, sk, pk, sa, salen, message_id, sequence, output, life);
+	err = ks_dht_send_message_mutable(h, sk, pk, sa, message_id, sequence, output, life);
 	free(json);
 	free(output);
 	ben_free(body);

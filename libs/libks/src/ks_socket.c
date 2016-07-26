@@ -353,6 +353,35 @@ KS_DECLARE(ks_status_t) ks_addr_set(ks_sockaddr_t *addr, const char *host, ks_po
 }
 
 
+KS_DECLARE(ks_status_t) ks_addr_set_raw(ks_sockaddr_t *addr, void *data, ks_port_t port, int family)
+{
+	ks_status_t status = KS_STATUS_SUCCESS;
+
+	ks_assert(addr);
+	
+	if (family != PF_INET && family != PF_INET6) family = PF_INET;
+
+	memset(addr, 0, sizeof(*addr));
+
+	if (family == PF_INET) {
+		addr->family = AF_INET;
+		addr->v.v4.sin_family = AF_INET;
+		memcpy(&(addr->v.v4.sin_addr), data, 4);
+		addr->v.v4.sin_port = port;
+	} else {
+		addr->family = AF_INET6;
+		addr->v.v6.sin6_family = AF_INET6;
+		addr->v.v6.sin6_port = port;
+		memcpy(&(addr->v.v6.sin6_addr), data, 16);
+	} 
+
+	ks_addr_get_host(addr);
+	ks_addr_get_port(addr);
+
+	return status;
+}
+
+
 KS_DECLARE(ks_status_t) ks_listen_sock(ks_socket_t server_sock, ks_sockaddr_t *addr, int backlog, ks_listen_callback_t callback, void *user_data)
 {
 	ks_status_t status = KS_STATUS_SUCCESS;
@@ -865,6 +894,21 @@ KS_DECLARE(ks_status_t) ks_find_local_ip(char *buf, int len, int *mask, int fami
 }
 
 
+KS_DECLARE(ks_status_t) ks_addr_raw_data(const ks_sockaddr_t *addr, void **data, ks_size_t *datalen)
+{
+	ks_assert(addr->family == AF_INET || addr->family == AF_INET6);
+
+	if (addr->family == AF_INET) {
+		*data = (void *)&addr->v.v4.sin_addr;
+		*datalen = 4;
+	} else {
+		*data = (void *)&addr->v.v6.sin6_addr;
+		*datalen = 16;
+	}
+
+	return KS_STATUS_SUCCESS;
+}
+
 KS_DECLARE(ks_status_t) ks_socket_send(ks_socket_t sock, void *data, ks_size_t *datalen)
 {
 	ks_ssize_t r;
@@ -888,7 +932,7 @@ KS_DECLARE(ks_status_t) ks_socket_send(ks_socket_t sock, void *data, ks_size_t *
 		status = KS_STATUS_BREAK;
 	}
 
-	return status;
+return status;
 }
 
 KS_DECLARE(ks_status_t) ks_socket_recv(ks_socket_t sock, void *data, ks_size_t *datalen)
