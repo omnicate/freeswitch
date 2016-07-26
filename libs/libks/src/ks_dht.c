@@ -1846,6 +1846,9 @@ KS_DECLARE(ks_status_t) ks_dht_one_loop(dht_handle_t *h, int timeout)
 
 	reset_poll(h);
 
+	if (!timeout) timeout = h->tosleep * 1000;
+
+
 	s = ks_poll(h->pollsocks, h->num_pollsocks, timeout);
 	
 	if (s < 0) {

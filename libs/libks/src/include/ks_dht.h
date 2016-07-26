@@ -54,6 +54,8 @@ KS_DECLARE(int) dht_ping_node(dht_handle_t *h, ks_sockaddr_t *sa);
 KS_DECLARE(int) dht_search(dht_handle_t *h, const unsigned char *id, int port, int af, dht_callback_t callback, void *closure);
 KS_DECLARE(int) dht_nodes(dht_handle_t *h, int af, int *good_return, int *dubious_return, int *cached_return, int *incoming_return);
 KS_DECLARE(ks_status_t) ks_dht_one_loop(dht_handle_t *h, int timeout);
+KS_DECLARE(void) ks_dht_set_callback(dht_handle_t *h, dht_callback_t callback, void *closure);
+KS_DECLARE(void) ks_dht_set_port(dht_handle_t *h, unsigned int port);
 KS_DECLARE(void) dht_dump_tables(dht_handle_t *h, FILE *f);
 KS_DECLARE(int) dht_get_nodes(dht_handle_t *h, struct sockaddr_in *sin, int *num, struct sockaddr_in6 *sin6, int *num6);
 KS_DECLARE(int) dht_uninit(dht_handle_t **h);

@@ -22,7 +22,7 @@
 #include "sodium.h"
 
 #define MAX_BOOTSTRAP_NODES 20
-static struct sockaddr_storage bootstrap_nodes[MAX_BOOTSTRAP_NODES];
+static ks_sockaddr_t bootstrap_nodes[MAX_BOOTSTRAP_NODES];
 static int num_bootstrap_nodes = 0;
 
 /* The call-back function is called by the DHT whenever something
@@ -57,7 +57,7 @@ static char * prompt(EditLine *e) {
 }
 
 static dht_handle_t *h;
-static unsigned char buf[4096];
+
 
 typedef struct dht_globals_s {
   int s;
@@ -68,15 +68,10 @@ typedef struct dht_globals_s {
 
 void *dht_event_thread(ks_thread_t *thread, void *data)
 {
-  time_t tosleep = 0;
-  int rc = 0;
-  socklen_t fromlen;
-  struct sockaddr_storage from;
   dht_globals_t *globals = data;
   
   while(!globals->exiting) {
-
-	  ks_dht_one_loop(h, h->tosleep * 1000);
+	  ks_dht_one_loop(h, 0);
   }
 
   return NULL;
@@ -168,44 +163,27 @@ main(int argc, char **argv)
         goto usage;
 
     globals.port = atoi(argv[i++]);
+
     if(globals.port <= 0 || globals.port >= 0x10000)
         goto usage;
 
     while(i < argc) {
-        struct addrinfo hints, *info, *infop;
-        memset(&hints, 0, sizeof(hints));
-        hints.ai_socktype = SOCK_DGRAM;
-        if(!ipv6)
-            hints.ai_family = AF_INET;
-        else if(!ipv4)
-            hints.ai_family = AF_INET6;
-        else
-            hints.ai_family = 0;
-        rc = getaddrinfo(argv[i], argv[i + 1], &hints, &info);
-        if(rc != 0) {
-            fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rc));
-            exit(1);
-        } else {
-	  fprintf(stderr, "Bootstrapping with node %s:%s\n", argv[i], argv[i+1]);
-	}
+		char *ip = argv[i];
+		int port = atoi(argv[i+1]);
+
+		fprintf(stderr, "Bootstrapping with node %s:%s\n", argv[i], argv[i+1]);
+		ks_addr_set(&bootstrap_nodes[num_bootstrap_nodes++], ip, port, 0);
 
         i++;
-        if(i >= argc)
-            goto usage;
 
-        infop = info;
-        while(infop) {
-            memcpy(&bootstrap_nodes[num_bootstrap_nodes],
-                   infop->ai_addr, infop->ai_addrlen);
-            infop = infop->ai_next;
-            num_bootstrap_nodes++;
-        }
-        freeaddrinfo(info);
+        if(i >= argc) {
+            goto usage;
+		}
 
         i++;
     }
 
-	af_flags_t af_flags = 0;
+	ks_dht_af_flag_t af_flags = 0;
 
 	if (ipv4) {
 		af_flags |= KS_DHT_AF_INET4;
@@ -215,8 +193,8 @@ main(int argc, char **argv)
 		af_flags |= KS_DHT_AF_INET6;
 	}
 
-    /* Init the dht.  This sets the socket into non-blocking mode. */
-    rc = dht_init(&h, af_flags, (unsigned char*)"LIBKS");
+    /* Init the dht. */
+    rc = ks_dht_init(&h, af_flags, (unsigned char*)"LIBKS");
 
     if(rc < 0) {
         perror("dht_init");
@@ -245,7 +223,7 @@ main(int argc, char **argv)
        a dump) and you already know their ids, it's better to use
        dht_insert_node.  If the ids are incorrect, the DHT will recover. */
     for(i = 0; i < num_bootstrap_nodes; i++) {
-        dht_ping_node(h, (struct sockaddr*)&bootstrap_nodes[i], sizeof(bootstrap_nodes[i]));
+        dht_ping_node(h, &bootstrap_nodes[i]);
         usleep(random() % 100000);
     }
 
@@ -304,8 +282,8 @@ main(int argc, char **argv)
 			  output = cJSON_CreateString(message);
 
 			  ks_dht_send_message_mutable_cjson(h, alice_secretkey, alice_publickey,
-						      (struct sockaddr*)&bootstrap_nodes[0], sizeof(bootstrap_nodes[0]),
-						      message_id, 1, output, 600);
+												&bootstrap_nodes[0],
+												message_id, 1, output, 600);
 			  free(input);
 			  cJSON_Delete(output);
 			} else if (!strncmp(line, "message_immutable", 15)) {
