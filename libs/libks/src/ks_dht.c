@@ -48,11 +48,11 @@ void dht_hash(void *hash_return, int hash_size, const void *v1, int len1, const 
 {
 	crypto_generichash_state state;
 
-	crypto_generichash_init(&state, NUL, 0, hash_size);
+	crypto_generichash_init(&state, NULL, 0, hash_size);
 	crypto_generichash_update(&state, v1, len1);
 	crypto_generichash_update(&state, v2, len2);
 	crypto_generichash_update(&state, v3, len3);
-	crypto_generichash_final(&state, hash, hash_size);
+	crypto_generichash_final(&state, (unsigned char *)hash_return, hash_size);
 
 	return;
 }
@@ -210,7 +210,7 @@ struct storage {
 static struct storage * find_storage(dht_handle_t *h, const unsigned char *id);
 static void flush_search_node(struct search_node *n, struct search *sr);
 
-static int send_ping(dht_handle_t *h, const struct sockaddr *sa,
+static int send_ping(dht_handle_t *h, const ks_sockaddr_t *sa,
                      const unsigned char *tid, int tid_len);
 static int send_pong(dht_handle_t *h, const ks_sockaddr_t *sa,
                      const unsigned char *tid, int tid_len);
@@ -758,7 +758,7 @@ static struct bucket *split_bucket(dht_handle_t *h, struct bucket *b)
    the node sent a message, 2 if it sent us a reply. */
 static struct node *new_node(dht_handle_t *h, const unsigned char *id, const ks_sockaddr_t *sa, int confirm)
 {
-    struct bucket *b = find_bucket(h, id, sa->sa_family);
+    struct bucket *b = find_bucket(h, id, sa->family);
     struct node *n;
     int mybucket, split;
 
@@ -993,7 +993,7 @@ static int insert_search_node(dht_handle_t *h, unsigned char *id,
 
 found:
 
-	ks_copy_addr(&n->ss, sa);
+	ks_addr_copy(&n->ss, sa);
 
     if (replied) {
         n->replied = 1;
@@ -1120,8 +1120,7 @@ static void search_step(dht_handle_t *h, struct search *sr)
 				all_acked = 0;
 				ks_log(KS_LOG_DEBUG, "Sending announce_peer.\n");
 				make_tid(tid, "ap", sr->tid);
-				send_announce_peer(h, (struct sockaddr*)&n->ss,
-								   sizeof(ks_sockaddr_t),
+				send_announce_peer(h, &n->ss,
 								   tid, 4, sr->id, sr->port,
 								   n->token, n->token_len,
 								   n->reply_time < h->now - 15);
@@ -1231,13 +1230,13 @@ KS_DECLARE(int) dht_search(dht_handle_t *h, const unsigned char *id, int port, i
             ks_log(KS_LOG_DEBUG, "Found local data (%d peers).\n", st->numpeers);
 
             for (i = 0; i < st->numpeers; i++) {
-                swapped = htons(st->peers[i].port);
-                if (st->peers[i].len == 4) {
-                    memcpy(buf, st->peers[i].ip, 4);
+                swapped = htons(st->peers[i].addr.port);
+                if (st->peers[i].addr.family == AF_INET) {
+                    memcpy(buf, st->peers[i].addr.ip, 4);
                     memcpy(buf + 4, &swapped, 2);
                     (*callback)(closure, KS_DHT_EVENT_VALUES, id, (void*)buf, 6);
-                } else if (st->peers[i].len == 16) {
-                    memcpy(buf, st->peers[i].ip, 16);
+                } else if (st->peers[i].addr.family == AF_INET6) {
+                    memcpy(buf, st->peers[i].addr.ip, 16);
                     memcpy(buf + 16, &swapped, 2);
                     (*callback)(closure, KS_DHT_EVENT_VALUES6, id, (void*)buf, 18);
                 }
@@ -1373,7 +1372,7 @@ static int storage_store(dht_handle_t *h, const unsigned char *id, const struct 
         }
         p = &st->peers[st->numpeers++];
         p->time = h->now;
-		ks_copy_addr(p->addr, sa);
+		ks_addr_copy(p->addr, sa);
         return 1;
     }
 }
@@ -1626,16 +1625,16 @@ KS_DECLARE(void) dht_dump_tables(dht_handle_t *h, FILE *f)
         fprintf(f, " %d/%d nodes:", st->numpeers, st->maxpeers);
         for (i = 0; i < st->numpeers; i++) {
             char buf[100];
-            if (st->peers[i].len == 4) {
-                inet_ntop(AF_INET, st->peers[i].ip, buf, 100);
-            } else if (st->peers[i].len == 16) {
+            if (st->peers[i].addr.family == AF_INET) {
+                inet_ntop(AF_INET, st->peers[i].addr.ip, buf, 100);
+            } else if (st->peers[i].addr.family == AF_INET6) {
                 buf[0] = '[';
-                inet_ntop(AF_INET6, st->peers[i].ip, buf + 1, 98);
+                inet_ntop(AF_INET6, st->peers[i].addr.ip, buf + 1, 98);
                 strcat(buf, "]");
             } else {
                 strcpy(buf, "???");
             }
-            fprintf(f, " %s:%u (%ld)", buf, st->peers[i].port, (long)(h->now - st->peers[i].time));
+            fprintf(f, " %s:%u (%ld)", buf, st->peers[i].addr.port, (long)(h->now - st->peers[i].time));
         }
         st = st->next;
     }
@@ -3044,10 +3043,10 @@ int send_nodes_peers(dht_handle_t *h, const ks_sockaddr_t *sa,
         k = 0;
 
        do {
-            if (st->peers[j].len == len) {
+            if (st->peers[j].addr.family == af) {
 				char data[18];
-				unsigned short swapped = htons(st->peers[j].port);
-				memcpy(data, st->peers[j].ip, len);
+				unsigned short swapped = htons(st->peers[j].addr.port);
+				memcpy(data, st->peers[j].addr.ip, len);
 				memcpy(data + len, &swapped, 2);
 				ben_list_append(ben_array, ben_blob(data, len + 2));
                 k++;

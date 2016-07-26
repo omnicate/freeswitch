@@ -58,7 +58,7 @@ KS_DECLARE(int) dht_get_nodes(dht_handle_t *h, struct sockaddr_in *sin, int *num
 KS_DECLARE(int) dht_uninit(dht_handle_t **h);
 
 /* This must be provided by the user. */
-int dht_blacklisted(const struct sockaddr *sa, int salen);
+int dht_blacklisted(const ks_sockaddr_t *sa);
 void dht_hash(void *hash_return, int hash_size, const void *v1, int len1, const void *v2, int len2, const void *v3, int len3);
 int dht_random_bytes(void *buf, size_t size);
 
