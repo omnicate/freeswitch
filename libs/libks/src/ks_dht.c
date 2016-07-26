@@ -39,21 +39,22 @@ Like Meatloaf says, 2 out of 3 ain't bad! But we needed a good base for some add
 #define MSG_CONFIRM 0
 #endif
 
-//usr/src/freeswitch.git/libs/libks/.libs/libks.so: undefined reference to `dht_random_bytes'
-//usr/src/freeswitch.git/libs/libks/.libs/libks.so: undefined reference to `dht_blacklisted'
-//usr/src/freeswitch.git/libs/libks/.libs/libks.so: undefined reference to `dht_hash'
-
-int dht_blacklisted(const struct sockaddr *sa, int salen)
+int dht_blacklisted(const ks_sockaddr_t *sa)
 {
 	return 0;
 }
+
 void dht_hash(void *hash_return, int hash_size, const void *v1, int len1, const void *v2, int len2, const void *v3, int len3)
 {
+	crypto_generichash_state state;
+
+	crypto_generichash_init(&state, NUL, 0, hash_size);
+	crypto_generichash_update(&state, v1, len1);
+	crypto_generichash_update(&state, v2, len2);
+	crypto_generichash_update(&state, v3, len3);
+	crypto_generichash_final(&state, hash, hash_size);
+
 	return;
-}
-int dht_random_bytes(void *buf, size_t size)
-{
-	return 0;
 }
 
 
@@ -127,8 +128,7 @@ set_nonblocking(int fd, int nonblocking)
 
 struct node {
     unsigned char id[20];
-    struct sockaddr_storage ss;
-    int sslen;
+    ks_sockaddr_t ss;
     time_t time;                /* time of last message received */
     time_t reply_time;          /* time of last correct reply received */
     time_t pinged_time;         /* time of last request */
@@ -142,15 +142,13 @@ struct bucket {
     int count;                  /* number of nodes */
     time_t time;                /* time of last reply in this bucket */
     struct node *nodes;
-    struct sockaddr_storage cached;  /* the address of a likely candidate */
-    int cachedlen;
+    ks_sockaddr_t cached;  /* the address of a likely candidate */
     struct bucket *next;
 };
 
 struct search_node {
     unsigned char id[20];
-    struct sockaddr_storage ss;
-    int sslen;
+    ks_sockaddr_t ss;
     time_t request_time;        /* the time of the last unanswered request */
     time_t reply_time;          /* the time of the last reply */
     int pinged;
@@ -179,9 +177,7 @@ struct search {
 
 struct peer {
     time_t time;
-    unsigned char ip[16];
-    unsigned short len;
-    unsigned short port;
+	ks_sockaddr_t addr;
 };
 
 /* The maximum number of peers we store for a given hash. */
@@ -214,34 +210,34 @@ struct storage {
 static struct storage * find_storage(dht_handle_t *h, const unsigned char *id);
 static void flush_search_node(struct search_node *n, struct search *sr);
 
-static int send_ping(dht_handle_t *h, const struct sockaddr *sa, int salen,
+static int send_ping(dht_handle_t *h, const struct sockaddr *sa,
                      const unsigned char *tid, int tid_len);
-static int send_pong(dht_handle_t *h, const struct sockaddr *sa, int salen,
+static int send_pong(dht_handle_t *h, const ks_sockaddr_t *sa,
                      const unsigned char *tid, int tid_len);
-static int send_find_node(dht_handle_t *h, const struct sockaddr *sa, int salen,
+static int send_find_node(dht_handle_t *h, const ks_sockaddr_t *sa,
                           const unsigned char *tid, int tid_len,
                           const unsigned char *target, int want, int confirm);
-static int send_nodes_peers(dht_handle_t *h, const struct sockaddr *sa, int salen,
+static int send_nodes_peers(dht_handle_t *h, const ks_sockaddr_t *sa,
                             const unsigned char *tid, int tid_len,
                             const unsigned char *nodes, int nodes_len,
                             const unsigned char *nodes6, int nodes6_len,
                             int af, struct storage *st,
                             const unsigned char *token, int token_len);
-static int send_closest_nodes(dht_handle_t *h, const struct sockaddr *sa, int salen,
+static int send_closest_nodes(dht_handle_t *h, const ks_sockaddr_t *sa,
                               const unsigned char *tid, int tid_len,
                               const unsigned char *id, int want,
                               int af, struct storage *st,
                               const unsigned char *token, int token_len);
-static int send_get_peers(dht_handle_t *h, const struct sockaddr *sa, int salen,
+static int send_get_peers(dht_handle_t *h, const ks_sockaddr_t *sa,
                           unsigned char *tid, int tid_len,
                           unsigned char *infohash, int want, int confirm);
-static int send_announce_peer(dht_handle_t *h, const struct sockaddr *sa, int salen,
+static int send_announce_peer(dht_handle_t *h, const ks_sockaddr_t *sa,
                               unsigned char *tid, int tid_len,
                               unsigned char *infohas, unsigned short port,
                               unsigned char *token, int token_len, int confirm);
-static int send_peer_announced(dht_handle_t *h, const struct sockaddr *sa, int salen,
+static int send_peer_announced(dht_handle_t *h, const ks_sockaddr_t *sa,
                                unsigned char *tid, int tid_len);
-static int send_error(dht_handle_t *h, const struct sockaddr *sa, int salen,
+static int send_error(dht_handle_t *h, const ks_sockaddr_t *sa,
                       unsigned char *tid, int tid_len,
                       int code, const char *message);
 
@@ -332,7 +328,7 @@ struct dht_handle_s {
 	int numsearches;
 	unsigned short search_id;
 
-	struct sockaddr_storage blacklist[DHT_MAX_BLACKLISTED];
+	ks_sockaddr_t blacklist[DHT_MAX_BLACKLISTED];
 	int next_blacklisted;
 
 	ks_time_t now;
@@ -604,7 +600,7 @@ static int bucket_random(struct bucket *b, unsigned char *id_return)
 /* Insert a new node into a bucket. */
 static struct node *insert_node(dht_handle_t *h, struct node *node)
 {
-    struct bucket *b = find_bucket(h, node->id, node->ss.ss_family);
+    struct bucket *b = find_bucket(h, node->id, node->ss.family);
 
     if (b == NULL) {
         return NULL;
@@ -651,15 +647,14 @@ static int send_cached_ping(dht_handle_t *h, struct bucket *b)
     unsigned char tid[4];
     int rc;
     /* We set family to 0 when there's no cached node. */
-    if (b->cached.ss_family == 0) {
+    if (b->cached.family == 0) {
         return 0;
 	}
 
     ks_log(KS_LOG_DEBUG, "Sending ping to cached node.\n");
     make_tid(tid, "pn", 0);
-    rc = send_ping(h, (struct sockaddr*)&b->cached, b->cachedlen, tid, 4);
-    b->cached.ss_family = 0;
-    b->cachedlen = 0;
+    rc = send_ping(h, &b->cached, tid, 4);
+    b->cached.family = 0;
     return rc;
 }
 
@@ -670,13 +665,13 @@ static void pinged(dht_handle_t *h, struct node *n, struct bucket *b)
     n->pinged++;
     n->pinged_time = h->now;
     if (n->pinged >= 3) {
-        send_cached_ping(h, b ? b : find_bucket(h, n->id, n->ss.ss_family));
+        send_cached_ping(h, b ? b : find_bucket(h, n->id, n->ss.family));
 	}
 }
 
 /* The internal blacklist is an LRU cache of nodes that have sent
    incorrect messages. */
-static void blacklist_node(dht_handle_t *h, const unsigned char *id, const struct sockaddr *sa, int salen)
+static void blacklist_node(dht_handle_t *h, const unsigned char *id, const ks_sockaddr_t *sa)
 {
     int i;
 
@@ -686,7 +681,7 @@ static void blacklist_node(dht_handle_t *h, const unsigned char *id, const struc
         struct node *n;
         struct search *sr;
         /* Make the node easy to discard. */
-        n = find_node(h, id, sa->sa_family);
+        n = find_node(h, id, sa->family);
         if (n) {
             n->pinged = 3;
             pinged(h, n, NULL);
@@ -703,24 +698,20 @@ static void blacklist_node(dht_handle_t *h, const unsigned char *id, const struc
         }
     }
     /* And make sure we don't hear from it again. */
-    memcpy(&h->blacklist[h->next_blacklisted], sa, salen);
+	ks_addr_copy(&h->blacklist[h->next_blacklisted], sa);
     h->next_blacklisted = (h->next_blacklisted + 1) % DHT_MAX_BLACKLISTED;
 }
 
-static int node_blacklisted(dht_handle_t *h, const struct sockaddr *sa, int salen)
+static int node_blacklisted(dht_handle_t *h, const ks_sockaddr_t *sa)
 {
     int i;
 
-    if ((unsigned)salen > sizeof(struct sockaddr_storage)) {
-        abort();
-	}
-
-    if (dht_blacklisted(sa, salen)) {
+    if (dht_blacklisted(sa)) {
         return 1;
 	}
 
     for(i = 0; i < DHT_MAX_BLACKLISTED; i++) {
-        if (memcmp(&h->blacklist[i], sa, salen) == 0) {
+		if (ks_addr_cmp(&h->blacklist[i], sa)) {
             return 1;
 		}
     }
@@ -765,7 +756,7 @@ static struct bucket *split_bucket(dht_handle_t *h, struct bucket *b)
 
 /* We just learnt about a node, not necessarily a new one.  Confirm is 1 if
    the node sent a message, 2 if it sent us a reply. */
-static struct node *new_node(dht_handle_t *h, const unsigned char *id, const struct sockaddr *sa, int salen, int confirm)
+static struct node *new_node(dht_handle_t *h, const unsigned char *id, const ks_sockaddr_t *sa, int confirm)
 {
     struct bucket *b = find_bucket(h, id, sa->sa_family);
     struct node *n;
@@ -779,7 +770,7 @@ static struct node *new_node(dht_handle_t *h, const unsigned char *id, const str
         return NULL;
 	}
 
-    if (is_martian(sa) || node_blacklisted(h, sa, salen)) {
+    if (is_martian(sa) || node_blacklisted(h, sa)) {
         return NULL;
 	}
 
@@ -794,7 +785,8 @@ static struct node *new_node(dht_handle_t *h, const unsigned char *id, const str
         if (id_cmp(n->id, id) == 0) {
             if (confirm || n->time < h->now - 15 * 60) {
                 /* Known node.  Update stuff. */
-                memcpy((struct sockaddr*)&n->ss, sa, salen);
+				ks_addr_copy(&n->ss, sa);
+
                 if (confirm) {
                     n->time = h->now;
 				}
@@ -812,7 +804,7 @@ static struct node *new_node(dht_handle_t *h, const unsigned char *id, const str
     /* New node. */
 
     if (mybucket) {
-        if (sa->sa_family == AF_INET) {
+        if (sa->family == AF_INET) {
             h->mybucket_grow_time = h->now;
 		} else {
             h->mybucket6_grow_time = h->now;
@@ -824,7 +816,7 @@ static struct node *new_node(dht_handle_t *h, const unsigned char *id, const str
     while (n) {
         if (n->pinged >= 3 && n->pinged_time < h->now - 15) {
             memcpy(n->id, id, 20);
-            memcpy((struct sockaddr*)&n->ss, sa, salen);
+			ks_addr_copy(&n->ss, sa);
             n->time = confirm ? h->now : 0;
             n->reply_time = confirm >= 2 ? h->now : 0;
             n->pinged_time = 0;
@@ -849,7 +841,7 @@ static struct node *new_node(dht_handle_t *h, const unsigned char *id, const str
                     unsigned char tid[4];
                     ks_log(KS_LOG_DEBUG, "Sending ping to dubious node.\n");
                     make_tid(tid, "pn", 0);
-                    send_ping(h, (struct sockaddr*)&n->ss, n->sslen, tid, 4);
+                    send_ping(h, &n->ss, tid, 4);
                     n->pinged++;
                     n->pinged_time = h->now;
                     break;
@@ -875,13 +867,12 @@ static struct node *new_node(dht_handle_t *h, const unsigned char *id, const str
         if (split) {
             ks_log(KS_LOG_DEBUG, "Splitting.\n");
             b = split_bucket(h, b);
-            return new_node(h, id, sa, salen, confirm);
+            return new_node(h, id, sa, confirm);
         }
 
         /* No space for this node.  Cache it away for later. */
-        if (confirm || b->cached.ss_family == 0) {
-            memcpy(&b->cached, sa, salen);
-            b->cachedlen = salen;
+        if (confirm || b->cached.family == 0) {
+			ks_addr_copy(&b->cached, sa);
         }
 
         return NULL;
@@ -891,8 +882,7 @@ static struct node *new_node(dht_handle_t *h, const unsigned char *id, const str
     n = ks_pool_alloc(h->pool, sizeof(struct node));
 
     memcpy(n->id, id, 20);
-    memcpy(&n->ss, sa, salen);
-    n->sslen = salen;
+	ks_addr_copy(&n->ss, sa);
     n->time = confirm ? h->now : 0;
     n->reply_time = confirm >= 2 ? h->now : 0;
     n->next = b->nodes;
@@ -962,14 +952,14 @@ static struct search *find_search(dht_handle_t *h, unsigned short tid, int af)
    discard it. */
 
 static int insert_search_node(dht_handle_t *h, unsigned char *id,
-                   const struct sockaddr *sa, int salen,
+                   const ks_sockaddr_t *sa,
                    struct search *sr, int replied,
                    unsigned char *token, int token_len)
 {
     struct search_node *n;
     int i, j;
 
-    if (sa->sa_family != sr->af) {
+    if (sa->family != sr->af) {
         ks_log(KS_LOG_DEBUG, "Attempted to insert node in the wrong family.\n");
         return 0;
     }
@@ -1002,8 +992,8 @@ static int insert_search_node(dht_handle_t *h, unsigned char *id,
     memcpy(n->id, id, 20);
 
 found:
-    memcpy(&n->ss, sa, salen);
-    n->sslen = salen;
+
+	ks_copy_addr(&n->ss, sa);
 
     if (replied) {
         n->replied = 1;
@@ -1075,11 +1065,11 @@ static int search_send_get_peers(dht_handle_t *h, struct search *sr, struct sear
 
     ks_log(KS_LOG_DEBUG, "Sending get_peers.\n");
     make_tid(tid, "gp", sr->tid);
-    send_get_peers(h, (struct sockaddr*)&n->ss, n->sslen, tid, 4, sr->id, -1, n->reply_time >= h->now - 15);
+    send_get_peers(h, &n->ss, tid, 4, sr->id, -1, n->reply_time >= h->now - 15);
     n->pinged++;
     n->request_time = h->now;
     /* If the node happens to be in our main routing table, mark it as pinged. */
-    if ((node = find_node(h, n->id, n->ss.ss_family))) {
+    if ((node = find_node(h, n->id, n->ss.family))) {
 		pinged(h, node, NULL);
 	}
     return 1;
@@ -1087,7 +1077,7 @@ static int search_send_get_peers(dht_handle_t *h, struct search *sr, struct sear
 
 /* When a search is in progress, we periodically call search_step to send
    further requests. */
-static void search_step(dht_handle_t *h, struct search *sr, dht_callback *callback, void *closure)
+static void search_step(dht_handle_t *h, struct search *sr)
 {
     int i, j;
     int all_done = 1;
@@ -1131,13 +1121,13 @@ static void search_step(dht_handle_t *h, struct search *sr, dht_callback *callba
 				ks_log(KS_LOG_DEBUG, "Sending announce_peer.\n");
 				make_tid(tid, "ap", sr->tid);
 				send_announce_peer(h, (struct sockaddr*)&n->ss,
-								   sizeof(struct sockaddr_storage),
+								   sizeof(ks_sockaddr_t),
 								   tid, 4, sr->id, sr->port,
 								   n->token, n->token_len,
 								   n->reply_time < h->now - 15);
 				n->pinged++;
 				n->request_time = h->now;
-				node = find_node(h, n->id, n->ss.ss_family);
+				node = find_node(h, n->id, n->ss.family);
 				if (node) pinged(h, node, NULL);
 			}
 			j++;
@@ -1166,8 +1156,8 @@ static void search_step(dht_handle_t *h, struct search *sr, dht_callback *callba
 
  done:
     sr->done = 1;
-    if (callback) {
-        (*callback)(closure, sr->af == AF_INET ? KS_DHT_EVENT_SEARCH_DONE : KS_DHT_EVENT_SEARCH_DONE6, sr->id, NULL, 0);
+    if (h->callback) {
+        h->callback(closure, sr->af == AF_INET ? KS_DHT_EVENT_SEARCH_DONE : KS_DHT_EVENT_SEARCH_DONE6, sr->id, NULL, 0);
 	}
     sr->step_time = h->now;
 }
@@ -1209,7 +1199,7 @@ static void insert_search_bucket(dht_handle_t *h, struct bucket *b, struct searc
     struct node *n;
     n = b->nodes;
     while (n) {
-        insert_search_node(h, n->id, (struct sockaddr*)&n->ss, n->sslen, sr, 0, NULL, 0);
+        insert_search_node(h, n->id, &n->ss, sr, 0, NULL, 0);
         n = n->next;
     }
 }
@@ -1335,21 +1325,9 @@ static struct storage *find_storage(dht_handle_t *h, const unsigned char *id)
 
 static int storage_store(dht_handle_t *h, const unsigned char *id, const struct sockaddr *sa, unsigned short port)
 {
-    int i, len;
+    int i;
     struct storage *st;
     unsigned char *ip;
-
-    if (sa->sa_family == AF_INET) {
-        struct sockaddr_in *sin = (struct sockaddr_in*)sa;
-        ip = (unsigned char*)&sin->sin_addr;
-        len = 4;
-    } else if (sa->sa_family == AF_INET6) {
-        struct sockaddr_in6 *sin6 = (struct sockaddr_in6*)sa;
-        ip = (unsigned char*)&sin6->sin6_addr;
-        len = 16;
-    } else {
-        return -1;
-    }
 
     st = find_storage(h, id);
 
@@ -1366,7 +1344,7 @@ static int storage_store(dht_handle_t *h, const unsigned char *id, const struct 
     }
 
     for(i = 0; i < st->numpeers; i++) {
-        if (st->peers[i].port == port && st->peers[i].len == len && memcmp(st->peers[i].ip, ip, len) == 0) {
+		if (ks_addr_cmp(&st->peers[i].addr, sa)) {
             break;
 		}
     }
@@ -1395,9 +1373,7 @@ static int storage_store(dht_handle_t *h, const unsigned char *id, const struct 
         }
         p = &st->peers[st->numpeers++];
         p->time = h->now;
-        p->len = len;
-        memcpy(p->ip, ip, len);
-        p->port = port;
+		ks_copy_addr(p->addr, sa);
         return 1;
     }
 }
@@ -1445,16 +1421,10 @@ static int expire_storage(dht_handle_t *h)
 
 static int rotate_secrets(dht_handle_t *h)
 {
-    int rc;
-
     h->rotate_secrets_time = h->now + 900 + random() % 1800;
 
     memcpy(h->oldsecret, h->secret, sizeof(h->secret));
-    rc = dht_random_bytes(h->secret, sizeof(h->secret));
-
-    if (rc < 0) {
-        return -1;
-	}
+	randombytes_buf(h->secret, sizeof(h->secret));
 
     return 1;
 }
@@ -1469,7 +1439,7 @@ static void make_token(dht_handle_t *h, const struct sockaddr *sa, int old, unsi
     int iplen;
     unsigned short port;
 
-    if (sa->sa_family == AF_INET) {
+    if (sa->family == AF_INET) {
         struct sockaddr_in *sin = (struct sockaddr_in*)sa;
         ip = &sin->sin_addr;
         iplen = 4;
@@ -1525,7 +1495,7 @@ KS_DECLARE(int) dht_nodes(dht_handle_t *h, int af, int *good_return, int *dubiou
             }
             n = n->next;
         }
-        if (b->cached.ss_family > 0) {
+        if (b->cached.family > 0) {
             cached++;
 		}
         b = b->next;
@@ -1555,7 +1525,7 @@ static void dump_bucket(dht_handle_t *h, FILE *f, struct bucket *b)
     struct node *n = b->nodes;
 	int mine = in_bucket(h->myid, b);
 	int age = (int)(h->now - b->time);
-	int cached = b->cached.ss_family;
+	int cached = b->cached.family;
     fprintf(f, "Bucket ");
     print_hex(f, b->first, 20);
     fprintf(f, " count %d age %d%s%s:\n", b->count, age, mine ? " (mine)" : "", cached ? " (cached)" : "");
@@ -1566,20 +1536,20 @@ static void dump_bucket(dht_handle_t *h, FILE *f, struct bucket *b)
         fprintf(f, "    Node ");
         print_hex(f, n->id, 20);
 
-        if (n->ss.ss_family == AF_INET) {
+        if (n->ss.family == AF_INET) {
             struct sockaddr_in *sin = (struct sockaddr_in*)&n->ss;
             inet_ntop(AF_INET, &sin->sin_addr, buf, 512);
             port = ntohs(sin->sin_port);
-        } else if (n->ss.ss_family == AF_INET6) {
+        } else if (n->ss.family == AF_INET6) {
             struct sockaddr_in6 *sin6 = (struct sockaddr_in6*)&n->ss;
             inet_ntop(AF_INET6, &sin6->sin6_addr, buf, 512);
             port = ntohs(sin6->sin6_port);
         } else {
-            ks_snprintf(buf, 512, "unknown(%d)", n->ss.ss_family);
+            ks_snprintf(buf, 512, "unknown(%d)", n->ss.family);
             port = 0;
         }
 
-        if (n->ss.ss_family == AF_INET6) {
+        if (n->ss.family == AF_INET6) {
             fprintf(f, " [%s]:%d ", buf, port);
 		} else {
             fprintf(f, " %s:%d ", buf, port);
@@ -1884,6 +1854,38 @@ static void ks_dht_store_destroy(struct ks_dht_store_s **old_store)
 	return;
 }
 
+
+KS_DECLARE(ks_status_t) ks_dht_one_loop(dht_handle_t *h, int timeout)
+{
+	ks_status_t status;
+	int s, i;
+	unsigned char buf[65536] = {0};
+	ks_ssize_t bytes;
+	ks_sockaddr_t remote_addr;
+
+	reset_poll(h);
+
+	s = ks_poll(h->pollsocks, h->num_pollsocks, timeout);
+	
+	if (s < 0) {
+		return KS_STATUS_FAIL;
+	}
+
+	if (s == 0) {
+		return KS_STATUS_TIMEOUT;
+	}
+
+	for (i = 0; i < h->num_pollsocks, i++) {
+		if ((h->pollsocks[i].revents & POLLIN)) {
+			if ((status = ks_socket_recvfrom(h->pollsocks[i].sock, buf, &bytes, &remote_addr)) == KS_STATUS_SUCCESS) {
+				// git rid of tosleep and convert it to non-blocking counter so you can still call this in a loop and just return timeout till tosleep expired
+				// beginning of rabbit hole to change references to addrs to ks_addrs instead and stop passing sockaddr and len all over the place.
+				rc = dht_periodic(h, buf, bytes, &remote_addr, &tosleep, callback, NULL);
+			}
+		}
+	}
+}
+
 typedef struct {
 	char ip[80];
 	ks_sockaddr_t addr;
@@ -1951,7 +1953,7 @@ static void reset_poll(dht_handle_t *h)
 	}
 }
 
-static ks_status_t add_ip(dht_handle_t *h, const char *ip, int family)
+static ks_ip_t *add_ip(dht_handle_t *h, const char *ip, int family)
 {
 	ks_ip_t *ipt;
 	ks_status_t status = KS_STATUS_SUCCESS;
@@ -1959,6 +1961,8 @@ static ks_status_t add_ip(dht_handle_t *h, const char *ip, int family)
 	ks_assert(h);
 	ks_assert(ip);
 	
+	ks_log(KS_LOG_DEBUG, "Adding bind ip: %s port: %d\n", ip, h->port);
+
 	ipt = ks_pool_alloc(h->pool, sizeof(*ipt));
 	ks_set_string(ipt->ip, ip);
 	
@@ -1967,7 +1971,7 @@ static ks_status_t add_ip(dht_handle_t *h, const char *ip, int family)
 	if (ks_addr_bind(ipt->sock, &ipt->addr) != KS_STATUS_SUCCESS) {
 		ks_socket_close(&ipt->sock);
 		ks_pool_free(h->pool, ipt);
-		return KS_STATUS_FAIL;
+		return NULL;
 	}
 
 	ks_socket_option(ipt->sock, SO_REUSEADDR, KS_TRUE);
@@ -1983,7 +1987,7 @@ static ks_status_t add_ip(dht_handle_t *h, const char *ip, int family)
 
 	reset_poll(h);
 
-	return KS_STATUS_SUCCESS;
+	return ipt;
 }
 
 KS_DECLARE(void) ks_dht_set_port(dht_handle_t *h, unsigned int port)
@@ -2016,36 +2020,10 @@ KS_DECLARE(ks_status_t) ks_dht_add_ip(dht_handle_t *h, const char *ip)
 }
 
 
-
-KS_DECLARE(ks_status_t) ks_dht_one_loop(dht_handle_t *h, int timeout)
+KS_DECLARE(void) ks_dht_set_callback(dht_callback *callback, void *closure)
 {
-	ks_status_t status;
-	int s, i;
-	unsigned char buf[65536] = {0};
-	ks_ssize_t bytes;
-	ks_sockaddr_t remote_addr;
-
-	reset_poll(h);
-
-	s = ks_poll(h->pollsocks, h->num_pollsocks, timeout);
-	
-	if (s < 0) {
-		return KS_STATUS_FAIL;
-	}
-
-	if (s == 0) {
-		return KS_STATUS_TIMEOUT;
-	}
-
-	for (i = 0; i < h->num_pollsocks, i++) {
-		if ((h->pollsocks[i].revents & POLLIN)) {
-			if ((status = ks_socket_recvfrom(h->pollsocks[i].sock, buf, &bytes, &remote_addr)) == KS_STATUS_SUCCESS) {
-				// git rid of tosleep and convert it to non-blocking counter so you can still call this in a loop and just return timeout till tosleep expired
-				// beginning of rabbit hole to change references to addrs to ks_addrs instead and stop passing sockaddr and len all over the place.
-				rc = dht_periodic(h, buf, bytes, &remote_addr, &tosleep, callback, NULL);
-			}
-		}
-	}
+	h->callback = callback;
+	h->closure = closure;
 }
 
 //KS_DECLARE(int) dht_init(dht_handle_t **handle, int s, int s6, const unsigned char *id, const unsigned char *v, unsigned int port)
@@ -2252,7 +2230,7 @@ static int neighbourhood_maintenance(dht_handle_t *h, int af)
             unsigned char tid[4];
             ks_log(KS_LOG_DEBUG, "Sending find_node for%s neighborhood maintenance.\n", af == AF_INET6 ? " IPv6" : "");
             make_tid(tid, "fn", 0);
-            send_find_node(h, (struct sockaddr*)&n->ss, n->sslen, tid, 4, id, want, n->reply_time >= h->now - 15);
+            send_find_node(h, &n->ss, tid, 4, id, want, n->reply_time >= h->now - 15);
             pinged(h, n, q);
         }
         return 1;
@@ -2320,7 +2298,7 @@ static int bucket_maintenance(dht_handle_t *h, int af)
 
                     ks_log(KS_LOG_DEBUG, "Sending find_node for%s bucket maintenance.\n", af == AF_INET6 ? " IPv6" : "");
                     make_tid(tid, "fn", 0);
-                    send_find_node(h, (struct sockaddr*)&n->ss, n->sslen, tid, 4, id, want, n->reply_time >= h->now - 15);
+                    send_find_node(h, &n->ss, tid, 4, id, want, n->reply_time >= h->now - 15);
                     pinged(h, n, q);
                     /* In order to avoid sending queries back-to-back, give up for now and reschedule us soon. */
                     return 1;
@@ -2332,8 +2310,10 @@ static int bucket_maintenance(dht_handle_t *h, int af)
     return 0;
 }
 
-KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, const struct sockaddr *from, int fromlen,
-             time_t *tosleep, dht_callback *callback, void *closure)
+
+KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, ks_sockaddr_t from) 
+//KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, const struct sockaddr *from, int fromlen,
+//           time_t *tosleep, dht_callback *callback, void *closure)
 {
 	unsigned char *logmsg = NULL;
 	h->now = ks_time_now_sec();
@@ -2367,7 +2347,7 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
             goto dontread;
 		}
 
-        if (node_blacklisted(h, from, fromlen)) {
+        if (node_blacklisted(h, from)) {
             ks_log(KS_LOG_DEBUG, "Received packet from blacklisted node.\n");
             goto dontread;
         }
@@ -2539,12 +2519,12 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
                 /* This is really annoying, as it means that we will
                    time-out all our searches that go through this node.
                    Kill it. */
-                blacklist_node(h, id, from, fromlen);
+                blacklist_node(h, id, from);
                 goto dontread;
             }
             if (tid_match(tid, "pn", NULL)) {
                 ks_log(KS_LOG_DEBUG, "Pong!\n");
-                new_node(h, id, from, fromlen, 2);
+                new_node(h, id, from, 2);
             } else if (tid_match(tid, "fn", NULL) || tid_match(tid, "gp", NULL)) {
                 int gp = 0;
                 struct search *sr = NULL;
@@ -2555,13 +2535,13 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
                 ks_log(KS_LOG_DEBUG, "Nodes found (%d+%d)%s!\n", nodes_len/26, nodes6_len/38, gp ? " for get_peers" : "");
                 if (nodes_len % 26 != 0 || nodes6_len % 38 != 0) {
                     ks_log(KS_LOG_DEBUG, "Unexpected length for node info!\n");
-                    blacklist_node(h, id, from, fromlen);
+                    blacklist_node(h, id, from);
                 } else if (gp && sr == NULL) {
                     ks_log(KS_LOG_DEBUG, "Unknown search!\n");
-                    new_node(h, id, from, fromlen, 1);
+                    new_node(h, id, from, 1);
                 } else {
                     int i;
-                    new_node(h, id, from, fromlen, 2);
+                    new_node(h, id, from, 2);
                     for (i = 0; i < nodes_len / 26; i++) {
                         unsigned char *ni = nodes + i * 26;
                         struct sockaddr_in sin;
@@ -2601,15 +2581,15 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
 					if ( token_len ) {
 						ks_log(KS_LOG_DEBUG, "token %d [%.*s]\n", token_len, token);
 					}
-                    insert_search_node(h, id, from, fromlen, sr, 1, token, token_len);
+                    insert_search_node(h, id, from, sr, 1, token, token_len);
                     if (values_len > 0 || values6_len > 0) {
                         ks_log(KS_LOG_DEBUG, "Got values (%d+%d)!\n", values_len / 6, values6_len / 18);
-                        if (callback) {
+                        if (h->callback) {
                             if (values_len > 0) {
-                                (*callback)(closure, KS_DHT_EVENT_VALUES, sr->id, (void*)values, values_len);
+                                h->callback(closure, KS_DHT_EVENT_VALUES, sr->id, (void*)values, values_len);
 							}
                             if (values6_len > 0) {
-                                (*callback)(closure, KS_DHT_EVENT_VALUES6, sr->id, (void*)values6, values6_len);
+                                h->callback(closure, KS_DHT_EVENT_VALUES6, sr->id, (void*)values6, values6_len);
 							}
                         }
                     }
@@ -2620,10 +2600,10 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
                 sr = find_search(h, ttid, from->sa_family);
                 if (!sr) {
                     ks_log(KS_LOG_DEBUG, "Unknown search!\n");
-                    new_node(h, id, from, fromlen, 1);
+                    new_node(h, id, from, 1);
                 } else {
                     int i;
-                    new_node(h, id, from, fromlen, 2);
+                    new_node(h, id, from, 2);
                     for (i = 0; i < sr->numnodes; i++) {
                         if (id_cmp(sr->nodes[i].id, id) == 0) {
                             sr->nodes[i].request_time = 0;
@@ -2642,9 +2622,9 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
             break;
         case DHT_MSG_PING:
             ks_log(KS_LOG_DEBUG, "Ping (%d)!\n", tid_len);
-            new_node(h, id, from, fromlen, 1);
+            new_node(h, id, from, 1);
             ks_log(KS_LOG_DEBUG, "Sending pong.\n");
-            send_pong(h, from, fromlen, tid, tid_len);
+            send_pong(h, from, tid, tid_len);
             break;
         case DHT_MSG_FIND_NODE:
 			if ( key_args ) {
@@ -2658,9 +2638,9 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
 			
 				ks_log(KS_LOG_DEBUG, "Find node!\n");
 				/* Needs to fetch the from, and fromlen from the decoded message, as well as the target and want */
-				new_node(h, id, from, fromlen, 1);
+				new_node(h, id, from, 1);
 				ks_log(KS_LOG_DEBUG, "Sending closest nodes (%d).\n", want);
-				send_closest_nodes(h, from, fromlen, tid, tid_len, target, want, 0, NULL, NULL, 0);
+				send_closest_nodes(h, from, tid, tid_len, target, want, 0, NULL, NULL, 0);
 			} else {
 				goto dontread;
 			}
@@ -2674,10 +2654,10 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
 			 */
 
             ks_log(KS_LOG_DEBUG, "Get_peers!\n");
-            new_node(h, id, from, fromlen, 1);
+            new_node(h, id, from, 1);
             if (id_cmp(info_hash, zeroes) == 0) {
                 ks_log(KS_LOG_DEBUG, "Eek!  Got get_peers with no info_hash.\n");
-                send_error(h, from, fromlen, tid, tid_len, 203, "Get_peers with no info_hash");
+                send_error(h, from, tid, tid_len, 203, "Get_peers with no info_hash");
                 break;
             } else {
                 struct storage *st = find_storage(h, info_hash);
@@ -2685,35 +2665,35 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
                 make_token(h, from, 0, token);
                 if (st && st->numpeers > 0) {
                      ks_log(KS_LOG_DEBUG, "Sending found%s peers.\n", from->sa_family == AF_INET6 ? " IPv6" : "");
-                     send_closest_nodes(h, from, fromlen, tid, tid_len, info_hash, want, from->sa_family, st, token, TOKEN_SIZE);
+                     send_closest_nodes(h, from, tid, tid_len, info_hash, want, from->sa_family, st, token, TOKEN_SIZE);
                 } else {
                     ks_log(KS_LOG_DEBUG, "Sending nodes for get_peers.\n");
-                    send_closest_nodes(h, from, fromlen, tid, tid_len, info_hash, want, 0, NULL, token, TOKEN_SIZE);
+                    send_closest_nodes(h, from, tid, tid_len, info_hash, want, 0, NULL, token, TOKEN_SIZE);
                 }
             }
             break;
         case DHT_MSG_ANNOUNCE_PEER:
             ks_log(KS_LOG_DEBUG, "Announce peer!\n");
-            new_node(h, id, from, fromlen, 1);
+            new_node(h, id, from, 1);
             if (id_cmp(info_hash, zeroes) == 0) {
                 ks_log(KS_LOG_DEBUG, "Announce_peer with no info_hash.\n");
-                send_error(h, from, fromlen, tid, tid_len, 203, "Announce_peer with no info_hash");
+                send_error(h, from, tid, tid_len, 203, "Announce_peer with no info_hash");
                 break;
             }
             if (!token_match(h, token, token_len, from)) {
                 ks_log(KS_LOG_DEBUG, "Incorrect token for announce_peer.\n");
-                send_error(h, from, fromlen, tid, tid_len, 203, "Announce_peer with wrong token");
+                send_error(h, from, tid, tid_len, 203, "Announce_peer with wrong token");
                 break;
             }
             if (port == 0) {
                 ks_log(KS_LOG_DEBUG, "Announce_peer with forbidden port %d.\n", port);
-                send_error(h, from, fromlen, tid, tid_len, 203, "Announce_peer with forbidden port number");
+                send_error(h, from, tid, tid_len, 203, "Announce_peer with forbidden port number");
                 break;
             }
             storage_store(h, info_hash, from, port);
             /* Note that if storage_store failed, we lie to the requestor. This is to prevent them from backtracking, and hence polluting the DHT. */
             ks_log(KS_LOG_DEBUG, "Sending peer announced.\n");
-            send_peer_announced(h, from, fromlen, tid, tid_len);
+            send_peer_announced(h, from, tid, tid_len);
         }
     }
 
@@ -2734,7 +2714,7 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
         sr = h->searches;
         while (sr) {
             if (!sr->done && sr->step_time + 5 <= h->now) {
-                search_step(h, sr, callback, closure);
+                search_step(h, sr);
             }
             sr = sr->next;
         }
@@ -2778,16 +2758,16 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, co
     }
 
     if (h->confirm_nodes_time > h->now) {
-        *tosleep = h->confirm_nodes_time - h->now;
+        h->tosleep = h->confirm_nodes_time - h->now;
     } else {
-        *tosleep = 0;
+        h->tosleep = 0;
 	}
 
     if (h->search_time > 0) {
         if (h->search_time <= h->now) {
-            *tosleep = 0;
+            h->tosleep = 0;
         } else if (*tosleep > h->search_time - h->now) {
-            *tosleep = h->search_time - h->now;
+            h->tosleep = h->search_time - h->now;
 		}
     }
 	ks_safe_free(logmsg);
@@ -2877,26 +2857,26 @@ KS_DECLARE(int) dht_get_nodes(dht_handle_t *h, struct sockaddr_in *sin, int *num
     return i + j;
 }
 
-KS_DECLARE(int) dht_insert_node(dht_handle_t *h, const unsigned char *id, struct sockaddr *sa, int salen)
+KS_DECLARE(int) dht_insert_node(dht_handle_t *h, const unsigned char *id, ks_sockaddr_t *sa)
 {
     struct node *n;
 
-    if (sa->sa_family != AF_INET) {
+    if (sa->family != AF_INET) {
         errno = EAFNOSUPPORT;
         return -1;
     }
 
-    n = new_node(h, id, (struct sockaddr*)sa, salen, 0);
+    n = new_node(h, id, sa, 0);
     return !!n;
 }
 
-KS_DECLARE(int) dht_ping_node(dht_handle_t *h, struct sockaddr *sa, int salen)
+KS_DECLARE(int) dht_ping_node(dht_handle_t *h, ks_sockaddr_t *sa)
 {
     unsigned char tid[4];
 
     ks_log(KS_LOG_DEBUG, "Sending ping.\n");
     make_tid(tid, "pn", 0);
-    return send_ping(h, sa, salen, tid, 4);
+    return send_ping(h, sa, tid, 4);
 }
 
 /* We could use a proper bencoding printer and parser, but the format of
@@ -2919,39 +2899,39 @@ KS_DECLARE(int) dht_ping_node(dht_handle_t *h, struct sockaddr *sa, int salen)
         COPY(buf, offset, h->my_v, sizeof(h->my_v), size);    \
     }
 
-static int dht_send(dht_handle_t *h, const void *buf, size_t len, int flags, const struct sockaddr *sa, int salen)
+static int dht_send(dht_handle_t *h, const void *buf, size_t len, int flags, const ks_sockaddr_t *sa)
 {
     int s;
+	char ip[80] = "";
+	ks_ip_t *ipt;
 
-    if (salen == 0) {
-        abort();
-	}
-
-    if (node_blacklisted(h, sa, salen)) {
+    if (node_blacklisted(h, sa)) {
         ks_log(KS_LOG_DEBUG, "Attempting to send to blacklisted node.\n");
         errno = EPERM;
         return -1;
     }
 
-    if (sa->sa_family == AF_INET) {
-        s = h->dht_socket;
-	} else if (sa->sa_family == AF_INET6) {
-        s = h->dht_socket6;
-	} else {
-        s = -1;
+	ks_ip_route(ip, sizeof(ip), addr->host);
+
+	if (!(ipt = ks_hash_search(h->iphash, ip, KS_UNLOCKED))) {
+		ipt = add_ip(h, ip, AF_INET);
 	}
 
-    if (s < 0) {
-        errno = EAFNOSUPPORT;
-        return -1;
-    }
+	if (!ipt) {
+        errno = EINVAL;
+		return -1;
+	}
 
-    return sendto(s, buf, len, flags, sa, salen);
+	if (ks_socket_sendto(ipt->sock, buf, len, sa) != KS_STATUS_SUCCESS) {
+		return -1;
+	}
+
+    return 0;
 }
 
 /* Sample ping packet '{"t":"aa", "y":"q", "q":"ping", "a":{"id":"abcdefghij0123456789"}}' */
 /* http://www.bittorrent.org/beps/bep_0005.html */
-int send_ping(dht_handle_t *h, const struct sockaddr *sa, int salen, const unsigned char *tid, int tid_len)
+int send_ping(dht_handle_t *h, const ks_sockaddr_t *sa, const unsigned char *tid, int tid_len)
 {
     char buf[512];
     int i = 0;
@@ -2967,12 +2947,12 @@ int send_ping(dht_handle_t *h, const struct sockaddr *sa, int salen, const unsig
 	i = ben_encode2(buf, 512, bencode_p);
 	ben_free(bencode_p); /* This SHOULD free the bencode_a_p as well */
 
-    return dht_send(h, buf, i, 0, sa, salen);
+    return dht_send(h, buf, i, 0, sa);
 }
 
 /* Sample pong packet '{"t":"aa", "y":"r", "r": {"id":"mnopqrstuvwxyz123456"}}' */
 /* http://www.bittorrent.org/beps/bep_0005.html */
-int send_pong(dht_handle_t *h, const struct sockaddr *sa, int salen, const unsigned char *tid, int tid_len)
+int send_pong(dht_handle_t *h, const ks_sockaddr_t *sa, const unsigned char *tid, int tid_len)
 {
     char buf[512];
 	int i = 0;
@@ -2988,14 +2968,14 @@ int send_pong(dht_handle_t *h, const struct sockaddr *sa, int salen, const unsig
 	ben_free(bencode_p); /* This SHOULD free the bencode_a_p as well */
 
 	ks_log(KS_LOG_DEBUG, "Encoded PONG\n");
-    return dht_send(h, buf, i, 0, sa, salen);
+    return dht_send(h, buf, i, 0, sa);
 }
 
 /* Sample find_node packet '{"t":"aa", "y":"q", "q":"find_node", "a": {"id":"abcdefghij0123456789", "target":"mnopqrstuvwxyz123456"}}' */
 /* Sample find_node packet w/ want '{"t":"aa", "y":"q", "q":"find_node", "a": {"id":"abcdefghij0123456789", "target":"mnopqrstuvwxyz123456", "want":"n4"}}' */
 /* http://www.bittorrent.org/beps/bep_0005.html */
 /* http://www.bittorrent.org/beps/bep_0032.html for want parameter */
-int send_find_node(dht_handle_t *h, const struct sockaddr *sa, int salen,
+int send_find_node(dht_handle_t *h, const ks_sockaddr_t *sa,
                const unsigned char *tid, int tid_len,
                const unsigned char *target, int want, int confirm)
 {
@@ -3024,12 +3004,12 @@ int send_find_node(dht_handle_t *h, const struct sockaddr *sa, int salen,
 	i = ben_encode2(buf, 512, bencode_p);
 	ben_free(bencode_p); /* This SHOULD free the bencode_a_p as well */
 
-    return dht_send(h, buf, i, confirm ? MSG_CONFIRM : 0, sa, salen);
+    return dht_send(h, buf, i, confirm ? MSG_CONFIRM : 0, sa);
 }
 
 /* sample find_node response '{"t":"aa", "y":"r", "r": {"id":"0123456789abcdefghij", "nodes": "def456..."}}'*/
 /* http://www.bittorrent.org/beps/bep_0005.html */
-int send_nodes_peers(dht_handle_t *h, const struct sockaddr *sa, int salen,
+int send_nodes_peers(dht_handle_t *h, const ks_sockaddr_t *sa,
                  const unsigned char *tid, int tid_len,
                  const unsigned char *nodes, int nodes_len,
                  const unsigned char *nodes6, int nodes6_len,
@@ -3081,7 +3061,7 @@ int send_nodes_peers(dht_handle_t *h, const struct sockaddr *sa, int salen,
 	i = ben_encode2(buf, 512, bencode_p);
 	ben_free(bencode_p); /* This SHOULD free the bencode_a_p as well */
 	
-	return dht_send(h, buf, i, 0, sa, salen);
+	return dht_send(h, buf, i, 0, sa);
 }
 
 static int insert_closest_node(unsigned char *nodes, int numnodes,
@@ -3089,9 +3069,9 @@ static int insert_closest_node(unsigned char *nodes, int numnodes,
 {
     int i, size;
 
-    if (n->ss.ss_family == AF_INET) {
+    if (n->ss.family == AF_INET) {
         size = 26;
-    } else if (n->ss.ss_family == AF_INET6) {
+    } else if (n->ss.family == AF_INET6) {
         size = 38;
     } else {
         abort();
@@ -3118,12 +3098,12 @@ static int insert_closest_node(unsigned char *nodes, int numnodes,
         memmove(nodes + size * (i + 1), nodes + size * i, size * (numnodes - i - 1));
 	}
 
-    if (n->ss.ss_family == AF_INET) {
+    if (n->ss.family == AF_INET) {
         struct sockaddr_in *sin = (struct sockaddr_in*)&n->ss;
         memcpy(nodes + size * i, n->id, 20);
         memcpy(nodes + size * i + 20, &sin->sin_addr, 4);
         memcpy(nodes + size * i + 24, &sin->sin_port, 2);
-    } else if (n->ss.ss_family == AF_INET6) {
+    } else if (n->ss.family == AF_INET6) {
         struct sockaddr_in6 *sin6 = (struct sockaddr_in6*)&n->ss;
         memcpy(nodes + size * i, n->id, 20);
         memcpy(nodes + size * i + 20, &sin6->sin6_addr, 16);
@@ -3147,7 +3127,7 @@ static int buffer_closest_nodes(dht_handle_t *h, unsigned char *nodes, int numno
     return numnodes;
 }
 
-int send_closest_nodes(dht_handle_t *h, const struct sockaddr *sa, int salen,
+int send_closest_nodes(dht_handle_t *h, const ks_sockaddr_t *sa,
 					   const unsigned char *tid, int tid_len,
 					   const unsigned char *id, int want,
 					   int af, struct storage *st,
@@ -3201,7 +3181,7 @@ int send_closest_nodes(dht_handle_t *h, const struct sockaddr *sa, int salen,
 /* sample get_peers w/ want '{"t":"aa", "y":"q", "q":"get_peers", "a": {"id":"abcdefghij0123456789", "info_hash":"mnopqrstuvwxyz123456": "want":"n4"}}'*/
 /* http://www.bittorrent.org/beps/bep_0005.html */
 /* http://www.bittorrent.org/beps/bep_0032.html for want parameter */
-int send_get_peers(dht_handle_t *h, const struct sockaddr *sa, int salen,
+int send_get_peers(dht_handle_t *h, const ks_sockaddr_t *sa,
 				   unsigned char *tid, int tid_len, unsigned char *infohash,
 				   int want, int confirm)
 {
@@ -3229,10 +3209,10 @@ int send_get_peers(dht_handle_t *h, const struct sockaddr *sa, int salen,
 	
 	ks_log(KS_LOG_DEBUG, "Encoded GET_PEERS\n");
 
-    return dht_send(h, buf, i, confirm ? MSG_CONFIRM : 0, sa, salen);
+    return dht_send(h, buf, i, confirm ? MSG_CONFIRM : 0, sa);
 }
 /* '{"t":"aa", "y":"q", "q":"announce_peer", "a": {"id":"abcdefghij0123456789", "implied_port": 1, "info_hash":"mnopqrstuvwxyz123456", "port": 6881, "token": "aoeusnth"}}'*/
-int send_announce_peer(dht_handle_t *h, const struct sockaddr *sa, int salen,
+int send_announce_peer(dht_handle_t *h, const ks_sockaddr_t *sa,
 					   unsigned char *tid, int tid_len,
 					   unsigned char *infohash, unsigned short port,
 					   unsigned char *token, int token_len, int confirm)
@@ -3256,10 +3236,10 @@ int send_announce_peer(dht_handle_t *h, const struct sockaddr *sa, int salen,
 	ben_free(bencode_p); /* This SHOULD free the bencode_a_p as well */
 	
 	ks_log(KS_LOG_DEBUG, "Encoded ANNOUNCE_PEERS\n");
-    return dht_send(h, buf, i, confirm ? MSG_CONFIRM : 0, sa, salen);
+    return dht_send(h, buf, i, confirm ? MSG_CONFIRM : 0, sa);
 }
 /* '{"t":"aa", "y":"r", "r": {"id":"mnopqrstuvwxyz123456"}}'*/
-static int send_peer_announced(dht_handle_t *h, const struct sockaddr *sa, int salen, unsigned char *tid, int tid_len)
+static int send_peer_announced(dht_handle_t *h, const ks_sockaddr_t *sa, unsigned char *tid, int tid_len)
 {
     char buf[512];
     int i = 0;
@@ -3275,11 +3255,11 @@ static int send_peer_announced(dht_handle_t *h, const struct sockaddr *sa, int s
 	ben_free(bencode_p); /* This SHOULD free the bencode_a_p as well */
 	
 	ks_log(KS_LOG_DEBUG, "Encoded peer_announced: %s\n\n", buf);
-    return dht_send(h, buf, i, 0, sa, salen);
+    return dht_send(h, buf, i, 0, sa);
 }
 
 /* '{"t":"aa", "y":"e", "e":[201, "A Generic Error Ocurred"]}'*/
-static int send_error(dht_handle_t *h, const struct sockaddr *sa, int salen,
+static int send_error(dht_handle_t *h, const ks_sockaddr_t *sa,
 					  unsigned char *tid, int tid_len,
 					  int code, const char *message)
 {
@@ -3298,7 +3278,7 @@ static int send_error(dht_handle_t *h, const struct sockaddr *sa, int salen,
 	ben_free(bencode_p);
 	
 	ks_log(KS_LOG_DEBUG, "Encoded error: %s\n\n", buf);
-    return dht_send(h, buf, i, 0, sa, salen);
+    return dht_send(h, buf, i, 0, sa);
 }
 
 #undef CHECK
@@ -3883,7 +3863,7 @@ int ks_dht_calculate_mutable_storage_target(unsigned char *pk, unsigned char *sa
 	return 0;
 }
 
-KS_DECLARE(int) ks_dht_send_message_mutable_cjson(dht_handle_t *h, unsigned char *sk, unsigned char *pk, const struct sockaddr *sa, int salen,
+KS_DECLARE(int) ks_dht_send_message_mutable_cjson(dht_handle_t *h, unsigned char *sk, unsigned char *pk, const ks_sockaddr_t *sa,
 											char *message_id, int sequence, cJSON *message, ks_time_t life)
 {
 	struct bencode *body = ben_dict();
@@ -3905,7 +3885,7 @@ KS_DECLARE(int) ks_dht_send_message_mutable_cjson(dht_handle_t *h, unsigned char
 	return err;
 }
 
-KS_DECLARE(int) ks_dht_send_message_mutable(dht_handle_t *h, unsigned char *sk, unsigned char *pk, const struct sockaddr *sa, int salen,
+KS_DECLARE(int) ks_dht_send_message_mutable(dht_handle_t *h, unsigned char *sk, unsigned char *pk, const ks_sockaddr_t *sa,
 											char *message_id, int sequence, char *message, ks_time_t life)
 {
 	unsigned char target[40], signature[crypto_sign_BYTES];
@@ -3978,7 +3958,7 @@ int ks_dht_generate_mutable_storage_args(struct bencode *data, int64_t sequence,
 	
 	dht_search(h, (const unsigned char *)entry->key, h->port, AF_INET, NULL, NULL);
 
-	return dht_send(h, buf, buf_len, 0, sa, salen);
+	return dht_send(h, buf, buf_len, 0, sa);
 }
 
 
