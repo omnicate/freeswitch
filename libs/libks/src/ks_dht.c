@@ -282,6 +282,7 @@ struct dht_handle_s {
 	ks_pool_t *pool;
 
 	struct pollfd *pollsocks;
+	ks_ip_t **iptsocks;
 	uint32_t num_pollsocks;
 
 	//int dht_socket;
@@ -1818,6 +1819,7 @@ static void reset_poll(dht_handle_t *h)
 	if (h->num_pollsocks < socks) {
 		h->num_pollsocks = socks;
 		h->pollsocks = (struct pollfd *)ks_pool_resize(h->pool, (void *)h->pollsocks, sizeof(struct pollfd) * h->num_pollsocks);
+		h->iptsocks = (ks_ip_t **) ks_pool_resize(h->pool, (void *)h->iptsocks, sizeof(ks_ip_t *) * h->num_pollsocks);
 		ks_log(KS_LOG_DEBUG, "Resize poll array to %d\n", h->num_pollsocks);
 	}
 
@@ -1832,6 +1834,7 @@ static void reset_poll(dht_handle_t *h)
 		
 		h->pollsocks[i].fd = ipt->sock;
 		h->pollsocks[i].events = POLLIN | POLLERR;
+		h->iptsocks[i] = ipt;
 		i++;
 	}
 }
@@ -1843,7 +1846,7 @@ KS_DECLARE(ks_status_t) ks_dht_one_loop(dht_handle_t *h, int timeout)
 	int s, i;
 	unsigned char buf[65536] = {0};
 	ks_size_t bytes = sizeof(buf);
-	ks_sockaddr_t remote_addr;
+
 
 	reset_poll(h);
 
@@ -1862,6 +1865,9 @@ KS_DECLARE(ks_status_t) ks_dht_one_loop(dht_handle_t *h, int timeout)
 
 	for (i = 0; i < h->num_pollsocks; i++) {
 		if ((h->pollsocks[i].revents & POLLIN)) {
+			ks_sockaddr_t remote_addr = KS_SA_INIT;
+			
+			remote_addr.family = h->iptsocks[i]->addr.family;
 			if ((status = ks_socket_recvfrom(h->pollsocks[i].fd, buf, &bytes, &remote_addr)) == KS_STATUS_SUCCESS) {
 				// git rid of tosleep and convert it to non-blocking counter so you can still call this in a loop and just return timeout till tosleep expired
 				// beginning of rabbit hole to change references to addrs to ks_addrs instead and stop passing sockaddr and len all over the place.
