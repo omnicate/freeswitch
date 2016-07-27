@@ -2311,10 +2311,13 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, ks
         }
 
 		msg_ben = ben_decode((const void *) buf, buflen);
-		ks_log(KS_LOG_DEBUG, "Received bencode message: \n\n%s\n", ben_print(msg_ben));
+		if ( !msg_ben ) {
+			ks_log(KS_LOG_DEBUG, "Received invalid message. Unable to ben_decode it.\n");
+			goto dontread;
+		}
 
         message = parse_message(msg_ben, tid, &tid_len, id);
-		ks_log(KS_LOG_DEBUG, "Message type from parse_message %d\n", message);
+		ks_log(KS_LOG_DEBUG, "Received bencode message[%d]: \n\n%s\n", message, ben_print(msg_ben));
 
         if (id_cmp(id, zeroes) == 0) {
 			message = DHT_MSG_INVALID;
@@ -3290,7 +3293,6 @@ static dht_msg_type_t parse_message(struct bencode *bencode_p,
 	struct bencode *key_args = ben_dict_get_by_str(bencode_p, "a");
 	struct bencode *key_resp = ben_dict_get_by_str(bencode_p, "r");
 
-	ks_log(KS_LOG_DEBUG, "decoded: %s \n", ben_print(bencode_p));
 	/* Need to set tid, tid_len, and id_return. Then return the message type or msg_error. */
 
 	if ( key_t ) {
