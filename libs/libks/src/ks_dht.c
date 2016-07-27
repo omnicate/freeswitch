@@ -2145,7 +2145,7 @@ static int token_bucket(dht_handle_t *h)
 
 static int neighbourhood_maintenance(dht_handle_t *h, int af)
 {
-    unsigned char id[20];
+    unsigned char id[21];
     struct bucket *b = find_bucket(h, h->myid, af);
     struct bucket *q;
     struct node *n;
@@ -2156,6 +2156,7 @@ static int neighbourhood_maintenance(dht_handle_t *h, int af)
 
     memcpy(id, h->myid, 20);
     id[19] = random() & 0xFF;
+	id[20] = 0;
     q = b;
 
     if (q->next && (q->count == 0 || (random() & 7) == 0)) {
@@ -2200,13 +2201,14 @@ static int bucket_maintenance(dht_handle_t *h, int af)
             /* This bucket hasn't seen any positive confirmation for a long
                time.  Pick a random id in this bucket's range, and send
                a request to a random node. */
-            unsigned char id[20];
+            unsigned char id[21];
             struct node *n;
             int rc;
 
             rc = bucket_random(b, id);
             if (rc < 0) {
                 memcpy(id, b->first, 20);
+				id[20] = 0;
 			}
 
             q = b;
