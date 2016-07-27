@@ -3061,15 +3061,13 @@ static int insert_closest_node(unsigned char *nodes, int numnodes,
 	}
 
     if (n->ss.family == AF_INET) {
-        struct sockaddr_in *sin = (struct sockaddr_in*)&n->ss;
         memcpy(nodes + size * i, n->id, 20);
-        memcpy(nodes + size * i + 20, &sin->sin_addr, 4);
-        memcpy(nodes + size * i + 24, &sin->sin_port, 2);
+        memcpy(nodes + size * i + 20, &n->ss.v.v4.sin_addr, 4);
+        memcpy(nodes + size * i + 24, &n->ss.v.v4.sin_port, 2);
     } else if (n->ss.family == AF_INET6) {
-        struct sockaddr_in6 *sin6 = (struct sockaddr_in6*)&n->ss;
         memcpy(nodes + size * i, n->id, 20);
-        memcpy(nodes + size * i + 20, &sin6->sin6_addr, 16);
-        memcpy(nodes + size * i + 36, &sin6->sin6_port, 2);
+        memcpy(nodes + size * i + 20, &n->ss.v.v6.sin6_addr, 16);
+        memcpy(nodes + size * i + 36, &n->ss.v.v6.sin6_port, 2);
     } else {
         abort();
     }
