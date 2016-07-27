@@ -250,6 +250,17 @@ main(int argc, char **argv)
 
 			if (!strncmp(line, "quit", 4)) {
 				globals.exiting = 1;
+			} else if (!strncmp(line, "show_bind", 9)) {
+				const ks_sockaddr_t **bindings;
+				ks_size_t len = 0;
+				int i;
+
+				ks_dht_get_bind_addrs(h, &bindings, &len);
+
+				for (i = 0; i < len; i++) {
+					printf("Bind addr %s:%d\n", bindings[i]->host, bindings[i]->port);
+				}
+
 			} else if (!strncmp(line, "ping ", 5)) {
 				const char *ip = line + 5;
 				ks_sockaddr_t tmp;

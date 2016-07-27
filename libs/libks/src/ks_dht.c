@@ -283,6 +283,7 @@ struct dht_handle_s {
 
 	struct pollfd *pollsocks;
 	ks_ip_t **iptsocks;
+	ks_sockaddr_t **addrsocks;
 	uint32_t num_pollsocks;
 
 	//int dht_socket;
@@ -1805,6 +1806,7 @@ static void reset_poll(dht_handle_t *h)
 		h->num_pollsocks = socks;
 		h->pollsocks = (struct pollfd *)ks_pool_resize(h->pool, (void *)h->pollsocks, sizeof(struct pollfd) * h->num_pollsocks);
 		h->iptsocks = (ks_ip_t **) ks_pool_resize(h->pool, (void *)h->iptsocks, sizeof(ks_ip_t *) * h->num_pollsocks);
+		h->addrsocks = (ks_sockaddr_t **) ks_pool_resize(h->pool, (void *)h->addrsocks, sizeof(ks_sockaddr_t *) * h->num_pollsocks);
 		ks_log(KS_LOG_DEBUG, "Resize poll array to %d\n", h->num_pollsocks);
 	}
 
@@ -1820,10 +1822,18 @@ static void reset_poll(dht_handle_t *h)
 		h->pollsocks[i].fd = ipt->sock;
 		h->pollsocks[i].events = POLLIN | POLLERR;
 		h->iptsocks[i] = ipt;
+		h->addrsocks[i] = &ipt->addr;
 		i++;
 	}
 }
 
+KS_DECLARE(ks_status_t) ks_dht_get_bind_addrs(dht_handle_t *h, const ks_sockaddr_t ***addrs, ks_size_t *addrlen)
+{
+	*addrs = (const ks_sockaddr_t **) h->addrsocks;
+	*addrlen = h->num_pollsocks;
+
+	return KS_STATUS_SUCCESS;
+}
 
 KS_DECLARE(ks_status_t) ks_dht_one_loop(dht_handle_t *h, int timeout)
 {
