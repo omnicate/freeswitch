@@ -3352,7 +3352,7 @@ static dht_msg_type_t parse_message(struct bencode *bencode_p,
 						  }
 						 */
 						
-						ks_log(KS_LOG_DEBUG, "get_peers query recieved for info hash [%s] from client\n", infohash);
+						ks_log(KS_LOG_DEBUG, "get_peers query recieved\n");
 						type = DHT_MSG_GET_PEERS;
 						goto done;
 					} else if (!ben_cmp_with_str(b_query, "ping")) {
@@ -3385,7 +3385,6 @@ static dht_msg_type_t parse_message(struct bencode *bencode_p,
 						goto done;
 					} else if (!ben_cmp_with_str(b_query, "put")) {
 						ks_log(KS_LOG_DEBUG, "Recieved a store put request\n");
-						ks_log(KS_LOG_DEBUG, "message [%s]\n", id_return);
 						type = DHT_MSG_STORE_PUT;
 						goto done;
 					} else {
