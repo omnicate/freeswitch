@@ -237,7 +237,16 @@ main(int argc, char **argv)
 
 		if (count > 1) {
 			int line_len = (int)strlen(line) - 1;
+			char *cmd_dup = strdup(line);
+			char *argv[8] = { 0 };
+			int argc = 0;
+
 			history(myhistory, &ev, H_ENTER, line);
+
+			if ( cmd_dup[line_len] == '\n' ) {
+				cmd_dup[line_len] = '\0';
+			}
+			argc = ks_separate_string(cmd_dup, " ", argv, (sizeof(argv) / sizeof(argv[0])));
 
 			if (!strncmp(line, "quit", 4)) {
 				globals.exiting = 1;
@@ -246,6 +255,11 @@ main(int argc, char **argv)
 				ks_sockaddr_t tmp;
 				ks_addr_set(&tmp, ip, globals.port, 0);
 				dht_ping_node(h, &tmp);
+			} else if (!strncmp(line, "find_node ", 9)) {
+				/* usage: find_node ipv[4|6] [40 character node id] [40 character target id] */
+				ks_bool_t ipv6 = strncmp(argv[1], "ipv4", 4);
+
+				ks_dht_api_find_node(h, argv[2], argv[3], ipv6);
 			} else if (!strncmp(line, "loglevel", 8)) {
 				ks_global_set_default_logger(atoi(line + 9));
 			} else if (!strncmp(line, "peer_dump", 9)) {
@@ -336,6 +350,8 @@ main(int argc, char **argv)
 			} else {
 				printf("Unknown command entered[%.*s]\n", line_len, line);
 			}
+
+			free(cmd_dup);
 		}
     }
 
@@ -360,3 +376,15 @@ main(int argc, char **argv)
            "                   port [address port]...\n");
     exit(0);
 }
+
+
+/* For Emacs:
+ * Local Variables:
+ * mode:c
+ * indent-tabs-mode:t
+ * tab-width:4
+ * c-basic-offset:4
+ * End:
+ * For VIM:
+ * vim:set softtabstop=4 shiftwidth=4 tabstop=4 noet:
+ */

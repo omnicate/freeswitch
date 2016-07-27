@@ -74,6 +74,8 @@ KS_DECLARE(int) ks_dht_send_message_mutable_cjson(dht_handle_t *h, unsigned char
 typedef void (ks_dht_store_entry_json_cb)(struct dht_handle_s *h, const cJSON *msg, void *obj);
 KS_DECLARE(void) ks_dht_store_entry_json_cb_set(struct dht_handle_s *h, ks_dht_store_entry_json_cb *store_json_cb, void *arg);
 
+KS_DECLARE(int) ks_dht_api_find_node(dht_handle_t *h, char *node_id_hex, char *target_hex, ks_bool_t ipv6);
+
 KS_END_EXTERN_C
 
 #endif /* _KS_DHT_H */

@@ -3922,6 +3922,33 @@ int ks_dht_generate_mutable_storage_args(struct bencode *data, int64_t sequence,
 	return dht_send(h, buf, buf_len, 0, sa);
 }
 
+// KS_DECLARE(int) ks_dht_send_message_mutable(
+KS_DECLARE(int) ks_dht_api_find_node(dht_handle_t *h, char *node_id_hex, char *target_hex, ks_bool_t ipv6)
+{
+	unsigned char node_id[20] = {0}, target[20] = {0}, tid[4] = {0};
+	struct node *n = NULL;
+	size_t size = 0;
+
+	if ( strlen(node_id_hex) != 40 || strlen(target_hex) != 40 ) {
+		ks_log(KS_LOG_INFO, "node_id(%s)[%d] and target(%s)[%d] must each be 40 hex characters\n", node_id_hex, strlen(node_id_hex), target_hex, strlen(target_hex));
+		return 1;
+	}
+
+	sodium_hex2bin(node_id, 20, node_id_hex, 40, ":", &size, NULL);
+	sodium_hex2bin(target, 20, target_hex, 40, ":", &size, NULL);
+	
+	n = find_node(h, node_id, ipv6 ? AF_INET6 : AF_INET);
+
+	if ( !n ) {
+		ks_log(KS_LOG_INFO, "Unable to find node with id[%s]\n", node_id_hex);
+		return 1;
+	}
+	
+	make_tid(tid, "fn", 0);
+
+	return send_find_node(h, &n->ss, tid, 4, target, WANT4 | WANT6, n->reply_time >= h->now - 15);
+}
+
 
 /* For Emacs:
  * Local Variables:
