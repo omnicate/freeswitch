@@ -258,7 +258,7 @@ main(int argc, char **argv)
 			} else if (!strncmp(line, "find_node ", 9)) {
 				/* usage: find_node ipv[4|6] [40 character node id] [40 character target id] */
 				ks_bool_t ipv6 = strncmp(argv[1], "ipv4", 4);
-
+				(void) argc; /* Check to see if it's the right length, else print usage */
 				ks_dht_api_find_node(h, argv[2], argv[3], ipv6);
 			} else if (!strncmp(line, "loglevel", 8)) {
 				ks_global_set_default_logger(atoi(line + 9));
