@@ -1860,6 +1860,7 @@ KS_DECLARE(ks_status_t) ks_dht_one_loop(dht_handle_t *h, int timeout)
 	}
 
 	if (s == 0) {
+		dht_periodic(h, buf, 0, NULL);
 		return KS_STATUS_TIMEOUT;
 	}
 
