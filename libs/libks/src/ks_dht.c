@@ -1488,28 +1488,13 @@ static void dump_bucket(dht_handle_t *h, FILE *f, struct bucket *b)
     fprintf(f, " count %d age %d%s%s:\n", b->count, age, mine ? " (mine)" : "", cached ? " (cached)" : "");
 
     while (n) {
-        char buf[512];
-        unsigned short port;
         fprintf(f, "    Node ");
         print_hex(f, n->id, 20);
 
-        if (n->ss.family == AF_INET) {
-            struct sockaddr_in *sin = (struct sockaddr_in*)&n->ss;
-            inet_ntop(AF_INET, &sin->sin_addr, buf, 512);
-            port = ntohs(sin->sin_port);
-        } else if (n->ss.family == AF_INET6) {
-            struct sockaddr_in6 *sin6 = (struct sockaddr_in6*)&n->ss;
-            inet_ntop(AF_INET6, &sin6->sin6_addr, buf, 512);
-            port = ntohs(sin6->sin6_port);
-        } else {
-            ks_snprintf(buf, 512, "unknown(%d)", n->ss.family);
-            port = 0;
-        }
-
         if (n->ss.family == AF_INET6) {
-            fprintf(f, " [%s]:%d ", buf, port);
+            fprintf(f, " [%s]:%d ", n->ss.host, n->ss.port);
 		} else {
-            fprintf(f, " %s:%d ", buf, port);
+            fprintf(f, " %s:%d ", n->ss.host, n->ss.port);
 		}
 
         if (n->time != n->reply_time) {
