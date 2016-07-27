@@ -37,6 +37,10 @@ typedef enum {
 
 
 typedef enum {
+	DHT_PARAM_AUTOROUTE = 1
+} ks_dht_param_t;
+
+typedef enum {
 	KS_DHT_AF_INET4 = (1 << 0),
 	KS_DHT_AF_INET6 = (1 << 1)
 } ks_dht_af_flag_t;
@@ -48,7 +52,9 @@ typedef struct dht_handle_s dht_handle_t;
 
 KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, ks_sockaddr_t *from);
 KS_DECLARE(ks_status_t) ks_dht_init(dht_handle_t **handle, ks_dht_af_flag_t af_flags, const unsigned char *id, unsigned int port);
-KS_DECLARE(ks_status_t) ks_dht_start(dht_handle_t *h);
+KS_DECLARE(void) ks_dht_set_param(dht_handle_t *h, ks_dht_param_t param, ks_bool_t val);
+KS_DECLARE(ks_status_t) ks_dht_add_ip(dht_handle_t *h, char *ip, int port);
+KS_DECLARE(void) ks_dht_start(dht_handle_t *h);
 KS_DECLARE(int) dht_insert_node(dht_handle_t *h, const unsigned char *id, ks_sockaddr_t *sa);
 KS_DECLARE(int) dht_ping_node(dht_handle_t *h, ks_sockaddr_t *sa);
 KS_DECLARE(int) dht_search(dht_handle_t *h, const unsigned char *id, int port, int af, dht_callback_t callback, void *closure);

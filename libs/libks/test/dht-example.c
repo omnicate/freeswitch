@@ -23,7 +23,9 @@
 
 #define MAX_BOOTSTRAP_NODES 20
 static ks_sockaddr_t bootstrap_nodes[MAX_BOOTSTRAP_NODES];
+static ks_sockaddr_t bind_nodes[MAX_BOOTSTRAP_NODES];
 static int num_bootstrap_nodes = 0;
+static int num_bind_nodes = 0;
 
 /* The call-back function is called by the DHT whenever something
    interesting happens.  Right now, it only happens when we get a new value or
@@ -85,10 +87,9 @@ main(int argc, char **argv)
     int i, rc;
     //int have_id = 0;
     //char *id_file = "dht-example.id";
+	int ipv4 = 0, ipv6 = 0;
+	int autobind = 0;
     int opt;
-    int ipv4 = 1, ipv6 = 1;
-    struct sockaddr_in sin;
-    struct sockaddr_in6 sin6;
     EditLine *el;
     History *myhistory;
     int count;
@@ -103,86 +104,68 @@ main(int argc, char **argv)
 
     ks_init();
 
-    globals.s = -1;
-    globals.s6 = -1;
-    globals.exiting = 0;
-    
     el = el_init("test", stdin, stdout, stderr);
     el_set(el, EL_PROMPT, &prompt);
     el_set(el, EL_EDITOR, "emacs");
     myhistory = history_init();
     history(myhistory, &ev, H_SETSIZE, 800);
     el_set(el, EL_HIST, history, myhistory);
-    
+    globals.port = 5309;
 
-    memset(&sin, 0, sizeof(sin));
-    sin.sin_family = AF_INET;
-
-    memset(&sin6, 0, sizeof(sin6));
-    sin6.sin6_family = AF_INET6;
 
     ks_global_set_default_logger(7);
 
     while(1) {
-        opt = getopt(argc, argv, "q46b:i:");
+        opt = getopt(argc, argv, "46ap:b:B:");
         if(opt < 0)
             break;
 
         switch(opt) {
-        case '4': ipv6 = 0; break;
-        case '6': ipv4 = 0; break;
-        case 'b': {
-            char buf[16];
-            int rc;
-            rc = inet_pton(AF_INET, optarg, buf);
-            if(rc == 1) {
-                memcpy(&sin.sin_addr, buf, 4);
-                break;
-            }
-            rc = inet_pton(AF_INET6, optarg, buf);
-            if(rc == 1) {
-                memcpy(&sin6.sin6_addr, buf, 16);
-                break;
-            }
-            goto usage;
-        }
-            break;
-			//case 'i':
-            //id_file = optarg;
-            break;
+		case '4':
+			ipv4 = 1;
+			break;
+		case '6':
+			ipv6 = 1;
+			break;
+		case 'a':
+			autobind = 1;
+			break;
+		case 'p':
+			globals.port = atoi(optarg);
+			break;
+		case 'b':
+		case 'B': {
+			char ip[80];
+			int port = globals.port;
+			char *p;
+			ks_set_string(ip, optarg);
+
+			if ((p = strchr(ip, ':'))) {
+				*p++ = '\0';
+				port = atoi(p);
+			}
+			if (opt == 'B') {
+				printf("Adding bootstrap node %s:%d\n", ip, port);
+				ks_addr_set(&bootstrap_nodes[num_bootstrap_nodes++], ip, port, 0);
+			} else {
+				printf("Adding binding %s:%d\n", ip, port);
+				ks_addr_set(&bind_nodes[num_bind_nodes++], ip, port, 0);
+			}
+		}
+			break;
         default:
             goto usage;
         }
     }
-
+	
     if(argc < 2)
         goto usage;
 
     i = optind;
 
-    if(argc < i + 1)
-        goto usage;
-
-    globals.port = atoi(argv[i++]);
-
     if(globals.port <= 0 || globals.port >= 0x10000)
         goto usage;
 
-    while(i < argc) {
-		char *ip = argv[i];
-		int port = atoi(argv[i+1]);
-
-		fprintf(stderr, "Bootstrapping with node %s:%s\n", argv[i], argv[i+1]);
-		ks_addr_set(&bootstrap_nodes[num_bootstrap_nodes++], ip, port, 0);
-
-        i++;
-
-        if(i >= argc) {
-            goto usage;
-		}
-
-        i++;
-    }
 
 	ks_dht_af_flag_t af_flags = 0;
 
@@ -201,6 +184,16 @@ main(int argc, char **argv)
         perror("dht_init");
         exit(1);
     }
+
+    for(i = 0; i < num_bind_nodes; i++) {
+		ks_dht_add_ip(h, bind_nodes[i].host, bind_nodes[i].port);
+	}
+
+	if (autobind) {
+		ks_dht_set_param(h, DHT_PARAM_AUTOROUTE, KS_TRUE);
+	}
+
+	ks_dht_start(h);
 
 	ks_dht_set_callback(h, callback, NULL);
 
@@ -264,6 +257,12 @@ main(int argc, char **argv)
 			} else if (!strncmp(line, "ping ", 5)) {
 				const char *ip = line + 5;
 				ks_sockaddr_t tmp;
+				char *p;
+
+				while ((p = strchr(ip, '\r')) || (p = strchr(ip, '\n'))) {
+					*p = '\0';
+				}
+
 				ks_addr_set(&tmp, ip, globals.port, 0);
 				dht_ping_node(h, &tmp);
 			} else if (!strncmp(line, "find_node ", 9)) {
@@ -383,8 +382,8 @@ main(int argc, char **argv)
     return 0;
     
  usage:
-    printf("Usage: dht-example [-4] [-6] [-i filename] [-b address]...\n"
-           "                   port [address port]...\n");
+    printf("Usage: dht-example [-a] [-4] [-6] [-p <port>] [-b <ip>[:<port>]]...\n"
+           "                   [-B <ip>[:<port>]]...\n");
     exit(0);
 }
 

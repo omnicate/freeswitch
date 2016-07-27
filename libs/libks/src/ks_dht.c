@@ -335,6 +335,10 @@ struct dht_handle_s {
 	int af_flags;
 
 	int tosleep;
+
+	int autoroute;
+
+	int started;
 };
 
 void ks_dht_store_entry_json_cb_set(struct dht_handle_s *h, ks_dht_store_entry_json_cb *store_json_cb, void *arg)
@@ -1842,6 +1846,10 @@ KS_DECLARE(ks_status_t) ks_dht_one_loop(dht_handle_t *h, int timeout)
 	unsigned char buf[65536] = {0};
 	ks_size_t bytes = sizeof(buf);
 
+	if (!h->started) {
+		return KS_STATUS_FAIL;
+	}
+
 
 	reset_poll(h);
 
@@ -1908,21 +1916,23 @@ static void clear_all_ip(dht_handle_t *h)
 
 }
 
-static ks_ip_t *add_ip(dht_handle_t *h, const char *ip, int family)
+static ks_ip_t *add_ip(dht_handle_t *h, const char *ip, int port, int family)
 {
 	ks_ip_t *ipt;
 
 	ks_assert(h);
 	ks_assert(ip);
+
+	if (!port) port = h->port;
 	
-	ks_log(KS_LOG_DEBUG, "Adding bind ip: %s port: %d\n", ip, h->port);
+	ks_log(KS_LOG_DEBUG, "Adding bind ip: %s port: %d family:%d\n", ip, h->port, family);
 
 	ipt = ks_pool_alloc(h->pool, sizeof(*ipt));
 	ipt->sock = KS_SOCK_INVALID;
 
 	ks_set_string(ipt->ip, ip);
 	
-	ks_addr_set(&ipt->addr, ip, h->port, family);
+	ks_addr_set(&ipt->addr, ip, port, family);
 
 	if ((ipt->sock = socket(family, SOCK_DGRAM, IPPROTO_UDP)) == KS_SOCK_INVALID) {
 		ks_log(KS_LOG_ERROR, "Socket Error\n");
@@ -1931,7 +1941,7 @@ static ks_ip_t *add_ip(dht_handle_t *h, const char *ip, int family)
 	}
 
 	if (ks_addr_bind(ipt->sock, &ipt->addr) != KS_STATUS_SUCCESS) {
-		ks_log(KS_LOG_ERROR, "Error Adding bind ip: %s port: %d sock: %d\n", ip, h->port, ipt->sock);
+		ks_log(KS_LOG_ERROR, "Error Adding bind ip: %s port: %d sock: %d (%s)\n", ip, port, ipt->sock, strerror(errno));
 		ks_socket_close(&ipt->sock);
 		ks_pool_free(h->pool, ipt);
 		return NULL;
@@ -1969,17 +1979,15 @@ KS_DECLARE(void) ks_dht_set_v(dht_handle_t *h, const unsigned char *v)
     }
 }
 
-KS_DECLARE(ks_status_t) ks_dht_add_ip(dht_handle_t *h, char *ip, ks_size_t iplen)
+KS_DECLARE(ks_status_t) ks_dht_add_ip(dht_handle_t *h, char *ip, int port)
 {
 	int family = AF_INET;
-	int mask = 0;
 
 	if (strchr(ip, ':')) {
 		family = AF_INET6;
 	}
 
-	ks_find_local_ip(ip, iplen, &mask, family, NULL);
-	return add_ip(h, ip, AF_INET) ? KS_STATUS_SUCCESS : KS_STATUS_FAIL;
+	return add_ip(h, ip, port, family) ? KS_STATUS_SUCCESS : KS_STATUS_FAIL;
 }
 
 
@@ -1989,14 +1997,47 @@ KS_DECLARE(void) ks_dht_set_callback(dht_handle_t *h, dht_callback_t callback, v
 	h->closure = closure;
 }
 
+
+KS_DECLARE(void) ks_dht_set_param(dht_handle_t *h, ks_dht_param_t param, ks_bool_t val)
+{
+	switch(param) {
+	case DHT_PARAM_AUTOROUTE:
+		h->autoroute = val;
+		break;
+	}
+}
+
+KS_DECLARE(void) ks_dht_start(dht_handle_t *h)
+{
+	char ip[48] = "";
+	int mask = 0;
+
+	if (h->started) return;
+
+    if ((h->af_flags & KS_DHT_AF_INET4) && !h->ip4s) {
+        h->buckets = ks_pool_alloc(h->pool, sizeof(*h->buckets));
+        h->buckets->af = AF_INET;
+		ks_find_local_ip(ip, sizeof(ip), &mask, AF_INET, NULL);
+		add_ip(h, ip, 0, AF_INET);
+    }
+
+	if ((h->af_flags & KS_DHT_AF_INET6) && !h->ip6s) {
+        h->buckets6 = ks_pool_alloc(h->pool, sizeof(*h->buckets6));
+        h->buckets6->af = AF_INET6;
+		ks_find_local_ip(ip, sizeof(ip), &mask, AF_INET6, NULL);
+		add_ip(h, ip, 0, AF_INET6);
+    }
+	
+	h->started = 1;
+
+}
+
 //KS_DECLARE(int) dht_init(dht_handle_t **handle, int s, int s6, const unsigned char *id, const unsigned char *v, unsigned int port)
 KS_DECLARE(ks_status_t) ks_dht_init(dht_handle_t **handle, ks_dht_af_flag_t af_flags, const unsigned char *id, unsigned int port)
 {
     int rc;
 	dht_handle_t *h;
 	ks_pool_t *pool;
-	char ip[80] = "";
-	int mask = 0;
 
 	ks_pool_open(&pool);
 	*handle = h = ks_pool_alloc(pool, sizeof(dht_handle_t));
@@ -2015,20 +2056,6 @@ KS_DECLARE(ks_status_t) ks_dht_init(dht_handle_t **handle, ks_dht_af_flag_t af_f
 
 
 	ks_hash_create(&h->iphash, KS_HASH_MODE_DEFAULT, KS_HASH_FLAG_RWLOCK, h->pool);
-
-    if ((h->af_flags & KS_DHT_AF_INET4)) {
-        h->buckets = ks_pool_alloc(h->pool, sizeof(*h->buckets));
-        h->buckets->af = AF_INET;
-		ks_find_local_ip(ip, sizeof(ip), &mask, AF_INET, NULL);
-		add_ip(h, ip, AF_INET);
-    }
-
-	if ((h->af_flags & KS_DHT_AF_INET6)) {
-        h->buckets6 = ks_pool_alloc(h->pool, sizeof(*h->buckets6));
-        h->buckets6->af = AF_INET6;
-		ks_find_local_ip(ip, sizeof(ip), &mask, AF_INET6, NULL);
-		add_ip(h, ip, AF_INET6);
-    }
 
 	h->store_json_cb = NULL;
 	h->store_json_cb_arg = NULL;
@@ -2884,18 +2911,21 @@ static int dht_send(dht_handle_t *h, const void *buf, size_t len, int flags, con
         return -1;
     }
 
+	
 	ks_ip_route(ip, sizeof(ip), sa->host);
 
-	if (!(ipt = ks_hash_search(h->iphash, ip, KS_UNLOCKED))) {
-		ipt = add_ip(h, ip, AF_INET);
+	if (!(ipt = ks_hash_search(h->iphash, ip, KS_UNLOCKED)) && h->autoroute) {
+		ipt = add_ip(h, ip, 0, sa->family);
 	}
 
 	if (!ipt) {
+		ks_log(KS_LOG_ERROR, "No route to dest\n");
         errno = EINVAL;
 		return -1;
 	}
 
 	if (ks_socket_sendto(ipt->sock, (void *)buf, &len, (ks_sockaddr_t *)sa) != KS_STATUS_SUCCESS) {
+		ks_log(KS_LOG_ERROR, "Socket Error (%s)\n", strerror(errno));
 		return -1;
 	}
 

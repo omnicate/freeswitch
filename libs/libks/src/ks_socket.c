@@ -805,7 +805,7 @@ KS_DECLARE(ks_status_t) ks_find_local_ip(char *buf, int len, int *mask, int fami
 
 	if (!getnameinfo((const struct sockaddr *) &l_address, l_address_len, buf, len, NULL, 0, NI_NUMERICHOST)) {
 		status = KS_STATUS_SUCCESS;
-		if (mask) {
+		if (mask && family == AF_INET) {
 			get_netmask((struct sockaddr_in *) &l_address, mask);
 		}
 	}
@@ -847,7 +847,7 @@ KS_DECLARE(ks_status_t) ks_find_local_ip(char *buf, int len, int *mask, int fami
 			getnameinfo((struct sockaddr *) &iface_out, sizeof(iface_out), abuf, sizeof(abuf), NULL, 0, NI_NUMERICHOST);
 			ks_copy_string(buf, abuf, len);
 			
-			if (mask) {
+			if (mask && family == AF_INET) {
 				get_netmask((struct sockaddr_in *) &iface_out, mask);
 			}
 
@@ -877,8 +877,9 @@ KS_DECLARE(ks_status_t) ks_find_local_ip(char *buf, int len, int *mask, int fami
 			if (getsockname(tmp_socket, (struct sockaddr *) &iface_out, &ilen) == -1) {
 				goto doh;
 			}
-
+			
 			inet_ntop(AF_INET6, (const void *) &iface_out.sin6_addr, buf, len - 1);
+
 			status = KS_STATUS_SUCCESS;
 		}
 		break;

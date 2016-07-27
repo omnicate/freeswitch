@@ -70,6 +70,10 @@ static int test_addr(int v)
 			return 0;
 		}
 
+		if (strcmp(addr1.host, "10.100.200.5")) {
+			return 0;
+		}
+
 		if (ks_addr_set(&addr2, "10.100.200.5", 2467, AF_INET) != KS_STATUS_SUCCESS) {
 			return 0;
 		}
@@ -84,6 +88,10 @@ static int test_addr(int v)
 
 	} else {
 		if (ks_addr_set(&addr1, "1607:f418:1210::1", 2467, AF_INET6) != KS_STATUS_SUCCESS) {
+			return 0;
+		}
+
+		if (strcmp(addr1.host, "1607:f418:1210::1")) {
 			return 0;
 		}
 
@@ -379,7 +387,7 @@ int main(void)
 	plan((have_v4 * 3) + (have_v6 * 3) + 1);
 
 	ok(have_v4 || have_v6);
-
+	
 	if (have_v4) {
 		ok(test_tcp(v4));
 		ok(test_udp(v4));
