@@ -3337,8 +3337,6 @@ static dht_msg_type_t parse_message(struct bencode *bencode_p,
 				} else { /* Has a query type */
 					const char *query_type = ben_str_val(b_query);
 					if (!ben_cmp_with_str(b_query, "get_peers")) {
-						struct bencode *b_infohash = key_args ? ben_dict_get_by_str( key_args, "info_hash") : NULL;
-						const char *infohash = b_infohash ? ben_str_val(b_infohash) : NULL;
 						/*
 						  {
 						    'a': {
