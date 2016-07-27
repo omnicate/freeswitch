@@ -2040,9 +2040,6 @@ KS_DECLARE(ks_status_t) ks_dht_init(dht_handle_t **handle, ks_dht_af_flag_t af_f
     h->storage = NULL;
     h->numstorage = 0;
 
-	h->buckets = NULL;
-	h->buckets6 = NULL;
-
 	if (!id) {
 		ks_random_string((char *)h->myid, 20, NULL);
 		//randombytes_buf(h->myid, 20);
@@ -2074,7 +2071,6 @@ KS_DECLARE(ks_status_t) ks_dht_init(dht_handle_t **handle, ks_dht_af_flag_t af_f
 
     expire_buckets(h, h->buckets);
     expire_buckets(h, h->buckets6);
-
 
 	ks_dht_store_create(h->pool, &h->store);
 
