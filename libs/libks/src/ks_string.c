@@ -230,7 +230,7 @@ KS_DECLARE(int) ks_snprintf(char *buffer, size_t count, const char *fmt, ...)
 }
 
 
-KS_DECLARE(unsigned int) ks_separate_string_string(char *buf, const char *delim, char **array, unsigned int arraylen)
+KS_DECLARE(unsigned int) ks_separate_string(char *buf, const char *delim, char **array, unsigned int arraylen)
 {
 	unsigned int count = 0;
 	char *d;

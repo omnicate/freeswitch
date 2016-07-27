@@ -98,7 +98,7 @@ KS_DECLARE(int) ks_toupper(int c);
 KS_DECLARE(int) ks_tolower(int c);
 KS_DECLARE(char *) ks_copy_string(char *from_str, const char *to_str, ks_size_t from_str_len);
 KS_DECLARE(int) ks_snprintf(char *buffer, size_t count, const char *fmt, ...);
-KS_DECLARE(unsigned int) ks_separate_string_string(char *buf, const char *delim, char **array, unsigned int arraylen);
+KS_DECLARE(unsigned int) ks_separate_string(char *buf, const char *delim, char **array, unsigned int arraylen);
 KS_DECLARE(int) ks_cpu_count(void);
 	static __inline__ int ks_safe_strcasecmp(const char *s1, const char *s2) {
 		if (!(s1 && s2)) {
