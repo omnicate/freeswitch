@@ -3311,7 +3311,6 @@ static dht_msg_type_t parse_message(struct bencode *bencode_p,
 
 		memcpy(tid_return, tran, (size_t) tran_len);
 		*tid_len = tran_len;
-		ks_log(KS_LOG_DEBUG, "Message transaction [%.*s]\n", tran_len, tran);
 	}
 
 	if ( key_args ) {
