@@ -72,10 +72,10 @@ int dht_blacklisted(const ks_sockaddr_t *sa);
 void dht_hash(void *hash_return, int hash_size, const void *v1, int len1, const void *v2, int len2, const void *v3, int len3);
 int dht_random_bytes(void *buf, size_t size);
 
-KS_DECLARE(int) ks_dht_send_message_mutable(dht_handle_t *h, unsigned char *sk, unsigned char *pk, const ks_sockaddr_t *sa,
+KS_DECLARE(int) ks_dht_send_message_mutable(dht_handle_t *h, unsigned char *sk, unsigned char *pk, char **node_id,
 											char *message_id, int sequence, char *message, ks_time_t life);
 
-KS_DECLARE(int) ks_dht_send_message_mutable_cjson(dht_handle_t *h, unsigned char *sk, unsigned char *pk, const ks_sockaddr_t *sa,
+KS_DECLARE(int) ks_dht_send_message_mutable_cjson(dht_handle_t *h, unsigned char *sk, unsigned char *pk, char **node_id,
 												  char *message_id, int sequence, cJSON *message, ks_time_t life);
 
 typedef void (ks_dht_store_entry_json_cb)(struct dht_handle_s *h, const cJSON *msg, void *obj);

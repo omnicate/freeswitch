@@ -3901,7 +3901,7 @@ int ks_dht_calculate_mutable_storage_target(unsigned char *pk, unsigned char *sa
 	return 0;
 }
 
-KS_DECLARE(int) ks_dht_send_message_mutable_cjson(dht_handle_t *h, unsigned char *sk, unsigned char *pk, const ks_sockaddr_t *sa,
+KS_DECLARE(int) ks_dht_send_message_mutable_cjson(dht_handle_t *h, unsigned char *sk, unsigned char *pk, char **node_id,
 											char *message_id, int sequence, cJSON *message, ks_time_t life)
 {
 	struct bencode *body = ben_dict();
@@ -3915,7 +3915,7 @@ KS_DECLARE(int) ks_dht_send_message_mutable_cjson(dht_handle_t *h, unsigned char
 
 	output = (char *)ben_encode(&output_len, body);
 
-	err = ks_dht_send_message_mutable(h, sk, pk, sa, message_id, sequence, output, life);
+	err = ks_dht_send_message_mutable(h, sk, pk, node_id, message_id, sequence, output, life);
 	free(json);
 	free(output);
 	ben_free(body);
@@ -3923,7 +3923,7 @@ KS_DECLARE(int) ks_dht_send_message_mutable_cjson(dht_handle_t *h, unsigned char
 	return err;
 }
 
-KS_DECLARE(int) ks_dht_send_message_mutable(dht_handle_t *h, unsigned char *sk, unsigned char *pk, const ks_sockaddr_t *sa,
+KS_DECLARE(int) ks_dht_send_message_mutable(dht_handle_t *h, unsigned char *sk, unsigned char *pk, char **node_id,
 											char *message_id, int sequence, char *message, ks_time_t life)
 {
 	unsigned char target[40], signature[crypto_sign_BYTES];
@@ -3992,11 +3992,56 @@ int ks_dht_generate_mutable_storage_args(struct bencode *data, int64_t sequence,
 	}
 
 	ks_dht_store_replace(h->store, entry);
-	/* TODO: dht_search() announce of this hash */
 	
+	/* dht_search() announce of this hash */
 	dht_search(h, (const unsigned char *)entry->key, h->port, AF_INET, NULL, NULL);
 
-	return dht_send(h, buf, buf_len, 0, sa);
+	if ( node_id && node_id[0] ) {
+		/* We're being told where to send these messages. */
+		int x = 0;
+
+		for ( x = 0; node_id[x] != NULL; x++ ) {
+			unsigned char node_id_bin[20] = {0};
+			struct node *n = NULL;
+			size_t size = 0;
+			
+			sodium_hex2bin(node_id_bin, 20, node_id[x], 40, ":", &size, NULL);
+			
+			n = find_node(h, node_id_bin, AF_INET);
+			
+			if ( !n ) {
+				n = find_node(h, node_id_bin, AF_INET6);
+			}
+			
+			if ( !n ) {
+				ks_log(KS_LOG_INFO, "Unable to find node with id\n");
+				continue;
+			}
+
+			err |= dht_send(h, buf, buf_len, 0, &n->ss);
+		}
+	} else {
+		/* Client api assumes that we'll figure out where to send the message.
+		   We should find a bucket that resolves to the key, and send to all nodes in that bucket.
+		 */ 
+		struct bucket *b4 = find_bucket(h, (const unsigned char *)entry->key, AF_INET);
+		struct bucket *b6 = find_bucket(h, (const unsigned char *)entry->key, AF_INET6);
+		struct node *n = NULL;
+
+		if ( b4 ) {
+			for ( n = b4->nodes; n->next; n = n->next ) {
+				err |= dht_send(h, buf, buf_len, 0, &n->ss);
+			}
+		}
+
+		if ( b6 ) {
+			for ( n = b6->nodes; n->next; n = n->next ) {
+				err |= dht_send(h, buf, buf_len, 0, &n->ss);
+			}
+		}
+	}
+
+	return err;
 }
 
 // KS_DECLARE(int) ks_dht_send_message_mutable(

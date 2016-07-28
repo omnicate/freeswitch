@@ -310,8 +310,7 @@ main(int argc, char **argv)
 			  output = cJSON_CreateString(message);
 			  
 			  ks_dht_send_message_mutable_cjson(h, alice_secretkey, alice_publickey,
-												&bootstrap_nodes[0],
-												message_id, 1, output, 600);
+												NULL, message_id, 1, output, 600);
 			  free(input);
 			  cJSON_Delete(output);
 			} else if (!strncmp(line, "message_immutable", 15)) {
