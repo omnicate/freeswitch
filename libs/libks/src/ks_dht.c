@@ -1925,8 +1925,23 @@ static ks_ip_t *add_ip(dht_handle_t *h, const char *ip, int port, int family)
 
 	if (!port) port = h->port;
 
-	if (family == AF_INET) h->af_flags |= KS_DHT_AF_INET4;
-	else if (family == AF_INET6) h->af_flags |= KS_DHT_AF_INET6;
+	if (family == AF_INET) {
+		h->af_flags |= KS_DHT_AF_INET4;
+
+		if (!h->buckets) {
+			h->buckets = ks_pool_alloc(h->pool, sizeof(*h->buckets));
+			h->buckets->af = AF_INET;
+		}
+
+	} else if (family == AF_INET6) {
+		h->af_flags |= KS_DHT_AF_INET6;
+		
+		if (!h->buckets6) {
+			h->buckets6 = ks_pool_alloc(h->pool, sizeof(*h->buckets6));
+			h->buckets6->af = AF_INET6;
+		}
+	}
+
 
 	ks_log(KS_LOG_DEBUG, "Adding bind ip: %s port: %d family:%d\n", ip, port, family);
 
@@ -2018,15 +2033,11 @@ KS_DECLARE(void) ks_dht_start(dht_handle_t *h)
 	if (h->started) return;
 
     if ((h->af_flags & KS_DHT_AF_INET4) && !h->ip4s) {
-        h->buckets = ks_pool_alloc(h->pool, sizeof(*h->buckets));
-        h->buckets->af = AF_INET;
 		ks_find_local_ip(ip, sizeof(ip), &mask, AF_INET, NULL);
 		add_ip(h, ip, 0, AF_INET);
     }
 
 	if ((h->af_flags & KS_DHT_AF_INET6) && !h->ip6s) {
-        h->buckets6 = ks_pool_alloc(h->pool, sizeof(*h->buckets6));
-        h->buckets6->af = AF_INET6;
 		ks_find_local_ip(ip, sizeof(ip), &mask, AF_INET6, NULL);
 		add_ip(h, ip, 0, AF_INET6);
     }
