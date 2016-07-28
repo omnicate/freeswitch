@@ -2226,13 +2226,25 @@ static int neighbourhood_maintenance(dht_handle_t *h, int af)
         /* Since our node-id is the same in both DHTs, it's probably
            profitable to query both families. */
 
-		int want = (h->af_flags & KS_DHT_AF_INET6) ? (WANT4 | WANT6) : -1;
         n = random_node(q);
         if (n) {
             unsigned char tid[4];
-            ks_log(KS_LOG_DEBUG, "Sending find_node for%s neighborhood maintenance.\n", af == AF_INET6 ? " IPv6" : "");
+
+			const char *msg;
+
+
+			if ((h->af_flags & KS_DHT_AF_INET6) && (h->af_flags & KS_DHT_AF_INET4)) {
+				msg = "v4 and v6";
+			} else if (h->af_flags & KS_DHT_AF_INET6) {
+				msg = "v6";
+			} else {
+				msg = "v4";
+			}
+
+
+            ks_log(KS_LOG_DEBUG, "Sending find_node for %s on %s neighborhood maintenance.\n", msg, af == AF_INET6 ? "IPv6" : "IPv4");
             make_tid(tid, "fn", 0);
-            send_find_node(h, &n->ss, tid, 4, id, want, n->reply_time >= h->now - 15);
+            send_find_node(h, &n->ss, tid, 4, id, h->af_flags, n->reply_time >= h->now - 15);
             pinged(h, n, q);
         }
         return 1;
@@ -2330,7 +2342,7 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, ks
         unsigned short port = 0;
         unsigned char values[2048], values6[2048];
         int values_len = 2048, values6_len = 2048;
-        int want = -1;
+        int want = 0;
         unsigned short ttid;
 		struct bencode *msg_ben = NULL;
 		struct bencode *key_args = NULL; /* Request args */
@@ -2395,14 +2407,18 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, ks
 
 			key_want = ben_dict_get_by_str(key_args, "want");
 			
-			if ( key_want ) {
-				if ( !ben_cmp_with_str(key_want, "n4") ) {
-					want = WANT4;
-				} else if ( !ben_cmp_with_str(key_want, "n6") ) {
-					want = WANT6;
-				} else {
-					want = -1;
+			if ( key_want && ben_is_list(key_want)) {
+				int x = 0;
+				for( x = 0; x < ben_list_len(key_want); x++ ) {
+					struct bencode *key_tmp = ben_list_get(key_want, x);
+					if ( !ben_cmp_with_str(key_tmp, "n4") ) {
+						want |= WANT4;
+					} else if ( !ben_cmp_with_str(key_tmp, "n6") ) {
+						want |= WANT6;
+					}
 				}
+			} else {
+				want = WANT4;
 			}
 
 			key_target = ben_dict_get_by_str(key_args, "target");
@@ -3012,10 +3028,14 @@ int send_find_node(dht_handle_t *h, const ks_sockaddr_t *sa,
 	if (target) ben_dict_set(bencode_a_p, ben_blob("target", 6), ben_blob(target, target_len));
 
 	if (want > 0) {
-		char *w = NULL;
-		if (want & WANT4) w = "n4";
-		if (want & WANT6) w = "n6";
-		if (w) ben_dict_set(bencode_a_p, ben_blob("want", 4), ben_blob(w, 2));
+		struct bencode *bencode_w = ben_list();
+		if (want & WANT4) {
+			ben_list_append(bencode_w, ben_blob("n4", 2));
+		}
+		if (want & WANT6) {
+			ben_list_append(bencode_w, ben_blob("n6", 2));
+		}
+		ben_dict_set(bencode_a_p, ben_blob("want", 4), bencode_w);
 	}
 
 	ben_dict_set(bencode_p, ben_blob("a", 1), bencode_a_p);
@@ -3217,10 +3237,14 @@ int send_get_peers(dht_handle_t *h, const ks_sockaddr_t *sa,
 	ben_dict_set(bencode_p, ben_blob("q", 1), ben_blob("get_peers", 9));
 	ben_dict_set(bencode_a_p, ben_blob("id", 2), ben_blob(h->myid, 20));
 	if (want > 0) {
-		char *w = NULL;
-		if (want & WANT4) w = "n4";
-		if (want & WANT6) w = "n6";
-		if (w) ben_dict_set(bencode_a_p, ben_blob("want", 4), ben_blob(w, 2));
+		struct bencode *bencode_w_p = ben_list();
+		if (want & WANT4) {
+			ben_list_append(bencode_w_p, ben_blob("n4", 2));
+		}
+		if (want & WANT6) {
+			ben_list_append(bencode_w_p, ben_blob("n6", 2));
+		}
+		ben_dict_set(bencode_a_p, ben_blob("want", 4), bencode_w_p);
 	}
 	ben_dict_set(bencode_a_p, ben_blob("info_hash", 9), ben_blob(infohash, infohash_len));
 	ben_dict_set(bencode_p, ben_blob("a", 1), bencode_a_p);
