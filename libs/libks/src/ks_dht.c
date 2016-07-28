@@ -2368,7 +2368,7 @@ KS_DECLARE(int) dht_periodic(dht_handle_t *h, const void *buf, size_t buflen, ks
 		}
 
         message = parse_message(msg_ben, tid, &tid_len, id);
-		ks_log(KS_LOG_DEBUG, "Received bencode message[%d]: \n\n%s\n", message, ben_print(msg_ben));
+		ks_log(KS_LOG_DEBUG, "Received bencode message[%d] from [%s] port (%d): \n\n%s\n", message, from->host, from->port, ben_print(msg_ben));
 
         if (id_cmp(id, zeroes) == 0) {
 			message = DHT_MSG_INVALID;
@@ -2937,6 +2937,8 @@ static int dht_send(dht_handle_t *h, const void *buf, size_t len, int flags, con
         errno = EINVAL;
 		return -1;
 	}
+
+	ks_log(KS_LOG_INFO, "Sending message to [%s] port (%d)\n", sa->host, sa->port);
 
 	if (ks_socket_sendto(ipt->sock, (void *)buf, &len, (ks_sockaddr_t *)sa) != KS_STATUS_SUCCESS) {
 		ks_log(KS_LOG_ERROR, "Socket Error (%s)\n", strerror(errno));
