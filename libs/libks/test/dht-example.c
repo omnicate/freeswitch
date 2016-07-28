@@ -140,7 +140,7 @@ main(int argc, char **argv)
 			char *p;
 			ks_set_string(ip, optarg);
 
-			if ((p = strchr(ip, ':'))) {
+			if ((p = strchr(ip, '+'))) {
 				*p++ = '\0';
 				port = atoi(p);
 			}
@@ -382,8 +382,8 @@ main(int argc, char **argv)
     return 0;
     
  usage:
-    printf("Usage: dht-example [-a] [-4] [-6] [-p <port>] [-b <ip>[:<port>]]...\n"
-           "                   [-B <ip>[:<port>]]...\n");
+    printf("Usage: dht-example [-a] [-4] [-6] [-p <port>] [-b <ip>[+<port>]]...\n"
+           "                   [-B <ip>[+<port>]]...\n");
     exit(0);
 }
 

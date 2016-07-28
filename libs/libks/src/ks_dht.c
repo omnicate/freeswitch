@@ -1924,8 +1924,11 @@ static ks_ip_t *add_ip(dht_handle_t *h, const char *ip, int port, int family)
 	ks_assert(ip);
 
 	if (!port) port = h->port;
-	
-	ks_log(KS_LOG_DEBUG, "Adding bind ip: %s port: %d family:%d\n", ip, h->port, family);
+
+	if (family == AF_INET) h->af_flags |= KS_DHT_AF_INET4;
+	else if (family == AF_INET6) h->af_flags |= KS_DHT_AF_INET6;
+
+	ks_log(KS_LOG_DEBUG, "Adding bind ip: %s port: %d family:%d\n", ip, port, family);
 
 	ipt = ks_pool_alloc(h->pool, sizeof(*ipt));
 	ipt->sock = KS_SOCK_INVALID;
