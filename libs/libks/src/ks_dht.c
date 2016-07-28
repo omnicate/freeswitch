@@ -189,7 +189,8 @@ static int send_pong(dht_handle_t *h, const ks_sockaddr_t *sa,
                      const unsigned char *tid, int tid_len);
 static int send_find_node(dht_handle_t *h, const ks_sockaddr_t *sa,
                           const unsigned char *tid, int tid_len,
-                          const unsigned char *target, int want, int confirm);
+                          const unsigned char *target, int target_len,
+						  int want, int confirm);
 static int send_nodes_peers(dht_handle_t *h, const ks_sockaddr_t *sa,
                             const unsigned char *tid, int tid_len,
                             const unsigned char *nodes, int nodes_len,
@@ -2196,7 +2197,7 @@ static int token_bucket(dht_handle_t *h)
 
 static int neighbourhood_maintenance(dht_handle_t *h, int af)
 {
-    unsigned char id[21];
+    unsigned char id[20];
     struct bucket *b = find_bucket(h, h->myid, af);
     struct bucket *q;
     struct node *n;
@@ -2207,7 +2208,6 @@ static int neighbourhood_maintenance(dht_handle_t *h, int af)
 
     memcpy(id, h->myid, 20);
     id[19] = random() & 0xFF;
-	id[20] = 0;
     q = b;
 
     if (q->next && (q->count == 0 || (random() & 7) == 0)) {
@@ -2244,7 +2244,7 @@ static int neighbourhood_maintenance(dht_handle_t *h, int af)
 
             ks_log(KS_LOG_DEBUG, "Sending find_node for %s on %s neighborhood maintenance.\n", msg, af == AF_INET6 ? "IPv6" : "IPv4");
             make_tid(tid, "fn", 0);
-            send_find_node(h, &n->ss, tid, 4, id, h->af_flags, n->reply_time >= h->now - 15);
+            send_find_node(h, &n->ss, tid, 4, id, sizeof(id), h->af_flags, n->reply_time >= h->now - 15);
             pinged(h, n, q);
         }
         return 1;
@@ -2264,14 +2264,13 @@ static int bucket_maintenance(dht_handle_t *h, int af)
             /* This bucket hasn't seen any positive confirmation for a long
                time.  Pick a random id in this bucket's range, and send
                a request to a random node. */
-            unsigned char id[21];
+            unsigned char id[20];
             struct node *n;
             int rc;
 
             rc = bucket_random(b, id);
             if (rc < 0) {
                 memcpy(id, b->first, 20);
-				id[20] = 0;
 			}
 
             q = b;
@@ -2313,7 +2312,7 @@ static int bucket_maintenance(dht_handle_t *h, int af)
 
                     ks_log(KS_LOG_DEBUG, "Sending find_node for%s bucket maintenance.\n", af == AF_INET6 ? " IPv6" : "");
                     make_tid(tid, "fn", 0);
-                    send_find_node(h, &n->ss, tid, 4, id, want, n->reply_time >= h->now - 15);
+                    send_find_node(h, &n->ss, tid, 4, id, sizeof(id), want, n->reply_time >= h->now - 15);
                     pinged(h, n, q);
                     /* In order to avoid sending queries back-to-back, give up for now and reschedule us soon. */
                     return 1;
@@ -3012,13 +3011,12 @@ int send_pong(dht_handle_t *h, const ks_sockaddr_t *sa, const unsigned char *tid
 /* http://www.bittorrent.org/beps/bep_0032.html for want parameter */
 int send_find_node(dht_handle_t *h, const ks_sockaddr_t *sa,
                const unsigned char *tid, int tid_len,
-               const unsigned char *target, int want, int confirm)
+			   const unsigned char *target, int target_len, int want, int confirm)
 {
     char buf[512];
 	int i = 0;
 	struct bencode *bencode_p = ben_dict();
 	struct bencode *bencode_a_p = ben_dict();
-	int target_len = target ? strlen((const char*)target) : 0;
 
 	ben_dict_set(bencode_p, ben_blob("t", 1), ben_blob(tid, tid_len));
 	ben_dict_set(bencode_p, ben_blob("y", 1), ben_blob("q", 1));
@@ -4025,7 +4023,7 @@ KS_DECLARE(int) ks_dht_api_find_node(dht_handle_t *h, char *node_id_hex, char *t
 	
 	make_tid(tid, "fn", 0);
 
-	return send_find_node(h, &n->ss, tid, 4, target, WANT4 | WANT6, n->reply_time >= h->now - 15);
+	return send_find_node(h, &n->ss, tid, 4, target, sizeof(target), WANT4 | WANT6, n->reply_time >= h->now - 15);
 }
 
 
