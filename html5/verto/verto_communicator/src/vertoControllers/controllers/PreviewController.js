@@ -14,21 +14,17 @@
         var volumes = document.querySelector('#mic-meter .volumes').children;
 
         $scope.localVideo = function() {
-          var constraints = {
-            mirrored: true,
-            audio: {
-              optional: [{ sourceId: storage.data.selectedAudio }]
-            }
-          };
+          var constraints = {};
+          constraints.audio = true;
+          constraints.video = {};
 
           if (storage.data.selectedVideo !== 'none') {
-            constraints.video = {
-              optional: [{ sourceId: storage.data.selectedVideo }]
-            };
+            constraints.video.deviceID = storage.data.selectedVideo;
+          } else {
+            constraints.video = false;
           }
-
-          navigator.getUserMedia(constraints, handleMedia, function(err, data) {
-
+          navigator.mediaDevices.getUserMedia(constraints).then(handleMedia).catch(function(e) {
+            console.error('Error getting user media: ' + e.toString());
           });
         };
 
