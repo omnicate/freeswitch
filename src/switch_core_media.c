@@ -55,7 +55,6 @@ static void gen_ice(switch_core_session_t *session, switch_media_type_t type, co
 #define TEXT_PERIOD_TIMEOUT 3000
 #define MAX_RED_FRAMES 25
 #define RED_PACKET_SIZE 100
-#define MSRP_LISTEN_PORT 8044
 
 typedef enum {
 	SMF_INIT = (1 << 0),
@@ -9953,6 +9952,8 @@ SWITCH_DECLARE(void) switch_core_media_gen_local_sdp(switch_core_session_t *sess
 
 	}
 
+msrp:
+
 	if (smh->msrp_session) {
 		switch_msrp_session_t *msrp_session = smh->msrp_session;
 
@@ -9999,6 +10000,30 @@ SWITCH_DECLARE(void) switch_core_media_gen_local_sdp(switch_core_session_t *sess
 		}
 
 		goto no_rtt;
+	} else if (switch_channel_test_cap(session->channel, CC_RTP_RTT) && (
+		switch_channel_test_flag(session->channel, CF_TEXT_POSSIBLE) ||
+		switch_channel_var_true(session->channel, "sip_enable_msrp"))) {
+
+		smh->msrp_session = switch_msrp_session_new(switch_core_session_get_pool(session));
+
+		if (!smh->msrp_session) {
+			goto endmsrp;
+		}
+
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "MSRP session created\n");
+
+		smh->msrp_session->call_id = switch_core_session_get_uuid(session);
+		smh->msrp_session->local_port = MSRP_LISTEN_PORT;
+
+		switch_channel_set_flag(session->channel, CF_TEXT);
+		switch_channel_set_flag(session->channel, CF_TEXT_POSSIBLE);
+		switch_channel_set_flag(session->channel, CF_MSRP);
+
+		switch_core_session_start_text_thread(session);
+
+		goto msrp;
+
+		endmsrp: ;
 	}
 
 	// RTP TEXT

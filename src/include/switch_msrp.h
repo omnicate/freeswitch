@@ -28,10 +28,13 @@
  * msrp.h -- MSRP lib
  *
  */
- #ifndef _MSRP_H
+
+#ifndef _MSRP_H
 #define _MSRP_H
 
 #include <switch.h>
+
+#define MSRP_LISTEN_PORT 8044
 
 enum {
 	MSRP_ST_WAIT_HEADER,

@@ -81,7 +81,7 @@ switch_status_t switch_msrp_init()
 
 	memset(&globals, 0, sizeof(globals));
 	set_global_ip("0.0.0.0");
-	globals.port = (switch_port_t)8044;
+	globals.port = (switch_port_t)MSRP_LISTEN_PORT;
 
 	rv = switch_sockaddr_info_get(&sa, globals.ip, SWITCH_INET, globals.port, 0, pool);
 	if (rv) goto sock_fail;
@@ -236,9 +236,9 @@ void dump_buffer(char *buf, switch_size_t len, int line)
 		if ((++k) %80 == 0) buff[j++] = '\n';
 		if (j >= MSRP_BUFF_SIZE * 2) break;
 	}
+
 	buff[j] = '\0';
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "%d:%ldDUMP:%s:DUMP\n", line, len, buff);
-
 }
 
 char *find_delim(char *buf, int len, char *delim)
@@ -396,7 +396,7 @@ msrp_msg_t *msrp_parse_headers(const char *start, int len, msrp_msg_t *msrp_msg,
 							msrp_msg->payload_bytes = msrp_msg->byte_end + 1 - msrp_msg->byte_start;
 						}
 
-						switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "%" SWITCH_SIZE_T_FMT " payload bytes\n", msrp_msg->payload_bytes);
+						if (globals.debug) switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "%" SWITCH_SIZE_T_FMT " payload bytes\n", msrp_msg->payload_bytes);
 
 						/*Fixme sanity check to avoid large byte-range attack*/
 						if (!msrp_msg->range_star && msrp_msg->payload_bytes > msrp_msg->bytes) {
@@ -576,7 +576,7 @@ switch_status_t msrp_reply(switch_socket_t *sock, msrp_msg_t *msrp_msg)
 		switch_str_nil(msrp_msg->headers[MSRP_H_TO_PATH]),
 		msrp_msg->delimiter);
 	len = strlen(buf);
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "reply: %" SWITCH_SIZE_T_FMT " bytes\n%s", len, buf);
+
 	return switch_socket_send(sock, buf, &len);
 }
 
@@ -820,7 +820,7 @@ static void *SWITCH_THREAD_FUNC msrp_listener(switch_thread_t *thread, void *obj
 	switch_memory_pool_t *pool = NULL;
 	switch_threadattr_t *thd_attr = NULL;
 
-switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "listener\n");
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "msrp listener start\n");
 
 	if (switch_core_new_memory_pool(&pool) != SWITCH_STATUS_SUCCESS) {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "OH OH no pool\n");
@@ -853,12 +853,12 @@ switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "listener\n");
 		switch_threadattr_detach_set(thd_attr, 1);
 		switch_threadattr_stacksize_set(thd_attr, SWITCH_THREAD_STACKSIZE);
 		switch_thread_create(&thread, thd_attr, msrp_worker, helper, worker_pool);
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "new thread spawned!\n");
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "msrp worker new thread spawned!\n");
 	}
 
 	if (pool) switch_core_destroy_memory_pool(&pool);
 
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "msrp_listener down\n");
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "msrp listener down\n");
 
 	return NULL;
 }
