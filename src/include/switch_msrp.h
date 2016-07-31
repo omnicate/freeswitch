@@ -83,6 +83,7 @@ typedef struct msrp_msg_s switch_msrp_msg_t;
 
 typedef struct {
 	switch_memory_pool_t *pool;
+	int secure;
 	char *remote_path;
 	char *remote_accept_types;
 	char *remote_accept_wrapped_types;

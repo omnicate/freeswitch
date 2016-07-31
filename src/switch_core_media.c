@@ -4282,6 +4282,8 @@ SWITCH_DECLARE(uint8_t) switch_core_media_negotiate_sdp(switch_core_session_t *s
 				goto endmsrp;
 			}
 
+			if (m->m_proto == sdp_proto_msrps) smh->msrp_session->secure = 1;
+
 			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "MSRP session created\n");
 
 			for (attr = m->m_attributes; attr; attr = attr->a_next) {
@@ -9960,17 +9962,19 @@ msrp:
 		if (!zstr(msrp_session->remote_path)) {
 			if (zstr(msrp_session->local_path)) {
 				msrp_session->local_path = switch_core_session_sprintf(session,
-					"msrp://%s:%d/%s;tcp",
+					"msrp%s://%s:%d/%s;tcp",
+					msrp_session->secure ? "s" : "",
 					ip, msrp_session->local_port, msrp_session->call_id);
 			}
 
 			switch_snprintf(buf + strlen(buf), SDPBUFLEN - strlen(buf),
-				"m=message %d TCP/MSRP *\n"
+				"m=message %d TCP/%sMSRP *\n"
 				"a=path:%s\n"
 				"a=accept-types:%s\n"
 				"a=accept-wrapped-types:%s\n"
 				"a=setup:passive\n",
 				msrp_session->local_port,
+				msrp_session->secure ? "TLS/" : "",
 				msrp_session->local_path,
 				msrp_session->local_accept_types,
 				msrp_session->local_accept_wrapped_types);
@@ -9980,17 +9984,19 @@ msrp:
 
 			if (zstr(msrp_session->local_path)) {
 				msrp_session->local_path = switch_core_session_sprintf(session,
-					"msrp://%s:%d/%s;tcp",
+					"msrp%s://%s:%d/%s;tcp",
+					msrp_session->secure ? "s" : "",
 					ip, MSRP_LISTEN_PORT, uuid);
 			}
 
 			switch_snprintf(buf + strlen(buf), SDPBUFLEN - strlen(buf),
-				"m=message %d TCP/MSRP *\n"
+				"m=message %d TCP/%sMSRP *\n"
 				"a=path:%s\n"
 				"a=accept-types:message/cpim text/* application/im-iscomposing+xml\n"
 				"a=accept-wrapped-types:*\n"
 				"a=setup:passive\n",
 				MSRP_LISTEN_PORT,
+				msrp_session->secure ? "TLS/" : "",
 				msrp_session->local_path);
 
 			if (!zstr(file_selector)) {
@@ -10001,7 +10007,7 @@ msrp:
 
 		goto no_rtt;
 	} else if (switch_channel_test_cap(session->channel, CC_RTP_RTT) && (
-		switch_channel_test_flag(session->channel, CF_TEXT_POSSIBLE) ||
+		// switch_channel_test_flag(session->channel, CF_TEXT_POSSIBLE) ||
 		switch_channel_var_true(session->channel, "sip_enable_msrp"))) {
 
 		smh->msrp_session = switch_msrp_session_new(switch_core_session_get_pool(session));
