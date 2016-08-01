@@ -197,8 +197,19 @@ function check_vid() {
     return use_vid;
 }
 
+var DISABLE_SPEED_TEST = true;
+
 function do_speed_test(fn)
 {
+
+  
+    if (DISABLE_SPEED_TEST) {
+	if (fn) {
+	    fn();
+	}
+	return;
+    }
+
     goto_page("bwtest");
 
     vertoHandle.rpcClient.speedTest(1024 * 256, function(e, obj) {

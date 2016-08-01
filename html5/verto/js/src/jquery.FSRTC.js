@@ -469,8 +469,8 @@
 		constraints: {
                     audio: false,
                     video: {
-			mandatory: self.options.videoParams,
-			optional: []
+			//mandatory: self.options.videoParams,
+			//optional: []
                     },
 		},
 		localVideo: self.options.localVideo,
@@ -513,19 +513,24 @@
 	    audio = false;
 	} else {
 	    audio = {
-		mandatory: {},
-		optional: []
+		//mandatory: {},
+		//optional: []
 	    };
 
 	    if (obj.options.useMic !== "any") {
-		audio.optional = [{sourceId: obj.options.useMic}]
+		//audio.optional = [{sourceId: obj.options.useMic}]
+		audio.deviceId = {exact: obj.options.useMic};
 	    }
 
+	    //FIXME
 	    if (obj.options.audioParams) {
 		for (var key in obj.options.audioParams) {
 		    var con = {};
-		    con[key] = obj.options.audioParams[key];
-		    audio.optional.push(con);
+		    //con[key] = obj.options.audioParams[key];
+		    if (obj.options.audioParams[key]) {
+			con.exact = key;
+			audio.advanced.push(con);
+		    }
 		}
 	    }
 
@@ -551,7 +556,7 @@
 	delete obj.options.videoParams.vertoBestFrameRate;
 
 	video = {
-	    mandatory: obj.options.videoParams,
+	    //mandatory: obj.options.videoParams,
 	    width: {min: obj.options.videoParams.minWidth, max: obj.options.videoParams.maxWidth},
 	    height: {min: obj.options.videoParams.minHeight, max: obj.options.videoParams.maxHeight}
 	};
@@ -561,18 +566,18 @@
 	var useVideo = obj.options.useVideo;
 
 	if (useVideo && obj.options.useCamera && obj.options.useCamera !== "none") {
-	    if (!video.optional) {
-		video.optional = [];
-	    }
+	    //if (!video.optional) {
+		//video.optional = [];
+	    //}
 
 	    if (obj.options.useCamera !== "any") {
-		video.optional.push({sourceId: obj.options.useCamera});
+		//video.optional.push({sourceId: obj.options.useCamera});
 		video.deviceId = obj.options.useCamera;
 	    }
 
 	    if (bestFrameRate) {
-		video.optional.push({minFrameRate: bestFrameRate});
-		video.optional.push({maxFrameRate: bestFrameRate});
+		//video.optional.push({minFrameRate: bestFrameRate});
+		//video.optional.push({maxFrameRate: bestFrameRate});
 		video.frameRate = {ideal: bestFrameRate, min: minFrameRate, max: 30};
 	    }
 
@@ -825,10 +830,10 @@
             //console.debug('on:add:stream', remoteMediaStream);
         };
 
-        var constraints = options.constraints || {
-	    offerToReceiveAudio: true,
-	    offerToReceiveVideo: true   
-        };
+        //var constraints = options.constraints || {
+	  //  offerToReceiveAudio: true,
+	    //offerToReceiveVideo: true   
+        //};
 
         // onOfferSDP(RTCSessionDescription)
         function createOffer() {
@@ -844,7 +849,7 @@
 		    options.sentICESDP = 1;
                 }
             },
-            onSdpError, constraints);
+            onSdpError);
         }
 
         // onAnswerSDP(RTCSessionDescription)
@@ -860,7 +865,7 @@
                     options.onAnswerSDP(sessionDescription);
                 }
             },
-            onSdpError, constraints);
+            onSdpError);
         }
 
         // if Mozilla Firefox & DataChannel; offer/answer will be created later
@@ -1030,14 +1035,14 @@
 
     // getUserMedia
     var video_constraints = {
-        mandatory: {},
-        optional: []
+        //mandatory: {},
+        //optional: []
     };
 
     function getUserMedia(options) {
         var n = navigator,
         media;
-        n.getMedia = n.webkitGetUserMedia || n.mozGetUserMedia;
+        n.getMedia = n.getUserMedia;//n.webkitGetUserMedia || n.mozGetUserMedia;
         n.getMedia(options.constraints || {
             audio: true,
             video: video_constraints
@@ -1112,12 +1117,13 @@
 	}
 
 	var video = {
-            mandatory: {},
-            optional: []
+            //mandatory: {},
+            //optional: []
         }	
-
+	//FIXME
 	if (cam) {
-	    video.optional = [{sourceId: cam}];
+	    //video.optional = [{sourceId: cam}];
+	    video.deviceId = {exact: cam};
 	}
 	
 	w = resList[resI][0];
