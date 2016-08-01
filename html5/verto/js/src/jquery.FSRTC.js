@@ -515,6 +515,7 @@
 	    audio = {
 		//mandatory: {},
 		//optional: []
+            advanced: []
 	    };
 
 	    if (obj.options.useMic !== "any") {
