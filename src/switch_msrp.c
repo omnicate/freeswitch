@@ -65,7 +65,7 @@ static void close_socket(switch_socket_t ** sock)
 	// switch_mutex_unlock(globals.sock_mutex);
 }
 
-switch_status_t switch_msrp_init()
+SWITCH_DECLARE(switch_status_t) switch_msrp_init()
 {
 	switch_memory_pool_t *pool;
 	switch_thread_t *thread;
@@ -117,7 +117,7 @@ sock_fail:
 	return SWITCH_STATUS_FALSE;
 }
 
-switch_status_t switch_msrp_destroy()
+SWITCH_DECLARE(switch_status_t) switch_msrp_destroy()
 {
 	switch_status_t st = SWITCH_STATUS_SUCCESS;
 	switch_socket_t *sock;
@@ -135,7 +135,8 @@ switch_status_t switch_msrp_destroy()
 	return st;
 }
 
-switch_msrp_session_t *switch_msrp_session_new(switch_memory_pool_t *pool) {
+SWITCH_DECLARE(switch_msrp_session_t *)switch_msrp_session_new(switch_memory_pool_t *pool) 
+{
 	switch_msrp_session_t *ms;
 	ms = switch_core_alloc(pool, sizeof(switch_msrp_session_t));
 	switch_assert(ms);
@@ -145,7 +146,8 @@ switch_msrp_session_t *switch_msrp_session_new(switch_memory_pool_t *pool) {
 	return ms;
 }
 
-switch_status_t switch_msrp_session_destroy(switch_msrp_session_t **ms) {
+SWITCH_DECLARE(switch_status_t) switch_msrp_session_destroy(switch_msrp_session_t **ms) 
+{
 	switch_mutex_destroy((*ms)->mutex);
 	ms = NULL;
 	return SWITCH_STATUS_SUCCESS;
@@ -166,7 +168,7 @@ switch_status_t switch_msrp_session_push_msg(switch_msrp_session_t *ms, msrp_msg
 	return SWITCH_STATUS_SUCCESS;
 }
 
-msrp_msg_t *switch_msrp_session_pop_msg(switch_msrp_session_t *ms)
+SWITCH_DECLARE(msrp_msg_t *)switch_msrp_session_pop_msg(switch_msrp_session_t *ms)
 {
 	msrp_msg_t *m = ms->msrp_msg;
 	if (m == NULL) return NULL;
@@ -277,7 +279,8 @@ Byte-Range: 1-0/0
 -------d4c667b2351e958f$
 */
 
-char *msrp_parse_header(char *start, int skip, const char *end, msrp_msg_t *msrp_msg, int index, switch_memory_pool_t *pool) {
+char *msrp_parse_header(char *start, int skip, const char *end, msrp_msg_t *msrp_msg, int index, switch_memory_pool_t *pool) 
+{
 	char *p = start + skip;
 	char *q;
 	if (*p && *p == ' ') p++;
@@ -874,7 +877,7 @@ void random_string(char *buf, switch_size_t size)
 	*(buf+size) = '\0';
 }
 
-switch_status_t switch_msrp_send(switch_msrp_session_t *ms, msrp_msg_t *msrp_msg)
+SWITCH_DECLARE(switch_status_t) switch_msrp_send(switch_msrp_session_t *ms, msrp_msg_t *msrp_msg)
 {
 	char transaction_id[32];
 	char buf[MSRP_BUFF_SIZE];
@@ -1002,7 +1005,8 @@ SWITCH_STANDARD_APP(msrp_recv_function)
 
 		if (msrp_msg->method == MSRP_METHOD_SEND) {
 			switch_size_t bytes = msrp_msg->payload_bytes;
-			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "%s %" SWITCH_SIZE_T_FMT "bytes writing\n", switch_str_nil(msrp_msg->headers[MSRP_H_MESSAGE_ID]), bytes);
+			char *msg = switch_str_nil(msrp_msg->headers[MSRP_H_MESSAGE_ID]);
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "%s %" SWITCH_SIZE_T_FMT "bytes writing\n", msg, bytes);
 			switch_file_write(fd, msrp_msg->payload, &bytes);
 			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "%" SWITCH_SIZE_T_FMT "bytes written\n", bytes);
 			if (bytes != msrp_msg->payload_bytes) {
@@ -1013,7 +1017,6 @@ SWITCH_STANDARD_APP(msrp_recv_function)
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "eat one message, left:%d\n", (int)msrp_session->msrp_msg_count);
 
 		switch_safe_free(msrp_msg);
-		msrp_msg = NULL;
 	}
 
 	switch_file_close(fd);
@@ -1255,7 +1258,7 @@ error:
 	return SWITCH_STATUS_SUCCESS;
 }
 
-void load_msrp_apis_and_applications(switch_loadable_module_interface_t **module_interface)
+SWITCH_DECLARE(void) switch_msrp_load_msrp_apis_and_applications(switch_loadable_module_interface_t **module_interface)
 {
 	switch_application_interface_t *app_interface;
 	switch_api_interface_t *api_interface;

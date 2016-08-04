@@ -106,15 +106,15 @@ typedef struct {
 	uint8_t frame_data[SWITCH_RTP_MAX_BUF_LEN];
 } switch_msrp_session_t;
 
-switch_status_t switch_msrp_init();
-switch_status_t switch_msrp_destroy();
-switch_msrp_session_t *switch_msrp_session_new(switch_memory_pool_t *pool);
-switch_status_t switch_msrp_session_destroy(switch_msrp_session_t **ms);
+SWITCH_DECLARE(switch_status_t) switch_msrp_init();
+SWITCH_DECLARE(switch_status_t) switch_msrp_destroy();
+SWITCH_DECLARE(switch_msrp_session_t *)switch_msrp_session_new(switch_memory_pool_t *pool);
+SWITCH_DECLARE(switch_status_t) switch_msrp_session_destroy(switch_msrp_session_t **ms);
 // switch_status_t switch_msrp_session_push_msg(switch_msrp_session_t *ms, msrp_msg_t *msg);
-switch_msrp_msg_t *switch_msrp_session_pop_msg(switch_msrp_session_t *ms);
-switch_status_t switch_msrp_send(switch_msrp_session_t *ms, msrp_msg_t *msg);
+SWITCH_DECLARE(switch_msrp_msg_t *)switch_msrp_session_pop_msg(switch_msrp_session_t *ms);
+SWITCH_DECLARE(switch_status_t) switch_msrp_send(switch_msrp_session_t *ms, msrp_msg_t *msg);
 
-void load_msrp_apis_and_applications(switch_loadable_module_interface_t **moudle_interface);
+SWITCH_DECLARE(void) switch_msrp_load_msrp_apis_and_applications(switch_loadable_module_interface_t **moudle_interface);
 
 #endif
 
