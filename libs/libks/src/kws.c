@@ -515,10 +515,10 @@ static int establish_client_logical_layer(kws_t *kws)
 			}
 
 			kws->sanity--;
-			
-			//if (!kws->block) {
-			//	return -2;
-			//}
+
+			if (!kws->block) {
+				return -2;
+			}
 
 		} while (kws->sanity > 0);
 		
