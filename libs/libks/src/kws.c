@@ -357,14 +357,16 @@ KS_DECLARE(ks_ssize_t) kws_raw_read(kws_t *kws, void *data, ks_size_t bytes, int
 			if (r == -1) {
 				err = SSL_get_error(kws->ssl, r);
 				
-				if (!block && err == SSL_ERROR_WANT_READ) {
-					r = -2;
+				if (err == SSL_ERROR_WANT_READ) {
+					if (!block) {
+						r = -2;
+						goto end;
+					}
+					wsh->x++;
+					ms_sleep(10);
+				} else {
+					r = -1;
 					goto end;
-				}
-
-				if (block) {
-					kws->x++;
-					ks_sleep_ms(10);
 				}
 			}
 
@@ -389,12 +391,12 @@ KS_DECLARE(ks_ssize_t) kws_raw_read(kws_t *kws, void *data, ks_size_t bytes, int
 			}
 		}
 	} while (r == -1 && ks_errno_is_blocking(ks_errno()) && kws->x < 1000);
+
+ end:
 	
 	if (kws->x >= 10000 || (block && kws->x >= 1000)) {
 		r = -1;
 	}
-
- end:
 
 	if (r > 0) {
 		*((char *)data + r) = '\0';
