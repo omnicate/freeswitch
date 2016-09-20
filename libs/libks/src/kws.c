@@ -362,8 +362,8 @@ KS_DECLARE(ks_ssize_t) kws_raw_read(kws_t *kws, void *data, ks_size_t bytes, int
 						r = -2;
 						goto end;
 					}
-					wsh->x++;
-					ms_sleep(10);
+					kws->x++;
+					ks_sleep_ms(10);
 				} else {
 					r = -1;
 					goto end;
