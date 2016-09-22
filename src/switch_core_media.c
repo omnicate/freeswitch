@@ -24,6 +24,7 @@
  * Contributor(s):
  * 
  * Anthony Minessale II <anthm@freeswitch.org>
+ * Seven Du <dujinfang@gmail.com>
  *
  * switch_core_media.c -- Core Media
  *
@@ -2450,7 +2451,6 @@ SWITCH_DECLARE(switch_status_t) switch_core_media_read_frame(switch_core_session
 
 		*frame = NULL;
 		status = SWITCH_STATUS_FALSE;
-		switch_yield(20000);
 
 		return status;
 	}
@@ -4351,7 +4351,7 @@ SWITCH_DECLARE(uint8_t) switch_core_media_negotiate_sdp(switch_core_session_t *s
 			}
 
 			smh->msrp_session->call_id = switch_core_session_get_uuid(session);
-			smh->msrp_session->local_port = MSRP_LISTEN_PORT;
+			smh->msrp_session->local_port = smh->msrp_session->secure ? MSRP_SSL_LISTEN_PORT : MSRP_LISTEN_PORT;
 			smh->msrp_session->local_accept_types = smh->msrp_session->remote_accept_types;
 			smh->msrp_session->local_accept_wrapped_types = smh->msrp_session->remote_accept_types;
 			smh->msrp_session->local_setup = smh->msrp_session->remote_setup;
@@ -9986,7 +9986,7 @@ msrp:
 				msrp_session->local_path = switch_core_session_sprintf(session,
 					"msrp%s://%s:%d/%s;tcp",
 					msrp_session->secure ? "s" : "",
-					ip, MSRP_LISTEN_PORT, uuid);
+					ip, msrp_session->secure ? MSRP_SSL_LISTEN_PORT : MSRP_LISTEN_PORT, uuid);
 			}
 
 			switch_snprintf(buf + strlen(buf), SDPBUFLEN - strlen(buf),
@@ -9995,7 +9995,7 @@ msrp:
 				"a=accept-types:message/cpim text/* application/im-iscomposing+xml\n"
 				"a=accept-wrapped-types:*\n"
 				"a=setup:passive\n",
-				MSRP_LISTEN_PORT,
+				msrp_session->secure ? MSRP_SSL_LISTEN_PORT : MSRP_LISTEN_PORT,
 				msrp_session->secure ? "TLS/" : "",
 				msrp_session->local_path);
 
@@ -10019,7 +10019,7 @@ msrp:
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "MSRP session created\n");
 
 		smh->msrp_session->call_id = switch_core_session_get_uuid(session);
-		smh->msrp_session->local_port = MSRP_LISTEN_PORT;
+		smh->msrp_session->local_port = smh->msrp_session->secure ? MSRP_SSL_LISTEN_PORT : MSRP_LISTEN_PORT;
 
 		switch_channel_set_flag(session->channel, CF_TEXT);
 		switch_channel_set_flag(session->channel, CF_TEXT_POSSIBLE);

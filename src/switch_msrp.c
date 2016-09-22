@@ -33,22 +33,114 @@
 #include <switch_msrp.h>
 
 #define MSRP_BUFF_SIZE SWITCH_RTP_MAX_BUF_LEN
+#define DEBUG_MSRP 0
 
 static struct {
 	int running;
 	int debug;
 	// switch_mutex_t *mutex;
 	char *ip;
-	switch_port_t port;
-	switch_socket_t *sock;
-	switch_thread_t *thread;
+
+	const SSL_METHOD *ssl_method;
+	SSL_CTX *ssl_ctx;
+	SSL *ssl;
+	int ssl_ready;
+
+	msrp_socket_t msock;
+	msrp_socket_t msock_ssl;
 } globals;
 
 typedef struct worker_helper{
 	int debug;
 	switch_memory_pool_t *pool;
-	switch_socket_t *sock;
+	msrp_client_socket_t csock;
 } worker_helper_t;
+
+static void msrp_deinit_ssl()
+{
+	if (globals.ssl_ctx) {
+		SSL_CTX_free(globals.ssl_ctx);
+		globals.ssl_ctx = NULL;
+	}
+}
+
+static int msrp_init_ssl()
+{
+	const char *err = "";
+	char *cert = "/usr/local/freeswitch/certs/wss.pem";
+	char *key = cert;
+
+
+	SSL_library_init();
+
+	globals.ssl_method = SSLv23_server_method();   /* create server instance */
+	globals.ssl_ctx = SSL_CTX_new(globals.ssl_method);    /* create context */
+	assert(globals.ssl_ctx);
+	globals.ssl_ready = 1;
+
+	/* Disable SSLv2 */
+	SSL_CTX_set_options(globals.ssl_ctx, SSL_OP_NO_SSLv2);
+	/* Disable SSLv3 */
+	SSL_CTX_set_options(globals.ssl_ctx, SSL_OP_NO_SSLv3);
+	/* Disable TLSv1 */
+	SSL_CTX_set_options(globals.ssl_ctx, SSL_OP_NO_TLSv1);
+	/* Disable Compression CRIME (Compression Ratio Info-leak Made Easy) */
+	SSL_CTX_set_options(globals.ssl_ctx, SSL_OP_NO_COMPRESSION);
+
+	// /* set the local certificate from CertFile */
+	// if (!zstr(profile->chain)) {
+	// 	if (switch_file_exists(profile->chain, NULL) != SWITCH_STATUS_SUCCESS) {
+	// 		err = "SUPPLIED CHAIN FILE NOT FOUND\n";
+	// 		goto fail;
+	// 	}
+
+	// 	if (!SSL_CTX_use_certificate_chain_file(profile->ssl_ctx, profile->chain)) {
+	// 		err = "CERT CHAIN FILE ERROR";
+	// 		goto fail;
+	// 	}
+	// }
+
+	if (switch_file_exists(cert, NULL) != SWITCH_STATUS_SUCCESS) {
+		err = "SUPPLIED CERT FILE NOT FOUND\n";
+		goto fail;
+	}
+
+	if (!SSL_CTX_use_certificate_file(globals.ssl_ctx, cert, SSL_FILETYPE_PEM)) {
+		err = "CERT FILE ERROR";
+		goto fail;
+	}
+
+	/* set the private key from KeyFile */
+
+	if (switch_file_exists(key, NULL) != SWITCH_STATUS_SUCCESS) {
+		err = "SUPPLIED KEY FILE NOT FOUND\n";
+		goto fail;
+	}
+
+	if (!SSL_CTX_use_PrivateKey_file(globals.ssl_ctx, key, SSL_FILETYPE_PEM)) {
+		err = "PRIVATE KEY FILE ERROR";
+		goto fail;
+	}
+
+	/* verify private key */
+	if ( !SSL_CTX_check_private_key(globals.ssl_ctx) ) {
+		err = "PRIVATE KEY FILE ERROR";
+		goto fail;
+	}
+
+	SSL_CTX_set_cipher_list(globals.ssl_ctx, "HIGH:!DSS:!aNULL@STRENGTH");
+
+	return 1;
+
+ fail:
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "SSL ERR: %s\n", err);
+
+	globals.ssl_ready = 0;
+	msrp_deinit_ssl();
+
+	return 0;
+}
+
 
 SWITCH_DECLARE_GLOBAL_STRING_FUNC(set_global_ip, globals.ip);
 
@@ -65,14 +157,40 @@ static void close_socket(switch_socket_t ** sock)
 	// switch_mutex_unlock(globals.sock_mutex);
 }
 
+static switch_status_t msock_init(char *ip, switch_port_t port, switch_socket_t **sock, switch_memory_pool_t *pool)
+{
+	switch_sockaddr_t *sa;
+	switch_status_t rv;
+
+	rv = switch_sockaddr_info_get(&sa, ip, SWITCH_INET, port, 0, pool);
+	if (rv) goto sock_fail;
+
+	rv = switch_socket_create(sock, switch_sockaddr_get_family(sa), SOCK_STREAM, SWITCH_PROTO_TCP, pool);
+	if (rv) goto sock_fail;
+
+	rv = switch_socket_opt_set(*sock, SWITCH_SO_REUSEADDR, 1);
+	if (rv) goto sock_fail;
+
+	rv = switch_socket_bind(*sock, sa);
+	if (rv) goto sock_fail;
+
+	rv = switch_socket_listen(*sock, 5);
+	if (rv) goto sock_fail;
+
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "Socket up listening on %s:%u\n", ip, port);
+
+	return SWITCH_STATUS_SUCCESS;
+
+sock_fail:
+	return rv;
+}
+
 SWITCH_DECLARE(switch_status_t) switch_msrp_init()
 {
 	switch_memory_pool_t *pool;
 	switch_thread_t *thread;
 	switch_threadattr_t *thd_attr = NULL;
-	switch_status_t rv;
-	switch_sockaddr_t *sa;
-	switch_socket_t *sock;
+	switch_status_t status;
 
 	if (switch_core_new_memory_pool(&pool) != SWITCH_STATUS_SUCCESS) {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "OH OH no pool\n");
@@ -81,40 +199,35 @@ SWITCH_DECLARE(switch_status_t) switch_msrp_init()
 
 	memset(&globals, 0, sizeof(globals));
 	set_global_ip("0.0.0.0");
-	globals.port = (switch_port_t)MSRP_LISTEN_PORT;
-
-	rv = switch_sockaddr_info_get(&sa, globals.ip, SWITCH_INET, globals.port, 0, pool);
-	if (rv) goto sock_fail;
-
-	rv = switch_socket_create(&sock, switch_sockaddr_get_family(sa), SOCK_STREAM, SWITCH_PROTO_TCP, pool);
-	if (rv) goto sock_fail;
-
-	rv = switch_socket_opt_set(sock, SWITCH_SO_REUSEADDR, 1);
-	if (rv) goto sock_fail;
-
-	rv = switch_socket_bind(sock, sa);
-	if (rv) goto sock_fail;
-
-	rv = switch_socket_listen(sock, 5);
-	if (rv) goto sock_fail;
-
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Socket up listening on %s:%u\n", globals.ip, globals.port);
+	globals.msock.port = (switch_port_t)MSRP_LISTEN_PORT;
+	globals.msock_ssl.port = (switch_port_t)MSRP_SSL_LISTEN_PORT;
+	globals.msock_ssl.secure = 1;
 
 	globals.running = 1;
-	globals.debug = 1;
-	globals.sock = sock;
+	globals.debug = DEBUG_MSRP;
 
-	switch_threadattr_create(&thd_attr, pool);
-	// switch_threadattr_detach_set(thd_attr, 1);
-	switch_threadattr_stacksize_set(thd_attr, SWITCH_THREAD_STACKSIZE);
-	switch_thread_create(&thread, thd_attr, msrp_listener, sock, pool);
+	status = msock_init(globals.ip, globals.msock.port, &globals.msock.sock, pool);
 
-	globals.thread = thread;
+	if (status == SWITCH_STATUS_SUCCESS) {
+		switch_threadattr_create(&thd_attr, pool);
+		// switch_threadattr_detach_set(thd_attr, 1);
+		switch_threadattr_stacksize_set(thd_attr, SWITCH_THREAD_STACKSIZE);
+		switch_thread_create(&thread, thd_attr, msrp_listener, &globals.msock, pool);
+		globals.msock.thread = thread;
+	}
+
+	msrp_init_ssl();
+	status = msock_init(globals.ip, globals.msock_ssl.port, &globals.msock_ssl.sock, pool);
+
+	if (status == SWITCH_STATUS_SUCCESS) {
+		switch_threadattr_create(&thd_attr, pool);
+		// switch_threadattr_detach_set(thd_attr, 1);
+		switch_threadattr_stacksize_set(thd_attr, SWITCH_THREAD_STACKSIZE);
+		switch_thread_create(&thread, thd_attr, msrp_listener, &globals.msock_ssl, pool);
+		globals.msock_ssl.thread = thread;
+	}
+
 	return SWITCH_STATUS_SUCCESS;
-
-sock_fail:
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Socket Error! Could not listen on %s:%u\n", globals.ip, globals.port);
-	return SWITCH_STATUS_FALSE;
 }
 
 SWITCH_DECLARE(switch_status_t) switch_msrp_destroy()
@@ -122,20 +235,27 @@ SWITCH_DECLARE(switch_status_t) switch_msrp_destroy()
 	switch_status_t st = SWITCH_STATUS_SUCCESS;
 	switch_socket_t *sock;
 	globals.running = 0;
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "destroy thread\n");
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "destroying thread\n");
 
-	sock = globals.sock;
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "socket error\n");
-
+	sock = globals.msock.sock;
 	close_socket(&sock);
-	if (globals.thread) switch_thread_join(&st, globals.thread);
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "destroy thread done\n");
 
-	globals.thread = NULL;
+	sock = globals.msock_ssl.sock;
+	close_socket(&sock);
+
+	if (globals.msock.thread) switch_thread_join(&st, globals.msock.thread);
+	if (globals.msock_ssl.thread) switch_thread_join(&st, globals.msock_ssl.thread);
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "destroy thread done\n");
+
+	globals.msock.thread = NULL;
+	globals.msock_ssl.thread = NULL;
+
+	msrp_deinit_ssl();
+
 	return st;
 }
 
-SWITCH_DECLARE(switch_msrp_session_t *)switch_msrp_session_new(switch_memory_pool_t *pool) 
+SWITCH_DECLARE(switch_msrp_session_t *)switch_msrp_session_new(switch_memory_pool_t *pool)
 {
 	switch_msrp_session_t *ms;
 	ms = switch_core_alloc(pool, sizeof(switch_msrp_session_t));
@@ -146,7 +266,7 @@ SWITCH_DECLARE(switch_msrp_session_t *)switch_msrp_session_new(switch_memory_poo
 	return ms;
 }
 
-SWITCH_DECLARE(switch_status_t) switch_msrp_session_destroy(switch_msrp_session_t **ms) 
+SWITCH_DECLARE(switch_status_t) switch_msrp_session_destroy(switch_msrp_session_t **ms)
 {
 	switch_mutex_destroy((*ms)->mutex);
 	ms = NULL;
@@ -171,7 +291,10 @@ switch_status_t switch_msrp_session_push_msg(switch_msrp_session_t *ms, msrp_msg
 SWITCH_DECLARE(msrp_msg_t *)switch_msrp_session_pop_msg(switch_msrp_session_t *ms)
 {
 	msrp_msg_t *m = ms->msrp_msg;
-	if (m == NULL) return NULL;
+	if (m == NULL) {
+		switch_yield(20000);
+		return NULL;
+	}
 
 	switch_mutex_lock(ms->mutex);
 	ms->msrp_msg = ms->msrp_msg->next;
@@ -212,6 +335,30 @@ switch_status_t msrp_msg_serialize(msrp_msg_t *msrp_msg, char *buf)
 		msrp_msg->delimiter);
 	switch_safe_free(code_number_str)
 	return SWITCH_STATUS_SUCCESS;
+}
+
+static switch_status_t msrp_socket_recv(msrp_client_socket_t *csock, char *buf, switch_size_t *len)
+{
+	switch_status_t status = SWITCH_STATUS_FALSE;
+
+	if (csock->secure) {
+		*len = SSL_read(globals.ssl, buf, *len);
+		if (*len) status = SWITCH_STATUS_SUCCESS;
+	} else {
+		status = switch_socket_recv(csock->sock, buf, len);
+	}
+
+	return status;
+}
+
+static switch_status_t msrp_socket_send(msrp_client_socket_t *csock, char *buf, switch_size_t *len)
+{
+	if (csock->secure) {
+		*len = SSL_write(globals.ssl, buf, *len);
+		return *len ? SWITCH_STATUS_SUCCESS : SWITCH_STATUS_FALSE;
+	} else {
+		return switch_socket_send(csock->sock, buf, len);
+	}
 }
 
 void dump_buffer(char *buf, switch_size_t len, int line)
@@ -270,6 +417,7 @@ char *find_delim(char *buf, int len, char *delim)
 	}
 	return NULL;
 }
+
 /*
 MSRP d4c667b2351e958f SEND
 To-Path: msrp://192.168.0.56:2856/73671a97c9dec690d303;tcp
@@ -279,7 +427,7 @@ Byte-Range: 1-0/0
 -------d4c667b2351e958f$
 */
 
-char *msrp_parse_header(char *start, int skip, const char *end, msrp_msg_t *msrp_msg, int index, switch_memory_pool_t *pool) 
+char *msrp_parse_header(char *start, int skip, const char *end, msrp_msg_t *msrp_msg, int index, switch_memory_pool_t *pool)
 {
 	char *p = start + skip;
 	char *q;
@@ -481,8 +629,10 @@ msrp_msg_t *msrp_parse_buffer(char *buf, int len, msrp_msg_t *msrp_msg, switch_m
 		msrp_msg->state = MSRP_ST_WAIT_HEADER;
 	}
 
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "parse state: %d\n", msrp_msg->state);
-	dump_buffer(buf, len, __LINE__);
+	if (globals.debug) {
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "parse state: %d\n", msrp_msg->state);
+		dump_buffer(buf, len, __LINE__);
+	}
 
 	if (msrp_msg->state == MSRP_ST_WAIT_HEADER) {
 		if ((start = switch_stristr("MSRP ", buf)) == NULL) {
@@ -560,7 +710,8 @@ msrp_msg_t *msrp_parse_buffer(char *buf, int len, msrp_msg_t *msrp_msg, switch_m
 			msrp_msg->last_p = buf + msrp_msg->payload_bytes;
 			if (msrp_msg->payload_bytes == len - dlen - 5) {
 				msrp_msg->last_p = buf + len;
-				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "payload bytes:%d\n", (int)msrp_msg->payload_bytes);
+
+				if (globals.debug) switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "payload bytes:%d\n", (int)msrp_msg->payload_bytes);
 
 				return msrp_msg; /*Fixme: assuming \r\ndelimiter$\r\n present*/
 			}
@@ -576,7 +727,7 @@ msrp_msg_t *msrp_parse_buffer(char *buf, int len, msrp_msg_t *msrp_msg, switch_m
 }
 
 
-switch_status_t msrp_reply(switch_socket_t *sock, msrp_msg_t *msrp_msg)
+switch_status_t msrp_reply(msrp_client_socket_t *csock, msrp_msg_t *msrp_msg)
 {
 	char buf[2048];
 	switch_size_t len;
@@ -588,10 +739,10 @@ switch_status_t msrp_reply(switch_socket_t *sock, msrp_msg_t *msrp_msg)
 		msrp_msg->delimiter);
 	len = strlen(buf);
 
-	return switch_socket_send(sock, buf, &len);
+	return msrp_socket_send(csock, buf, &len);
 }
 
-switch_status_t msrp_report(switch_socket_t *sock, msrp_msg_t *msrp_msg, char *status_code)
+switch_status_t msrp_report(msrp_client_socket_t *csock, msrp_msg_t *msrp_msg, char *status_code)
 {
 	char buf[2048];
 	switch_size_t len;
@@ -607,11 +758,11 @@ switch_status_t msrp_report(switch_socket_t *sock, msrp_msg_t *msrp_msg, char *s
 		msrp_msg->bytes,
 		msrp_msg->delimiter);
 	len = strlen(buf);
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "report: %" SWITCH_SIZE_T_FMT " bytes\n%s", len, buf);
-	return switch_socket_send(sock, buf, &len);
+	if (globals.debug) switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "report: %" SWITCH_SIZE_T_FMT " bytes\n%s", len, buf);
+	return msrp_socket_send(csock, buf, &len);
 }
 
-switch_bool_t msrp_find_uuid(char *uuid, char *to_path)
+static switch_bool_t msrp_find_uuid(char *uuid, char *to_path)
 {
 	int len = strlen(to_path);
 	int i;
@@ -631,8 +782,8 @@ switch_bool_t msrp_find_uuid(char *uuid, char *to_path)
 static void *SWITCH_THREAD_FUNC msrp_worker(switch_thread_t *thread, void *obj)
 {
 	worker_helper_t *helper = (worker_helper_t *) obj;
-	switch_socket_t *sock;
-	switch_memory_pool_t *pool;
+	msrp_client_socket_t *csock = &helper->csock;
+	switch_memory_pool_t *pool = helper->pool;
 	char buf[MSRP_BUFF_SIZE];
 	char *p;
 	char *last_p;
@@ -644,29 +795,77 @@ static void *SWITCH_THREAD_FUNC msrp_worker(switch_thread_t *thread, void *obj)
 	switch_msrp_session_t *msrp_session = NULL;
 	switch_channel_t *channel = NULL;
 	int sanity = 10;
+	SSL *ssl = NULL;
 
-	pool = helper->pool;
-	sock = helper->sock;
-	switch_socket_opt_set(sock, SWITCH_SO_TCP_NODELAY, TRUE);
-	// switch_socket_opt_set(sock, SWITCH_SO_NONBLOCK, TRUE);
+	switch_socket_opt_set(csock->sock, SWITCH_SO_TCP_NODELAY, TRUE);
+	// switch_socket_opt_set(csock->sock, SWITCH_SO_NONBLOCK, TRUE);
 
-	status = switch_socket_recv(sock, buf, &len);
+	if (csock->secure) { // tls?
+		int secure_established = 0;
+		int sanity = 10;
+		switch_os_socket_t sockdes = -1;
 
-	msrp_msg = msrp_parse_buffer(buf, len, NULL, pool);
-	switch_assert(msrp_msg);
+		switch_os_sock_get(&sockdes, csock->sock);
+		// switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "socket: %d\n", sockdes);
+		switch_assert(sockdes > -1);
+
+		ssl = SSL_new(globals.ssl_ctx);
+		assert(ssl);
+		globals.ssl = ssl;
+
+		SSL_set_fd(ssl, sockdes);
+
+		do {
+			int code = SSL_accept(ssl);
+
+			if (code == 1) {
+				secure_established = 1;
+				goto done;
+			}
+
+			if (code == 0) {
+				goto err;
+			}
+
+			if (code < 0) {
+				if (code == -1 && SSL_get_error(ssl, code) != SSL_ERROR_WANT_READ) {
+					goto err;
+				}
+			}
+		} while(sanity--);
+
+		err:
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "SSL ERR\n");
+			goto end;
+
+		done:
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "SSL established = %d\n", secure_established);
+	}
+
+	len = MSRP_BUFF_SIZE;
+	status = msrp_socket_recv(csock, buf, &len);
 
 	if (helper->debug) {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "status:%d, len:%" SWITCH_SIZE_T_FMT "\n", status, len);
+	}
 
+	if (status == SWITCH_STATUS_SUCCESS) {
+		msrp_msg = msrp_parse_buffer(buf, len, NULL, pool);
+		switch_assert(msrp_msg);
+	} else {
+		goto end;
+	}
+
+	if (helper->debug) {
 		msrp_msg_serialize(msrp_msg, buf);
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "%s\n", buf);
 	}
 
 	if (msrp_msg->state == MSRP_ST_DONE && msrp_msg->method == MSRP_METHOD_SEND) {
-		msrp_reply(sock, msrp_msg);
+		msrp_reply(csock, msrp_msg);
 		if (msrp_msg->headers[MSRP_H_SUCCESS_REPORT] &&
 			!strcmp(msrp_msg->headers[MSRP_H_SUCCESS_REPORT], "yes")) {
-			msrp_report(sock, msrp_msg, "200 OK");
+			msrp_report(csock, msrp_msg, "200 OK");
 		}
 	} else {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Parse initial message error!\n");
@@ -691,15 +890,16 @@ static void *SWITCH_THREAD_FUNC msrp_worker(switch_thread_t *thread, void *obj)
 	channel = switch_core_session_get_channel(session);
 	msrp_session = switch_core_media_get_msrp_session(session);
 	switch_assert(msrp_session);
-	msrp_session->socket = sock;
+	msrp_session->csock = csock;
 
 	len = MSRP_BUFF_SIZE;
 	p = buf;
 	last_p = buf;
 	switch_safe_free(msrp_msg);
 	msrp_msg = NULL;
-	while(switch_socket_recv(sock, p, &len) == SWITCH_STATUS_SUCCESS) {
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "read bytes:%ld\n", len);
+
+	while(msrp_socket_recv(csock, p, &len) == SWITCH_STATUS_SUCCESS) {
+		// switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "read bytes:%ld\n", len);
 
 		if (helper->debug) dump_buffer(buf, (p - buf) + len, __LINE__);
 
@@ -722,10 +922,10 @@ static void *SWITCH_THREAD_FUNC msrp_worker(switch_thread_t *thread, void *obj)
 		}
 
 		if (msrp_msg->state == MSRP_ST_DONE && msrp_msg->method == MSRP_METHOD_SEND) {
-			msrp_reply(sock, msrp_msg);
+			msrp_reply(csock, msrp_msg);
 			if (msrp_msg->headers[MSRP_H_SUCCESS_REPORT] &&
 				!strcmp(msrp_msg->headers[MSRP_H_SUCCESS_REPORT], "yes")) {
-				msrp_report(sock, msrp_msg, "200 OK");
+				msrp_report(csock, msrp_msg, "200 OK");
 			}
 			last_p = msrp_msg->last_p;
 			switch_msrp_session_push_msg(msrp_session, msrp_msg);
@@ -794,7 +994,7 @@ static void *SWITCH_THREAD_FUNC msrp_worker(switch_thread_t *thread, void *obj)
 
 					if (msrp_msg_old->headers[MSRP_H_SUCCESS_REPORT] &&
 						!strcmp(msrp_msg_old->headers[MSRP_H_SUCCESS_REPORT], "yes")) {
-						// msrp_report(sock, msrp_msg_old, "200 OK");
+						// msrp_report(csock, msrp_msg_old, "200 OK");
 					}
 
 					switch_msrp_session_push_msg(msrp_session, msrp_msg_old);
@@ -816,7 +1016,7 @@ static void *SWITCH_THREAD_FUNC msrp_worker(switch_thread_t *thread, void *obj)
 end:
 	if (session) switch_core_session_rwunlock(session);
 
-	switch_socket_close(sock);
+	switch_socket_close(csock->sock);
 	switch_core_destroy_memory_pool(&pool);
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "msrp worker %s down\n", uuid);
 
@@ -825,40 +1025,42 @@ end:
 
 static void *SWITCH_THREAD_FUNC msrp_listener(switch_thread_t *thread, void *obj)
 {
-	switch_socket_t *listen_sock = (switch_socket_t *) obj;
+	msrp_socket_t *msock = (msrp_socket_t *)obj;
 	switch_status_t rv;
-	switch_socket_t *sock;
 	switch_memory_pool_t *pool = NULL;
 	switch_threadattr_t *thd_attr = NULL;
+	switch_socket_t *sock = NULL;
 
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "msrp listener start\n");
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "MSRP listener start%s\n", msock->secure ? " ssl" : "");
 
 	if (switch_core_new_memory_pool(&pool) != SWITCH_STATUS_SUCCESS) {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "OH OH no pool\n");
 		return NULL;
 	}
 
-	switch_socket_opt_set(listen_sock, SWITCH_SO_TCP_NODELAY, TRUE);
-	// switch_socket_opt_set(listen_sock, SWITCH_SO_NONBLOCK, TRUE);
+	switch_socket_opt_set(msock->sock, SWITCH_SO_TCP_NODELAY, TRUE);
+	// switch_socket_opt_set(msock->sock, SWITCH_SO_NONBLOCK, TRUE);
 
-	while (globals.running && (rv = switch_socket_accept(&sock, listen_sock, pool)) == SWITCH_STATUS_SUCCESS) {
+	while (globals.running && (rv = switch_socket_accept(&sock, msock->sock, pool)) == SWITCH_STATUS_SUCCESS) {
 		switch_memory_pool_t *worker_pool;
 		worker_helper_t *helper;
 
 		if (globals.debug > 0) {
-			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Connection Open\n");
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Connection Open%s\n", msock->secure ? " SSL" : "");
 		}
 
 		if (switch_core_new_memory_pool(&worker_pool) != SWITCH_STATUS_SUCCESS) {
 			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "OH OH no pool\n");
 			return NULL;
 		}
+
 		switch_zmalloc(helper, sizeof(worker_helper_t));
 
 		switch_assert(helper != NULL);
 		helper->pool = worker_pool;
 		helper->debug = globals.debug;
-		helper->sock = sock;
+		helper->csock.sock = sock;
+		helper->csock.secure = msock->secure;
 
 		switch_threadattr_create(&thd_attr, pool);
 		switch_threadattr_detach_set(thd_attr, 1);
@@ -869,7 +1071,7 @@ static void *SWITCH_THREAD_FUNC msrp_listener(switch_thread_t *thread, void *obj
 
 	if (pool) switch_core_destroy_memory_pool(&pool);
 
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "msrp listener down\n");
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "MSRP listener down\n");
 
 	return NULL;
 }
@@ -892,6 +1094,8 @@ SWITCH_DECLARE(switch_status_t) switch_msrp_send(switch_msrp_session_t *ms, msrp
 	switch_size_t len;
 	char *to_path = msrp_msg->headers[MSRP_H_TO_PATH] ? msrp_msg->headers[MSRP_H_TO_PATH] : ms->remote_path;
 	char *from_path = msrp_msg->headers[MSRP_H_FROM_PATH] ? msrp_msg->headers[MSRP_H_FROM_PATH] : ms->local_path;
+
+	if (!from_path) return SWITCH_STATUS_SUCCESS;
 
 	random_string(transaction_id, 16);
 
@@ -918,9 +1122,9 @@ SWITCH_DECLARE(switch_status_t) switch_msrp_send(switch_msrp_session_t *ms, msrp
 	}
 	sprintf(buf + len, "\r\n-------%s$\r\n", transaction_id);
 	len += (12 + strlen(transaction_id));
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "---------------------send: %" SWITCH_SIZE_T_FMT " bytes\n%s\n", len, buf);
+	if (globals.debug) switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "---------------------send: %" SWITCH_SIZE_T_FMT " bytes\n%s\n", len, buf);
 
-	return ms->socket ? switch_socket_send(ms->socket, buf, &len) : SWITCH_STATUS_FALSE;
+	return ms->csock ? msrp_socket_send(ms->csock, buf, &len) : SWITCH_STATUS_FALSE;
 }
 
 #if 0

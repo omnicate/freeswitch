@@ -33,8 +33,10 @@
 #define _MSRP_H
 
 #include <switch.h>
+#include <openssl/ssl.h>
 
-#define MSRP_LISTEN_PORT 8044
+#define MSRP_LISTEN_PORT 2855
+#define MSRP_SSL_LISTEN_PORT 2856
 
 enum {
 	MSRP_ST_WAIT_HEADER,
@@ -83,6 +85,18 @@ typedef struct msrp_msg_s {
 
 typedef struct msrp_msg_s switch_msrp_msg_t;
 
+typedef struct msrp_socket_s {
+	switch_port_t port;
+	switch_socket_t *sock;
+	switch_thread_t *thread;
+	int secure;
+} msrp_socket_t;
+
+typedef struct msrp_client_socket_s {
+	switch_socket_t *sock;
+	int secure;
+} msrp_client_socket_t;
+
 typedef struct {
 	switch_memory_pool_t *pool;
 	int secure;
@@ -103,7 +117,7 @@ typedef struct {
 	switch_mutex_t *mutex;
 	switch_size_t msrp_msg_buffer_size;
 	switch_size_t msrp_msg_count;
-	switch_socket_t *socket;
+	msrp_client_socket_t *csock;
 	switch_frame_t frame;
 	uint8_t frame_data[SWITCH_RTP_MAX_BUF_LEN];
 } switch_msrp_session_t;

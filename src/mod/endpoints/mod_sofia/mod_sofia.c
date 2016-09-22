@@ -934,7 +934,7 @@ static switch_status_t sofia_write_text_frame(switch_core_session_t *session, sw
 			switch_msrp_msg_t msrp_msg = { 0 };
 
 			msrp_msg.headers[MSRP_H_CONTENT_TYPE] = "message/cpim";
-			msrp_msg.headers[MSRP_H_CONTENT_TYPE] = "text/plain";
+			// msrp_msg.headers[MSRP_H_CONTENT_TYPE] = "text/plain";
 			msrp_msg.payload = frame->data;
 			msrp_msg.payload_bytes = frame->datalen;
 
