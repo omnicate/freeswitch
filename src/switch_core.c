@@ -2908,6 +2908,7 @@ SWITCH_DECLARE(switch_status_t) switch_core_destroy(void)
 	switch_scheduler_task_thread_stop();
 
 	switch_rtp_shutdown();
+	switch_msrp_destroy();
 
 	if (switch_test_flag((&runtime), SCF_USE_AUTO_NAT)) {
 		switch_nat_shutdown();

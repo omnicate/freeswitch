@@ -40,6 +40,7 @@ static struct {
 	int debug;
 	// switch_mutex_t *mutex;
 	char *ip;
+	int message_buffer_size;
 
 	const SSL_METHOD *ssl_method;
 	SSL_CTX *ssl_ctx;
@@ -141,8 +142,43 @@ static int msrp_init_ssl()
 	return 0;
 }
 
-
 SWITCH_DECLARE_GLOBAL_STRING_FUNC(set_global_ip, globals.ip);
+
+static switch_status_t load_config()
+{
+	char *cf = "msrp.conf";
+	switch_xml_t cfg, xml = NULL, settings, param;
+	switch_status_t status = SWITCH_STATUS_SUCCESS;
+
+	if (!(xml = switch_xml_open_cfg(cf, &cfg, NULL))) {
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Open of %s failed\n", cf);
+		status = SWITCH_STATUS_FALSE;
+		return status;
+	}
+
+	if ((settings = switch_xml_child(cfg, "settings"))) {
+		for (param = switch_xml_child(settings, "param"); param; param = param->next) {
+			char *var = (char *) switch_xml_attr_soft(param, "name");
+			char *val = (char *) switch_xml_attr_soft(param, "value");
+			if (!strcasecmp(var, "listen-ip")) {
+				set_global_ip(val);
+			} else if (!strcasecmp(var, "listen-port")) {
+				globals.msock.port = atoi(val);
+			} else if (!strcasecmp(var, "listen-ssl-port")) {
+				globals.msock_ssl.port = atoi(val);
+			} else if (!strcasecmp(var, "debug")) {
+				globals.debug = switch_true(val);
+			} else if (!strcasecmp(var, "message-buffer-size") && val) {
+				globals.message_buffer_size = atoi(val);
+				if (globals.message_buffer_size == 0) globals.message_buffer_size = 50;
+			}
+		}
+	}
+
+	switch_xml_free(xml);
+
+	return status;
+}
 
 static void *SWITCH_THREAD_FUNC msrp_listener(switch_thread_t *thread, void *obj);
 
@@ -202,9 +238,12 @@ SWITCH_DECLARE(switch_status_t) switch_msrp_init()
 	globals.msock.port = (switch_port_t)MSRP_LISTEN_PORT;
 	globals.msock_ssl.port = (switch_port_t)MSRP_SSL_LISTEN_PORT;
 	globals.msock_ssl.secure = 1;
+	globals.message_buffer_size = 50;
+	globals.debug = DEBUG_MSRP;
+
+	load_config();
 
 	globals.running = 1;
-	globals.debug = DEBUG_MSRP;
 
 	status = msock_init(globals.ip, globals.msock.port, &globals.msock.sock, pool);
 
@@ -255,13 +294,15 @@ SWITCH_DECLARE(switch_status_t) switch_msrp_destroy()
 	return st;
 }
 
-SWITCH_DECLARE(switch_msrp_session_t *)switch_msrp_session_new(switch_memory_pool_t *pool)
+SWITCH_DECLARE(switch_msrp_session_t *)switch_msrp_session_new(switch_memory_pool_t *pool, switch_bool_t secure)
 {
 	switch_msrp_session_t *ms;
 	ms = switch_core_alloc(pool, sizeof(switch_msrp_session_t));
 	switch_assert(ms);
 	ms->pool = pool;
-	ms->msrp_msg_buffer_size = 50; /*TODO: make it configurable*/
+	ms->secure = secure;
+	ms->local_port = secure ? globals.msock_ssl.port : globals.msock.port;
+	ms->msrp_msg_buffer_size = globals.message_buffer_size;
 	switch_mutex_init(&ms->mutex, SWITCH_MUTEX_NESTED, pool);
 	return ms;
 }
@@ -1470,19 +1511,51 @@ error:
 	return SWITCH_STATUS_SUCCESS;
 }
 
-SWITCH_DECLARE(void) switch_msrp_load_msrp_apis_and_applications(switch_loadable_module_interface_t **module_interface)
+#endif
+
+
+#define MSRP_SYNTAX "debug <on|off>|restart"
+SWITCH_STANDARD_API(msrp_api_function)
 {
-	switch_application_interface_t *app_interface;
+	if (zstr(cmd)) {
+		stream->write_function(stream, "-ERR usage: " MSRP_SYNTAX "\n");
+		return SWITCH_STATUS_SUCCESS;
+	}
+
+	if (!strcmp(cmd, "debug on")) {
+		globals.debug = 1;
+		stream->write_function(stream, "+OK debug on\n");
+	} else if(!strcmp(cmd, "debug off")) {
+		globals.debug = 0;
+		stream->write_function(stream, "+OK debug off\n");
+	} else if(!strcmp(cmd, "restart")) {
+		switch_msrp_destroy();
+		switch_msrp_init();
+	}
+
+	return SWITCH_STATUS_SUCCESS;
+}
+
+SWITCH_DECLARE(void) switch_msrp_load_apis_and_applications(switch_loadable_module_interface_t **module_interface)
+{
+	// switch_application_interface_t *app_interface;
 	switch_api_interface_t *api_interface;
+
+	SWITCH_ADD_API(api_interface, "msrp", "MSRP Functions", msrp_api_function, "JSON");
+
+#if 0
 	SWITCH_ADD_API(api_interface, "uuid_msrp_send", "send msrp text", uuid_msrp_send_function, "<cmd> <args>");
 	SWITCH_ADD_APP(app_interface, "msrp_echo", "Echo msrp message", "Perform an echo test against the msrp channel", msrp_echo_function, "", SAF_NONE);
 	SWITCH_ADD_APP(app_interface, "msrp_recv", "Recv msrp message to file", "Recv msrp message", msrp_recv_function, "<filename>", SAF_NONE);
 	SWITCH_ADD_APP(app_interface, "msrp_send", "Send file via msrp", "Send file via msrp", msrp_send_function, "<filename>", SAF_NONE);
 	SWITCH_ADD_APP(app_interface, "msrp_bridge", "Bridge msrp channels", "Bridge msrp channels", msrp_bridge_function, "dialstr", SAF_NONE);
+#endif
 
+	switch_console_set_complete("add msrp debug on");
+	switch_console_set_complete("add msrp debug off");
+	switch_console_set_complete("restart");
 }
 
-#endif
 
 /* For Emacs:
  * Local Variables:

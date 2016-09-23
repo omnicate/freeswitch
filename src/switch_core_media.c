@@ -4275,14 +4275,12 @@ SWITCH_DECLARE(uint8_t) switch_core_media_negotiate_sdp(switch_core_session_t *s
 
 		if(got_msrp && m->m_type == sdp_media_message) {
 			if (!smh->msrp_session) {
-				smh->msrp_session = switch_msrp_session_new(switch_core_session_get_pool(session));
+				smh->msrp_session = switch_msrp_session_new(switch_core_session_get_pool(session), m->m_proto == sdp_proto_msrps);
 			}
 
 			if (!smh->msrp_session) {
 				goto endmsrp;
 			}
-
-			if (m->m_proto == sdp_proto_msrps) smh->msrp_session->secure = 1;
 
 			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "MSRP session created\n");
 
@@ -4351,7 +4349,6 @@ SWITCH_DECLARE(uint8_t) switch_core_media_negotiate_sdp(switch_core_session_t *s
 			}
 
 			smh->msrp_session->call_id = switch_core_session_get_uuid(session);
-			smh->msrp_session->local_port = smh->msrp_session->secure ? MSRP_SSL_LISTEN_PORT : MSRP_LISTEN_PORT;
 			smh->msrp_session->local_accept_types = smh->msrp_session->remote_accept_types;
 			smh->msrp_session->local_accept_wrapped_types = smh->msrp_session->remote_accept_types;
 			smh->msrp_session->local_setup = smh->msrp_session->remote_setup;
@@ -6970,8 +6967,8 @@ SWITCH_DECLARE(switch_status_t) switch_core_media_choose_port(switch_core_sessio
 		if (!zstr(smh->mparams->extrtpip)) { /* and we've got an ext-rtp-ip, eg, from verto config */
 			use_ip = smh->mparams->extrtpip; /* let's use it for composing local sdp to send to client */
 			/*
-			switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, 
-						"%s will use %s instead of %s in SDP, because we're originating and we have an ext-rtp-ip setting\n", 
+			switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR,
+						"%s will use %s instead of %s in SDP, because we're originating and we have an ext-rtp-ip setting\n",
 						switch_channel_get_name(smh->session->channel), smh->mparams->extrtpip, smh->mparams->rtpip);
 			*/
 		}
@@ -9986,7 +9983,7 @@ msrp:
 				msrp_session->local_path = switch_core_session_sprintf(session,
 					"msrp%s://%s:%d/%s;tcp",
 					msrp_session->secure ? "s" : "",
-					ip, msrp_session->secure ? MSRP_SSL_LISTEN_PORT : MSRP_LISTEN_PORT, uuid);
+					ip, msrp_session->local_port, uuid);
 			}
 
 			switch_snprintf(buf + strlen(buf), SDPBUFLEN - strlen(buf),
@@ -9995,7 +9992,7 @@ msrp:
 				"a=accept-types:message/cpim text/* application/im-iscomposing+xml\n"
 				"a=accept-wrapped-types:*\n"
 				"a=setup:passive\n",
-				msrp_session->secure ? MSRP_SSL_LISTEN_PORT : MSRP_LISTEN_PORT,
+				msrp_session->local_port,
 				msrp_session->secure ? "TLS/" : "",
 				msrp_session->local_path);
 
@@ -10008,9 +10005,10 @@ msrp:
 		goto no_rtt;
 	} else if (switch_channel_test_cap(session->channel, CC_RTP_RTT) && (
 		// switch_channel_test_flag(session->channel, CF_TEXT_POSSIBLE) ||
-		switch_channel_var_true(session->channel, "sip_enable_msrp"))) {
+		switch_channel_var_true(session->channel, "sip_enable_msrp") ||
+		switch_channel_var_true(session->channel, "sip_enable_msrps"))) {
 
-		smh->msrp_session = switch_msrp_session_new(switch_core_session_get_pool(session));
+		smh->msrp_session = switch_msrp_session_new(switch_core_session_get_pool(session), switch_channel_var_true(session->channel, "sip_enable_msrps"));
 
 		if (!smh->msrp_session) {
 			goto endmsrp;
@@ -10019,7 +10017,6 @@ msrp:
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "MSRP session created\n");
 
 		smh->msrp_session->call_id = switch_core_session_get_uuid(session);
-		smh->msrp_session->local_port = smh->msrp_session->secure ? MSRP_SSL_LISTEN_PORT : MSRP_LISTEN_PORT;
 
 		switch_channel_set_flag(session->channel, CF_TEXT);
 		switch_channel_set_flag(session->channel, CF_TEXT_POSSIBLE);
