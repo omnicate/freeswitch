@@ -512,9 +512,9 @@ msrp_msg_t *msrp_parse_headers(const char *start, int len, msrp_msg_t *msrp_msg,
 			if (!strncasecmp(p, "SEND", 4)) {
 				msrp_msg->method = MSRP_METHOD_SEND;
 				p +=6; /*skip \r\n*/
-			} else if (!strncasecmp(p, "REPORT", 5)) {
+			} else if (!strncasecmp(p, "REPORT", 6)) {
 				msrp_msg->method = MSRP_METHOD_REPORT;
-				p += 7;
+				p += 8;
 			} else if (!strncasecmp(p, "AUTH", 4)) {
 				msrp_msg->method = MSRP_METHOD_AUTH;
 				p += 6;
