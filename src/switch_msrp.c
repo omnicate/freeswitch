@@ -355,6 +355,14 @@ msrp_msg_t *msrp_parse_headers(const char *start, int len, msrp_msg_t *msrp_msg,
 			q = msrp_parse_header(p, 8, end, msrp_msg, MSRP_H_TO_PATH, pool);
 			if (q == p) break; /* incomplete header*/
 			p = q;
+		} else if (!strncasecmp(p, "Status:", 7)) {
+			q = msrp_parse_header(p, 7, end, msrp_msg, MSRP_H_STATUS, pool);
+			if (q == p) break; /* incomplete header*/
+			p = q;
+		} else if (!strncasecmp(p, "Keep-Alive:", 11)) {
+			q = msrp_parse_header(p, 11, end, msrp_msg, MSRP_H_KEEPALIVE, pool);
+			if (q == p) break; /* incomplete header*/
+			p = q;
 		} else if (!strncasecmp(p, "Message-ID:", 11)) {
 			q = msrp_parse_header(p, 11, end, msrp_msg, MSRP_H_MESSAGE_ID, pool);
 			if (q == p) break; /* incomplete header*/
@@ -445,7 +453,7 @@ msrp_msg_t *msrp_parse_headers(const char *start, int len, msrp_msg_t *msrp_msg,
 			if (q > p) {
 				char *last_p = p;
 				*q = '\0';
-				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "unsupported header %s\n", p);
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "unsupported header [%s]\n", p);
 				p = q + 1;
 				msrp_msg->last_header = msrp_msg->last_header == 0 ? MSRP_H_UNKNOWN : msrp_msg->last_header + 1;
 				q = msrp_parse_header(p, 0, end, msrp_msg, msrp_msg->last_header, pool);
