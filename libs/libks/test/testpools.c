@@ -48,6 +48,8 @@ int main(int argc, char **argv)
 
 	ks_init();
 
+	plan(11);
+
 	if (argc > 1) {
 		int tmp = atoi(argv[1]);
 
@@ -62,6 +64,7 @@ int main(int argc, char **argv)
 	status = ks_pool_open(&pool);
 
 	printf("OPEN:\n");
+	ok(status == KS_STATUS_SUCCESS);
 	if (status != KS_STATUS_SUCCESS) {
 		fprintf(stderr, "OPEN ERR: %d [%s]\n", err, ks_pool_strerror(status));
 		exit(255);
@@ -70,6 +73,7 @@ int main(int argc, char **argv)
 	printf("ALLOC:\n");
 	str = ks_pool_alloc(pool, bytes);
 
+	ok(str != NULL);
 	if (!str) {
 		fprintf(stderr, "ALLOC ERR\n");
 		exit(255);
@@ -90,6 +94,7 @@ int main(int argc, char **argv)
 
 	str = ks_pool_alloc(pool, bytes);
 
+	ok(str != NULL);
 	if (!str) {
 		fprintf(stderr, "ALLOC2 ERR: [FAILED]\n");
 		exit(255);
@@ -103,6 +108,7 @@ int main(int argc, char **argv)
 
 	foo = ks_pool_alloc(pool, sizeof(struct foo));
 
+	ok(foo != NULL);
 	if (!foo) {
 		fprintf(stderr, "ALLOC OBJ: [FAILED]\n");
 		exit(255);
@@ -117,6 +123,7 @@ int main(int argc, char **argv)
 	printf("FREE OBJ:\n");
 
 	status = ks_pool_safe_free(pool, foo);
+	ok(status == KS_STATUS_SUCCESS);
 	if (status != KS_STATUS_SUCCESS) {
 		fprintf(stderr, "FREE OBJ ERR: [%s]\n", ks_pool_strerror(status));
 		exit(255);
@@ -127,6 +134,7 @@ int main(int argc, char **argv)
 
 	foo = ks_pool_alloc(pool, sizeof(struct foo));
 
+	ok(foo != NULL);
 	if (!foo) {
 		fprintf(stderr, "ALLOC OBJ2: [FAILED]\n");
 		exit(255);
@@ -143,6 +151,7 @@ int main(int argc, char **argv)
 
 	foo = ks_pool_alloc(pool, sizeof(struct foo));
 
+	ok(foo != NULL);
 	if (!foo) {
 		fprintf(stderr, "ALLOC OBJ3: [FAILED]\n");
 		exit(255);
@@ -160,6 +169,7 @@ int main(int argc, char **argv)
 	bytes *= 2;
 	str = ks_pool_resize(pool, str, bytes);
 
+	ok(str != NULL);
 	if (!str) {
 		fprintf(stderr, "RESIZE ERR: [FAILED]\n");
 		exit(255);
@@ -172,6 +182,7 @@ int main(int argc, char **argv)
 	printf("FREE 2:\n");
 
 	status = ks_pool_free(pool, str);
+	ok(status == KS_STATUS_SUCCESS);
 	if (status != KS_STATUS_SUCCESS) {
 		fprintf(stderr, "FREE2 ERR: [%s]\n", ks_pool_strerror(status));
 		exit(255);
@@ -181,6 +192,7 @@ int main(int argc, char **argv)
 	printf("CLEAR:\n");
 	status = ks_pool_clear(pool);
 
+	ok(status == KS_STATUS_SUCCESS);
 	if (status != KS_STATUS_SUCCESS) {
 		fprintf(stderr, "CLEAR ERR: [%s]\n", ks_pool_strerror(status));
 		exit(255);
@@ -189,6 +201,7 @@ int main(int argc, char **argv)
 	printf("CLOSE:\n");
 	status = ks_pool_close(&pool);
 	
+	ok(status == KS_STATUS_SUCCESS);
 	if (status != KS_STATUS_SUCCESS) {
 		fprintf(stderr, "CLOSE ERR: [%s]\n", ks_pool_strerror(err));
 		exit(255);
@@ -196,5 +209,5 @@ int main(int argc, char **argv)
 
 	ks_shutdown();
 
-	exit(0);
+	done_testing();
 }

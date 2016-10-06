@@ -402,5 +402,5 @@ int main(void)
 
 	ks_shutdown();
 
-	return 0;
+	done_testing();
 }

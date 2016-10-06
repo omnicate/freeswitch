@@ -131,8 +131,7 @@ int main(int argc, char **argv)
 	ok(test1());
 	ok(test2());
 
-	done_testing();
 	ks_shutdown();
 
-	exit(0);
+	done_testing();
 }

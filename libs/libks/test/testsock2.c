@@ -16,5 +16,5 @@ int main(int argc, char *argv[])
 
 	ks_shutdown();
 
-	return 0;
+	done_testing();
 }

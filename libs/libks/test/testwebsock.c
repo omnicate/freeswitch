@@ -280,5 +280,5 @@ int main(void)
 	unlink("/tmp/testwebsock.pem");
 	ks_shutdown();
 
-	return 0;
+	done_testing();
 }

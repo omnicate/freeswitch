@@ -40,7 +40,6 @@ int main(int argc, char **argv)
 #else
 	ok( diff > 1950 && diff < 2050 );
 #endif
-	done_testing();
 	ks_shutdown();
-	exit(0);
+	done_testing();
 }

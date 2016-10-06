@@ -346,7 +346,6 @@ int main(int argc, char **argv)
 	check_rwl();
 	check_cond();
 	
-	done_testing();
 	ks_shutdown();
-	exit(0);
+	done_testing();
 }
