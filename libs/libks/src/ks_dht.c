@@ -2112,14 +2112,14 @@ KS_DECLARE(ks_status_t) ks_dht_init(dht_handle_t **handle, ks_dht_af_flag_t af_f
 
 	ks_dht_store_create(h->pool, &h->store);
 
-    return 1;
+    return KS_STATUS_SUCCESS;
 
  fail:
     ks_pool_free(h->pool, h->buckets);
     h->buckets = NULL;
     ks_pool_free(h->pool, h->buckets6);
     h->buckets6 = NULL;
-    return -1;
+    return KS_STATUS_FAIL;
 }
 
 KS_DECLARE(int) dht_uninit(dht_handle_t **handle)

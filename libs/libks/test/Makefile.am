@@ -5,7 +5,7 @@ check_PROGRAMS =
 EXTRA_DIST = tap.h
 
 check_PROGRAMS += testpools
-testpools_SOURCES = testpools.c
+testpools_SOURCES = testpools.c tap.c
 testpools_CFLAGS = $(AM_CFLAGS)
 testpools_LDADD = $(TEST_LDADD)
 
@@ -43,6 +43,11 @@ check_PROGRAMS += testwebsock
 testwebsock_SOURCES = testwebsock.c tap.c
 testwebsock_CFLAGS = $(AM_CFLAGS)
 testwebsock_LDADD = $(TEST_LDADD)
+
+check_PROGRAMS += testdht
+testdht_SOURCES = testdht.c tap.c
+testdht_CFLAGS = $(AM_CFLAGS)
+testdht_LDADD = $(TEST_LDADD)
 
 check_PROGRAMS += dht_example
 dht_example_SOURCES = dht-example.c

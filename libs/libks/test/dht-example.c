@@ -83,7 +83,7 @@ void *dht_event_thread(ks_thread_t *thread, void *data)
 int
 main(int argc, char **argv)
 {
-  dht_globals_t globals = {0};
+	dht_globals_t globals = {0};
     int i, rc;
     //int have_id = 0;
     //char *id_file = "dht-example.id";
@@ -178,9 +178,9 @@ main(int argc, char **argv)
 	}
 
     /* Init the dht. */
-    rc = ks_dht_init(&h, af_flags, NULL, globals.port);
+    status = ks_dht_init(&h, af_flags, NULL, globals.port);
 
-    if(rc < 0) {
+    if(status != KS_STATUS_SUCCESS) {
         perror("dht_init");
         exit(1);
     }
