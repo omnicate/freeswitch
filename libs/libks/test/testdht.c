@@ -1,6 +1,16 @@
 #include <ks.h>
 #include <tap.h>
 
+/* 
+   Test should cover end to end DHT functionality that isn't covered by a more specific test file
+   * Find ip
+   * init 2 or more clients(with dedicated ports)
+   * add ip to clients
+   * exchange peers between clients
+   * shutdown clients
+   * cleanup ks
+ */
+
 int main() {
   int err = 0;
   char v4[48] = {0}, v6[48] = {0};

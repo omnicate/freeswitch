@@ -11,4 +11,6 @@ testsock
 testsock2
 testwebsock
 testdht
+testdht_net
+testdht_msg
 dht_example

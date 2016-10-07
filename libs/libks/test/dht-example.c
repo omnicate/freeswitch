@@ -84,7 +84,7 @@ int
 main(int argc, char **argv)
 {
 	dht_globals_t globals = {0};
-    int i, rc;
+    int i;
     //int have_id = 0;
     //char *id_file = "dht-example.id";
 	int ipv4 = 0, ipv6 = 0;

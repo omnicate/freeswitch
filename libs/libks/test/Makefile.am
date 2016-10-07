@@ -49,6 +49,16 @@ testdht_SOURCES = testdht.c tap.c
 testdht_CFLAGS = $(AM_CFLAGS)
 testdht_LDADD = $(TEST_LDADD)
 
+check_PROGRAMS += testdht_net
+testdht_net_SOURCES = testdht-net.c tap.c
+testdht_net_CFLAGS = $(AM_CFLAGS)
+testdht_net_LDADD = $(TEST_LDADD)
+
+check_PROGRAMS += testdht_msg
+testdht_msg_SOURCES = testdht-msg.c tap.c
+testdht_msg_CFLAGS = $(AM_CFLAGS)
+testdht_msg_LDADD = $(TEST_LDADD)
+
 check_PROGRAMS += dht_example
 dht_example_SOURCES = dht-example.c
 dht_example_CFLAGS = $(AM_CFLAGS)
