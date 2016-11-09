@@ -39,12 +39,12 @@ Like Meatloaf says, 2 out of 3 ain't bad! But we needed a good base for some add
 #define MSG_CONFIRM 0
 #endif
 
-int dht_blacklisted(const ks_sockaddr_t *sa)
+KS_DECLARE(int) dht_blacklisted(const ks_sockaddr_t *sa)
 {
 	return 0;
 }
 
-void dht_hash(void *hash_return, int hash_size, const void *v1, int len1, const void *v2, int len2, const void *v3, int len3)
+KS_DECLARE(void) dht_hash(void *hash_return, int hash_size, const void *v1, int len1, const void *v2, int len2, const void *v3, int len3)
 {
 	crypto_generichash_state state;
 
@@ -57,14 +57,19 @@ void dht_hash(void *hash_return, int hash_size, const void *v1, int len1, const 
 	return;
 }
 
+/*
+KS_DECLARE(int) dht_random_bytes(void *buf, size_t size)
+{
+return 0;
+}
+*/
 
 #ifdef _WIN32
 
 #undef EAFNOSUPPORT
 #define EAFNOSUPPORT WSAEAFNOSUPPORT
 
-static int
-random(void)
+static int random(void)
 {
     return rand();
 }
@@ -183,38 +188,6 @@ struct storage {
 static struct storage * find_storage(dht_handle_t *h, const unsigned char *id);
 static void flush_search_node(struct search_node *n, struct search *sr);
 
-static int send_ping(dht_handle_t *h, const ks_sockaddr_t *sa,
-                     const unsigned char *tid, int tid_len);
-static int send_pong(dht_handle_t *h, const ks_sockaddr_t *sa,
-                     const unsigned char *tid, int tid_len);
-static int send_find_node(dht_handle_t *h, const ks_sockaddr_t *sa,
-                          const unsigned char *tid, int tid_len,
-                          const unsigned char *target, int target_len,
-						  int want, int confirm);
-static int send_nodes_peers(dht_handle_t *h, const ks_sockaddr_t *sa,
-                            const unsigned char *tid, int tid_len,
-                            const unsigned char *nodes, int nodes_len,
-                            const unsigned char *nodes6, int nodes6_len,
-                            int af, struct storage *st,
-                            const unsigned char *token, int token_len);
-static int send_closest_nodes(dht_handle_t *h, const ks_sockaddr_t *sa,
-                              const unsigned char *tid, int tid_len,
-                              const unsigned char *id, int want,
-                              int af, struct storage *st,
-                              const unsigned char *token, int token_len);
-static int send_get_peers(dht_handle_t *h, const ks_sockaddr_t *sa,
-                          unsigned char *tid, int tid_len,
-                          unsigned char *infohash, int want, int confirm);
-static int send_announce_peer(dht_handle_t *h, const ks_sockaddr_t *sa,
-                              unsigned char *tid, int tid_len,
-                              unsigned char *infohas, unsigned short port,
-                              unsigned char *token, int token_len, int confirm);
-static int send_peer_announced(dht_handle_t *h, const ks_sockaddr_t *sa,
-                               unsigned char *tid, int tid_len);
-static int send_error(dht_handle_t *h, const ks_sockaddr_t *sa,
-                      unsigned char *tid, int tid_len,
-                      int code, const char *message);
-
 typedef enum {
 	DHT_MSG_INVALID = 0,
 	DHT_MSG_ERROR = 1,
@@ -232,6 +205,77 @@ typedef enum {
 static dht_msg_type_t parse_message(struct bencode *bencode_p,
 									unsigned char *tid_return, int *tid_len,
 									unsigned char *id_return);
+
+static unsigned char *debug_printable(const unsigned char *buf, unsigned char *out, int buflen);
+static void print_hex(FILE *f, const unsigned char *buf, int buflen);
+static int is_martian(const ks_sockaddr_t *sa);
+static int id_cmp(const unsigned char *restrict id1, const unsigned char *restrict id2);
+static int lowbit(const unsigned char *id);
+static int common_bits(const unsigned char *id1, const unsigned char *id2);
+static int xorcmp(const unsigned char *id1, const unsigned char *id2, const unsigned char *ref);
+static int in_bucket(const unsigned char *id, struct bucket *b);
+static struct bucket *find_bucket(dht_handle_t *h, unsigned const char *id, int af);
+static struct bucket *previous_bucket(dht_handle_t *h, struct bucket *b);
+static struct node *find_node(dht_handle_t *h, const unsigned char *id, int af);
+static struct node *random_node(struct bucket *b);
+static int bucket_middle(struct bucket *b, unsigned char *id_return);
+static int bucket_random(struct bucket *b, unsigned char *id_return);
+static struct node *insert_node(dht_handle_t *h, struct node *node);
+static int node_good(dht_handle_t *h, struct node *node);
+static void make_tid(unsigned char *tid_return, const char *prefix, unsigned short seqno);
+static int tid_match(const unsigned char *tid, const char *prefix, unsigned short *seqno_return);
+static int send_cached_ping(dht_handle_t *h, struct bucket *b);
+static void pinged(dht_handle_t *h, struct node *n, struct bucket *b);
+static void blacklist_node(dht_handle_t *h, const unsigned char *id, const ks_sockaddr_t *sa);
+static int node_blacklisted(dht_handle_t *h, const ks_sockaddr_t *sa);
+static struct bucket *split_bucket(dht_handle_t *h, struct bucket *b);
+static struct node *new_node(dht_handle_t *h, const unsigned char *id, const ks_sockaddr_t *sa, int confirm);
+static int expire_buckets(dht_handle_t *h, struct bucket *b);
+static struct search *find_search(dht_handle_t *h, unsigned short tid, int af);
+static int insert_search_node(dht_handle_t *h, unsigned char *id,
+							  const ks_sockaddr_t *sa,
+							  struct search *sr, int replied,
+							  unsigned char *token, int token_len);
+static void flush_search_node(struct search_node *n, struct search *sr);
+static void expire_searches(dht_handle_t *h);
+static int search_send_get_peers(dht_handle_t *h, struct search *sr, struct search_node *n);
+static void search_step(dht_handle_t *h, struct search *sr);
+static struct search *new_search(dht_handle_t *h);
+static void insert_search_bucket(dht_handle_t *h, struct bucket *b, struct search *sr);
+static struct storage *find_storage(dht_handle_t *h, const unsigned char *id);
+static int storage_store(dht_handle_t *h, const unsigned char *id, const ks_sockaddr_t *sa, unsigned short port);
+static int expire_storage(dht_handle_t *h);
+static int rotate_secrets(dht_handle_t *h);
+static void make_token(dht_handle_t *h, const ks_sockaddr_t *sa, int old, unsigned char *token_return);
+static int token_match(dht_handle_t *h, const unsigned char *token, int token_len, const ks_sockaddr_t *sa);
+static void dump_bucket(dht_handle_t *h, FILE *f, struct bucket *b);
+
+static void reset_poll(dht_handle_t *h);
+static void clear_all_ip(dht_handle_t *h);
+static int token_bucket(dht_handle_t *h);
+static int neighbourhood_maintenance(dht_handle_t *h, int af);
+static int bucket_maintenance(dht_handle_t *h, int af);
+static int dht_send(dht_handle_t *h, const void *buf, size_t len, int flags, const ks_sockaddr_t *sa);
+
+static int send_ping(dht_handle_t *h, const ks_sockaddr_t *sa, const unsigned char *tid, int tid_len);
+static int send_pong(dht_handle_t *h, const ks_sockaddr_t *sa, const unsigned char *tid, int tid_len);
+static int send_find_node(dht_handle_t *h, const ks_sockaddr_t *sa, const unsigned char *tid, int tid_len, const unsigned char *target, int target_len,
+						  int want, int confirm);
+static int send_nodes_peers(dht_handle_t *h, const ks_sockaddr_t *sa, const unsigned char *tid, int tid_len, const unsigned char *nodes, int nodes_len,
+                            const unsigned char *nodes6, int nodes6_len, int af, struct storage *st, const unsigned char *token, int token_len);
+static int insert_closest_node(unsigned char *nodes, int numnodes, const unsigned char *id, struct node *n);
+static int buffer_closest_nodes(dht_handle_t *h, unsigned char *nodes, int numnodes, const unsigned char *id, struct bucket *b);
+static int send_closest_nodes(dht_handle_t *h, const ks_sockaddr_t *sa, const unsigned char *tid, int tid_len, const unsigned char *id, int want,
+                              int af, struct storage *st, const unsigned char *token, int token_len);
+static int send_get_peers(dht_handle_t *h, const ks_sockaddr_t *sa, unsigned char *tid, int tid_len, unsigned char *infohash, int want, int confirm);
+static int send_announce_peer(dht_handle_t *h, const ks_sockaddr_t *sa, unsigned char *tid, int tid_len, unsigned char *infohas, unsigned short port,
+                              unsigned char *token, int token_len, int confirm);
+static int send_peer_announced(dht_handle_t *h, const ks_sockaddr_t *sa, unsigned char *tid, int tid_len);
+static int send_error(dht_handle_t *h, const ks_sockaddr_t *sa, unsigned char *tid, int tid_len, int code, const char *message);
+
+static dht_msg_type_t parse_message(struct bencode *bencode_p, unsigned char *tid_return, int *tid_len, unsigned char *id_return);
+static int b64encode(unsigned char *in, ks_size_t ilen, unsigned char *out, ks_size_t olen);
+
 
 static const unsigned char zeroes[20] = {0};
 //static const unsigned char v4prefix[16] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xFF, 0xFF, 0, 0, 0, 0 };
@@ -276,8 +320,6 @@ typedef struct {
 	ks_sockaddr_t addr;
 	ks_socket_t sock;
 } ks_ip_t;
-
-
 
 struct dht_handle_s {
 	ks_pool_t *pool;
@@ -342,7 +384,19 @@ struct dht_handle_s {
 	int started;
 };
 
-void ks_dht_store_entry_json_cb_set(struct dht_handle_s *h, ks_dht_store_entry_json_cb *store_json_cb, void *arg)
+static ks_ip_t *add_ip(dht_handle_t *h, const char *ip, int port, int family);
+
+static void ks_dht_store_entry_destroy(struct ks_dht_store_entry_s **old_entry);
+static int ks_dht_store_entry_create(struct dht_handle_s *h, struct bencode *msg, struct ks_dht_store_entry_s **new_entry, ks_time_t life, ks_bool_t mine);
+static struct ks_dht_store_entry_s *ks_dht_store_fetch(struct ks_dht_store_s *store, char *key);
+static int ks_dht_store_insert(struct ks_dht_store_s *store, struct ks_dht_store_entry_s *entry, ks_time_t now);
+static int ks_dht_store_replace(struct ks_dht_store_s *store, struct ks_dht_store_entry_s *entry);
+static void ks_dht_store_prune(struct ks_dht_store_s *store, ks_time_t now);
+static int ks_dht_store_create(ks_pool_t *pool, struct ks_dht_store_s **new_store);
+static void ks_dht_store_destroy(struct ks_dht_store_s **old_store);
+
+
+KS_DECLARE(void) ks_dht_store_entry_json_cb_set(struct dht_handle_s *h, ks_dht_store_entry_json_cb *store_json_cb, void *arg)
 {
 	h->store_json_cb = store_json_cb;
 	h->store_json_cb_arg = arg;
@@ -1284,7 +1338,6 @@ KS_DECLARE(int) dht_search(dht_handle_t *h, const unsigned char *id, int port, i
 }
 
 /* A struct storage stores all the stored peer addresses for a given info hash. */
-
 static struct storage *find_storage(dht_handle_t *h, const unsigned char *id)
 {
     struct storage *st = h->storage;
@@ -2965,7 +3018,7 @@ static int dht_send(dht_handle_t *h, const void *buf, size_t len, int flags, con
 
 /* Sample ping packet '{"t":"aa", "y":"q", "q":"ping", "a":{"id":"abcdefghij0123456789"}}' */
 /* http://www.bittorrent.org/beps/bep_0005.html */
-int send_ping(dht_handle_t *h, const ks_sockaddr_t *sa, const unsigned char *tid, int tid_len)
+static int send_ping(dht_handle_t *h, const ks_sockaddr_t *sa, const unsigned char *tid, int tid_len)
 {
     char buf[512];
     int i = 0;
@@ -2986,7 +3039,7 @@ int send_ping(dht_handle_t *h, const ks_sockaddr_t *sa, const unsigned char *tid
 
 /* Sample pong packet '{"t":"aa", "y":"r", "r": {"id":"mnopqrstuvwxyz123456"}}' */
 /* http://www.bittorrent.org/beps/bep_0005.html */
-int send_pong(dht_handle_t *h, const ks_sockaddr_t *sa, const unsigned char *tid, int tid_len)
+static int send_pong(dht_handle_t *h, const ks_sockaddr_t *sa, const unsigned char *tid, int tid_len)
 {
     char buf[512];
 	int i = 0;
@@ -3009,7 +3062,7 @@ int send_pong(dht_handle_t *h, const ks_sockaddr_t *sa, const unsigned char *tid
 /* Sample find_node packet w/ want '{"t":"aa", "y":"q", "q":"find_node", "a": {"id":"abcdefghij0123456789", "target":"mnopqrstuvwxyz123456", "want":"n4"}}' */
 /* http://www.bittorrent.org/beps/bep_0005.html */
 /* http://www.bittorrent.org/beps/bep_0032.html for want parameter */
-int send_find_node(dht_handle_t *h, const ks_sockaddr_t *sa,
+static int send_find_node(dht_handle_t *h, const ks_sockaddr_t *sa,
                const unsigned char *tid, int tid_len,
 			   const unsigned char *target, int target_len, int want, int confirm)
 {
@@ -3046,7 +3099,7 @@ int send_find_node(dht_handle_t *h, const ks_sockaddr_t *sa,
 
 /* sample find_node response '{"t":"aa", "y":"r", "r": {"id":"0123456789abcdefghij", "nodes": "def456..."}}'*/
 /* http://www.bittorrent.org/beps/bep_0005.html */
-int send_nodes_peers(dht_handle_t *h, const ks_sockaddr_t *sa,
+static int send_nodes_peers(dht_handle_t *h, const ks_sockaddr_t *sa,
                  const unsigned char *tid, int tid_len,
                  const unsigned char *nodes, int nodes_len,
                  const unsigned char *nodes6, int nodes6_len,
@@ -3166,7 +3219,7 @@ static int buffer_closest_nodes(dht_handle_t *h, unsigned char *nodes, int numno
     return numnodes;
 }
 
-int send_closest_nodes(dht_handle_t *h, const ks_sockaddr_t *sa,
+static int send_closest_nodes(dht_handle_t *h, const ks_sockaddr_t *sa,
 					   const unsigned char *tid, int tid_len,
 					   const unsigned char *id, int want,
 					   int af, struct storage *st,
@@ -3220,7 +3273,7 @@ int send_closest_nodes(dht_handle_t *h, const ks_sockaddr_t *sa,
 /* sample get_peers w/ want '{"t":"aa", "y":"q", "q":"get_peers", "a": {"id":"abcdefghij0123456789", "info_hash":"mnopqrstuvwxyz123456": "want":"n4"}}'*/
 /* http://www.bittorrent.org/beps/bep_0005.html */
 /* http://www.bittorrent.org/beps/bep_0032.html for want parameter */
-int send_get_peers(dht_handle_t *h, const ks_sockaddr_t *sa,
+static int send_get_peers(dht_handle_t *h, const ks_sockaddr_t *sa,
 				   unsigned char *tid, int tid_len, unsigned char *infohash,
 				   int want, int confirm)
 {
@@ -3255,7 +3308,7 @@ int send_get_peers(dht_handle_t *h, const ks_sockaddr_t *sa,
     return dht_send(h, buf, i, confirm ? MSG_CONFIRM : 0, sa);
 }
 /* '{"t":"aa", "y":"q", "q":"announce_peer", "a": {"id":"abcdefghij0123456789", "implied_port": 1, "info_hash":"mnopqrstuvwxyz123456", "port": 6881, "token": "aoeusnth"}}'*/
-int send_announce_peer(dht_handle_t *h, const ks_sockaddr_t *sa,
+static int send_announce_peer(dht_handle_t *h, const ks_sockaddr_t *sa,
 					   unsigned char *tid, int tid_len,
 					   unsigned char *infohash, unsigned short port,
 					   unsigned char *token, int token_len, int confirm)
@@ -3748,7 +3801,7 @@ static dht_msg_type_t parse_message(struct bencode *bencode_p,
 
 /* b64encode function taken from kws.c. Maybe worth exposing a function like this. */
 static const char c64[65] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-static int b64encode(unsigned char *in, ks_size_t ilen, unsigned char *out, ks_size_t olen) 
+static int b64encode(unsigned char *in, ks_size_t ilen, unsigned char *out, ks_size_t olen)
 {
 	int y=0,bytes=0;
 	ks_size_t x=0;
@@ -3793,7 +3846,7 @@ static int b64encode(unsigned char *in, ks_size_t ilen, unsigned char *out, ks_s
    3. The target hash will be generated here, and will be the hash that must be used for announcing the message, and updating it.
 
 */
-int ks_dht_generate_mutable_storage_args(struct bencode *data, int64_t sequence, int cas,
+KS_DECLARE(int) ks_dht_generate_mutable_storage_args(struct bencode *data, int64_t sequence, int cas,
 										 unsigned char *id, int id_len, /* querying nodes id */
 										 const unsigned char *sk, const unsigned char *pk,
 										 unsigned char *salt, unsigned long long salt_length,
@@ -3882,7 +3935,7 @@ int ks_dht_generate_mutable_storage_args(struct bencode *data, int64_t sequence,
 	return 0;
 }
 
-int ks_dht_calculate_mutable_storage_target(unsigned char *pk, unsigned char *salt, int salt_length, unsigned char *target, int target_length)
+KS_DECLARE(int) ks_dht_calculate_mutable_storage_target(unsigned char *pk, unsigned char *salt, int salt_length, unsigned char *target, int target_length)
 {
 	SHA_CTX sha;
 	unsigned char sha1[20] = {0};

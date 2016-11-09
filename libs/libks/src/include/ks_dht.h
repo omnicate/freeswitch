@@ -24,6 +24,7 @@ THE SOFTWARE.
 #define _KS_DHT_H
 
 #include "ks.h"
+#include "ks_bencode.h"
 
 KS_BEGIN_EXTERN_C
 
@@ -66,11 +67,20 @@ KS_DECLARE(void) ks_dht_set_port(dht_handle_t *h, unsigned int port);
 KS_DECLARE(void) dht_dump_tables(dht_handle_t *h, FILE *f);
 KS_DECLARE(int) dht_get_nodes(dht_handle_t *h, struct sockaddr_in *sin, int *num, struct sockaddr_in6 *sin6, int *num6);
 KS_DECLARE(int) dht_uninit(dht_handle_t **h);
+KS_DECLARE(void) ks_dht_set_v(dht_handle_t *h, const unsigned char *v);
+KS_DECLARE(int) ks_dht_calculate_mutable_storage_target(unsigned char *pk, unsigned char *salt, int salt_length, unsigned char *target, int target_length);
+KS_DECLARE(int) ks_dht_generate_mutable_storage_args(struct bencode *data, int64_t sequence, int cas,
+													 unsigned char *id, int id_len, /* querying nodes id */
+													 const unsigned char *sk, const unsigned char *pk,
+													 unsigned char *salt, unsigned long long salt_length,
+													 unsigned char *token, unsigned long long token_length,
+													 unsigned char *signature, unsigned long long *signature_length,
+													 struct bencode **arguments);
 
 /* This must be provided by the user. */
-int dht_blacklisted(const ks_sockaddr_t *sa);
-void dht_hash(void *hash_return, int hash_size, const void *v1, int len1, const void *v2, int len2, const void *v3, int len3);
-int dht_random_bytes(void *buf, size_t size);
+KS_DECLARE(int) dht_blacklisted(const ks_sockaddr_t *sa);
+KS_DECLARE(void) dht_hash(void *hash_return, int hash_size, const void *v1, int len1, const void *v2, int len2, const void *v3, int len3);
+KS_DECLARE(int) dht_random_bytes(void *buf, size_t size);
 
 KS_DECLARE(int) ks_dht_send_message_mutable(dht_handle_t *h, unsigned char *sk, unsigned char *pk, char **node_id,
 											char *message_id, int sequence, char *message, ks_time_t life);
