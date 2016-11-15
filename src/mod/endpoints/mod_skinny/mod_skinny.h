@@ -290,6 +290,7 @@ typedef struct private_object private_t;
 /* PROFILES FUNCTIONS */
 /*****************************************************************************/
 skinny_profile_t *skinny_find_profile(const char *profile_name);
+skinny_profile_t *skinny_find_profile_by_domain(const char *domain_name);
 switch_status_t skinny_profile_dump(const skinny_profile_t *profile, switch_stream_handle_t *stream);
 switch_status_t skinny_profile_find_listener_by_device_name(skinny_profile_t *profile, const char *device_name, listener_t **listener);
 switch_status_t skinny_profile_find_listener_by_device_name_and_instance(skinny_profile_t *profile, const char *device_name, uint32_t device_instance, listener_t **listener);

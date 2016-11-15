@@ -529,6 +529,103 @@ static switch_status_t skinny_api_cmd_profile_set(const char *profile_name, cons
 /*****************************************************************************/
 /* API */
 /*****************************************************************************/
+SWITCH_STANDARD_API(skinny_contact_function)
+{
+	char *data;
+	char *user = NULL;
+	char *domain = NULL, *dup_domain = NULL;
+	char *concat = NULL;
+	char *profile_name = NULL;
+	char *p;
+	char *reply = "error/facility_not_subscribed";
+	switch_hash_index_t *hi;
+	skinny_profile_t *profile = NULL;
+
+	if (!cmd || zstr(cmd)) {
+		stream->write_function(stream, "%s", "");
+		return SWITCH_STATUS_SUCCESS;
+	}
+
+	data = strdup(cmd);
+	switch_assert(data);
+
+	if ((p = strchr(data, '/'))) {
+		profile_name = data;
+		*p++ = '\0';
+		user = p;
+	} else {
+		user = data;
+	}
+
+	if ((domain = strchr(user, '@'))) {
+		*domain++ = '\0';
+		if ((concat = strchr(domain, '/'))) {
+			*concat++ = '\0';
+		}
+	} else {
+		if ((concat = strchr(user, '/'))) {
+		*concat++ = '\0';
+		}
+	}
+
+	if (zstr(domain)) {
+		dup_domain = switch_core_get_domain(SWITCH_TRUE);
+		domain = dup_domain;
+	}
+
+	if (!user) goto end;
+
+	if (zstr(profile_name) || strcmp(profile_name, "*") || zstr(domain)) {
+		if (!zstr(profile_name)) {
+			profile = skinny_find_profile(profile_name);
+		}
+
+		if (!profile && !zstr(domain)) {
+			profile = skinny_find_profile_by_domain(domain);
+		}
+	}
+
+	/* just return first one */
+	if (!profile) {
+		void *val;
+
+		switch_mutex_lock(globals.mutex);
+		for (hi = switch_core_hash_first(globals.profile_hash); hi; hi = switch_core_hash_next(&hi)) {
+			switch_core_hash_this(hi, NULL, NULL, &val);
+			profile = (skinny_profile_t *) val;
+			if (profile) {
+				break;
+			}
+		}
+		switch_safe_free(hi);
+		switch_mutex_unlock(globals.mutex);
+	}
+
+	if ( !profile ) {
+		reply = "error/profile_not_found";
+		goto end;
+	}
+
+	/* This is a hack, skinny doesn't really support multiple profiles as implemented */
+	reply = switch_mprintf("skinny/%s/%s@%s", profile->name, user, domain);
+
+ end:
+
+	if (zstr(reply)) {
+		reply = "error/user_not_registered";
+	} else if (end_of(reply) == ',') {
+		end_of(reply) = '\0';
+	}
+
+	stream->write_function(stream, "%s", reply);
+	reply = NULL;
+
+	switch_safe_free(data);
+	switch_safe_free(dup_domain);
+
+	return SWITCH_STATUS_SUCCESS;
+}
+
 SWITCH_STANDARD_API(skinny_function)
 {
 	char *argv[1024] = { 0 };
@@ -659,6 +756,8 @@ done:
 switch_status_t skinny_api_register(switch_loadable_module_interface_t **module_interface)
 {
 	switch_api_interface_t *api_interface;
+
+	SWITCH_ADD_API(api_interface, "skinny_contact", "Generate a skinny endpoint dialstring", skinny_contact_function, "profile/user@domain");
 
 	SWITCH_ADD_API(api_interface, "skinny", "Skinny Controls", skinny_function, "<cmd> <args>");
 	switch_console_set_complete("add skinny help");
