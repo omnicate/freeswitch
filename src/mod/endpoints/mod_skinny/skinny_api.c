@@ -606,8 +606,8 @@ SWITCH_STANDARD_API(skinny_contact_function)
 		goto end;
 	}
 
-	/* This is a hack, skinny doesn't really support multiple profiles as implemented */
-	reply = switch_mprintf("skinny/%s/%s@%s", profile->name, user, domain);
+	/* This is a hack, skinny doesn't really support multiple profiles or domains as implemented */
+	reply = switch_mprintf("skinny/%s/%s", profile->name, user);
 
  end:
 
