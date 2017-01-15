@@ -661,7 +661,7 @@ fi
 
 AC_SUBST(PA_LIBS)
 
-AM_CONDITIONAL([ENABLE_ZRTP],[test "x$enable_zrtp" != "xno"])
+AM_CONDITIONAL([ENABLE_ZRTP],[test "x$enable_zrtp" = "xyes"])
 
 AM_CONDITIONAL([WANT_DEBUG],[test "${enable_debug}" = "yes"])
 
