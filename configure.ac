@@ -279,6 +279,29 @@ if test "x${cross_compiling}" = "xyes"; then
 		export apr_cv_process_shared_works=yes
 		export apr_cv_mutex_robust_shared=yes
 	 ;;
+
+     *-openwrt-linux-gnu)
+        # spandsp modem
+        ac_cv_file__dev_ptmx=yes
+        # libjs
+        export ac_cv_va_copy=yes
+        # srtp
+        export ac_cv_file__dev_urandom=yes
+        # rpl_malloc
+        export ac_cv_func_realloc_0_nonnull=yes
+        export ac_cv_func_malloc_0_nonnull=yes
+        # apr
+        export ac_cv_func_setpgrp_void=yes
+        export ac_cv_file__dev_zero=yes
+        export apr_cv_tcp_nodelay_with_cork=yes
+        export ac_cv_file_dbd_apr_dbd_mysql_c=no
+        export ac_cv_sizeof_ssize_t=4
+        export apr_cv_mutex_recursive=yes
+        export ac_cv_func_pthread_rwlock_init=yes
+        export apr_cv_type_rwlock_t=yes
+        export apr_cv_process_shared_works=yes
+        export apr_cv_mutex_robust_shared=yes
+      ;;
     esac
 else
     CC_FOR_BUILD='$(CC)'
