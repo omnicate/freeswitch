@@ -81,6 +81,25 @@ typedef struct worker_helper{
 	switch_msrp_session_t *msrp_session;
 } worker_helper_t;
 
+SWITCH_DECLARE(void) switch_msrp_msg_set_payload(switch_msrp_msg_t *msrp_msg, const char *buf, switch_size_t payload_bytes)
+{	if (!msrp_msg->payload) {
+		switch_malloc(msrp_msg->payload, payload_bytes + 1);
+	} else if (msrp_msg->payload_bytes < payload_bytes + 1) {
+		msrp_msg->payload = realloc((void *)msrp_msg->payload, payload_bytes + 1);
+	}
+
+	switch_assert(msrp_msg->payload);
+	memcpy((void *)msrp_msg->payload, buf, payload_bytes);
+	*(msrp_msg->payload + payload_bytes) = '\0';
+	msrp_msg->payload_bytes = payload_bytes;
+}
+
+switch_bool_t msrp_check_success_report(switch_msrp_msg_t *msrp_msg)
+{
+	const char *msrp_h_success_report = switch_msrp_msg_get_header(msrp_msg, MSRP_H_SUCCESS_REPORT);
+	return (msrp_h_success_report &&!strcmp(msrp_h_success_report, "yes"));
+}
+
 static void msrp_deinit_ssl()
 {
 	if (globals.ssl_ctx) {
@@ -423,19 +442,20 @@ switch_status_t msrp_msg_serialize(switch_msrp_msg_t *msrp_msg, char *buf)
 		case MSRP_METHOD_REPORT: sprintf(method, "REPORT"); break;
 		default: sprintf(method, "%d", msrp_msg->method); break;
 	}
+
 	sprintf(buf, "=================================\n"
 		"MSRP %s %s%s\nFrom: %s\nTo: %s\nMessage-ID: %s\n"
 		"Content-Type: %s\n"
 		"Byte-Range: %" SWITCH_SIZE_T_FMT "-%" SWITCH_SIZE_T_FMT"/%" SWITCH_SIZE_T_FMT "\n"
 		"Payload:\n%s\n%s\n"
 		"=================================\n",
-		msrp_msg->transaction_id ? switch_str_nil(msrp_msg->transaction_id) : code_number_str,
+		msrp_msg->transaction_id ? msrp_msg->transaction_id : code_number_str,
 		msrp_msg->transaction_id ? "" : " ",
-		msrp_msg->transaction_id ? method : switch_str_nil(msrp_msg->code_description),
-		switch_str_nil(msrp_msg->headers[MSRP_H_FROM_PATH]),
-		switch_str_nil(msrp_msg->headers[MSRP_H_TO_PATH]),
-		switch_str_nil(msrp_msg->headers[MSRP_H_MESSAGE_ID]),
-		switch_str_nil(msrp_msg->headers[MSRP_H_CONTENT_TYPE]),
+		msrp_msg->transaction_id ? method : msrp_msg->code_description,
+		switch_msrp_msg_get_header(msrp_msg, MSRP_H_FROM_PATH),
+		switch_msrp_msg_get_header(msrp_msg, MSRP_H_TO_PATH),
+		switch_msrp_msg_get_header(msrp_msg, MSRP_H_MESSAGE_ID),
+		switch_msrp_msg_get_header(msrp_msg, MSRP_H_CONTENT_TYPE),
 		msrp_msg->byte_start,
 		msrp_msg->byte_end,
 		msrp_msg->bytes,
@@ -479,7 +499,7 @@ static switch_status_t msrp_socket_send(switch_msrp_client_socket_t *csock, char
 	}
 }
 
-void dump_buffer(char *buf, switch_size_t len, int line)
+void dump_buffer(const char *buf, switch_size_t len, int line)
 {
 	int i, j, k = 0;
 	char buff[MSRP_BUFF_SIZE * 2];
@@ -508,13 +528,13 @@ void dump_buffer(char *buf, switch_size_t len, int line)
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "%d: [%" SWITCH_SIZE_T_FMT "] ::DUMP::%s::DUMP::\n", line, len, buff);
 }
 
-char *find_delim(char *buf, int len, char *delim)
+char *find_delim(char *buf, int len, const char *delim)
 {
 	char *p, *q, *s = NULL;
 	char *end;
 
 	p = buf;
-	q = delim;
+	q = (char *)delim;
 
 	if (p == NULL) return NULL;
 	if (q == NULL) return NULL;
@@ -529,7 +549,7 @@ char *find_delim(char *buf, int len, char *delim)
 			} else {
 					s = NULL;
 					p++;
-					q = delim;
+					q = (char *)delim;
 			}
 			if (*q == '\0') return s;
 	}
@@ -545,7 +565,68 @@ Byte-Range: 1-0/0
 -------d4c667b2351e958f$
 */
 
-char *msrp_parse_header(char *start, int skip, const char *end, switch_msrp_msg_t *msrp_msg, int index, switch_memory_pool_t *pool)
+char* HEADER_NAMES[] = {
+	"MSRP_H_FROM_PATH",
+	"MSRP_H_TO_PATH",
+	"MSRP_H_MESSAGE_ID",
+	"MSRP_H_CONTENT_TYPE",
+	"MSRP_H_SUCCESS_REPORT",
+	"MSRP_H_FAILURE_REPORT",
+	"MSRP_H_STATUS",
+	"MSRP_H_KEEPALIVE",
+
+	"MSRP_H_TRASACTION_ID",
+	"MSRP_H_DELIMITER",
+
+	"MSRP_H_UNKNOWN"
+};
+
+SWITCH_DECLARE(char*) switch_msrp_msg_header_name(switch_msrp_header_type_t htype) {
+	if (htype > MSRP_H_UNKNOWN) htype = MSRP_H_UNKNOWN;
+
+	return HEADER_NAMES[htype];
+}
+
+SWITCH_DECLARE(switch_status_t) switch_msrp_msg_add_header(switch_msrp_msg_t *msrp_msg, switch_msrp_header_type_t htype, char *fmt, ...)
+{
+	switch_status_t status;
+
+	int ret = 0;
+	char *data;
+	va_list ap;
+
+	va_start(ap, fmt);
+	ret = switch_vasprintf(&data, fmt, ap);
+	va_end(ap);
+
+	if (ret == -1) {
+		return SWITCH_STATUS_MEMERR;
+	}
+
+	status = switch_event_add_header_string(msrp_msg->headers, SWITCH_STACK_BOTTOM, switch_msrp_msg_header_name(htype), data);
+
+	switch (htype) {
+	case MSRP_H_TRASACTION_ID:
+		msrp_msg->transaction_id = switch_msrp_msg_get_header(msrp_msg, MSRP_H_TRASACTION_ID);
+		break;
+	case MSRP_H_DELIMITER:
+		msrp_msg->delimiter = switch_msrp_msg_get_header(msrp_msg, MSRP_H_DELIMITER);
+		break;
+	case MSRP_H_CODE_DESCRIPTION:
+		msrp_msg->code_description = switch_msrp_msg_get_header(msrp_msg, MSRP_H_CODE_DESCRIPTION);
+		break;
+	default: break;
+	}
+
+	return status;
+}
+
+SWITCH_DECLARE(const char *) switch_msrp_msg_get_header(switch_msrp_msg_t *msrp_msg, switch_msrp_header_type_t htype) {
+	char *v = switch_event_get_header(msrp_msg->headers, switch_msrp_msg_header_name(htype));
+	return v;
+}
+
+char *msrp_parse_header(char *start, int skip, const char *end, switch_msrp_msg_t *msrp_msg, switch_msrp_header_type_t htype, switch_memory_pool_t *pool)
 {
 	char *p = start + skip;
 	char *q;
@@ -555,40 +636,39 @@ char *msrp_parse_header(char *start, int skip, const char *end, switch_msrp_msg_
 	if (q > p) {
 		if (*(q-1) == '\r') *(q-1) = '\0';
 		*q = '\0';
-		msrp_msg->headers[index] = switch_core_strdup(pool, p);
-		msrp_msg->last_header = msrp_msg->last_header > index ? msrp_msg->last_header : index;
+		switch_msrp_msg_add_header(msrp_msg, htype, p);
 		return q + 1;
 	}
 	return start;
 }
 
-switch_msrp_msg_t *msrp_parse_headers(const char *start, int len, switch_msrp_msg_t *msrp_msg, switch_memory_pool_t *pool)
+switch_msrp_msg_t *msrp_parse_headers(char *start, int len, switch_msrp_msg_t *msrp_msg, switch_memory_pool_t *pool)
 {
-	char *p = (char *)start;
+	char *p = start;
 	char *q = p;
 	const char *end = start + len;
-	int headers = 0;
-	char line[1024];
-
 
 	while(p < end) {
 		if (!strncasecmp(p, "MSRP ", 5)) {
 			p += 5;
 			q = p;
+
 			while(*q && q < end && *q != ' ') q++;
+
 			if (q > p) {
 				*q = '\0';
-				msrp_msg->transaction_id = switch_core_strdup(pool, p);
-				switch_snprintf(line, 128, "-------%s", msrp_msg->transaction_id);
-				msrp_msg->delimiter = switch_core_strdup(pool, line);
+				switch_msrp_msg_add_header(msrp_msg, MSRP_H_TRASACTION_ID, p);
+				switch_msrp_msg_add_header(msrp_msg, MSRP_H_DELIMITER, "-------%s", p);
 				msrp_msg->state = MSRP_ST_PARSE_HEADER;
 			}
+
 			p = q;
+
 			if (++p >= end) goto done;
 
 			if (!strncasecmp(p, "SEND", 4)) {
 				msrp_msg->method = MSRP_METHOD_SEND;
-				p +=6; /*skip \r\n*/
+				p += 6; /*skip \r\n*/
 			} else if (!strncasecmp(p, "REPORT", 6)) {
 				msrp_msg->method = MSRP_METHOD_REPORT;
 				p += 8;
@@ -607,12 +687,11 @@ switch_msrp_msg_t *msrp_parse_headers(const char *start, int len, switch_msrp_ms
 					if (q > p) {
 						if (*(q-1) == '\r') *(q-1) = '\0';
 						*q = '\0';
-						msrp_msg->code_description = switch_core_strdup(pool, p);
+						switch_msrp_msg_add_header(msrp_msg, MSRP_H_CODE_DESCRIPTION, p);
 						p = ++q;
 					}
 				}
 			}
-			headers++;
 		} else if (!strncasecmp(p, "From-Path:", 10)) {
 			q = msrp_parse_header(p, 10, end, msrp_msg, MSRP_H_FROM_PATH, pool);
 			if (q == p) break; /* incomplete header*/
@@ -686,7 +765,6 @@ switch_msrp_msg_t *msrp_parse_headers(const char *start, int len, switch_msrp_ms
 					}
 				}
 			}
-			headers++;
 		} else if (*p == '\r' && *(p+1) == '\n') {
 			msrp_msg->state = MSRP_ST_WAIT_BODY;
 			p += 2;
@@ -713,7 +791,7 @@ switch_msrp_msg_t *msrp_parse_headers(const char *start, int len, switch_msrp_ms
 					}
 				}
 				break;
-		} else {/* unsupported header*/
+		} else {/* unsupported header */
 			q = p;
 			while(*q && q < end && *q != ':') q++;
 			if (q > p) {
@@ -721,11 +799,10 @@ switch_msrp_msg_t *msrp_parse_headers(const char *start, int len, switch_msrp_ms
 				*q = '\0';
 				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "unsupported header [%s]\n", p);
 				p = q + 1;
-				msrp_msg->last_header = msrp_msg->last_header == 0 ? MSRP_H_UNKNOWN : msrp_msg->last_header + 1;
-				q = msrp_parse_header(p, 0, end, msrp_msg, msrp_msg->last_header, pool);
+				q = msrp_parse_header(p, 0, end, msrp_msg, MSRP_H_UNKNOWN, pool);
 				if (q == p) {
 					p = last_p;
-					break; /* incomplete header*/
+					break; /* incomplete header */
 				}
 				p = q;
 			}
@@ -739,11 +816,10 @@ done:
 
 switch_msrp_msg_t *msrp_parse_buffer(char *buf, int len, switch_msrp_msg_t *msrp_msg, switch_memory_pool_t *pool)
 {
-	const char *start;
+	char *start;
 
 	if (!msrp_msg) {
-		switch_zmalloc(msrp_msg, sizeof(switch_msrp_msg_t));
-		switch_assert(msrp_msg);
+		msrp_msg = switch_msrp_msg_create();
 		msrp_msg->state = MSRP_ST_WAIT_HEADER;
 	}
 
@@ -753,10 +829,11 @@ switch_msrp_msg_t *msrp_parse_buffer(char *buf, int len, switch_msrp_msg_t *msrp
 	}
 
 	if (msrp_msg->state == MSRP_ST_WAIT_HEADER) {
-		if ((start = switch_stristr("MSRP ", buf)) == NULL) {
+		if ((start = (char *)switch_stristr("MSRP ", buf)) == NULL) {
 			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Not an MSRP packet, Skip!\n");
 			return msrp_msg;
 		}
+
 		msrp_msg = msrp_parse_headers(start, len - (start - buf), msrp_msg, pool);
 
 		if (msrp_msg->state == MSRP_ST_ERROR) return msrp_msg;
@@ -770,28 +847,28 @@ switch_msrp_msg_t *msrp_parse_buffer(char *buf, int len, switch_msrp_msg_t *msrp
 			msrp_msg->state = MSRP_ST_DONE;
 			return msrp_msg;
 		}
+
 		if (msrp_msg->range_star) { /* the * case */
 			/*hope we can find the delimiter at the end*/
 			int dlen;
 			char *delim_pos = NULL;
+			switch_size_t payload_bytes;
+
 			switch_assert(msrp_msg->delimiter);
 			dlen = strlen(msrp_msg->delimiter);
+
 			if (!strncmp(buf + len - dlen - 3, msrp_msg->delimiter, dlen)) { /*bingo*/
-				msrp_msg->payload_bytes = len - dlen - 5;
-				msrp_msg->payload = switch_core_alloc(pool, msrp_msg->payload_bytes + 1);
-				switch_assert(msrp_msg->payload);
-				memcpy(msrp_msg->payload, buf, msrp_msg->payload_bytes);
-				msrp_msg->byte_end = msrp_msg->byte_start + msrp_msg->payload_bytes - 1;
+				payload_bytes = len - dlen - 5;
+				switch_msrp_msg_set_payload(msrp_msg, buf, payload_bytes);
+				msrp_msg->byte_end = msrp_msg->byte_start + payload_bytes - 1;
 				msrp_msg->state = MSRP_ST_DONE;
 				msrp_msg->last_p = buf + len;
 				return msrp_msg;
-			} else if ((delim_pos = find_delim(buf, len, msrp_msg->delimiter))){
+			} else if ((delim_pos = find_delim(buf, len, msrp_msg->delimiter))) {
 				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "=======================================delimiter: %s\n", delim_pos);
-				msrp_msg->payload_bytes = delim_pos - buf - 2;
-				// if (msrp_msg->payload_bytes < 0) msrp_msg->payload_bytes = 0;
-				msrp_msg->payload = switch_core_alloc(pool, msrp_msg->payload_bytes + 1);
-				switch_assert(msrp_msg->payload);
-				memcpy(msrp_msg->payload, buf, msrp_msg->payload_bytes);
+				payload_bytes = delim_pos - buf - 2;
+				switch_assert(payload_bytes >= 0);
+				switch_msrp_msg_set_payload(msrp_msg, buf, payload_bytes);
 				msrp_msg->byte_end = msrp_msg->byte_start + msrp_msg->payload_bytes - 1;
 				msrp_msg->state = MSRP_ST_DONE;
 				msrp_msg->last_p = delim_pos + dlen + 3;
@@ -803,14 +880,17 @@ switch_msrp_msg_t *msrp_parse_buffer(char *buf, int len, switch_msrp_msg_t *msrp
 			}
 		} else if (msrp_msg->payload_bytes == 0) {
 			int dlen = strlen(msrp_msg->delimiter);
-			if(strncasecmp(buf, msrp_msg->delimiter, dlen)) {
+
+			if (strncasecmp(buf, msrp_msg->delimiter, dlen)) {
 				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error find delimiter\n");
 				msrp_msg->state = MSRP_ST_ERROR;
 				return msrp_msg;
 			}
+
 			msrp_msg->payload = NULL;
 			msrp_msg->state = MSRP_ST_DONE;
 			msrp_msg->last_p = buf + dlen + 3; /*Fixme: assuming end with $\r\n*/
+
 			return msrp_msg;
 		} else {
 			int dlen = strlen(msrp_msg->delimiter);
@@ -820,9 +900,7 @@ switch_msrp_msg_t *msrp_parse_buffer(char *buf, int len, switch_msrp_msg_t *msrp
 				return msrp_msg; /*keep waiting ?*/
 			}
 
-			msrp_msg->payload = switch_core_alloc(pool, msrp_msg->payload_bytes);
-			switch_assert(msrp_msg->payload);
-			memcpy(msrp_msg->payload, buf, msrp_msg->payload_bytes);
+			switch_msrp_msg_set_payload(msrp_msg, buf, msrp_msg->payload_bytes);
 			msrp_msg->last_p = buf + msrp_msg->payload_bytes;
 			msrp_msg->state = MSRP_ST_DONE;
 			msrp_msg->last_p = buf + msrp_msg->payload_bytes;
@@ -845,16 +923,15 @@ switch_msrp_msg_t *msrp_parse_buffer(char *buf, int len, switch_msrp_msg_t *msrp
 	return msrp_msg;
 }
 
-
 switch_status_t msrp_reply(switch_msrp_client_socket_t *csock, switch_msrp_msg_t *msrp_msg)
 {
 	char buf[2048];
 	switch_size_t len;
 	sprintf(buf, "MSRP %s 200 OK\r\nTo-Path: %s\r\nFrom-Path: %s\r\n"
 		"%s$\r\n",
-		switch_str_nil(msrp_msg->transaction_id),
-		switch_str_nil(msrp_msg->headers[MSRP_H_FROM_PATH]),
-		switch_str_nil(msrp_msg->headers[MSRP_H_TO_PATH]),
+		msrp_msg->transaction_id,
+		switch_str_nil(switch_msrp_msg_get_header(msrp_msg, MSRP_H_FROM_PATH)),
+		switch_str_nil(switch_msrp_msg_get_header(msrp_msg, MSRP_H_TO_PATH)),
 		msrp_msg->delimiter);
 	len = strlen(buf);
 
@@ -868,20 +945,22 @@ switch_status_t msrp_report(switch_msrp_client_socket_t *csock, switch_msrp_msg_
 	sprintf(buf, "MSRP %s REPORT\r\nTo-Path: %s\r\nFrom-Path: %s\r\nMessage-ID: %s\r\n"
 		"Status: 000 %s\r\nByte-Range: 1-%" SWITCH_SIZE_T_FMT "/%" SWITCH_SIZE_T_FMT
 		"\r\n%s$\r\n",
-		switch_str_nil(msrp_msg->transaction_id),
-		switch_str_nil(msrp_msg->headers[MSRP_H_FROM_PATH]),
-		switch_str_nil(msrp_msg->headers[MSRP_H_TO_PATH]),
-		switch_str_nil(msrp_msg->headers[MSRP_H_MESSAGE_ID]),
+		msrp_msg->transaction_id,
+		switch_str_nil(switch_msrp_msg_get_header(msrp_msg, MSRP_H_FROM_PATH)),
+		switch_str_nil(switch_msrp_msg_get_header(msrp_msg, MSRP_H_TO_PATH)),
+		switch_str_nil(switch_msrp_msg_get_header(msrp_msg, MSRP_H_MESSAGE_ID)),
 		switch_str_nil(status_code),
 		msrp_msg->byte_end,
 		msrp_msg->bytes,
 		msrp_msg->delimiter);
 	len = strlen(buf);
+
 	if (globals.debug) switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "report: %" SWITCH_SIZE_T_FMT " bytes\n%s", len, buf);
+
 	return msrp_socket_send(csock, buf, &len);
 }
 
-static switch_bool_t msrp_find_uuid(char *uuid, char *to_path)
+static switch_bool_t msrp_find_uuid(char *uuid, const char *to_path)
 {
 	int len = strlen(to_path);
 	int i;
@@ -917,12 +996,13 @@ static void *SWITCH_THREAD_FUNC msrp_worker(switch_thread_t *thread, void *obj)
 
 	if (client_mode) {
 		switch_sockaddr_t *sa = NULL;
-		switch_msrp_msg_t setup_msg = { 0 };
+		switch_msrp_msg_t *setup_msg = switch_msrp_msg_create();
 		const char *remote_ip = NULL;
 		switch_port_t remote_port = 0;
 		char *dup = NULL;
 		char *p = NULL;
 
+		switch_assert(setup_msg);
 		switch_assert(helper->msrp_session);
 		msrp_session = helper->msrp_session;
 		msrp_session->running = 1;
@@ -1024,14 +1104,15 @@ static void *SWITCH_THREAD_FUNC msrp_worker(switch_thread_t *thread, void *obj)
 
 		helper->msrp_session->csock = csock;
 
-		setup_msg.headers[MSRP_H_CONTENT_TYPE] = "text/plain";
-		setup_msg.payload = NULL;
-		setup_msg.payload_bytes = 0;
+		switch_msrp_msg_add_header(setup_msg, MSRP_H_CONTENT_TYPE, "text/plain");
 
-		if (SWITCH_STATUS_SUCCESS != switch_msrp_send(msrp_session, &setup_msg)) {
+		if (SWITCH_STATUS_SUCCESS != switch_msrp_send(msrp_session, setup_msg)) {
 			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "MSRP initial setup send error!\n");
+			switch_msrp_msg_destroy(&setup_msg);
 			goto end;
 		}
+
+		switch_msrp_msg_destroy(&setup_msg);
 	} else { // server mode
 		switch_socket_opt_set(csock->sock, SWITCH_SO_TCP_NODELAY, TRUE);
 		// switch_socket_opt_set(csock->sock, SWITCH_SO_NONBLOCK, TRUE);
@@ -1096,8 +1177,7 @@ static void *SWITCH_THREAD_FUNC msrp_worker(switch_thread_t *thread, void *obj)
 
 		if (msrp_msg->state == MSRP_ST_DONE && msrp_msg->method == MSRP_METHOD_SEND) {
 			msrp_reply(csock, msrp_msg);
-			if (msrp_msg->headers[MSRP_H_SUCCESS_REPORT] &&
-				!strcmp(msrp_msg->headers[MSRP_H_SUCCESS_REPORT], "yes")) {
+			if (msrp_check_success_report(msrp_msg)) {
 				msrp_report(csock, msrp_msg, "200 OK");
 			}
 		} else if (msrp_msg->state == MSRP_ST_DONE && msrp_msg->method == MSRP_METHOD_AUTH) {
@@ -1107,7 +1187,7 @@ static void *SWITCH_THREAD_FUNC msrp_worker(switch_thread_t *thread, void *obj)
 			goto end;
 		}
 
-		if (msrp_find_uuid(uuid, msrp_msg->headers[MSRP_H_TO_PATH]) != SWITCH_TRUE) {
+		if (msrp_find_uuid(uuid, switch_msrp_msg_get_header(msrp_msg, MSRP_H_TO_PATH)) != SWITCH_TRUE) {
 			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Invalid MSRP to-path!\n");
 		}
 
@@ -1136,8 +1216,7 @@ static void *SWITCH_THREAD_FUNC msrp_worker(switch_thread_t *thread, void *obj)
 	len = MSRP_BUFF_SIZE;
 	p = buf;
 	last_p = buf;
-	switch_safe_free(msrp_msg);
-	msrp_msg = NULL;
+	switch_msrp_msg_destroy(&msrp_msg);
 
 	while (msrp_socket_recv(csock, p, &len) == SWITCH_STATUS_SUCCESS && len > 0) {
 		// switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "read bytes:%" SWITCH_SIZE_T_FMT "\n", len);
@@ -1163,16 +1242,17 @@ static void *SWITCH_THREAD_FUNC msrp_worker(switch_thread_t *thread, void *obj)
 
 		if (msrp_msg->state == MSRP_ST_DONE && msrp_msg->method == MSRP_METHOD_SEND) {
 			msrp_reply(csock, msrp_msg);
-			if (msrp_msg->headers[MSRP_H_SUCCESS_REPORT] &&
-				!strcmp(msrp_msg->headers[MSRP_H_SUCCESS_REPORT], "yes")) {
+
+			if (msrp_check_success_report(msrp_msg)) {
 				msrp_report(csock, msrp_msg, "200 OK");
 			}
+
 			last_p = msrp_msg->last_p;
 			switch_msrp_session_push_msg(msrp_session, msrp_msg);
 			msrp_msg = NULL;
 		} else if (msrp_msg->state == MSRP_ST_DONE) { /* throw away */
 			last_p = msrp_msg->last_p;
-			switch_safe_free(msrp_msg);
+			switch_msrp_msg_destroy(&msrp_msg);
 			msrp_msg = NULL;
 		} else {
 			last_p = msrp_msg->last_p;
@@ -1183,7 +1263,7 @@ static void *SWITCH_THREAD_FUNC msrp_worker(switch_thread_t *thread, void *obj)
 			switch_yield(100000);
 		}
 
-		if (p + len > last_p) {
+		if (p + len > last_p) { // unparsed msg in buffer
 			p += len;
 			if (!msrp_msg) {
 				int rest_len = p - last_p;
@@ -1196,6 +1276,7 @@ static void *SWITCH_THREAD_FUNC msrp_worker(switch_thread_t *thread, void *obj)
 			}
 
 			if (p >= buf + MSRP_BUFF_SIZE) {
+				switch_msrp_msg_t *new_msg;
 
 				if (msrp_msg->state != MSRP_ST_WAIT_BODY || !msrp_msg->range_star) {
 					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "buffer overflow\n");
@@ -1203,47 +1284,23 @@ static void *SWITCH_THREAD_FUNC msrp_worker(switch_thread_t *thread, void *obj)
 					break;
 				}
 
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "buffer overflow\n");
+				switch_assert(p == buf + MSRP_BUFF_SIZE);
+
 				/* buffer full*/
-				msrp_msg->payload_bytes = p - last_p;
-				msrp_msg->byte_end = msrp_msg->byte_start + msrp_msg->payload_bytes - 1;
-				msrp_msg->payload = switch_core_alloc(pool, msrp_msg->payload_bytes);
-				switch_assert(msrp_msg->payload);
-				memcpy(msrp_msg->payload, last_p, msrp_msg->payload_bytes);
-
-				{
-					int i;
-					switch_msrp_msg_t *msrp_msg_old = msrp_msg;
-					msrp_msg = NULL;
-					/*dup msrp_msg*/
-					switch_zmalloc(msrp_msg, sizeof(switch_msrp_msg_t));
-					switch_assert(msrp_msg);
-					msrp_msg->state = msrp_msg_old->state;
-					msrp_msg->byte_start = msrp_msg_old->byte_end + 1;
-					msrp_msg->bytes = msrp_msg_old->bytes;
-					msrp_msg->range_star = msrp_msg_old->range_star;
-					msrp_msg->method = msrp_msg_old->method;
-					msrp_msg->transaction_id = switch_core_strdup(pool, msrp_msg_old->transaction_id);
-					msrp_msg->delimiter = switch_core_strdup(pool, msrp_msg_old->delimiter);
-					msrp_msg->last_header = msrp_msg_old->last_header;
-
-					for (i = 0; i < msrp_msg->last_header; i++) {
-						msrp_msg->headers[i] = switch_core_strdup(pool, msrp_msg_old->headers[i]);
-					}
-
-					msrp_msg_old->state = MSRP_ST_DONE;
-
-					if (msrp_msg_old->headers[MSRP_H_SUCCESS_REPORT] &&
-						!strcmp(msrp_msg_old->headers[MSRP_H_SUCCESS_REPORT], "yes")) {
-						// msrp_report(csock, msrp_msg_old, "200 OK");
-					}
-
-					switch_msrp_session_push_msg(msrp_session, msrp_msg_old);
-				}
+				msrp_msg->payload_bytes = 0;
+				new_msg = switch_msrp_msg_dup(msrp_msg);
+				switch_msrp_msg_set_payload(new_msg, last_p, p - last_p);
+				new_msg->state = MSRP_ST_DONE;
+				switch_msrp_session_push_msg(msrp_session, new_msg);
+				new_msg = NULL;
 
 				p = buf;
 				len = MSRP_BUFF_SIZE;
 				last_p = buf;
 				msrp_msg->last_p = buf;
+				msrp_msg->byte_start = msrp_msg->byte_end = 0;
+				msrp_msg->payload_bytes = 0;
 			}
 		} else { /* all buffer parsed */
 			p = buf;
@@ -1372,8 +1429,10 @@ SWITCH_DECLARE(switch_status_t) switch_msrp_perform_send(switch_msrp_session_t *
 	char transaction_id[MSRP_TRANS_ID_LEN + 1] = { 0 };
 	char buf[MSRP_BUFF_SIZE];
 	switch_size_t len;
-	char *to_path = msrp_msg->headers[MSRP_H_TO_PATH] ? msrp_msg->headers[MSRP_H_TO_PATH] : ms->remote_path;
-	char *from_path = msrp_msg->headers[MSRP_H_FROM_PATH] ? msrp_msg->headers[MSRP_H_FROM_PATH] : ms->local_path;
+	const char *msrp_h_to_path = switch_msrp_msg_get_header(msrp_msg, MSRP_H_TO_PATH);
+	const char *msrp_h_from_path = switch_msrp_msg_get_header(msrp_msg, MSRP_H_FROM_PATH);
+	const char *to_path = msrp_h_to_path ? msrp_h_to_path : ms->remote_path;
+	const char *from_path = msrp_h_from_path ? msrp_h_from_path: ms->local_path;
 
 	if (!ms->running) {
 		switch_log_printf(SWITCH_CHANNEL_ID_LOG, file, func, line, ms->call_id, SWITCH_LOG_WARNING, "MSRP not ready! Discard one message\n");
@@ -1393,7 +1452,7 @@ SWITCH_DECLARE(switch_status_t) switch_msrp_perform_send(switch_msrp_session_t *
 		transaction_id,
 		to_path,
 		from_path,
-		switch_str_nil(msrp_msg->headers[MSRP_H_CONTENT_TYPE]),
+		switch_str_nil(switch_msrp_msg_get_header(msrp_msg, MSRP_H_CONTENT_TYPE)),
 		msrp_msg->payload ? msrp_msg->payload_bytes : 0,
 		msrp_msg->payload ? msrp_msg->payload_bytes : 0,
 		msrp_msg->payload ? "\r\n\r\n" : "");
@@ -1408,14 +1467,59 @@ SWITCH_DECLARE(switch_status_t) switch_msrp_perform_send(switch_msrp_session_t *
 		memcpy(buf + len, msrp_msg->payload, msrp_msg->payload_bytes);
 		len += msrp_msg->payload_bytes;
 	}
+
 	sprintf(buf + len, "\r\n-------%s$\r\n", transaction_id);
 	len += (12 + strlen(transaction_id));
+
 	if (globals.debug) switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "---------------------send: %" SWITCH_SIZE_T_FMT " bytes---------------------\n%s\n", len, buf);
 	return ms->csock ? msrp_socket_send(ms->csock, buf, &len) : SWITCH_STATUS_FALSE;
 }
 
+
+SWITCH_DECLARE(switch_msrp_msg_t *) switch_msrp_msg_create()
+{
+	switch_msrp_msg_t *msg = malloc(sizeof(switch_msrp_msg_t));
+	switch_assert(msg);
+
+	memset(msg, 0, sizeof(switch_msrp_msg_t));
+	switch_event_create(&msg->headers, SWITCH_EVENT_GENERAL);
+	switch_assert(msg->headers);
+
+	return msg;
+}
+
+SWITCH_DECLARE(switch_msrp_msg_t *) switch_msrp_msg_dup(switch_msrp_msg_t *msg)
+{
+	switch_msrp_msg_t *new_msg = malloc(sizeof(switch_msrp_msg_t));
+	switch_assert(new_msg);
+	memset(new_msg, 0, sizeof(switch_msrp_msg_t));
+	switch_event_dup(&new_msg->headers, msg->headers);
+	switch_assert(new_msg->headers);
+
+	new_msg->transaction_id = switch_msrp_msg_get_header(new_msg, MSRP_H_TRASACTION_ID);
+	new_msg->delimiter = switch_msrp_msg_get_header(new_msg, MSRP_H_DELIMITER);
+	new_msg->code_description = switch_msrp_msg_get_header(new_msg, MSRP_H_CODE_DESCRIPTION);
+	new_msg->state = msg->state;
+	new_msg->method = msg->method;
+	new_msg->code_number = msg->code_number;
+	new_msg->payload_bytes = msg->payload_bytes;
+
+	if (msg->payload) {
+		memcpy(new_msg->payload, msg->payload, msg->payload_bytes);
+	}
+
+	return new_msg;
+}
+
 SWITCH_DECLARE(void) switch_msrp_msg_destroy(switch_msrp_msg_t **msg)
 {
+
+	switch_msrp_msg_t *msrp_msg = *msg;
+	if (msrp_msg->headers) {
+		switch_event_destroy(&msrp_msg->headers);
+	}
+
+	switch_safe_free(msrp_msg->payload);
 	*msg = NULL;
 }
 
