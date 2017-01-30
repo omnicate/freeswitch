@@ -82,14 +82,15 @@ typedef struct worker_helper{
 } worker_helper_t;
 
 SWITCH_DECLARE(void) switch_msrp_msg_set_payload(switch_msrp_msg_t *msrp_msg, const char *buf, switch_size_t payload_bytes)
-{	if (!msrp_msg->payload) {
+{
+	if (!msrp_msg->payload) {
 		switch_malloc(msrp_msg->payload, payload_bytes + 1);
 	} else if (msrp_msg->payload_bytes < payload_bytes + 1) {
-		msrp_msg->payload = realloc((void *)msrp_msg->payload, payload_bytes + 1);
+		msrp_msg->payload = realloc(msrp_msg->payload, payload_bytes + 1);
 	}
 
 	switch_assert(msrp_msg->payload);
-	memcpy((void *)msrp_msg->payload, buf, payload_bytes);
+	memcpy(msrp_msg->payload, buf, payload_bytes);
 	*(msrp_msg->payload + payload_bytes) = '\0';
 	msrp_msg->payload_bytes = payload_bytes;
 }
@@ -397,11 +398,6 @@ SWITCH_DECLARE(switch_status_t) switch_msrp_session_destroy(switch_msrp_session_
 switch_status_t switch_msrp_session_push_msg(switch_msrp_session_t *ms, switch_msrp_msg_t *msg)
 {
 	switch_mutex_lock(ms->mutex);
-
-	if (msg->payload && msg->payload_bytes) { /* add NULL byte */
-		*((char *)msg->payload + msg->payload_bytes) = '\0';
-		msg->payload_bytes++;
-	}
 	
 	if (ms->last_msg == NULL) {
 		ms->last_msg = msg;
@@ -410,8 +406,11 @@ switch_status_t switch_msrp_session_push_msg(switch_msrp_session_t *ms, switch_m
 		ms->last_msg->next = msg;
 		ms->last_msg = msg;
 	}
+
 	ms->msrp_msg_count++;
+
 	switch_mutex_unlock(ms->mutex);
+
 	return SWITCH_STATUS_SUCCESS;
 }
 
@@ -1216,7 +1215,7 @@ static void *SWITCH_THREAD_FUNC msrp_worker(switch_thread_t *thread, void *obj)
 	len = MSRP_BUFF_SIZE;
 	p = buf;
 	last_p = buf;
-	switch_msrp_msg_destroy(&msrp_msg);
+	if (msrp_msg) switch_msrp_msg_destroy(&msrp_msg);
 
 	while (msrp_socket_recv(csock, p, &len) == SWITCH_STATUS_SUCCESS && len > 0) {
 		// switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "read bytes:%" SWITCH_SIZE_T_FMT "\n", len);
@@ -1523,38 +1522,28 @@ SWITCH_DECLARE(void) switch_msrp_msg_destroy(switch_msrp_msg_t **msg)
 	*msg = NULL;
 }
 
-#if 0
-SWITCH_STANDARD_APP(msrp_recv_function)
+SWITCH_STANDARD_APP(msrp_recv_file_function)
 {
-	msrp_session_t *msrp_session = NULL;
+	switch_msrp_session_t *msrp_session = NULL;
 	switch_msrp_msg_t *msrp_msg = NULL;
 	switch_channel_t *channel = switch_core_session_get_channel(session);
-	private_object_t *tech_pvt = switch_core_session_get_private(session);
 	switch_memory_pool_t *pool = switch_core_session_get_pool(session);
 	switch_file_t *fd;
 	const char *filename = data;
 
-	if (!tech_pvt) {
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "No tech_pvt!\n");
-		return;
-	}
-
-	if(!tech_pvt->msrp_session) {
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "No msrp_session!\n");
-		return;
-	}
-
 	if (zstr(data)) {
 		filename = switch_channel_get_variable(channel, "sip_msrp_file_name");
+
 		if (zstr(filename)) {
 			switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "No file specified.\n");
 			return;
 		}
+
 		filename = switch_core_session_sprintf(session, "%s%s%s", SWITCH_GLOBAL_dirs.base_dir, SWITCH_PATH_SEPARATOR, filename);
 	}
 
-	if (!(msrp_session = tech_pvt->msrp_session)) {
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Not a msrp session!\n");
+	if (!(msrp_session = switch_core_media_get_msrp_session(session))) {
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Not a MSRP session!\n");
 		return;
 	}
 
@@ -1563,39 +1552,42 @@ SWITCH_STANDARD_APP(msrp_recv_function)
 		return;
 	}
 
-	while (1) {
-		if ((msrp_msg = msrp_session_pop_msg(msrp_session)) == NULL) {
-			if (!switch_channel_ready(channel)) break;
-			switch_yield(10000);
+	switch_channel_set_flag(channel, CF_TEXT_PASSIVE);
+	switch_channel_answer(channel);
+
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "File [%s] Opened\n", filename);
+
+	while (switch_channel_ready(channel)) {
+		if ((msrp_msg = switch_msrp_session_pop_msg(msrp_session)) == NULL) {
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG1, "MSRP message queue size: %d\n", (int)msrp_session->msrp_msg_count);
 			continue;
 		}
 
 		if (msrp_msg->method == MSRP_METHOD_SEND) {
 			switch_size_t bytes = msrp_msg->payload_bytes;
-			char *msg = switch_str_nil(msrp_msg->headers[MSRP_H_MESSAGE_ID]);
-			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "%s %" SWITCH_SIZE_T_FMT "bytes writing\n", msg, bytes);
+			const char *msg = switch_msrp_msg_get_header(msrp_msg, MSRP_H_MESSAGE_ID);
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG1, "%s %" SWITCH_SIZE_T_FMT " bytes writing\n", msg, bytes);
 			switch_file_write(fd, msrp_msg->payload, &bytes);
-			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "%" SWITCH_SIZE_T_FMT "bytes written\n", bytes);
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG1, "%" SWITCH_SIZE_T_FMT " bytes written\n", bytes);
 			if (bytes != msrp_msg->payload_bytes) {
-				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "write fail, bytes lost!\n");
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "write failed, bytes lost!\n");
 			}
 		}
-
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "eat one message, left:%d\n", (int)msrp_session->msrp_msg_count);
 
 		switch_safe_free(msrp_msg);
 	}
 
 	switch_file_close(fd);
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "File closed!\n");
+	switch_channel_clear_flag(channel, CF_TEXT_PASSIVE);
+
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "File closed!\n");
 }
 
-SWITCH_STANDARD_APP(msrp_send_function)
+SWITCH_STANDARD_APP(msrp_send_file_function)
 {
-	msrp_session_t *msrp_session = NULL;
+	switch_msrp_session_t *msrp_session = NULL;
 	switch_msrp_msg_t *msrp_msg = NULL;
 	switch_channel_t *channel = switch_core_session_get_channel(session);
-	private_object_t *tech_pvt = switch_core_session_get_private(session);
 	switch_memory_pool_t *pool = switch_core_session_get_pool(session);
 	switch_file_t *fd;
 	const char *filename = data;
@@ -1603,17 +1595,7 @@ SWITCH_STANDARD_APP(msrp_send_function)
 	char buf[2048];
 	int sanity = 10;
 
-	if (!tech_pvt) {
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "No tech_pvt!\n");
-		return;
-	}
-
-	if(!tech_pvt->msrp_session) {
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "No msrp_session!\n");
-		return;
-	}
-
-	if (!(msrp_session = tech_pvt->msrp_session)) {
+	if (!(msrp_session = switch_core_media_get_msrp_session(session))) {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Not a msrp session!\n");
 		return;
 	}
@@ -1623,39 +1605,36 @@ SWITCH_STANDARD_APP(msrp_send_function)
 		return;
 	}
 
-	switch_assert(pool);
+	msrp_msg = switch_msrp_msg_create();
 
-	switch_zmalloc(msrp_msg, sizeof(switch_msrp_msg_t));
-	switch_assert(msrp_msg);
-
-	msrp_msg->headers[MSRP_H_FROM_PATH] = switch_mprintf("msrp://%s:%d/%s;tcp",
-		tech_pvt->rtpip, tech_pvt->msrp_session->local_port, tech_pvt->msrp_session->call_id);
-	msrp_msg->headers[MSRP_H_TO_PATH] = tech_pvt->msrp_session->remote_path;
+	// switch_msrp_msg_add_header(msrp_msg, MSRP_H_FROM_PATH, "msrp://%s:%d/%s;tcp",
+	// 	globals.ip, msrp_session->local_port, msrp_session->call_id);
+	// switch_msrp_msg_add_header(msrp_msg, MSRP_H_TO_PATH, msrp_session->remote_path);
 	/*TODO: send file in octet or maybe guess mime?*/
-	msrp_msg->headers[MSRP_H_CONTENT_TYPE] = "application/octet-stream";
-	msrp_msg->headers[MSRP_H_CONTENT_TYPE] = "text/plain";
+	// switch_msrp_msg_add_header(msrp_msg, MSRP_H_CONTENT_TYPE, "application/octet-stream");
+	switch_msrp_msg_add_header(msrp_msg, MSRP_H_CONTENT_TYPE, "text/plain");
 
-	msrp_msg->bytes = switch_file_get_size(fd);
+	msrp_msg->payload_bytes = switch_file_get_size(fd);
 	msrp_msg->byte_start = 1;
 
-	while(sanity-- && tech_pvt->msrp_session->socket == NULL) {
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Waiting socket\n");
+	while(sanity-- && !msrp_session->running) {
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Waiting MSRP socket ...\n");
 		switch_yield(1000000);
 	}
 
-	if (tech_pvt->msrp_session->socket == NULL) {
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Waiting for socket timedout, exiting...\n");
+	if (!msrp_session->running) {
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Waiting for MSRP socket timedout, exiting...\n");
 		goto end;
 	}
 
 	while (switch_file_read(fd, buf, &len) == SWITCH_STATUS_SUCCESS &&
-		switch_channel_ready(channel)) {
-		msrp_msg->payload = buf;
-		msrp_msg->byte_end = msrp_msg->byte_start + len - 1;
-		msrp_msg->payload_bytes = len;
+		switch_channel_ready(channel) && len > 0) {
+
+		msrp_msg->byte_end = msrp_msg->byte_start + len + 1;
+		switch_msrp_msg_set_payload(msrp_msg, buf, len);
 
 		/*TODO: send in chunk should ending in + but not $ after delimiter*/
-		msrp_send(tech_pvt->msrp_session->socket, msrp_msg);
+		switch_msrp_send(msrp_session, msrp_msg);
 
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "%ld bytes sent\n", len);
 
@@ -1670,11 +1649,8 @@ SWITCH_STANDARD_APP(msrp_send_function)
 
 end:
 	switch_file_close(fd);
-
-	switch_safe_free(msrp_msg->headers[MSRP_H_FROM_PATH]);
-	switch_safe_free(msrp_msg);
-
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "File sent, closed!\n");
+	switch_msrp_msg_destroy(&msrp_msg);
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "File [%s] sent, closed!\n", filename);
 }
 
 SWITCH_STANDARD_API(uuid_msrp_send_function)
@@ -1682,9 +1658,8 @@ SWITCH_STANDARD_API(uuid_msrp_send_function)
 	char *mycmd = NULL, *argv[3] = { 0 };
 	int argc;
 	switch_core_session_t *msession = NULL;
-	// msrp_session_t *msrp_session = NULL;
+	switch_msrp_session_t *msrp_session = NULL;
 	switch_msrp_msg_t *msrp_msg = NULL;
-	private_object_t *tech_pvt = NULL;
 	switch_memory_pool_t *pool = NULL;
 
 	if (zstr(cmd) || !(mycmd = strdup(cmd))) {
@@ -1702,45 +1677,28 @@ SWITCH_STANDARD_API(uuid_msrp_send_function)
 		return SWITCH_STATUS_SUCCESS;
 	}
 
-	tech_pvt = switch_core_session_get_private(msession);
 	pool = switch_core_session_get_pool(msession);
-	switch_assert(pool);
 
-	if (!tech_pvt) {
-		stream->write_function(stream, "-ERR No tech_pvt.\n");
-		switch_core_session_rwunlock(msession);
-		return SWITCH_STATUS_SUCCESS;
-	}
-
-	if(!tech_pvt->msrp_session) {
+	if (!(msrp_session = switch_core_media_get_msrp_session(msession))) {
 		stream->write_function(stream, "-ERR No msrp_session.\n");
 		switch_core_session_rwunlock(msession);
 		return SWITCH_STATUS_SUCCESS;
 	}
 
-	switch_zmalloc(msrp_msg, sizeof(switch_msrp_msg_t));
-	switch_assert(msrp_msg);
+	msrp_msg = switch_msrp_msg_create();
 
-	msrp_msg->headers[MSRP_H_FROM_PATH] = switch_mprintf("msrp://%s:%d/%s;tcp",
-		tech_pvt->rtpip, tech_pvt->msrp_session->local_port, tech_pvt->msrp_session->call_id);
-	msrp_msg->headers[MSRP_H_TO_PATH] = tech_pvt->msrp_session->remote_path;
-	msrp_msg->headers[MSRP_H_CONTENT_TYPE] = "text/plain";
-	msrp_msg->payload = switch_core_strdup(pool, argv[1]);
-
-	msrp_send(tech_pvt->msrp_session->socket, msrp_msg);
-
-	switch_safe_free(msrp_msg->headers[MSRP_H_FROM_PATH]);
-	switch_safe_free(msrp_msg);
-	stream->write_function(stream, "+OK sent\n");
+	switch_msrp_msg_add_header(msrp_msg, MSRP_H_CONTENT_TYPE, "text/plain");
+	switch_msrp_msg_set_payload(msrp_msg, argv[1], strlen(argv[1]));
+	switch_msrp_send(msrp_session, msrp_msg);
+	switch_msrp_msg_destroy(&msrp_msg);
+	stream->write_function(stream, "+OK message sent\n");
 	switch_core_session_rwunlock(msession);
 	return SWITCH_STATUS_SUCCESS;
+
 error:
 	stream->write_function(stream, "-ERR Usage: uuid_msrp_send <uuid> msg\n");
 	return SWITCH_STATUS_SUCCESS;
 }
-
-#endif
-
 
 #define MSRP_SYNTAX "debug <on|off>|restart"
 SWITCH_STANDARD_API(msrp_api_function)
@@ -1766,20 +1724,19 @@ SWITCH_STANDARD_API(msrp_api_function)
 
 SWITCH_DECLARE(void) switch_msrp_load_apis_and_applications(switch_loadable_module_interface_t **module_interface)
 {
-	// switch_application_interface_t *app_interface;
+	switch_application_interface_t *app_interface;
 	switch_api_interface_t *api_interface;
 
 	SWITCH_ADD_API(api_interface, "msrp", "MSRP Functions", msrp_api_function, "JSON");
 
-#if 0
-	SWITCH_ADD_API(api_interface, "uuid_msrp_send", "send msrp text", uuid_msrp_send_function, "<cmd> <args>");
-	SWITCH_ADD_APP(app_interface, "msrp_recv", "Recv msrp message to file", "Recv msrp message", msrp_recv_function, "<filename>", SAF_NONE);
-	SWITCH_ADD_APP(app_interface, "msrp_send", "Send file via msrp", "Send file via msrp", msrp_send_function, "<filename>", SAF_NONE);
-#endif
+	SWITCH_ADD_API(api_interface, "uuid_msrp_send", "send msrp text", uuid_msrp_send_function, "<msg>");
+	SWITCH_ADD_APP(app_interface, "msrp_recv_file", "Recv msrp message to file", "Recv msrp message", msrp_recv_file_function, "<filename>", SAF_SUPPORT_TEXT_ONLY);
+	SWITCH_ADD_APP(app_interface, "msrp_send_file", "Send file via msrp", "Send file via msrp", msrp_send_file_function, "<filename>", SAF_SUPPORT_TEXT_ONLY);
 
 	switch_console_set_complete("add msrp debug on");
 	switch_console_set_complete("add msrp debug off");
 	switch_console_set_complete("restart");
+	switch_console_set_complete("add uuid_msrp_send ::console::list_uuid");
 }
 
 
