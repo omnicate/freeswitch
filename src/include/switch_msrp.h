@@ -84,6 +84,7 @@ typedef struct msrp_msg_s {
 	switch_size_t byte_end;
 	switch_size_t bytes;
 	switch_size_t payload_bytes;
+	switch_size_t accumulated_bytes;
 	int range_star; /* range-end is '*' */
 	char *last_p;
 	char *payload;
