@@ -969,6 +969,7 @@ static switch_status_t sofia_read_text_frame(switch_core_session_t *session, swi
 		rframe->buflen = sizeof(msrp_session->frame_data);
 
 		if (msrp_msg && msrp_msg->method == MSRP_METHOD_SEND &&
+			msrp_msg->payload &&
 			!switch_stristr("?OTRv3?", msrp_msg->payload) &&
 			!switch_stristr("application/im-iscomposing", msrp_msg->payload) &&
 			msrp_h_content_type &&
@@ -1000,8 +1001,6 @@ static switch_status_t sofia_read_text_frame(switch_core_session_t *session, swi
 
 		return status;
 	}
-
-
 
 	return switch_core_media_read_frame(session, frame, flags, stream_id, SWITCH_MEDIA_TYPE_TEXT);
 }
