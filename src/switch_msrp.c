@@ -506,7 +506,7 @@ static switch_status_t msrp_socket_recv(switch_msrp_client_socket_t *csock, char
 
 static switch_status_t msrp_socket_send(switch_msrp_client_socket_t *csock, char *buf, switch_size_t *len)
 {
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "send: %s\n", buf);
+	// switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "send: %s\n", buf);
 
 	if (csock->secure) {
 		*len = SSL_write(csock->ssl, buf, *len);
