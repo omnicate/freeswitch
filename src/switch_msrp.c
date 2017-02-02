@@ -34,8 +34,7 @@
 #include <switch_msrp.h>
 #include <switch_stun.h>
 
-// #define MSRP_BUFF_SIZE SWITCH_RTP_MAX_BUF_LEN
-#define MSRP_BUFF_SIZE 512
+#define MSRP_BUFF_SIZE SWITCH_RTP_MAX_BUF_LEN
 #define DEBUG_MSRP 0
 #define MSRP_LISTEN_PORT 2855
 #define MSRP_SSL_LISTEN_PORT 2856
