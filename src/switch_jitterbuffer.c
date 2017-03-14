@@ -104,6 +104,9 @@ struct switch_jb_s {
 	switch_channel_t *channel;
 	uint32_t buffer_lag;
 	uint32_t flush;
+	uint32_t last_read_ts; /* in network byte order */
+	uint16_t last_read_seq;/* in network byte order */
+	int ever_read_marker;  /* if ever get a marker  */
 };
 
 
@@ -583,8 +586,31 @@ static inline void add_node(switch_jb_t *jb, switch_rtp_packet_t *packet, switch
 
 	switch_core_inthash_insert(jb->node_hash, node->packet.header.seq, node);
 
-	if (packet->header.m && jb->type == SJB_VIDEO) {
-		jb->complete_frames++;
+	if (jb->type == SJB_VIDEO) {
+		if (packet->header.m) {
+			jb->complete_frames++;
+			jb->ever_read_marker = 1;
+		}
+
+		if (!jb->ever_read_marker) { /* hack for streams never send marker bit */
+			if (jb->last_read_seq && jb->last_read_ts) {
+				if (jb->last_read_ts != node->packet.header.ts && ntohs(jb->last_read_seq) + 1 == ntohs(node->packet.header.seq)) {
+					switch_mutex_lock(jb->mutex);
+					if ((node = switch_core_inthash_find(jb->node_hash, jb->last_read_seq))) {
+						jb_debug(jb, 2, "Found buffered seq: %u, set marker!\n", ntohs(jb->last_read_seq));
+						switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ALERT, "set marker on %u!\n", ntohs(jb->last_read_seq));
+						node->packet.header.m = 1;
+						jb->complete_frames++;
+					} else {
+						jb_debug(jb, 2, "Missing buffered seq: %u\n", ntohs(jb->last_read_seq));
+					}
+					switch_mutex_unlock(jb->mutex);
+				}
+			}
+
+			jb->last_read_ts = node->packet.header.ts;
+			jb->last_read_seq = node->packet.header.seq;
+		}
 	}
 
 	if (jb->node_hash_ts) {
