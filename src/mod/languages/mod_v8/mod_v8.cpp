@@ -120,6 +120,7 @@ typedef struct {
 	switch_event_node_t *event_node;
 	set<FSEventHandler *> *event_handlers;
 	char *xml_handler;
+	v8::Platform *v8platform;
 } mod_v8_global_t;
 
 static mod_v8_global_t globals = { 0 };
@@ -651,12 +652,17 @@ static int v8_parse_and_execute(switch_core_session_t *session, const char *inpu
 							free(path);
 						}
 						// Create a string containing the JavaScript source code.
-						Handle<String> source = String::NewFromUtf8(isolate, script_data);
+						//Handle<String> source = String::NewFromUtf8(isolate, script_data);
+						ScriptCompiler::Source *source = new ScriptCompiler::Source (String::NewFromUtf8(isolate, script_data));
 
 						TryCatch try_catch;
 
 						// Compile the source code.
-						Handle<Script> v8_script = Script::Compile(source, Local<Value>::New(isolate, String::NewFromUtf8(isolate, script_file)));
+						//Handle<Script> v8_script = Script::Compile(source, Local<Value>::New(isolate, String::NewFromUtf8(isolate, script_file)));
+						v8::ScriptCompiler::CompileOptions options = v8::ScriptCompiler::kNoCompileOptions;
+						Handle<v8::Script> v8_script = v8::ScriptCompiler::Compile(context, source, options).ToLocalChecked();
+						//Handle<v8::Script> v8_script = v8::ScriptCompiler::Compile(context, source,/* String::NewFromUtf8(isolate, script_file),*/ v8::ScriptCompiler::kProduceCodeCache).ToLocalChecked();
+						//source->GetCachedData();						
 
 						if (try_catch.HasCaught()) {
 							v8_error(isolate, &try_catch);
@@ -1007,7 +1013,9 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_v8_load)
 		return SWITCH_STATUS_FALSE;
 	}
 
-	JSMain::Initialize();
+	//JSMain::Initialize();
+	globals.v8platform = NULL;
+	JSMain::Initialize(&globals.v8platform);
 
 	/* Make all "built in" modules available to load on demand */
 	v8_mod_init_built_in(FSCoreDB::GetModuleInterface());
@@ -1044,6 +1052,8 @@ SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_v8_shutdown)
 
 	delete globals.event_handlers;
 	switch_mutex_destroy(globals.event_mutex);
+
+	delete globals.v8platform;
 
 	switch_core_hash_destroy(&module_manager.load_hash);
 	switch_core_destroy_memory_pool(&module_manager.pool);

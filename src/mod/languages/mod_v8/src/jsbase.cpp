@@ -102,18 +102,22 @@ void JSBase::AddInstance(Isolate *isolate, const Handle<Object>& handle, const H
 
 	// Make the handle weak
 	obj->persistentHandle->Reset(isolate, handle);
-	obj->persistentHandle->SetWeak<JSBase>(obj, WeakCallback);
+	//obj->persistentHandle->SetWeak<JSBase>(obj, WeakCallback);
+	obj->persistentHandle->SetWeak<JSBase>(obj, WeakCallback, WeakCallbackType::kParameter);
 	obj->persistentHandle->MarkIndependent();
 }
 
-void JSBase::WeakCallback(const WeakCallbackData<Object, JSBase>& data)
+//void JSBase::WeakCallback(const WeakCallbackData<Object, JSBase>& data)
+void JSBase::WeakCallback(const WeakCallbackInfo<JSBase>& data)
 {
-	JSBase *wrap = data.GetParameter();
-	Local<Object> pobj = data.GetValue();
+	//JSBase *wrap = data.GetParameter();
+	JSBase *wrap = (JSBase*)data.GetParameter();
+
+	//Local<Object> pobj = data.GetValue();
 
 	if (wrap->autoDestroy) {
 		HandleScope scope(data.GetIsolate());
-		assert(pobj == *wrap->persistentHandle);
+		//assert(pobj == *wrap->persistentHandle);
 		delete wrap;
 	} else if (!wrap->persistentHandle->IsEmpty()) {
 		wrap->persistentHandle->ClearWeak();
@@ -138,7 +142,8 @@ void JSBase::CreateInstance(const v8::FunctionCallbackInfo<Value>& args)
 		autoDestroy = args[1]->BooleanValue();
 	} else {
 		// Create a new C++ instance
-		Handle<External> ex = Handle<External>::Cast(args.Callee()->GetHiddenValue(String::NewFromUtf8(args.GetIsolate(), "constructor_method")));
+		//Handle<External> ex = Handle<External>::Cast(args.Callee()->GetHiddenValue(String::NewFromUtf8(args.GetIsolate(), "constructor_method")));
+		Handle<External> ex = Handle<External>::Cast(args.Callee()->GetPrivate(args.GetIsolate()->GetCurrentContext(), Private::New(args.GetIsolate(), String::NewFromUtf8(args.GetIsolate(), "constructor_method"))).ToLocalChecked());
 
 		if (ex->Value()) {
 			ConstructorCallback cb = (ConstructorCallback)ex->Value();
@@ -189,7 +194,8 @@ void JSBase::Register(Isolate *isolate, const js_class_definition_t *desc)
 		function->InstanceTemplate()->SetAccessor(String::NewFromUtf8(isolate, desc->properties[i].name), desc->properties[i].get, desc->properties[i].set);
 	}
 
-	function->GetFunction()->SetHiddenValue(String::NewFromUtf8(isolate, "constructor_method"), External::New(isolate, (void *)desc->constructor));
+	//function->GetFunction()->SetHiddenValue(String::NewFromUtf8(isolate, "constructor_method"), External::New(isolate, (void *)desc->constructor));
+	function->GetFunction()->SetPrivate(isolate->GetCurrentContext(), Private::New(isolate, String::NewFromUtf8(isolate, "constructor_method")), External::New(isolate, (void *)desc->constructor));
 
 	// Set the function in the global scope, to make it available
 	global->Set(v8::String::NewFromUtf8(isolate, desc->name), function->GetFunction());

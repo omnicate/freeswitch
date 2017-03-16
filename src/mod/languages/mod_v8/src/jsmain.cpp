@@ -41,6 +41,7 @@
 #include <iostream>
 #include <sstream>
 #include <fstream>
+#include <switch.h>
 
 using namespace std;
 using namespace v8;
@@ -97,8 +98,13 @@ const string JSMain::LoadFileToString(const string& filename)
 
 JSMain::JSMain(void)
 {
-	isolate = Isolate::New();
+	//isolate = Isolate::New();
+	Isolate::CreateParams params;
+	params.array_buffer_allocator =
+		v8::ArrayBuffer::Allocator::NewDefaultAllocator();
+	isolate = Isolate::New(params);
 
+	
 	extenderClasses = new vector<const js_class_definition_t *>();
 	extenderFunctions = new vector<js_function_t *>();
 	extenderInstances = new vector<registered_instance_t*>();
@@ -136,7 +142,8 @@ JSMain::~JSMain(void)
 	extenderClasses->clear();
 	extenderFunctions->clear();
 
-	if (!Isolate::GetCurrent()) {
+	//if (!Isolate::GetCurrent()) {
+	if (isolate) {
 		enteredIsolate = true;
 		isolate->Enter();
 	}
@@ -178,7 +185,7 @@ const string JSMain::GetExceptionInfo(Isolate* isolate, TryCatch* try_catch)
 		ostringstream ss;
 
 		ss << filename_string << ":" << linenum << ": " << exception_string << "\r\n";
-
+		
 		// Print line of source code.
 		String::Utf8Value sourceline(message->GetSourceLine());
 		const char *sourceline_string = js_safe_str(*sourceline);
@@ -216,14 +223,14 @@ void JSMain::Include(const v8::FunctionCallbackInfo<Value>& args)
 		if (js_file.length() > 0) {
 			Handle<String> source = String::NewFromUtf8(args.GetIsolate(), js_file.c_str());
 
-			Handle<Script> script = Script::Compile(source, args[i]);
+			Handle<Script> script = Script::Compile(source, args[i]->ToString());
 
 			args.GetReturnValue().Set(script->Run());
 
 			return;
 		}
 	}
-
+	
 	args.GetReturnValue().Set(Undefined(args.GetIsolate()));
 }
 
@@ -233,7 +240,7 @@ void JSMain::Log(const v8::FunctionCallbackInfo<Value>& args)
 	String::Utf8Value str(args[0]);
 
 	printf("%s\r\n", js_safe_str(*str));
-
+	
 	args.GetReturnValue().Set(Undefined(args.GetIsolate()));
 }
 
@@ -302,7 +309,9 @@ const string JSMain::ExecuteString(const string& scriptData, const string& fileN
 			TryCatch try_catch;
 
 			// Compile the source code.
-			Handle<Script> script = Script::Compile(source, Local<Value>::New(isolate, String::NewFromUtf8(isolate, fileName.c_str())));
+			//Handle<Script> script = Script::Compile(source, Local<Value>::New(isolate, String::NewFromUtf8(isolate, fileName.c_str())));
+			Handle<Script> script = Script::Compile(source, String::NewFromUtf8(isolate, fileName.c_str()));
+
 
 			if (try_catch.HasCaught()) {
 				res = JSMain::GetExceptionInfo(isolate, &try_catch);
@@ -340,7 +349,7 @@ const string JSMain::ExecuteString(const string& scriptData, const string& fileN
 #endif
 	}
 	//isolate->Exit();
-
+	
 	if (resultIsError) {
 		*resultIsError = isError;
 	}
@@ -404,18 +413,24 @@ Isolate *JSMain::GetIsolate()
 	return isolate;
 }
 
-void JSMain::Initialize()
-{
-	V8::InitializeICU(); // Initialize();
+void JSMain::Initialize(v8::Platform **platform)
+{	
+	bool res = V8::InitializeICUDefaultLocation(SWITCH_GLOBAL_dirs.mod_dir);
+	V8::InitializeExternalStartupData(SWITCH_GLOBAL_dirs.mod_dir);
+
+	*platform = v8::platform::CreateDefaultPlatform();
+	V8::InitializePlatform(*platform);
+	V8::Initialize();
 }
 
 void JSMain::Dispose()
 {
 	// Make sure to cleanup properly!
-	V8::LowMemoryNotification();
-	while (!V8::IdleNotification()) {}
+	v8::Isolate::GetCurrent()->LowMemoryNotification();
+	while (!v8::Isolate::GetCurrent()->IdleNotificationDeadline(0.500)) {}	
 
 	V8::Dispose();
+	V8::ShutdownPlatform();
 }
 
 const vector<const js_class_definition_t *>& JSMain::GetExtenderClasses() const
