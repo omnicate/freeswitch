@@ -829,6 +829,7 @@ struct private_object {
 	char *last_sent_callee_id_number;
 	char *proxy_refer_uuid;
 	msg_t *proxy_refer_msg;
+	msg_t *update_msg;
 	switch_mutex_t *flag_mutex;
 	switch_mutex_t *sofia_mutex;
 	switch_payload_t te;
