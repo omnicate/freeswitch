@@ -33,6 +33,7 @@ verto-es6.js:
 	# babel src/es6 > $@
 	npm run build
 	cat src/vendor/*.js >> $@
+	cat $(ES6FILES) | ./jsmin > verto-min.js
 	cat $(ES6FILES) | ./jsmin > ../demo/js/verto-min.js
 	cat $(ES6FILES) | ./jsmin > ../video_demo/js/verto-min.js
 	cat $(ES6FILES) | ./jsmin > ../video_demo-live_canvas/js/verto-min.js

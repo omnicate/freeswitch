@@ -744,6 +744,9 @@
 
 		return $.verto.warnOnUnload;
 	});
+
+	$.FSRTC = new VertoRTC();
+
 })(jQuery);
 
 /* For Emacs:
