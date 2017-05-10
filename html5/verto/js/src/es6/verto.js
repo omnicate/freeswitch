@@ -25,6 +25,7 @@
  *
  * Seven Du <dujinfang@x-y-t.cn>
  * Xueyun Jiang <jiangxueyun@x-y-t.cn>
+ * Stefan Yohansson <sy.fen0@gmail.com>
  *
  * verto.js - Main interface
  *
