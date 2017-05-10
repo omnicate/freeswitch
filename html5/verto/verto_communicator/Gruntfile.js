@@ -126,7 +126,7 @@ module.exports = function (grunt) {
           ],
           port: 9001,
           server: {
-            baseDir: ['../js/src/', './js', '.'],
+            baseDir: ['../js/dist', './js', '.'],
             index: 'src/index.html',
             middleware: [
               require("connect-logger")(),
@@ -155,7 +155,7 @@ module.exports = function (grunt) {
               '/config.json': 'src/config.json',
               '/contributors.txt': 'src/contributors.txt',
               '/bower_components': './bower_components',
-              '/js/src': '../js/src',
+              '/js/dist': '../js/dist',
               '/js': './js'
             }
           }

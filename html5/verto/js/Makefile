@@ -37,6 +37,7 @@ verto-es6.js:
 	cat $(ES6FILES) | ./jsmin > ../demo/js/verto-min.js
 	cat $(ES6FILES) | ./jsmin > ../video_demo/js/verto-min.js
 	cat $(ES6FILES) | ./jsmin > ../video_demo-live_canvas/js/verto-min.js
+	cat $(ES6FILES) | ./jsmin > ../verto_communicator/js/verto-min.js
 	rm verto-es6.js
 
 es6: verto-es6.js
