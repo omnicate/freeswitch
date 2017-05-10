@@ -130,7 +130,7 @@ export default class VertoConfMan {
 		}
 
 		if (this.params.laData.infoChannel) {
-			this.verto.unsubscribe(conf.params.laData.infoChannel);
+			this.verto.unsubscribe(this.params.laData.infoChannel);
 		}
 
 		if (this.params.laData.modChannel) {
