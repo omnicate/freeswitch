@@ -242,23 +242,13 @@ class Verto {
 
 	purge() {
 		var verto = this;
-		var x = 0;
-		var i;
 
-		for (i in verto.dialogs) {
-			if (!x) {
-				console.log("purging dialogs");
-			}
-			x++;
-			verto.dialogs[i].setState(Verto.enum.state.purge);
-		}
+		console.log("purging dialogs");
+		Object.keys(verto.dialogs).forEach(dialog => {
+			verto.dialogs[dialog].setState(Verto.enum.state.purge);
+		});
 
-		for (i in verto.eventSUBS) {
-			if (verto.eventSUBS[i]) {
-				console.log("purging subscription: " + i);
-				delete verto.eventSUBS[i];
-			}
-		}
+		verto.eventSUBS = {};
 	}
 
 	call(method, params, success_cb, error_cb) {
@@ -542,9 +532,7 @@ class Verto {
 					}
 					console.error("UNSUBBED or invalid EVENT " + key + " IGNORED");
 				} else {
-					for (var i in list) {
-						var sub = list[i];
-
+					list.forEach(sub => {
 						if (!sub || !sub.ready) {
 							console.error("invalid EVENT for " + key + " IGNORED");
 						} else if (sub.handler) {
@@ -554,7 +542,7 @@ class Verto {
 						} else {
 							console.log("EVENT:", data.params);
 						}
-					}
+					});
 				}
 
 				break;
@@ -583,12 +571,12 @@ class Verto {
 
 		switch (method) {
 		case "verto.subscribe":
-			for (i in e.unauthorizedChannels) {
-				drop_bad(verto, e.unauthorizedChannels[i]);
-			}
-			for (i in e.subscribedChannels) {
-				mark_ready(verto, e.subscribedChannels[i]);
-			}
+			Object.keys(e.unauthorizedChannels || {}).forEach(channel => {
+				drop_bad(verto, e.unauthorizedChannels[channel]);
+			});
+			Object.keys(e.subscribedChannels || {}).forEach(channel => {
+				mark_ready(verto, e.subscribedChannels[channel]);
+			});
 
 			break;
 		case "verto.unsubscribe":
@@ -615,12 +603,10 @@ class Verto {
 	broadcast(channel, params) {
 		var msg = {
 			eventChannel: channel,
-			data: {}
+			data: {
+				...params
+			}
 		};
-
-		for (var i in params) {
-			msg.data[i] = params[i];
-		}
 
 		this.sendMethod("verto.broadcast", msg);
 	}
@@ -707,9 +693,9 @@ class Verto {
 		if (typeof(channel) === "string") {
 			r.push(verto.do_subscribe(verto, channel, subChannels, params));
 		} else {
-			for (var i in channel) {
+			Object.keys(channel || {}).forEach(c => {
 				r.push(verto.do_subscribe(verto, channel, subChannels, params));
-			}
+			});
 		}
 
 		if (subChannels.length) {
@@ -723,53 +709,47 @@ class Verto {
 	}
 
 	unsubscribe(handle) {
-		var verto = this;
-		var i;
+		const verto = this;
 
 		if (!handle) {
-			for (i in verto.eventSUBS) {
-				if (verto.eventSUBS[i]) {
-					verto.unsubscribe(verto.eventSUBS[i]);
-				}
-			}
+			Object.keys(verto.eventSUBS).forEach(event => {
+				verto.unsubscribe(verto.eventSUBS[event]);
+			});
 		} else {
-			var unsubChannels = {};
-			var sendChannels = [];
-			var channel;
+			const unsubChannels = {};
+			let sendChannels = [];
 
 			if (typeof(handle) == "string") {
 				delete verto.eventSUBS[handle];
 				unsubChannels[handle]++;
 			} else {
-				for (i in handle) {
-					if (typeof(handle[i]) == "string") {
-						channel = handle[i];
+				Object.keys(handle).forEach(channel => {
+					if (typeof(channel) == "string") {
 						delete verto.eventSUBS[channel];
 						unsubChannels[channel]++;
 					} else {
-						var repl = [];
-						channel = handle[i].eventChannel;
+					   const repl = [];
+					   const eventChannel = handle[channel].eventChannel;
 
-						for (var j in verto.eventSUBS[channel]) {
-							if (verto.eventSUBS[channel][j].serno == handle[i].serno) {} else {
-								repl.push(verto.eventSUBS[channel][j]);
-							}
-						}
+					   verto.eventSUBS[eventChannel] = verto.eventSUBS[eventChannel].reduce((acc, ec) => {
+						   if (ec.serno != channel.serno) {
+							   acc.push(ec);
+						   }
+						   return acc;
+					   }, []);
 
-						verto.eventSUBS[channel] = repl;
-
-						if (verto.eventSUBS[channel].length === 0) {
-							delete verto.eventSUBS[channel];
-							unsubChannels[channel]++;
-						}
-					}
-				}
+					   if (verto.eventSUBS[eventChannel].length === 0) {
+						   delete verto.eventSUBS[eventChannel];
+						   unsubChannels[eventChannel]++;
+					   }
+				   }
+				});
 			}
 
-			for (var u in unsubChannels) {
-				console.log("Sending Unsubscribe for: ", u);
-				sendChannels.push(u);
-			}
+			sendChannels = Object.keys(unsubChannels).map(i => {
+				console.log("Sending Unsubscribe for: ", i);
+				return i;
+			});
 
 			if (sendChannels.length) {
 				verto.sendMethod("verto.unsubscribe", {
@@ -820,49 +800,56 @@ class Verto {
 	}
 
 	static checkDevices(runtime) {
-		var self = this;
+		const self = this;
 		console.info("enumerating devices");
-		var aud_in = [], aud_out = [], vid = [];
-		var has_video = 0, has_audio = 0;
-		var Xstream;
 
-		function gotDevices(deviceInfos) {
-			// Handles being called several times to update labels. Preserve values.
-			for (var i = 0; i !== deviceInfos.length; ++i) {
-				var deviceInfo = deviceInfos[i];
-				var text = "";
+		function gotDevices(stream) {
+			return deviceInfos => {
+				// Handles being called several times to update labels. Preserve values.
+				const { aud_in, aud_out, vid } = deviceInfos.reduce((acc, deviceInfo) => {
+					let text = '';
+					const kindMap = {
+						'audioinput': 'aud_in',
+						'audiooutput': 'aud_out',
+						'videoinput': 'vid'
+					};
+					const kindLabel = {
+						'audioinput': 'micrphone',
+						'audiooutput': 'speaker',
+						'videoinput': 'camera'
+					};
 
-				console.log(deviceInfo);
-				console.log(deviceInfo.kind + ": " + deviceInfo.label + " id = " + deviceInfo.deviceId);
+					console.log(deviceInfo);
+					console.log(`${deviceInfo.kind}: ${deviceInfo.label} id = ${deviceInfo.deviceId}`);
 
-				if (deviceInfo.kind === 'audioinput') {
-					text = deviceInfo.label || 'microphone ' + (aud_in.length + 1);
-					aud_in.push({id: deviceInfo.deviceId, kind: "audio_in", label: text});
-				} else if (deviceInfo.kind === 'audiooutput') {
-					text = deviceInfo.label || 'speaker ' + (aud_out.length + 1);
-					aud_out.push({id: deviceInfo.deviceId, kind: "audio_out", label: text});
-				} else if (deviceInfo.kind === 'videoinput') {
-					text = deviceInfo.label || 'camera ' + (vid.length + 1);
-					vid.push({id: deviceInfo.deviceId, kind: "video", label: text});
-				} else {
-					console.log('Some other kind of source/device: ', deviceInfo);
+					if (Object.keys(kindMap).includes(deviceInfo.kind)) {
+						acc[kindMap[deviceInfo.kind]].push({
+							id: deviceInfo.deviceId,
+							kind: kindMap[deviceInfo.kind],
+							label: deviceInfo.label || `${kindLabel[deviceInfo.kind]} ${aud_in.length + 1}`
+						});
+					} else {
+						console.log('Some other kind of source/device: ', deviceInfo);
+					}
+
+					return acc;
+				}, { aud_in: [], aud_out: [], vid: [] });
+
+				self.videoDevices = vid;
+				self.audioInDevices = aud_in;
+				self.audioOutDevices = aud_out;
+
+				console.info("Audio IN Devices", self.audioInDevices);
+				console.info("Audio Out Devices", self.audioOutDevices);
+				console.info("Video Devices", self.videoDevices);
+
+				if (stream) {
+					stream.getTracks().forEach(track => track.stop());
 				}
-			}
 
-			self.videoDevices = vid;
-			self.audioInDevices = aud_in;
-			self.audioOutDevices = aud_out;
-
-			console.info("Audio IN Devices", self.audioInDevices);
-			console.info("Audio Out Devices", self.audioOutDevices);
-			console.info("Video Devices", self.videoDevices);
-
-			if (Xstream) {
-				Xstream.getTracks().forEach(function(track) {track.stop();});
-			}
-
-			if (runtime) {
-				runtime(true);
+				if (runtime) {
+					runtime(true);
+				}
 			}
 		}
 
@@ -871,22 +858,21 @@ class Verto {
 			if (runtime) runtime(false);
 		}
 
-		function checkTypes(devs) {
-			for (var i = 0; i !== devs.length; ++i) {
-
-				if (devs[i].kind === 'audioinput') {
-					has_audio++;
-				} else if (devs[i].kind === 'videoinput') {
-					has_video++;
+		function checkTypes(devices) {
+			const { has_video, has_audio } = devices.reduce((acc, device) => {
+				if (device.kind === 'audioinput') {
+					acc['has_audio']++;
+				} else if (device.kind === 'videoinput') {
+					acc['has_video']++;
 				}
-			}
+				return acc;
+			}, { has_video: 0, has_audio: 0 });
 
 			navigator.getUserMedia({
-					audio: (has_audio > 0 ? true : false),
-					video: (has_video > 0 ? true : false)
+					audio: !!has_audio,
+					video: !!has_video
 				}, function(stream) {
-					Xstream = stream;
-					navigator.mediaDevices.enumerateDevices().then(gotDevices).catch(handleError);
+					navigator.mediaDevices.enumerateDevices().then(gotDevices(stream)).catch(handleError);
 				}, function(err) {
 					console.log("The following error occurred: " + err.name);
 				});
@@ -924,9 +910,10 @@ class Verto {
 	}
 
 	deviceParams(obj) {
-		for (var i in obj) {
-			this.options.deviceParams[i] = obj[i];
-		}
+		this.options.deviceParams = {
+			...this.options.deviceParams,
+			...obj
+		};
 
 		if (obj.useCamera) {
 			var rtc = new VertoRTC();
@@ -935,9 +922,10 @@ class Verto {
 	};
 
 	videoParams(obj) {
-		for (var i in obj) {
-			this.options.videoParams[i] = obj[i];
-		}
+		this.options.videoParams = {
+			...this.options.videoParams,
+			...obj
+		};
 	};
 
 	iceServers(obj) {
@@ -968,9 +956,9 @@ class Verto {
 				dialog.hangup();
 			}
 		} else {
-			for (var i in this.dialogs) {
-				this.dialogs[i].hangup();
-			}
+			Object.keys(this.dialogs).forEach(dialogKey => {
+				this.dialogs[dialogKey].hangup();
+			});
 		}
 	}
 }
