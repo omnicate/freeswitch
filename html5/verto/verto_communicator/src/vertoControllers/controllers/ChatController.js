@@ -129,7 +129,7 @@
       });
 
       $rootScope.$on('members.boot', function(event, members) {
-        $scope.$apply(function() {
+        $scope.$applyAsync(function() {
           clearConferenceChat();
           for (var idx in members) {
             var member = members[idx];
