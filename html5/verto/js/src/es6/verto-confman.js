@@ -60,8 +60,8 @@ export default class VertoConfMan {
 
 		verto.subscribe(this.params.laData.infoChannel, {
 			handler: function(v, e) {
-				if (typeof(this.params.infoCallback) === "function") {
-					this.params.infoCallback(v,e);
+				if (typeof(_this.params.infoCallback) === "function") {
+					_this.params.infoCallback(v,e);
 				}
 			}
 		});
