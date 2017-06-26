@@ -469,7 +469,7 @@ var ttl = 0;
 
 
 export default class VertoRTC {
-	constructor(options) {
+	constructor(options = {}) {
 		this.validRes = [];
 
 		this.options = Object.assign({
