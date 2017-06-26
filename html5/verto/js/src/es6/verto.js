@@ -96,7 +96,6 @@ class Verto {
 			return;
 		}
 
-		const _this = this;
 		this.options = Object.assign({
 			login: null,
 			passwd: null,
@@ -112,17 +111,17 @@ class Verto {
 			ringSleep: 6000,
 			sessid: null,
 			// la: new VertoLiveArray(),
-			onmessage: function(e) {
-				return _this.handleMessage(e.eventData);
+			onmessage: (e) => {
+				return this.handleMessage(e.eventData);
 			},
-			onWSConnect: function(o) {
+			onWSConnect: (o) => {
 				console.log("connected!!!!");
 				o.call('login', {});
 			},
-			onWSLogin: function(verto, success) {
+			onWSLogin: (verto, success) => {
 			},
-			onWSClose: function(verto, success) {
-				_this.purge();
+			onWSClose: (verto, success) => {
+				this.purge();
 			}
 		}, params, callbacks);
 
