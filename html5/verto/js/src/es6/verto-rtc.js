@@ -131,16 +131,12 @@ function onMessage(self, msg) {
 }
 
 function FSRTCattachMediaStream(element, stream) {
-	if (element && element.id && typeof attachMediaStream == 'function') {
-		attachMediaStream(element, stream);
+	if (element.srcObject !== undefined) {
+		element.srcObject = stream;
+	} else if (element.src !== undefined) {
+		element.src = URL.createObjectURL(stream);
 	} else {
-		if (typeof element.srcObject !== 'undefined') {
-			element.srcObject = stream;
-		} else if (typeof element.src !== 'undefined') {
-			element.src = URL.createObjectURL(stream);
-		} else {
-			console.error('Error attaching stream to element.');
-		}
+		console.error('Error attaching stream to element.');
 	}
 }
 // @TODO: exposed because it's used in verto communicator, needs fix
