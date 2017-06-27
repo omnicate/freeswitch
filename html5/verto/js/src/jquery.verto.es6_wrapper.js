@@ -745,7 +745,7 @@
 		return $.verto.warnOnUnload;
 	});
 
-	$.FSRTC = new VertoRTC();
+	$.FSRTC = VertoRTC;
 
 })(jQuery);
 

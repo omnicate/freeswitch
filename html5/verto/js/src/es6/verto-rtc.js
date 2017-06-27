@@ -499,7 +499,7 @@ export default class VertoRTC {
 			offerToReceiveVideo: this.options.useVideo ? true : false,
 		};
 
-		if (this.options.useVideo) {
+		if (this.options.useVideo && !this.options.screenShare) {
 			this.options.useVideo.style.display = 'none';
 		}
 
@@ -726,19 +726,31 @@ export default class VertoRTC {
 		delete this.options.videoParams.vertoBestFrameRate;
 
 		if (this.options.screenShare) {
-			// fix for chrome to work for now, will need to change once we figure out how to do this in a non-mandatory style constraint.
-			var opt = [];
-			opt.push({sourceId: this.options.useCamera});
+			if (!this.options.useCamera && !!navigator.mozGetUserMedia) {
+				//This is an issue, only FireFox needs to ask this additional question if its screen or window we need a better way
+				var dowin = window.confirm("Do you want to share an application window?  If not you can share an entire screen.");
 
-			if (bestFrameRate) {
-				opt.push({minFrameRate: bestFrameRate});
-				opt.push({maxFrameRate: bestFrameRate});
+				video = {
+					width: {min: this.options.videoParams.minWidth, max: this.options.videoParams.maxWidth},
+					height: {min: this.options.videoParams.minHeight, max: this.options.videoParams.maxHeight},
+					mediaSource: dowin ? "window" : "screen"
+				}
+			} else {
+				var opt = [];
+				if (this.options.useCamera) {
+					opt.push({sourceId: this.options.useCamera});
+				}
+
+				if (bestFrameRate) {
+					opt.push({minFrameRate: bestFrameRate});
+					opt.push({maxFrameRate: bestFrameRate});
+				}
+
+				video = {
+					mandatory: this.options.videoParams,
+					optional: opt
+				};
 			}
-
-			video = {
-				mandatory: this.options.videoParams,
-				optional: opt
-			};
 		} else {
 			video = {
 				//mandatory: this.options.videoParams,
@@ -882,6 +894,8 @@ export default class VertoRTC {
 
 			if (screen) {
 				self.constraints.offerToReceiveVideo = false;
+				self.constraints.offerToReceiveAudio = false;
+				self.constraints.offerToSendAudio = false;
 			}
 
 			self.peer = FSRTCPeerConnection({
@@ -947,7 +961,7 @@ export default class VertoRTC {
 		return false;
 	}
 
-	bestResSupported() {
+	static bestResSupported() {
 		var FSRTC = this;
 		var w = 0, h = 0;
 
@@ -961,7 +975,7 @@ export default class VertoRTC {
 		return [w, h];
 	}
 
-	getValidRes(cam, func) {
+	static getValidRes(cam, func) {
 		var FSRTC = this;
 		var used = [];
 		var cached = localStorage.getItem("res_" + cam);
@@ -981,10 +995,10 @@ export default class VertoRTC {
 		FSRTC.validRes = [];
 		resI = 0;
 
-		this.checkRes(cam, func);
+		VertoRTC.checkRes(cam, func);
 	}
 
-	checkPerms(runtime, check_audio, check_video) {
+	static checkPerms(runtime, check_audio, check_video) {
 		var FSRTC = this;
 		getUserMedia({
 			constraints: {
@@ -1002,7 +1016,7 @@ export default class VertoRTC {
 			onerror: function(e) {
 				if (check_video && check_audio) {
 					console.error("error, retesting with audio params only");
-					return FSRTC.checkPerms(runtime, check_audio, false);
+					return VertoRTC.checkPerms(runtime, check_audio, false);
 				}
 
 				console.error("media perm init error");
@@ -1014,7 +1028,7 @@ export default class VertoRTC {
 		})
 	}
 
-	checkRes(cam, func) {
+	static checkRes(cam, func) {
 		var FSRTC = this;
 		if (resI >= resList.length) {
 			var res = {

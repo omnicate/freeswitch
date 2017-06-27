@@ -66,19 +66,18 @@ class Verto {
 
 	static init(obj, runtime) {
 		var self = this;
-		var rtc = new VertoRTC();
 		if (!obj) {
 			obj = {};
 		}
 
 		if (!obj.skipPermCheck && !obj.skipDeviceCheck) {
-			rtc.checkPerms(function(status) {
+			VertoRTC.checkPerms(function(status) {
 			  self.checkDevices(runtime);
 			}, true, true);
 		} else if (obj.skipPermCheck && !obj.skipDeviceCheck) {
 			self.checkDevices(runtime);
 		} else if (!obj.skipPermCheck && obj.skipDeviceCheck) {
-			rtc.checkPerms(function(status) {
+			VertoRTC.checkPerms(function(status) {
 			  runtime(status);
 			}, true, true);
 		} else {
@@ -129,7 +128,7 @@ class Verto {
 		console.info("verto_params", params);
 
 		if (this.options.deviceParams.useCamera) {
-			// $.FSRTC.getValidRes(this.options.deviceParams.useCamera, this.options.deviceParams.onResCheck);
+			VertoRTC.getValidRes(this.options.deviceParams.useCamera, this.options.deviceParams.onResCheck);
 		}
 
 		if (!this.options.deviceParams.useMic) {
@@ -903,15 +902,14 @@ class Verto {
 		}
 	}
 
-	deviceParams(obj) {
+	deviceParams(obj = {}) {
 		this.options.deviceParams = {
 			...this.options.deviceParams,
 			...obj
 		};
 
 		if (obj.useCamera) {
-			var rtc = new VertoRTC();
-			rtc.getValidRes(this.options.deviceParams.useCamera, obj ? obj.onResCheck : undefined);
+			VertoRTC.getValidRes(this.options.deviceParams.useCamera, obj ? obj.onResCheck : undefined);
 		}
 	};
 

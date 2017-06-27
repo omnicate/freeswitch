@@ -43,7 +43,7 @@ export default class VertoDialog {
 			useVideo: verto.options.useVideo,
 			useStereo: verto.options.useStereo,
 			screenShare: false,
-			useCamera: verto.options.deviceParams.useCamera,
+			useCamera: false,
 			useMic: verto.options.deviceParams.useMic,
 			useSpeak: verto.options.deviceParams.useSpeak,
 			tag: verto.options.tag,
@@ -51,6 +51,10 @@ export default class VertoDialog {
 			login: verto.options.login,
 			videoParams: verto.options.videoParams
 		}, params);
+
+		if (!dialog.params.screenShare) {
+			dialog.params.useCamera = verto.options.deviceParams.useCamera;
+		}
 
 		dialog.verto = verto;
 		dialog.direction = direction;
