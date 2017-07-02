@@ -37,6 +37,11 @@
 #include <libavutil/opt.h>
 #include <libavutil/imgutils.h>
 
+
+#if LIBAVCODEC_VERSION_MAJOR > 56
+#define FS_USE_FF_CODEC_SEND_RECEIVE_API
+#endif
+
 #define SLICE_SIZE SWITCH_DEFAULT_VIDEO_SIZE
 #define H264_NALU_BUFFER_SIZE 65536
 #define MAX_NALUS 128
@@ -1163,14 +1168,26 @@ static switch_status_t switch_h264_encode(switch_codec_t *codec, switch_frame_t 
 	/* encode the image */
 	memset(context->nalus, 0, sizeof(context->nalus));
 	context->nalu_current_index = 0;
-GCC_DIAG_OFF(deprecated-declarations)
-	ret = avcodec_encode_video2(avctx, pkt, avframe, got_output);
-GCC_DIAG_ON(deprecated-declarations)
+
+#ifdef FS_USE_FF_CODEC_SEND_RECEIVE_API
+
+	ret = avcodec_send_frame(avctx, avframe);
 
 	if (ret < 0) {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Encoding Error %d\n", ret);
 		goto error;
 	}
+
+	ret = avcodec_receive_packet(avctx, pkt);
+
+	if (ret == 0) {
+		*got_output = 1;
+	} else {
+		*got_output = 0;
+	}
+#else
+	ret = avcodec_encode_video2(avctx, pkt, avframe, got_output);
+#endif
 
 	if (context->need_key_frame) {
 		avframe->pict_type = 0;
@@ -1278,8 +1295,13 @@ static switch_status_t switch_h264_decode(switch_codec_t *codec, switch_frame_t 
 		uint32_t size = switch_buffer_inuse(context->nalu_buffer);
 		AVPacket pkt = { 0 };
 		AVFrame *picture;
+
+#ifdef FS_USE_FF_CODEC_SEND_RECEIVE_API
+		int ret;
+#else
 		int got_picture = 0;
 		int decoded_len;
+#endif
 
 		if (size > 0) {
 			av_init_packet(&pkt);
@@ -1290,13 +1312,23 @@ static switch_status_t switch_h264_decode(switch_codec_t *codec, switch_frame_t 
 			if (!context->decoder_avframe) context->decoder_avframe = av_frame_alloc();
 			picture = context->decoder_avframe;
 			switch_assert(picture);
-GCC_DIAG_OFF(deprecated-declarations)
+
+#ifdef FS_USE_FF_CODEC_SEND_RECEIVE_API
+			ret = avcodec_send_packet(avctx, &pkt);
+			if (ret != 0) {
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Send packet %d\n", ret);
+			}
+
+			ret = avcodec_receive_frame(avctx, picture);
+
+			if (ret == 0) {
+#else
 			decoded_len = avcodec_decode_video2(avctx, picture, &got_picture, &pkt);
-GCC_DIAG_ON(deprecated-declarations)
 
 			// switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "buffer: %d got pic: %d len: %d [%dx%d]\n", size, got_picture, decoded_len, picture->width, picture->height);
-
 			if (got_picture && decoded_len > 0) {
+#endif
+
 				int width = picture->width;
 				int height = picture->height;
 
