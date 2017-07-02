@@ -31,7 +31,6 @@
  */
 
 #include <switch.h>
-GCC_DIAG_OFF(deprecated-declarations)
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libavutil/opt.h>
@@ -40,9 +39,21 @@ GCC_DIAG_OFF(deprecated-declarations)
 #include <libavutil/channel_layout.h>
 #include <libavresample/avresample.h>
 #include <libswscale/swscale.h>
-GCC_DIAG_ON(deprecated-declarations)
 #define SCALE_FLAGS SWS_BICUBIC
 #define DFT_RECORD_OFFSET 0
+
+
+#if LIBAVCODEC_VERSION_MAJOR > 56
+#define FS_USE_FF_CODEC_SEND_RECEIVE_API
+#define FS_USE_PTS_INSTEAD_OF_PKT_PTS
+#endif
+
+#if FF_API_LAVF_AVCTX || LIBAVFORMAT_VERSION_MAJOR > 58
+#define FS_USE_FF_AVFORMAT_CODECPAR
+
+#undef GCC_DIAG_OFF
+#define GCC_DIAG_OFF(x) GCC_DIAG_ON(x)
+#endif
 
 
 #ifndef AVUTIL_TIMESTAMP_H
@@ -55,6 +66,7 @@ GCC_DIAG_ON(deprecated-declarations)
 
 // a wrapper around a single output AVStream
 typedef struct MediaStream {
+	AVCodecContext *avcc;
 	AVStream *st;
 	AVFrame *frame;
 	AVFrame *tmp_frame;
@@ -130,11 +142,6 @@ struct av_file_context {
 };
 
 typedef struct av_file_context av_file_context_t;
-
-
-
-//FUCK
-
 
 /**
  * Fill the provided buffer with a string containing a timestamp
@@ -397,14 +404,23 @@ static switch_status_t add_stream(MediaStream *mst, AVFormatContext *fc, AVCodec
 		return status;
 	}
 	mst->st->id = fc->nb_streams - 1;
-GCC_DIAG_OFF(deprecated-declarations)
+
+#ifdef FS_USE_FF_AVFORMAT_CODECPAR
+	c = mst->avcc = avcodec_alloc_context3(*codec);
+	switch_assert(c);
+    av_codec_set_pkt_timebase(c, mst->st->time_base);
+#else
 	c = mst->st->codec;
-GCC_DIAG_ON(deprecated-declarations)
-	//switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "id:%d den:%d num:%d\n", mst->st->id, mst->st->time_base.den, mst->st->time_base.num);
+	mst->avcc = c;
+#endif
+
+	// switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "id:%d den:%d num:%d codec_id:%d\n", mst->st->id, mst->st->time_base.den, mst->st->time_base.num, codec_id);
 
 	if (threads > 4) {
 		threads = 4;
 	}
+
+	c->codec_type = (*codec)->type;
 
 	switch ((*codec)->type) {
 	case AVMEDIA_TYPE_AUDIO:
@@ -480,16 +496,19 @@ GCC_DIAG_ON(deprecated-declarations)
 			switch (mm->vprofile) {
 			case SWITCH_VIDEO_PROFILE_BASELINE:
 				av_opt_set(c->priv_data, "profile", "baseline", 0);
+				c->profile = FF_PROFILE_H264_BASELINE;
 				c->level = 41;
 				break;
 			case SWITCH_VIDEO_PROFILE_MAIN:
 				av_opt_set(c->priv_data, "profile", "main", 0);
 				av_opt_set(c->priv_data, "level", "5", 0);
+				c->profile = FF_PROFILE_H264_MAIN;
 				c->level = 5;
 				break;
 			case SWITCH_VIDEO_PROFILE_HIGH:
 				av_opt_set(c->priv_data, "profile", "high", 0);
 				av_opt_set(c->priv_data, "level", "52", 0);
+				c->profile = FF_PROFILE_H264_HIGH;
 				c->level = 52;
 				break;
 			}
@@ -531,8 +550,8 @@ GCC_DIAG_ON(deprecated-declarations)
 			av_set_options_string(c, "quality=realtime", "=", ":");
 		}
 
-		c->colorspace = AVCOL_SPC_RGB;
-		c->color_range = AVCOL_RANGE_JPEG;
+		// c->colorspace = AVCOL_SPC_RGB;
+		// c->color_range = AVCOL_RANGE_JPEG;
 
 		if (mm) {
 			if (mm->vb) {
@@ -552,6 +571,10 @@ GCC_DIAG_ON(deprecated-declarations)
 	if (fc->oformat->flags & AVFMT_GLOBALHEADER) {
 		c->flags |= CODEC_FLAG_GLOBAL_HEADER;
 	}
+
+#ifdef FS_USE_FF_AVFORMAT_CODECPAR
+    avcodec_parameters_from_context(mst->st->codecpar, c);
+#endif
 
 	return SWITCH_STATUS_SUCCESS;
 }
@@ -581,10 +604,13 @@ static AVFrame *alloc_picture(enum AVPixelFormat pix_fmt, int width, int height)
 static switch_status_t open_video(AVFormatContext *fc, AVCodec *codec, MediaStream *mst)
 {
 	int ret;
-GCC_DIAG_OFF(deprecated-declarations)
-	AVCodecContext *c = mst->st->codec;
-GCC_DIAG_ON(deprecated-declarations)
 	switch_status_t status = SWITCH_STATUS_FALSE;
+
+#ifdef FS_USE_FF_AVFORMAT_CODECPAR
+	AVCodecContext *c = mst->avcc;
+#else
+	AVCodecContext *c = mst->st->codec;
+#endif
 
 	/* open the codec */
 	ret = avcodec_open2(c, codec, NULL);
@@ -609,9 +635,13 @@ static switch_status_t open_audio(AVFormatContext *fc, AVCodec *codec, MediaStre
 	AVCodecContext *c;
 	int ret;
 	switch_status_t status = SWITCH_STATUS_FALSE;
-GCC_DIAG_OFF(deprecated-declarations)
+
+#ifdef FS_USE_FF_AVFORMAT_CODECPAR
+	c = mst->avcc;
+#else
 	c = mst->st->codec;
-GCC_DIAG_ON(deprecated-declarations)
+#endif
+
 	ret = avcodec_open2(c, codec, NULL);
 
 	if (ret == AVERROR_EXPERIMENTAL) {
@@ -847,20 +877,36 @@ static void *SWITCH_THREAD_FUNC video_thread_run(switch_thread_t *thread, void *
 		//switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "pts: %ld\n", context->eh.video_st->frame->pts);
 
 		/* encode the image */
-GCC_DIAG_OFF(deprecated-declarations)
+
+#ifdef FS_USE_FF_CODEC_SEND_RECEIVE_API
+	ret = avcodec_send_frame(context->eh.video_st->avcc, context->eh.video_st->frame);
+
+	if (ret < 0) {
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Encoding Error %d\n", ret);
+		continue;
+	}
+
+	ret = avcodec_receive_packet(context->eh.video_st->avcc, &pkt);
+
+	if (ret == 0) {
+		got_packet = 1;
+	} else {
+		got_packet = 0;
+	}
+
+#else
 		ret = avcodec_encode_video2(context->eh.video_st->st->codec, &pkt, context->eh.video_st->frame, &got_packet);
-GCC_DIAG_ON(deprecated-declarations)
- 
+
 		if (ret < 0) {
 			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Encoding Error %d\n", ret);
 			continue;
 		}
-
+#endif
 		if (got_packet) {
 			switch_mutex_lock(context->eh.mutex);
-GCC_DIAG_OFF(deprecated-declarations)
-			ret = write_frame(context->eh.fc, &context->eh.video_st->st->codec->time_base, context->eh.video_st->st, &pkt);
-GCC_DIAG_ON(deprecated-declarations) 
+
+			ret = write_frame(context->eh.fc, &context->eh.video_st->st->time_base, context->eh.video_st->st, &pkt);
+
 			switch_mutex_unlock(context->eh.mutex);
 			av_packet_unref(&pkt);
 		}
@@ -878,17 +924,30 @@ GCC_DIAG_ON(deprecated-declarations)
 
 		av_init_packet(&pkt);
 
-GCC_DIAG_OFF(deprecated-declarations)		
-		ret = avcodec_encode_video2(context->eh.video_st->st->codec, &pkt, NULL, &got_packet);
-GCC_DIAG_ON(deprecated-declarations)
+#ifdef FS_USE_FF_CODEC_SEND_RECEIVE_API
+		ret = avcodec_receive_packet(context->eh.video_st->avcc, &pkt);
 
-		if (ret < 0) {
+		if (ret == 0) {
+			got_packet = 1;
+		} else if (ret == AVERROR(EAGAIN)) {
+			ret = avcodec_send_frame(context->eh.video_st->avcc, NULL);
+
+			if (ret < 0) {
+				// switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Encoding Error %d\n", ret);
+				break;
+			}
+		} else {
 			break;
-		} else if (got_packet) {
+		}
+
+#else
+		ret = avcodec_encode_video2(context->eh.video_st->st->codec, &pkt, NULL, &got_packet);
+		if (ret < 0) break;
+#endif
+
+		if (got_packet) {
 			switch_mutex_lock(context->eh.mutex);
-GCC_DIAG_OFF(deprecated-declarations)
-			ret = write_frame(context->eh.fc, &context->eh.video_st->st->codec->time_base, context->eh.video_st->st, &pkt);
-GCC_DIAG_ON(deprecated-declarations)
+			ret = write_frame(context->eh.fc, &context->eh.video_st->st->time_base, context->eh.video_st->st, &pkt);
 			switch_mutex_unlock(context->eh.mutex);
 			av_packet_unref(&pkt);
 			if (ret < 0) break;
@@ -909,7 +968,7 @@ GCC_DIAG_ON(deprecated-declarations)
 }
 
 
-static switch_status_t video_read_callback(switch_core_session_t *session, switch_frame_t *frame, void *user_data)
+static av_unused switch_status_t video_read_callback(switch_core_session_t *session, switch_frame_t *frame, void *user_data)
 {
 	record_helper_t *eh = user_data;
 	switch_image_t *img = NULL;
@@ -929,13 +988,18 @@ static void close_stream(AVFormatContext *fc, MediaStream *mst)
 	if (mst->frame) av_frame_free(&mst->frame);
 	if (mst->tmp_frame) av_frame_free(&mst->tmp_frame);
 
-GCC_DIAG_OFF(deprecated-declarations)
+#ifdef FS_USE_FF_AVFORMAT_CODECPAR
+	if (mst->avcc) {
+		avcodec_free_context(&mst->avcc);
+	}
+#else
 	if (mst->st && mst->st->codec) {
 		avcodec_close(mst->st->codec);
 	}
-GCC_DIAG_ON(deprecated-declarations)
+#endif
 }
 
+#if 0
 SWITCH_STANDARD_APP(record_av_function)
 {
 	switch_status_t status;
@@ -1048,9 +1112,13 @@ SWITCH_STANDARD_APP(record_av_function)
 		video_st.next_pts = switch_time_now() / 1000;
 		if (add_stream(&video_st, fc, &video_codec, fmt->video_codec, NULL) == SWITCH_STATUS_SUCCESS &&
 			open_video(fc, video_codec, &video_st) == SWITCH_STATUS_SUCCESS) {
-GCC_DIAG_OFF(deprecated-declarations)
+
+#ifdef FS_USE_FF_AVFORMAT_CODECPAR
+			avcodec_string(codec_str, sizeof(codec_str), video_st.avcc, 1);
+#else
 			avcodec_string(codec_str, sizeof(codec_str), video_st.st->codec, 1);
-GCC_DIAG_ON(deprecated-declarations)
+#endif
+
 			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "use video codec implementation %s\n", codec_str);
 			has_video = 1;
 		}
@@ -1152,9 +1220,13 @@ GCC_DIAG_ON(deprecated-declarations)
 		if (mutex) switch_mutex_lock(mutex);
 
 		switch_buffer_write(buffer, read_frame->data, read_frame->datalen);
-GCC_DIAG_OFF(deprecated-declarations)
+
+#ifdef FS_USE_FF_AVFORMAT_CODECPAR
+		bytes = audio_st.frame->nb_samples * 2 * audio_st.st->codecpar->channels;
+#else
 		bytes = audio_st.frame->nb_samples * 2 * audio_st.st->codec->channels;
-GCC_DIAG_ON(deprecated-declarations)
+#endif
+
 		inuse = switch_buffer_inuse(buffer);
 
 		while (inuse >= bytes) {
@@ -1186,18 +1258,51 @@ GCC_DIAG_ON(deprecated-declarations)
 				audio_st.tmp_frame->pts = audio_st.next_pts;
 				audio_st.next_pts += audio_st.frame->nb_samples;
 
-GCC_DIAG_OFF(deprecated-declarations)
+#ifdef FS_USE_FF_AVFORMAT_CODECPAR
+				ret = avcodec_send_frame(audio_st.avcc, audio_st.tmp_frame);
+
+				if (ret != 0) {
+					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error send frame\n");
+					continue;
+				}
+
+				ret = avcodec_receive_packet(audio_st.avcc, &pkt);
+
+				if (ret == 0) {
+					got_packet = 1;
+				} else {
+					got_packet = 0;
+				}
+
+#else
 				ret = avcodec_encode_audio2(audio_st.st->codec, &pkt, audio_st.tmp_frame, &got_packet);
-GCC_DIAG_ON(deprecated-declarations)
+#endif
+
 			} else {
 				av_frame_make_writable(audio_st.frame);
 				switch_buffer_read(buffer, audio_st.frame->data[0], bytes);
 				audio_st.frame->pts = audio_st.next_pts;
 				audio_st.next_pts  += audio_st.frame->nb_samples;
 
-GCC_DIAG_OFF(deprecated-declarations)
+#ifdef FS_USE_FF_AVFORMAT_CODECPAR
+				ret = avcodec_send_frame(audio_st.avcc, audio_st.tmp_frame);
+
+				if (ret != 0) {
+					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error send frame\n");
+					continue;
+				}
+
+				ret = avcodec_receive_packet(audio_st.avcc, &pkt);
+
+				if (ret == 0) {
+					got_packet = 1;
+				} else {
+					got_packet = 0;
+				}
+
+#else
 				ret = avcodec_encode_audio2(audio_st.st->codec, &pkt, audio_st.frame, &got_packet);
-GCC_DIAG_ON(deprecated-declarations)
+#endif
 			}
 
 			if (ret < 0) {
@@ -1208,9 +1313,8 @@ GCC_DIAG_ON(deprecated-declarations)
 
 			if (got_packet) {
 				// switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "got pkt: %d\n", pkt.size);
-GCC_DIAG_OFF(deprecated-declarations)
-				ret = write_frame(fc, &audio_st.st->codec->time_base, audio_st.st, &pkt);
-GCC_DIAG_ON(deprecated-declarations)
+				ret = write_frame(fc, &audio_st.st->time_base, audio_st.st, &pkt);
+
 				if (ret < 0) {
 					switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error while writing audio frame: %s\n", get_error_text(ret));
 					goto end;
@@ -1238,9 +1342,24 @@ GCC_DIAG_ON(deprecated-declarations)
 
 	again:
 		av_init_packet(&pkt);
-GCC_DIAG_OFF(deprecated-declarations)
+
+#ifdef FS_USE_FF_AVFORMAT_CODECPAR
+		ret = avcodec_send_frame(video_st.avcc, NULL);
+
+		if (ret != 0) {
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error send frame\n");
+		} else {
+			ret = avcodec_receive_packet(video_st.avcc, &pkt);
+
+			if (ret == 0) {
+				got_packet = 1;
+			} else {
+				got_packet = 0;
+			}
+		}
+#else
 		ret = avcodec_encode_video2(video_st.st->codec, &pkt, NULL, &got_packet);
-GCC_DIAG_ON(deprecated-declarations)
+#endif
 
 		if (ret < 0) {
 			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Encoding Error %d\n", ret);
@@ -1248,9 +1367,7 @@ GCC_DIAG_ON(deprecated-declarations)
 		}
 
 		if (got_packet) {
-GCC_DIAG_OFF(deprecated-declarations)
-			ret = write_frame(fc, &video_st.st->codec->time_base, video_st.st, &pkt);
-GCC_DIAG_ON(deprecated-declarations)
+			ret = write_frame(fc, &video_st.st->time_base, video_st.st, &pkt);
 			av_packet_unref(&pkt);
 			goto again;
 		}
@@ -1293,6 +1410,8 @@ GCC_DIAG_ON(deprecated-declarations)
 	switch_core_session_video_reset(session);
 }
 /* end of App interface */
+
+#endif
 
 
 /* API interface */
@@ -1404,12 +1523,12 @@ static void mod_avformat_destroy_output_context(av_file_context_t *context)
 		avresample_free(&context->audio_st.resample_ctx);
 	}
 
-	avformat_close_input(&context->fc);
+	// avformat_close_input(&context->fc);
 
 	context->fc = NULL;
 	context->audio_st.st = NULL;
 	context->video_st.st = NULL;
-	
+
 }
 
 static switch_status_t open_input_file(av_file_context_t *context, switch_file_handle_t *handle, const char *filename)
@@ -1444,12 +1563,34 @@ static switch_status_t open_input_file(av_file_context_t *context, switch_file_h
 	av_dump_format(context->fc, 0, filename, 0);
 
 	for (i = 0; i< context->fc->nb_streams; i++) {
-GCC_DIAG_OFF(deprecated-declarations)
+
+#ifdef FS_USE_FF_AVFORMAT_CODECPAR
+		if (context->fc->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO && !context->has_audio) {
+			context->audio_st.avcc = avcodec_alloc_context3(NULL);
+			switch_assert(context->audio_st.avcc);
+
+			if (avcodec_parameters_to_context(context->audio_st.avcc, context->fc->streams[i]->codecpar) < 0) {
+				switch_goto_status(SWITCH_STATUS_FALSE, err);
+			}
+			av_codec_set_pkt_timebase(context->audio_st.avcc, context->fc->streams[i]->time_base);
+#else
 		if (context->fc->streams[i]->codec->codec_type == AVMEDIA_TYPE_AUDIO && !context->has_audio) {
+#endif
 			context->audio_st.st = context->fc->streams[i];
 			context->has_audio = 1;
+
+#ifdef FS_USE_FF_AVFORMAT_CODECPAR
+		} else if (context->fc->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO && !context->has_video) {
+			context->video_st.avcc = avcodec_alloc_context3(NULL);
+			switch_assert(context->video_st.avcc);
+		    if (avcodec_parameters_to_context(context->video_st.avcc, context->fc->streams[i]->codecpar) < 0) {
+				switch_goto_status(SWITCH_STATUS_FALSE, err);
+		    }
+			av_codec_set_pkt_timebase(context->video_st.avcc, context->fc->streams[i]->time_base);
+#else
 		} else if (context->fc->streams[i]->codec->codec_type == AVMEDIA_TYPE_VIDEO && !context->has_video) {
-GCC_DIAG_ON(deprecated-declarations)
+#endif
+
 			context->video_st.st = context->fc->streams[i];
 			if (switch_test_flag(handle, SWITCH_FILE_FLAG_VIDEO)) {
 				context->has_video = 1;
@@ -1466,7 +1607,28 @@ GCC_DIAG_ON(deprecated-declarations)
 	}
 
 	/** Find a decoder for the audio stream. */
-GCC_DIAG_OFF(deprecated-declarations)
+
+#ifdef FS_USE_FF_AVFORMAT_CODECPAR
+	if (context->has_audio && !(audio_codec = avcodec_find_decoder(context->audio_st.st->codecpar->codec_id))) {
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Could not find input codec %d\n", context->audio_st.st->codecpar->codec_id);
+		context->has_audio = 0;
+	}
+
+	if (context->has_video && !(video_codec = avcodec_find_decoder(context->video_st.st->codecpar->codec_id))) {
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Could not find input codec %d\n", context->video_st.st->codecpar->codec_id);
+		context->has_video = 0;
+	}
+
+	if (context->has_audio && (error = avcodec_open2(context->audio_st.avcc, audio_codec, NULL)) < 0) {
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Could not open input codec (error '%s')\n", get_error_text(error));
+		context->has_audio = 0;
+	}
+
+	if (context->has_video && (error = avcodec_open2(context->video_st.avcc, video_codec, NULL)) < 0) {
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Could not open input codec (error '%s')\n", get_error_text(error));
+		context->has_video = 0;
+	}
+#else
 	if (context->has_audio && !(audio_codec = avcodec_find_decoder(context->audio_st.st->codec->codec_id))) {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "Could not find input codec %d\n", context->audio_st.st->codec->codec_id);
 		context->has_audio = 0;
@@ -1486,7 +1648,7 @@ GCC_DIAG_OFF(deprecated-declarations)
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Could not open input codec (error '%s')\n", get_error_text(error));
 		context->has_video = 0;
 	}
-GCC_DIAG_ON(deprecated-declarations)
+#endif
 
 	// printf("has audio:%d has_video:%d\n", context->has_audio, context->has_video);
 
@@ -1496,9 +1658,12 @@ GCC_DIAG_ON(deprecated-declarations)
 	}
 
 	if (context->has_audio) {
-GCC_DIAG_OFF(deprecated-declarations)
+
+#ifdef FS_USE_FF_AVFORMAT_CODECPAR
+		AVCodecContext *c = context->audio_st.avcc;
+#else
 		AVCodecContext *c = context->audio_st.st->codec;
-GCC_DIAG_ON(deprecated-declarations)
+#endif
 
 		context->audio_st.frame = av_frame_alloc();
 		switch_assert(context->audio_st.frame);
@@ -1507,9 +1672,7 @@ GCC_DIAG_ON(deprecated-declarations)
 		context->audio_st.channels = handle->channels;
 		context->audio_st.sample_rate = handle->samplerate;
 
-GCC_DIAG_OFF(deprecated-declarations)
-		if (context->audio_st.st->codec->sample_fmt != AV_SAMPLE_FMT_S16) {
-GCC_DIAG_ON(deprecated-declarations)
+		if (c->sample_fmt != AV_SAMPLE_FMT_S16) {
 			AVAudioResampleContext *resample_ctx = avresample_alloc_context();
 
 			if (resample_ctx) {
@@ -1542,8 +1705,12 @@ GCC_DIAG_ON(deprecated-declarations)
 	if (!context->has_video) {
 		switch_clear_flag(handle, SWITCH_FILE_FLAG_VIDEO);
 	} else {
-GCC_DIAG_OFF(deprecated-declarations)
+
+#ifdef FS_USE_FF_AVFORMAT_CODECPAR
+		switch (context->video_st.avcc->pix_fmt) {
+#else
 		switch (context->video_st.st->codec->pix_fmt) {
+#endif
 		case AV_PIX_FMT_YUVA420P:
 		case AV_PIX_FMT_RGBA:
 		case AV_PIX_FMT_ARGB:
@@ -1554,7 +1721,6 @@ GCC_DIAG_OFF(deprecated-declarations)
 			context->handle->mm.fmt = SWITCH_IMG_FMT_I420;
 			break;
 		}
-GCC_DIAG_ON(deprecated-declarations)
 		
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, 
 						  "Opening file in mode: %s\n", context->handle->mm.fmt == SWITCH_IMG_FMT_ARGB ? "ARGB" : "I420");
@@ -1609,13 +1775,16 @@ static void *SWITCH_THREAD_FUNC file_read_thread_run(switch_thread_t *thread, vo
 
 			if (context->has_video) {
 				void *pop;
-				
+
 				context->video_st.next_pts = 0;
 				context->video_start_time = 0;
-GCC_DIAG_OFF(deprecated-declarations)
+
+#ifdef FS_USE_FF_AVFORMAT_CODECPAR
+				avcodec_flush_buffers(context->video_st.avcc);
+#else
 				avcodec_flush_buffers(context->video_st.st->codec);
-GCC_DIAG_ON(deprecated-declarations)
-				
+#endif
+
 				while(switch_queue_trypop(context->eh.video_queue, &pop) == SWITCH_STATUS_SUCCESS) {
 					switch_image_t *img;
 					if (!pop) break;
@@ -1669,9 +1838,23 @@ again:
 			vframe = av_frame_alloc();
 			switch_assert(vframe);
 
-GCC_DIAG_OFF(deprecated-declarations)
+#ifdef FS_USE_FF_CODEC_SEND_RECEIVE_API
+			error = avcodec_send_packet(context->video_st.avcc, &pkt);
+			if (error != 0) {
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Send packet %d\n", error);
+			}
+
+			error = avcodec_receive_frame(context->video_st.avcc, vframe);
+
+			if (error == 0) {
+				got_data = 1;
+			} else if (error == AVERROR(EAGAIN)) {
+				got_data = 0; // try again;
+			} else {
+#else
 			if ((error = avcodec_decode_video2(context->video_st.st->codec, vframe, &got_data, &pkt)) < 0) {
-GCC_DIAG_ON(deprecated-declarations)
+#endif
+
 				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Could not decode frame (error '%s')\n", get_error_text(error));
 				av_packet_unref(&pkt);
 				av_frame_free(&vframe);
@@ -1721,10 +1904,11 @@ GCC_DIAG_ON(deprecated-declarations)
 					vframe->width = frm->width;
 					vframe->height = frm->height;
 					vframe->pts = frm->pts;
-GCC_DIAG_OFF(deprecated-declarations)
-					vframe->pkt_pts = frm->pkt_pts;
-GCC_DIAG_ON(deprecated-declarations)
+#ifdef FS_USE_PTS_INSTEAD_OF_PKT_PTS
+					vframe->pts = frm->pts;
+#else
 					vframe->pkt_dts = frm->pkt_dts;
+#endif
 					ret = av_frame_get_buffer(vframe, 32);
 
 					switch_assert(ret >= 0);
@@ -1752,9 +1936,12 @@ GCC_DIAG_ON(deprecated-declarations)
 						int diff;
 						int sleep = 66000;
 #endif
-GCC_DIAG_OFF(deprecated-declarations)
+
+#ifdef FS_USE_PTS_INSTEAD_OF_PKT_PTS
+						*pts = vframe->pts;
+#else
 						*pts = vframe->pkt_pts;
-GCC_DIAG_ON(deprecated-declarations)
+#endif
 						avframe2img(vframe, img);
 						img->user_priv = pts;
 
@@ -1791,9 +1978,23 @@ GCC_DIAG_ON(deprecated-declarations)
 		} else if (context->has_audio && pkt.stream_index == context->audio_st.st->index) {
 			AVFrame in_frame = { { 0 } };
 
-GCC_DIAG_OFF(deprecated-declarations)
+#ifdef FS_USE_FF_CODEC_SEND_RECEIVE_API
+			error = avcodec_send_packet(context->audio_st.avcc, &pkt);
+			if (error != 0) {
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Send packet %d\n", error);
+			}
+
+			error = avcodec_receive_frame(context->audio_st.avcc, &in_frame);
+
+			if (error == 0) {
+				got_data = 1;
+			} else if (error == AVERROR(EAGAIN)) {
+				got_data = 0;
+			} else {
+#else
 			if ((error = avcodec_decode_audio4(context->audio_st.st->codec, &in_frame, &got_data, &pkt)) < 0) {
-GCC_DIAG_ON(deprecated-declarations)
+#endif
+
 				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Could not decode frame (error '%s')\n", get_error_text(error));
 				av_packet_unref(&pkt);
 				break;
@@ -1951,7 +2152,7 @@ static switch_status_t av_file_open(switch_file_handle_t *handle, const char *pa
 	if ((tmp = switch_event_get_header(handle->params, "av_audio_codec"))) {
 		if ((context->audio_codec = avcodec_find_encoder_by_name(tmp))) {
 			fmt->audio_codec = context->audio_codec->id;
-			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "specified audio codec %s %s [%s]\n", 
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "specified audio codec %s %s [%s]\n",
 							  tmp, context->audio_codec->name, context->audio_codec->long_name);
 		}
 	}
@@ -2138,10 +2339,11 @@ static switch_status_t av_file_write(switch_file_handle_t *handle, void *data, s
 		switch_buffer_write(context->audio_buffer, data, datalen);
 	}
 
-GCC_DIAG_OFF(deprecated-declarations)
-	bytes = context->audio_st.frame->nb_samples * 2 * context->audio_st.st->codec->channels;
-GCC_DIAG_ON(deprecated-declarations)
-
+#ifdef FS_USE_FF_AVFORMAT_CODECPAR
+	bytes = context->audio_st.frame->nb_samples * 2 * context->audio_st.avcc->channels;
+#else
+	bytes = context->audio_st.frame->nb_samples * 2 * context->audio_st.audio_st.codec->channels;
+#endif
 
 	//inuse = switch_buffer_inuse(context->audio_buffer);
 	//switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "inuse: %d samples: %d bytes: %d\n", inuse, context->audio_st.frame->nb_samples, bytes);
@@ -2187,9 +2389,24 @@ GCC_DIAG_ON(deprecated-declarations)
 
 			//context->audio_st.tmp_frame->pts = context->audio_st.next_pts;
 			//context->audio_st.next_pts += context->audio_st.frame->nb_samples;
-GCC_DIAG_OFF(deprecated-declarations)
+#ifdef FS_USE_FF_CODEC_SEND_RECEIVE_API
+			ret = avcodec_send_frame(context->audio_st.avcc, context->audio_st.tmp_frame);
+
+			if (ret != 0) {
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error send frame %d\n", ret);
+				continue;
+			}
+
+			ret = avcodec_receive_packet(context->audio_st.avcc, &pkt);
+
+			if (ret == 0) {
+				got_packet = 1;
+			} else {
+				got_packet = 0;
+			}
+#else
 			ret = avcodec_encode_audio2(context->audio_st.st->codec, &pkt, context->audio_st.tmp_frame, &got_packet);
-GCC_DIAG_ON(deprecated-declarations)
+#endif
 		} else {
 			av_frame_make_writable(context->audio_st.frame);
 			switch_buffer_read(context->audio_buffer, context->audio_st.frame->data[0], bytes);
@@ -2199,9 +2416,27 @@ GCC_DIAG_ON(deprecated-declarations)
 			//context->audio_st.frame->pts = context->audio_st.next_pts;
 			//context->audio_st.next_pts  += context->audio_st.frame->nb_samples;
 
-GCC_DIAG_OFF(deprecated-declarations)
+#ifdef FS_USE_FF_CODEC_SEND_RECEIVE_API
+			ret = avcodec_send_frame(context->audio_st.avcc, context->audio_st.frame);
+
+			if (ret != 0) {
+				switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error send frame\n");
+				continue;
+			}
+
+			ret = avcodec_receive_packet(context->audio_st.avcc, &pkt);
+
+			if (ret == 0) {
+				got_packet = 1;
+			} else if (ret == (EAGAIN)) {
+				got_packet = 0;
+				ret = 0;
+			} else {
+				got_packet = 0;
+			}
+#else
 			ret = avcodec_encode_audio2(context->audio_st.st->codec, &pkt, context->audio_st.frame, &got_packet);
-GCC_DIAG_ON(deprecated-declarations)
+#endif
 		}
 
 		if (ret < 0) {
@@ -2211,9 +2446,9 @@ GCC_DIAG_ON(deprecated-declarations)
 		
 		if (got_packet) {
 			if (context->mutex) switch_mutex_lock(context->mutex);
-GCC_DIAG_OFF(deprecated-declarations)
-			ret = write_frame(context->fc, &context->audio_st.st->codec->time_base, context->audio_st.st, &pkt);
-GCC_DIAG_ON(deprecated-declarations)
+
+			ret = write_frame(context->fc, &context->audio_st.st->time_base, context->audio_st.st, &pkt);
+
 			if (context->mutex) switch_mutex_unlock(context->mutex);
 			if (ret < 0) {
 				context->errs++;
@@ -2325,7 +2560,7 @@ static switch_status_t av_file_close(switch_file_handle_t *handle)
 		if (context->has_video && switch_test_flag(handle, SWITCH_FILE_FLAG_WRITE)) {
 			av_write_trailer(context->fc);
 		}
-		
+
 		mod_avformat_destroy_output_context(context);
 	}
 
@@ -2581,18 +2816,26 @@ static switch_status_t av_file_read_video(switch_file_handle_t *handle, switch_f
 	}
 #endif
 
-GCC_DIAG_OFF(deprecated-declarations)
-	if (st->codec->time_base.num) {
+	if (st->time_base.num) {
+#ifdef FS_USE_FF_AVFORMAT_CODECPAR
+		ticks = st->parser ? st->parser->repeat_pict + 1 : mst->avcc->ticks_per_frame;
+#else
 		ticks = st->parser ? st->parser->repeat_pict + 1 : st->codec->ticks_per_frame;
 		// mst->next_pts += ((int64_t)AV_TIME_BASE * st->codec->time_base.num * ticks) / st->codec->time_base.den;
+#endif
 	}
 
 	if (!context->video_start_time) {
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "start: %" SWITCH_INT64_T_FMT " ticks: %d ticks_per_frame: %d st num:%d st den:%d codec num:%d codec den:%d start: %" SWITCH_TIME_T_FMT ", duration:%" SWITCH_INT64_T_FMT " nb_frames:%" SWITCH_INT64_T_FMT " q2d:%f\n",
-			context->video_start_time, ticks, st->codec->ticks_per_frame, st->time_base.num, st->time_base.den, st->codec->time_base.num, st->codec->time_base.den,
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "start: %" SWITCH_INT64_T_FMT " ticks: %d ticks_per_frame: %d st num:%d st den:%d start: %" SWITCH_TIME_T_FMT ", duration:%" SWITCH_INT64_T_FMT " nb_frames:%" SWITCH_INT64_T_FMT " q2d:%f\n",
+			context->video_start_time, ticks,
+#ifdef FS_USE_FF_AVFORMAT_CODECPAR
+			mst->avcc->ticks_per_frame,
+#else
+			st->codec->ticks_per_frame,
+#endif
+			st->time_base.num, st->time_base.den,
 			st->start_time, st->duration, st->nb_frames, av_q2d(st->time_base));
 	}
-GCC_DIAG_ON(deprecated-declarations)
 
  again:
 
@@ -2705,13 +2948,15 @@ static switch_status_t av_file_write_video(switch_file_handle_t *handle, switch_
 			char codec_str[256];
 			int ret;
 
-GCC_DIAG_OFF(deprecated-declarations)
+#ifdef FS_USE_FF_AVFORMAT_CODECPAR
+			avcodec_string(codec_str, sizeof(codec_str), context->video_st.avcc, 1);
+#else
 			avcodec_string(codec_str, sizeof(codec_str), context->video_st.st->codec, 1);
-GCC_DIAG_ON(deprecated-declarations)
+#endif
 			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "use video codec implementation %s\n", codec_str);
 			context->has_video = 1;
 
-			// av_dump_format(context->fc, 0, "/tmp/av.mp4", 1);
+			av_dump_format(context->fc, 0, context->fc->filename, 1);
 
 			ret = avformat_write_header(context->fc, NULL);
 			if (ret < 0) {
@@ -2804,7 +3049,7 @@ static const char modname[] = "mod_av";
 SWITCH_MODULE_LOAD_FUNCTION(mod_avformat_load)
 {
 	switch_api_interface_t *api_interface;
-	switch_application_interface_t *app_interface;
+	// switch_application_interface_t *app_interface;
 	switch_file_interface_t *file_interface;
 	int i = 0;
 
@@ -2835,7 +3080,7 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_avformat_load)
 
 	SWITCH_ADD_API(api_interface, "av_format", "av information", av_format_api_function, "");
 
-	SWITCH_ADD_APP(app_interface, "record_av", "record video using libavformat", "record video using libavformat", record_av_function, "<file>", SAF_NONE);
+	// SWITCH_ADD_APP(app_interface, "record_av", "record video using libavformat", "record video using libavformat", record_av_function, "<file>", SAF_NONE);
 
 	/* indicate that the module should continue to be loaded */
 	return SWITCH_STATUS_SUCCESS;

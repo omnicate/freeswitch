@@ -93,7 +93,7 @@ int mod_av_lockmgr_cb(void **m, enum AVLockOp op)
 static void log_callback(void *ptr, int level, const char *fmt, va_list vl)
 {
 	switch_log_level_t switch_level = SWITCH_LOG_DEBUG;
-	return;
+	// return;
 	/* naggy messages */
 	if (level == AV_LOG_DEBUG || level == AV_LOG_WARNING) return;
 
@@ -109,7 +109,7 @@ static void log_callback(void *ptr, int level, const char *fmt, va_list vl)
 		default: break;
 	}
 
-	// switch_level = SWITCH_LOG_ERROR; // hardcoded for debug
+	switch_level = SWITCH_LOG_ERROR; // hardcoded for debug
 	switch_log_vprintf(SWITCH_CHANNEL_LOG_CLEAN, switch_level, fmt, vl);
 }
 
