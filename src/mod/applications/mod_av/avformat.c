@@ -132,9 +132,9 @@ struct av_file_context {
 	int errs;
 	switch_file_handle_t *handle;
 
-	AVFilterContext *buffersink_ctx;
-	AVFilterContext *buffersrc_ctx;
-	AVFilterGraph *filter_graph;
+	AVFilterContext *vid_buffersink_ctx;
+	AVFilterContext *vid_buffersrc_ctx;
+	AVFilterGraph *vid_filter_graph;
 	int live;
 };
 
@@ -1417,7 +1417,7 @@ static void mod_avformat_destroy_output_context(av_file_context_t *context)
 		avresample_free(&context->audio_st.resample_ctx);
 	}
 
-	avfilter_graph_free(&context->filter_graph);
+	avfilter_graph_free(&context->vid_filter_graph);
 	avformat_close_input(&context->fc);
 
 	context->fc = NULL;
@@ -1426,7 +1426,7 @@ static void mod_avformat_destroy_output_context(av_file_context_t *context)
 	
 }
 
-static int init_filters(av_file_context_t *context, const char *filters_descr)
+static int init_video_filters(av_file_context_t *context, const char *filters_descr)
 {
     char args[512];
     int ret;
@@ -1438,9 +1438,9 @@ static int init_filters(av_file_context_t *context, const char *filters_descr)
 GCC_DIAG_OFF(deprecated-declarations)
 	AVCodecContext *dec_ctx = context->video_st.st->codec;
 GCC_DIAG_ON(deprecated-declarations)
-	AVFilterGraph *filter_graph = avfilter_graph_alloc();
+	AVFilterGraph *vid_filter_graph = avfilter_graph_alloc();
 
-	if (!filter_graph) {
+	if (!vid_filter_graph) {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Out of memory\n");
 		return AVERROR(ENOMEM);
 	}
@@ -1452,45 +1452,45 @@ GCC_DIAG_ON(deprecated-declarations)
 			 dec_ctx->sample_aspect_ratio.num);
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Creating buffer source '%s'\n", args);
 
-    ret = avfilter_graph_create_filter(&context->buffersrc_ctx, buffersrc, "in", args, NULL, filter_graph);
+    ret = avfilter_graph_create_filter(&context->vid_buffersrc_ctx, buffersrc, "in", args, NULL, vid_filter_graph);
     if (ret < 0) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Cannot create buffer source '%s' (%s)\n", args, get_error_text(ret));
-		avfilter_graph_free(&filter_graph);
+		avfilter_graph_free(&vid_filter_graph);
         return ret;
     }
 
     /* buffer video sink: to terminate the filter chain. */
-    ret = avfilter_graph_create_filter(&context->buffersink_ctx, buffersink, "out",
-                                       NULL, pix_fmts, filter_graph);
+    ret = avfilter_graph_create_filter(&context->vid_buffersink_ctx, buffersink, "out",
+                                       NULL, pix_fmts, vid_filter_graph);
     if (ret < 0) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Cannot create buffer sink (%s)\n", get_error_text(ret));
-		avfilter_graph_free(&filter_graph);
+		avfilter_graph_free(&vid_filter_graph);
         return ret;
     }
 
     /* Endpoints for the filter graph. */
     outputs->name       = av_strdup("in");
-    outputs->filter_ctx = context->buffersrc_ctx;
+    outputs->filter_ctx = context->vid_buffersrc_ctx;
     outputs->pad_idx    = 0;
     outputs->next       = NULL;
 
     inputs->name       = av_strdup("out");
-    inputs->filter_ctx = context->buffersink_ctx;
+    inputs->filter_ctx = context->vid_buffersink_ctx;
     inputs->pad_idx    = 0;
     inputs->next       = NULL;
 
-    if ((ret = avfilter_graph_parse(filter_graph, filters_descr, inputs, outputs, NULL)) < 0) {
+    if ((ret = avfilter_graph_parse(vid_filter_graph, filters_descr, inputs, outputs, NULL)) < 0) {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Cannot create filter '%s' (%s)\n", filters_descr, get_error_text(ret));
-		avfilter_graph_free(&filter_graph);
+		avfilter_graph_free(&vid_filter_graph);
         return ret;
 	}
 
-    if ((ret = avfilter_graph_config(filter_graph, NULL)) < 0) {
+    if ((ret = avfilter_graph_config(vid_filter_graph, NULL)) < 0) {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Cannot config graph '%s' (%s)\n", filters_descr, get_error_text(ret));
         return ret;
 	}
 
-	context->filter_graph = filter_graph;
+	context->vid_filter_graph = vid_filter_graph;
     return 0;
 }
 
@@ -1613,7 +1613,7 @@ GCC_DIAG_OFF(deprecated-declarations)
 			// av_vf is the video filter(s) parameter. If present, a filter graph may be built
 			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Creating filter graph '%s' for input file '%s'\n", val, filename);
 			avfilter_register_all();
-			init_filters(context, val);
+			init_video_filters(context, val);
 		}
 	}
 GCC_DIAG_ON(deprecated-declarations)
@@ -1820,7 +1820,7 @@ GCC_DIAG_ON(deprecated-declarations)
 
 			if (got_data && error >= 0) {
 				switch_img_fmt_t fmt = SWITCH_IMG_FMT_I420;
-				if (	!context->filter_graph && (
+				if (	!context->vid_filter_graph && (
 						(vframe->format == AV_PIX_FMT_YUVA420P ||
 						vframe->format == AV_PIX_FMT_RGBA ||
 						vframe->format == AV_PIX_FMT_ARGB ||
@@ -1872,11 +1872,11 @@ GCC_DIAG_ON(deprecated-declarations)
 
 				context->handle->mm.fmt = fmt;
 
-				if (context->filter_graph) {
+				if (context->vid_filter_graph) {
 					AVFrame *filt_frame;
 
 					/* push the decoded frame into the filtergraph */
-					if (av_buffersrc_add_frame(context->buffersrc_ctx, vframe) < 0) {
+					if (av_buffersrc_add_frame(context->vid_buffersrc_ctx, vframe) < 0) {
 						switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error while feeding the filtergraph\n");
 						break;
 					}
@@ -1886,7 +1886,7 @@ GCC_DIAG_ON(deprecated-declarations)
 
 					/* pull filtered frames from the filtergraph */
 					while (1) {
-						int ret = av_buffersink_get_frame(context->buffersink_ctx, filt_frame);
+						int ret = av_buffersink_get_frame(context->vid_buffersink_ctx, filt_frame);
 						if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
 							break;
 						if (ret < 0)
