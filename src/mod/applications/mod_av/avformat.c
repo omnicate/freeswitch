@@ -1605,14 +1605,16 @@ GCC_DIAG_OFF(deprecated-declarations)
 		context->has_audio = 0;
 	}
 
-	if (context->has_video && (error = avcodec_open2(context->video_st.st->codec, video_codec, NULL)) < 0) {
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Could not open input codec (error '%s')\n", get_error_text(error));
-		context->has_video = 0;
-	} else if (handle->params && (val = switch_event_get_header(handle->params, "av_vf"))) {
-		// av_vf is the video filter(s) parameter. If present, a filter graph may be built
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Creating filter graph '%s' for input file '%s'\n", val, filename);
-		avfilter_register_all();
-		init_filters(context, val);
+	if (context->has_video) {
+		if ((error = avcodec_open2(context->video_st.st->codec, video_codec, NULL)) < 0) {
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Could not open input codec (error '%s')\n", get_error_text(error));
+			context->has_video = 0;
+		} else if (handle->params && (val = switch_event_get_header(handle->params, "av_vf"))) {
+			// av_vf is the video filter(s) parameter. If present, a filter graph may be built
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Creating filter graph '%s' for input file '%s'\n", val, filename);
+			avfilter_register_all();
+			init_filters(context, val);
+		}
 	}
 GCC_DIAG_ON(deprecated-declarations)
 
