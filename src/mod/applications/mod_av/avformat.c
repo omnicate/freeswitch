@@ -132,6 +132,9 @@ struct av_file_context {
 	int errs;
 	switch_file_handle_t *handle;
 
+	AVFilterContext *aud_buffersink_ctx;
+	AVFilterContext *aud_buffersrc_ctx;
+	AVFilterGraph *aud_filter_graph;
 	AVFilterContext *vid_buffersink_ctx;
 	AVFilterContext *vid_buffersrc_ctx;
 	AVFilterGraph *vid_filter_graph;
@@ -1417,6 +1420,7 @@ static void mod_avformat_destroy_output_context(av_file_context_t *context)
 		avresample_free(&context->audio_st.resample_ctx);
 	}
 
+	avfilter_graph_free(&context->aud_filter_graph);
 	avfilter_graph_free(&context->vid_filter_graph);
 	avformat_close_input(&context->fc);
 
@@ -1426,7 +1430,78 @@ static void mod_avformat_destroy_output_context(av_file_context_t *context)
 	
 }
 
-static int init_video_filters(av_file_context_t *context, const char *filters_descr)
+switch_status_t init_audio_filters(av_file_context_t *context, const char *filters_descr)
+{
+	char args[512];
+	int ret;
+	AVFilter *buffersrc  = avfilter_get_by_name("abuffer");
+	AVFilter *buffersink = avfilter_get_by_name("abuffersink");
+	AVFilterInOut *outputs = avfilter_inout_alloc();
+	AVFilterInOut *inputs  = avfilter_inout_alloc();
+	AVFilterGraph *aud_filter_graph = avfilter_graph_alloc();
+
+	if (!aud_filter_graph) {
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Out of memory\n");
+		return SWITCH_STATUS_MEMERR;
+	}
+
+	if (!buffersrc || ! buffersink) {
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Cannot found filter\n");
+		return SWITCH_STATUS_FALSE;
+	}
+
+    snprintf(args, sizeof(args), "sample_rate=%d:sample_fmt=%s:channels=%d:time_base=%d/%d:channel_layout=0x%"PRIx64,
+		context->handle->samplerate, av_get_sample_fmt_name(AV_SAMPLE_FMT_S16),
+		context->handle->channels,
+		context->audio_st.st->time_base.num, context->audio_st.st->time_base.den,
+		context->handle->channels == 2 ? (uint64_t)AV_CH_LAYOUT_STEREO : (uint64_t)AV_CH_LAYOUT_MONO);
+
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Creating audio buffer source '%s'\n", args);
+
+    ret = avfilter_graph_create_filter(&context->aud_buffersrc_ctx, buffersrc, "in", args, NULL, aud_filter_graph);
+    if (ret < 0) {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Cannot create audio buffer source '%s' (%s)\n", args, get_error_text(ret));
+		avfilter_graph_free(&aud_filter_graph);
+        return SWITCH_STATUS_FALSE;
+    }
+
+    /* buffer video sink: to terminate the filter chain. */
+    ret = avfilter_graph_create_filter(&context->aud_buffersink_ctx, buffersink, "out", NULL, NULL, aud_filter_graph);
+
+    if (ret < 0) {
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Cannot create buffer sink (%s)\n", get_error_text(ret));
+		avfilter_graph_free(&aud_filter_graph);
+		return SWITCH_STATUS_FALSE;
+    }
+
+    /* Endpoints for the filter graph. */
+    outputs->name       = av_strdup("in");
+    outputs->filter_ctx = context->aud_buffersrc_ctx;
+    outputs->pad_idx    = 0;
+    outputs->next       = NULL;
+
+    inputs->name       = av_strdup("out");
+    inputs->filter_ctx = context->aud_buffersink_ctx;
+    inputs->pad_idx    = 0;
+    inputs->next       = NULL;
+
+    if ((ret = avfilter_graph_parse(aud_filter_graph, filters_descr, inputs, outputs, NULL)) < 0) {
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Cannot create filter '%s' (%s)\n", filters_descr, get_error_text(ret));
+		avfilter_graph_free(&aud_filter_graph);
+        return SWITCH_STATUS_FALSE;
+	}
+
+    if ((ret = avfilter_graph_config(aud_filter_graph, NULL)) < 0) {
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Cannot config graph '%s' (%s)\n", filters_descr, get_error_text(ret));
+		avfilter_graph_free(&aud_filter_graph);
+        return SWITCH_STATUS_FALSE;
+	}
+
+	context->aud_filter_graph = aud_filter_graph;
+    return SWITCH_STATUS_SUCCESS;
+}
+
+switch_status_t init_video_filters(av_file_context_t *context, const char *filters_descr)
 {
     char args[512];
     int ret;
@@ -1436,27 +1511,28 @@ static int init_video_filters(av_file_context_t *context, const char *filters_de
     AVFilterInOut *inputs  = avfilter_inout_alloc();
     enum AVPixelFormat pix_fmts[] = { AV_PIX_FMT_YUV420P };
 GCC_DIAG_OFF(deprecated-declarations)
-	AVCodecContext *dec_ctx = context->video_st.st->codec;
+	AVCodecContext *avctx = context->video_st.st->codec;
 GCC_DIAG_ON(deprecated-declarations)
 	AVFilterGraph *vid_filter_graph = avfilter_graph_alloc();
 
 	if (!vid_filter_graph) {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Out of memory\n");
-		return AVERROR(ENOMEM);
+		return SWITCH_STATUS_MEMERR;
 	}
 
     /* buffer video source: the decoded frames from the decoder will be inserted here. */
 	snprintf(args, sizeof(args), "width=%d:height=%d:pix_fmt=%d:time_base=%d/%d:sar=%d",
-			 dec_ctx->width, dec_ctx->height, /*dec_ctx->pix_fmt*/ 0 /* FORCE AV_PIX_FMT_YUV420P */,
-			 1,1,//dec_ctx->time_base.num, dec_ctx->time_base.den,
-			 dec_ctx->sample_aspect_ratio.num);
+			 avctx->width, avctx->height, /*avctx->pix_fmt*/ 0 /* FORCE AV_PIX_FMT_YUV420P */,
+			 // context->video_st.st->time_base.num, context->video_st.st->time_base.den,
+			 context->video_st.st->time_base.num, context->handle->samplerate,
+			 avctx->sample_aspect_ratio.num);
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Creating buffer source '%s'\n", args);
 
     ret = avfilter_graph_create_filter(&context->vid_buffersrc_ctx, buffersrc, "in", args, NULL, vid_filter_graph);
     if (ret < 0) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Cannot create buffer source '%s' (%s)\n", args, get_error_text(ret));
 		avfilter_graph_free(&vid_filter_graph);
-        return ret;
+        return SWITCH_STATUS_FALSE;
     }
 
     /* buffer video sink: to terminate the filter chain. */
@@ -1465,7 +1541,7 @@ GCC_DIAG_ON(deprecated-declarations)
     if (ret < 0) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Cannot create buffer sink (%s)\n", get_error_text(ret));
 		avfilter_graph_free(&vid_filter_graph);
-        return ret;
+        return SWITCH_STATUS_FALSE;
     }
 
     /* Endpoints for the filter graph. */
@@ -1482,16 +1558,17 @@ GCC_DIAG_ON(deprecated-declarations)
     if ((ret = avfilter_graph_parse(vid_filter_graph, filters_descr, inputs, outputs, NULL)) < 0) {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Cannot create filter '%s' (%s)\n", filters_descr, get_error_text(ret));
 		avfilter_graph_free(&vid_filter_graph);
-        return ret;
+        return SWITCH_STATUS_FALSE;
 	}
 
     if ((ret = avfilter_graph_config(vid_filter_graph, NULL)) < 0) {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Cannot config graph '%s' (%s)\n", filters_descr, get_error_text(ret));
-        return ret;
+		avfilter_graph_free(&vid_filter_graph);
+        return SWITCH_STATUS_FALSE;
 	}
 
 	context->vid_filter_graph = vid_filter_graph;
-    return 0;
+    return SWITCH_STATUS_SUCCESS;
 }
 
 static switch_status_t open_input_file(av_file_context_t *context, switch_file_handle_t *handle, const char *filename)
@@ -1600,9 +1677,16 @@ GCC_DIAG_OFF(deprecated-declarations)
 		context->has_video = 0;
 	}
 
-	if (context->has_audio && (error = avcodec_open2(context->audio_st.st->codec, audio_codec, NULL)) < 0) {
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Could not open input codec (error '%s')\n", get_error_text(error));
-		context->has_audio = 0;
+	if (context->has_audio) {
+		if ((error = avcodec_open2(context->audio_st.st->codec, audio_codec, NULL)) < 0) {
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Could not open input codec (error '%s')\n", get_error_text(error));
+			context->has_audio = 0;
+		} else if (handle->params && (val = switch_event_get_header(handle->params, "av_af"))) {
+			// av_af is the audio filter(s) parameter. If present, a filter graph may be built
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Creating audio filter graph '%s' for input file '%s'\n", val, filename);
+			avfilter_register_all();
+			init_audio_filters(context, val);
+		}
 	}
 
 	if (context->has_video) {
@@ -1611,7 +1695,7 @@ GCC_DIAG_OFF(deprecated-declarations)
 			context->has_video = 0;
 		} else if (handle->params && (val = switch_event_get_header(handle->params, "av_vf"))) {
 			// av_vf is the video filter(s) parameter. If present, a filter graph may be built
-			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Creating filter graph '%s' for input file '%s'\n", val, filename);
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Creating video filter graph '%s' for input file '%s'\n", val, filename);
 			avfilter_register_all();
 			init_video_filters(context, val);
 		}
