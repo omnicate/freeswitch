@@ -1066,6 +1066,9 @@ switch_status_t init_audio_filters(av_file_context_t *context, const char *filte
 	AVFilterInOut *outputs = avfilter_inout_alloc();
 	AVFilterInOut *inputs  = avfilter_inout_alloc();
 	AVFilterGraph *aud_filter_graph = avfilter_graph_alloc();
+GCC_DIAG_OFF(deprecated-declarations)
+	AVCodecContext *c = context->audio_st.st->codec;
+GCC_DIAG_ON(deprecated-declarations)
 
 	if (!aud_filter_graph) {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Out of memory\n");
@@ -1078,22 +1081,31 @@ switch_status_t init_audio_filters(av_file_context_t *context, const char *filte
 	}
 
     snprintf(args, sizeof(args), "sample_rate=%d:sample_fmt=%s:channels=%d:time_base=%d/%d:channel_layout=0x%"PRIx64,
-		context->handle->samplerate, av_get_sample_fmt_name(AV_SAMPLE_FMT_S16),
-		context->handle->channels,
+		c->sample_rate, av_get_sample_fmt_name(c->sample_fmt),
+		c->channels,
 		context->audio_st.st->time_base.num, context->audio_st.st->time_base.den,
-		context->handle->channels == 2 ? (uint64_t)AV_CH_LAYOUT_STEREO : (uint64_t)AV_CH_LAYOUT_MONO);
+		(uint64_t)((c->channel_layout == 0 && c->channels == 2) ? AV_CH_LAYOUT_STEREO : c->channel_layout));
 
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Creating audio buffer source '%s'\n", args);
 
     ret = avfilter_graph_create_filter(&context->aud_buffersrc_ctx, buffersrc, "in", args, NULL, aud_filter_graph);
+
     if (ret < 0) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Cannot create audio buffer source '%s' (%s)\n", args, get_error_text(ret));
 		avfilter_graph_free(&aud_filter_graph);
         return SWITCH_STATUS_FALSE;
     }
 
+    snprintf(args, sizeof(args), "sample_rate=%d:sample_fmt=%s:channels=%d:time_base=%d/%d:channel_layout=0x%"PRIx64,
+		context->handle->samplerate, av_get_sample_fmt_name(AV_SAMPLE_FMT_S16),
+		context->handle->channels,
+		1, context->handle->samplerate,
+		av_get_default_channel_layout(context->handle->channels));
+
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_DEBUG, "Creating audio buffer sink '%s'\n", args);
+
     /* buffer video sink: to terminate the filter chain. */
-    ret = avfilter_graph_create_filter(&context->aud_buffersink_ctx, buffersink, "out", NULL, NULL, aud_filter_graph);
+    ret = avfilter_graph_create_filter(&context->aud_buffersink_ctx, buffersink, "out", args, NULL, aud_filter_graph);
 
     if (ret < 0) {
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Cannot create buffer sink (%s)\n", get_error_text(ret));
@@ -1349,7 +1361,7 @@ GCC_DIAG_ON(deprecated-declarations)
 		context->audio_st.sample_rate = handle->samplerate;
 
 GCC_DIAG_OFF(deprecated-declarations)
-		if (context->audio_st.st->codec->sample_fmt != AV_SAMPLE_FMT_S16) {
+		if (!context->aud_filter_graph && context->audio_st.st->codec->sample_fmt != AV_SAMPLE_FMT_S16) {
 GCC_DIAG_ON(deprecated-declarations)
 			AVAudioResampleContext *resample_ctx = avresample_alloc_context();
 
@@ -1714,13 +1726,37 @@ GCC_DIAG_ON(deprecated-declarations)
 
 				} else {
 					//switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "this block is not tested samples: %d\n", in_frame.nb_samples);
-					switch_mutex_lock(context->mutex);
-					switch_buffer_write(context->audio_buffer, in_frame.data[0], in_frame.nb_samples * 2 * context->audio_st.channels);
-					switch_mutex_unlock(context->mutex);
-				}
 
-			}
+					if (!context->aud_filter_graph) {
+						switch_mutex_lock(context->mutex);
+						switch_buffer_write(context->audio_buffer, in_frame.data[0], in_frame.nb_samples * 2 * context->audio_st.channels);
+						switch_mutex_unlock(context->mutex);
+					} else {
+						AVFrame *filter_frame;
 
+						if (av_buffersrc_add_frame(context->aud_buffersrc_ctx, &in_frame) < 0) {
+							switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Error while feeding the filtergraph\n");
+							break;
+						}
+
+						filter_frame = av_frame_alloc();
+						switch_assert(filter_frame);
+
+						/* pull filtered frames from the filtergraph */
+						while (1) {
+							int ret = av_buffersink_get_frame(context->aud_buffersink_ctx, filter_frame);
+
+							if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) break;
+
+							switch_mutex_lock(context->mutex);
+							switch_buffer_write(context->audio_buffer, filter_frame->data[0], filter_frame->nb_samples * 2 * context->audio_st.channels);
+							switch_mutex_unlock(context->mutex);
+						} // while
+
+						av_frame_unref(filter_frame);
+					} // aud_filter_graph
+				} // resample_ctx
+			} // got_data
 		}
 	}
 
