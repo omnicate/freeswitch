@@ -51,6 +51,7 @@ applications/mod_spandsp
 #applications/mod_translate
 applications/mod_valet_parking
 #applications/mod_video_filter
+#applications/mod_pcap
 #applications/mod_vmd
 applications/mod_voicemail
 #applications/mod_voicemail_ivr

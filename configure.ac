@@ -1941,6 +1941,7 @@ AC_CONFIG_FILES([Makefile
 		src/mod/xml_int/mod_xml_scgi/Makefile
 		src/mod/applications/mod_av/Makefile
 		src/mod/applications/mod_video_filter/Makefile
+		src/mod/applications/mod_pcap/Makefile
 		src/include/switch_am_config.h
 		build/getsounds.sh
 		build/getlib.sh
