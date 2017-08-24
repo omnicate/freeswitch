@@ -554,6 +554,13 @@ class Verto {
 
 				break;
 
+			case 'verto.clientReady':
+				if (verto.callbacks.onMessage) {
+					verto.callbacks.onMessage(verto, null, $.verto.enum.message.clientReady, data.params);
+					console.debug("CLIENT READY", data.params);
+				}
+
+				break;
 			default:
 				console.error("INVALID METHOD OR NON-EXISTANT CALL REFERENCE IGNORED", data.method);
 				break;
@@ -960,7 +967,7 @@ Verto.unloadJobs = [];
 Verto.enum = {
 	state: ENUM("new requesting trying recovering ringing answering early active held hangup destroy purge"),
 	direction: ENUM("inbound outbound"),
-	message: ENUM("display info pvtEvent"),
+	message: ENUM("display info pvtEvent clientReady"),
 	states: Object.freeze({
 		new: {
 			requesting: 1,
