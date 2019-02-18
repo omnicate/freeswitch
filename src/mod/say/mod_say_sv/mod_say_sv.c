@@ -419,11 +419,11 @@ static switch_status_t sv_say_time(switch_say_file_handle_t *sh, char *tosay, sw
                 say_today = say_yesterday = 0;
         }
 
+	if (say_day) {
+                say_num(sh, tm.tm_mday, SSM_COUNTED);
+        }
         if (say_month) {
                 switch_say_file(sh, "time/mon-%d", tm.tm_mon);
-        }
-        if (say_day) {
-                say_num(sh, tm.tm_mday, SSM_COUNTED);
         }
         if (say_year) {
                 say_num(sh, tm.tm_year + 1900, SSM_PRONOUNCED_YEAR);
