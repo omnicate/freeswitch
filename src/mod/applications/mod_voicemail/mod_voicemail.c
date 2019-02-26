@@ -2267,9 +2267,15 @@ static void voicemail_check_main(switch_core_session_t *session, vm_profile_t *p
 					switch_safe_free(file_path);
 				} else if (!strcmp(input, profile->record_greeting_key)) {
 					int num;
-					TRY_CODE(vm_macro_get(session, VM_CHOOSE_GREETING_MACRO, key_buf, input, sizeof(input), 1, "", &term, timeout));
-
-					num = atoi(input);
+					switch_bool_t only_one_greeting =
+					switch_true(switch_channel_get_variable(channel, "only_one_greeting"));
+					if (only_one_greeting) {
+						num = 1;
+					} else {
+						TRY_CODE(vm_macro_get(session, VM_CHOOSE_GREETING_MACRO, key_buf, input, sizeof(input), 1, "",
+										  &term, timeout));
+						num = atoi(input);
+					}
 					if (num < 1 || num > VM_MAX_GREETINGS) {
 						TRY_CODE(switch_ivr_phrase_macro(session, VM_CHOOSE_GREETING_FAIL_MACRO, NULL, NULL, NULL));
 					} else {
