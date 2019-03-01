@@ -410,15 +410,14 @@ static switch_status_t sv_say_time(switch_say_file_handle_t *sh, char *tosay, sw
         if (say_yesterday) {
                 switch_say_file(sh, "time/igar");
         }
-        if (say_dow) {
-                switch_say_file(sh, "time/day-%d", tm.tm_wday);
-        }
-
         if (say_date) {
                 say_year = say_month = say_day = say_dow = 1;
                 say_today = say_yesterday = 0;
         }
 
+	if (say_dow) {
+                switch_say_file(sh, "time/day-%d", tm.tm_wday);
+        }
         if (say_day) {
                 say_num(sh, tm.tm_mday, SSM_COUNTED);
         }
