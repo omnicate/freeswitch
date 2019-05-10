@@ -2568,7 +2568,7 @@ static void voicemail_check_main(switch_core_session_t *session, vm_profile_t *p
 						status = vm_macro_get(session, VM_ENTER_PASS_MACRO, profile->terminator_key,
 											  pass_buf, sizeof(pass_buf), 0, profile->terminator_key, &term, timeout);
 						if (status != SWITCH_STATUS_SUCCESS) {
-							switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Status %s\n", status);
+							switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Status %d\n", status);
 							goto end;
 						}
 						if (*pass_buf == '\0') {
