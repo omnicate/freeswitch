@@ -2589,26 +2589,33 @@ static void voicemail_check_main(switch_core_session_t *session, vm_profile_t *p
 					thepass = cbt.password;
 				}
 
+				switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Auth %d\n", status);
 				if (!auth) {
 					if (!zstr(cbt.password) && !strcmp(cbt.password, mypass)) {
 						auth++;
+						switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Auth %d\n", status);
 					} else if (!thepass && profile->allow_empty_password_auth) {
 						auth++;
+						switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Auth %d\n", status);
 					}
 
 					if (!auth && (!profile->db_password_override || (profile->db_password_override && zstr(cbt.password))) && (thepass || thehash) && mypass) {
+						switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "cbt.pass: %s\n", cbt.password);
+
 						if (thehash) {
 							char digest[SWITCH_MD5_DIGEST_STRING_SIZE] = { 0 };
 							char *lpbuf = switch_mprintf("%s:%s:%s", myid, domain_name, mypass);
 							switch_md5_string(digest, (void *) lpbuf, strlen(lpbuf));
 							if (!strcmp(digest, thehash)) {
 								auth++;
+								switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Auth %d\n", status);
 							}
 							switch_safe_free(lpbuf);
 						}
 
 						if (!auth && thepass && !strcmp(thepass, mypass)) {
 							auth++;
+							switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Auth %d\n", status);
 						}
 					}
 				}
@@ -2616,6 +2623,7 @@ static void voicemail_check_main(switch_core_session_t *session, vm_profile_t *p
 				switch_event_create_subclass(&event, SWITCH_EVENT_CUSTOM, VM_EVENT_MAINT);
 				switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "VM-Action", "authentication");
 				switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "VM-Auth-Result", auth ? "success" : "fail");
+				switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Auth %d\n", status);
 				switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "VM-User", myid);
 				switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "VM-Domain", domain_name);
 				switch_channel_event_set_data(channel, event);
