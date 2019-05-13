@@ -2591,6 +2591,9 @@ static void voicemail_check_main(switch_core_session_t *session, vm_profile_t *p
 
 				switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Auth %d\n", auth);
 				if (!auth) {
+					switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "thepass %d\n", auth);
+					switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "allow empty password auth %d\n", profile->allow_empty_password_auth);
+
 					if (!zstr(cbt.password) && !strcmp(cbt.password, mypass)) {
 						auth++;
 						switch_log_printf(SWITCH_CHANNEL_SESSION_LOG(session), SWITCH_LOG_ERROR, "Auth %d\n", status);
