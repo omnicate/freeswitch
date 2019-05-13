@@ -1035,6 +1035,7 @@ typedef enum {
 #define VM_ENTER_ID_MACRO "voicemail_enter_id"
 #define VM_ENTER_PASS_MACRO "voicemail_enter_pass"
 #define VM_FAIL_AUTH_MACRO "voicemail_fail_auth"
+#define VM_ENTER_NEW_PASS_MACRO "voicemail_enter_new_pass"
 #define VM_CHANGE_PASS_SUCCESS_MACRO "voicemail_change_pass_success"
 #define VM_CHANGE_PASS_FAIL_MACRO "voicemail_change_pass_fail"
 #define VM_ABORT_MACRO "voicemail_abort"
@@ -2315,7 +2316,7 @@ static void voicemail_check_main(switch_core_session_t *session, vm_profile_t *p
 
 					while (!ok) {
 						fail = 0;
-						switch_snprintf(macro, sizeof(macro), "phrase:%s:%s", VM_ENTER_PASS_MACRO, profile->terminator_key);
+						switch_snprintf(macro, sizeof(macro), "phrase:%s:%s", VM_ENTER_NEW_PASS_MACRO, profile->terminator_key);
 						TRY_CODE(switch_ivr_read(session, 0, 255, macro, NULL, buf, sizeof(buf), 10000, profile->terminator_key, 0));
 
 
