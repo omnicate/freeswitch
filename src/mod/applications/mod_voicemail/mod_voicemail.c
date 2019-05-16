@@ -1653,7 +1653,12 @@ static switch_status_t listen_file(switch_core_session_t *session, vm_profile_t 
 				status = SWITCH_STATUS_SUCCESS;
 				*cc.buf = '\0';
 			} else {
-				TRY_CODE(vm_macro_get(session, VM_LISTEN_FILE_CHECK_MACRO, key_buf, input, sizeof(input), 1, "", &term, profile->digit_timeout));
+				if (cbt->type == MSG_NEW){
+						TRY_CODE(vm_macro_get(session, VM_LISTEN_FILE_CHECK_MACRO, key_buf, input, sizeof(input), 1, "", &term, profile->digit_timeout));
+				} else {
+						strcat(key_buf, "!");
+						TRY_CODE(vm_macro_get(session, VM_LISTEN_FILE_CHECK_MACRO, key_buf, input, sizeof(input), 1, "", &term, profile->digit_timeout));
+				}
 			}
 			if (!strcmp(input, profile->prev_msg_key)) {
 				cbt->move = VM_MOVE_PREV;
