@@ -46,6 +46,7 @@
       <param name="web-template-file" value="web-vm.tpl"/>
       <param name="db-password-override" value="false"/>
       <param name="allow-empty-password-auth" value="true"/>
+      <param name="allow-password-change" value="true"/>
       <!-- if you need to change the sample rate of the recorded files e.g. gmail voicemail player -->
       <!--<param name="record-sample-rate" value="11025"/>-->
       <!-- the next two both must be set for this to be enabled
