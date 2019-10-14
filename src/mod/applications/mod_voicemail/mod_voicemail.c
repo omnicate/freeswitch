@@ -181,6 +181,7 @@ struct vm_profile {
 	switch_bool_t auto_playback_recordings;
 	switch_bool_t db_password_override;
 	switch_bool_t allow_empty_password_auth;
+	switch_bool_t allow_password_change;
 	switch_bool_t send_full_vm_header;
 	switch_thread_rwlock_t *rwlock;
 	switch_memory_pool_t *pool;
@@ -687,6 +688,8 @@ vm_profile_t *profile_set_config(vm_profile_t *profile)
 									NULL, NULL, profile, vm_config_web_callback, NULL, NULL);
 	SWITCH_CONFIG_SET_ITEM(profile->config[i++], "db-password-override", SWITCH_CONFIG_BOOL, CONFIG_RELOADABLE,
 						   &profile->db_password_override, SWITCH_FALSE, NULL, NULL, NULL);
+	SWITCH_CONFIG_SET_ITEM(profile->config[i++], "allow-password-change", SWITCH_CONFIG_BOOL, CONFIG_RELOADABLE,
+						   &profile->allow_password_change, SWITCH_TRUE, NULL, NULL, NULL);
 	SWITCH_CONFIG_SET_ITEM(profile->config[i++], "allow-empty-password-auth", SWITCH_CONFIG_BOOL, CONFIG_RELOADABLE,
 						   &profile->allow_empty_password_auth, SWITCH_TRUE, NULL, NULL, NULL);
 	SWITCH_CONFIG_SET_ITEM(profile->config[i++], "auto-playback-recordings", SWITCH_CONFIG_BOOL, CONFIG_RELOADABLE, &profile->auto_playback_recordings, SWITCH_FALSE, NULL, NULL, NULL);
@@ -2305,7 +2308,7 @@ static void voicemail_check_main(switch_core_session_t *session, vm_profile_t *p
 						switch_safe_free(file_path);
 					}
 
-				} else if (!strcmp(input, profile->change_pass_key)) {
+				} else if (!strcmp(input, profile->change_pass_key) && profile->allow_password_change) {
 					char buf[256] = "";
 					char macro[256] = "";
 					switch_event_t *params;
