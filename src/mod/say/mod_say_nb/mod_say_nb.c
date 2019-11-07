@@ -72,20 +72,25 @@ SWITCH_MODULE_DEFINITION(mod_say_nb, mod_say_nb_load, NULL, NULL);
 
 static switch_status_t play_group(switch_say_method_t method, switch_say_gender_t gender, int a, int b, int c, char *what, switch_say_file_handle_t *sh)
 {
-	
+	/*
+	 * Norweigian, like swedish, have gendered numbers for the number one. Utrum is 'en' while neutrum is 'ett'. They also have 'et' but we'll probably
+	 * never encounter that, that's for when describing things like 'a house' - 'et hus' in contrast to specifically one house 'ett hus'
+	 * 
+	 * Source: https://www.riksmalsforbundet.no/grammatikk/kapittel-7-tallord/ 
+	 */
 	if (a) {
 		if (method == SSM_COUNTED) {
-			if ( a > 1 && b == 0 && c == 0) {	/* [2-9]xx */
-				switch_say_file(sh, "digits/%d", a);
+			if ( a > 1 && b == 0 && c == 0) {	/* [2-9]00 */
+				switch_say_file(sh, "digits/%d", a); //to till ni
 			}
-			switch_say_file(sh, "digits/r-100");
+			switch_say_file(sh, "digits/r-100"); //hundrede TODO: missing if we're ever going to need it
 		} else {
 			if (a == 1) {	/* 1xx */
-				switch_say_file(sh, "digits/n-1");
+				switch_say_file(sh, "digits/n-1"); //ett
 			} else {	/* [2-9]xx */
 				switch_say_file(sh, "digits/%d", a);
 			}
-			switch_say_file(sh, "digits/100");
+			switch_say_file(sh, "digits/100"); //hundre
 		}
 	}
 
@@ -109,15 +114,15 @@ static switch_status_t play_group(switch_say_method_t method, switch_say_gender_
         if (c) {	/* 0 < 9 */
 		if (c == 1) {
 			if (what) {
-	 			switch_say_file(sh, "digits/n-1");
+	 			switch_say_file(sh, "digits/n-1"); //ett
 			} else {
 				if (method == SSM_COUNTED) {
-					switch_say_file(sh, "digits/r-1");
+					switch_say_file(sh, "digits/r-1"); //forsta
 				} else {
 					if (gender == SSG_UTRUM) {
-						switch_say_file(sh, "digits/u-1");
+						switch_say_file(sh, "digits/u-1"); //ett
 					} else {
-						switch_say_file(sh, "digits/n-1");
+						switch_say_file(sh, "digits/n-1"); //en
 					}
 				}
 			}
