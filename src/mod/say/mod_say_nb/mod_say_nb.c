@@ -37,11 +37,7 @@
  *
  * Contributor(s):
  *
- * Anthony Minessale II <anthm@freeswitch.org>
- * Michael B. Murdock <mike@mmurdock.org>
- * Daniel Swarbrick <daniel.swarbrick@gmail.com>
- * Christian Benke <cb@poab.org>
- * Jakob Sundberg <jakob@mress.se> (2013)
+ * Lukas Levin (lukas@wgtwo.com)
  *
  * This is based on mod_say_sv.c
  * mod_say_nb.c -- Say for Norwegian (Bokmål)
@@ -145,7 +141,7 @@ static switch_status_t play_group(switch_say_method_t method, switch_say_gender_
 	}
 
         if (what && (a || b || c)) {
-                switch_say_file(sh, what);
+			switch_say_file(sh, what);
         }
 
 	return SWITCH_STATUS_SUCCESS;
