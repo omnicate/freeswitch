@@ -73,17 +73,22 @@ SWITCH_MODULE_DEFINITION(mod_say_nb, mod_say_nb_load, NULL, NULL);
 static switch_status_t play_group(switch_say_method_t method, switch_say_gender_t gender, int a, int b, int c, char *what, switch_say_file_handle_t *sh)
 {
 	/*
-	 * Norweigian, like swedish, have gendered numbers for the number one. Utrum is 'en' while neutrum is 'ett'. They also have 'et' but we'll probably
-	 * never encounter that, that's for when describing things like 'a house' - 'et hus' in contrast to specifically one house 'ett hus'
+	 * Norweigian, like swedish, have gendered numbers for the number one.
+	 * Utrum is 'en' while neutrum is 'ett'. They also have 'et' but we'll
+	 * probably never encounter that, that's for when describing things
+	 * like 'a house' - 'et hus' in contrast to specifically one house
+	 * 'ett hus'
 	 * 
-	 * Source: https://www.riksmalsforbundet.no/grammatikk/kapittel-7-tallord/ 
+	 * Source:
+	 * https://www.riksmalsforbundet.no/grammatikk/kapittel-7-tallord/ 
 	 */
 	if (a) {
 		if (method == SSM_COUNTED) {
 			if ( a > 1 && b == 0 && c == 0) {	/* [2-9]00 */
 				switch_say_file(sh, "digits/%d", a); //to till ni
 			}
-			switch_say_file(sh, "digits/r-100"); //hundrede TODO: missing if we're ever going to need it
+			switch_say_file(sh, "digits/r-100"); //hundrede 
+			//TODO: missing if we're ever going to need it
 		} else {
 			if (a == 1) {	/* 1xx */
 				switch_say_file(sh, "digits/n-1"); //ett
@@ -174,7 +179,11 @@ static switch_status_t nb_say_general_count(switch_say_file_handle_t *sh, char *
 
 	in = atoi(tosay);
 
-	if (in != 0) {   /*fills the places-array with tosay(resp. in) from tail to front e.g. 84371 would be places[|1|7|3|4|8|0|0|0|], up to 1 billion minus 1*/
+	/* 
+	 * fills the places-array with tosay(resp. in) from tail to front e.g.
+	 * 84371 would be places[|1|7|3|4|8|0|0|0|], up to 1 billion minus 1
+	 */
+	if (in != 0) {   
 		for (x = 8; x >= 0; x--) {
 			int num = (int) pow(10, x);
 			if ((places[(uint32_t) x] = in / num)) {
@@ -237,89 +246,6 @@ static switch_status_t nb_say_time(switch_say_file_handle_t *sh, char *tosay, sw
 	const char *tz = NULL;
 
 	tz = switch_say_file_handle_get_variable(sh, "timezone");
-
-	if (say_args->type == SST_TIME_MEASUREMENT) {
-		int64_t hours = 0;
-		int64_t minutes = 0;
-		int64_t seconds = 0;
-		int64_t r = 0;
-
-		if (strchr(tosay, ':')) {
-			char *tme = strdup(tosay);
-			char *p;
-
-			if ((p = strrchr(tme, ':'))) {
-				*p++ = '\0';
-				seconds = atoi(p);
-				if ((p = strchr(tme, ':'))) {
-					*p++ = '\0';
-					minutes = atoi(p);
-					hours = atoi(tme);
-				} else {
-					minutes = atoi(tme);
-				}
-			}
-			free(tme);
-		} else {
-			if ((seconds = atol(tosay)) <= 0) {
-				seconds = (int64_t) switch_epoch_time_now(NULL);
-			}
-
-			if (seconds >= 60) {
-				minutes = seconds / 60;
-				r = seconds % 60;
-				seconds = r;
-			}
-
-			if (minutes >= 60) {
-				hours = minutes / 60;
-				r = minutes % 60;
-				minutes = r;
-			}
-		}
-
-		if (hours) {
-			say_num(sh, hours, SSM_PRONOUNCED);
-			if (hours == 1) {
-				switch_say_file(sh, "time/timme");
-			} else {
-				switch_say_file(sh, "time/timmar");
-			}
-		} else { /* midnight */
-			if (minutes == 0) {
-				switch_say_file(sh, "time/midnatt");
-			} else {
-				switch_say_file(sh, "digits/0");
-				switch_say_file(sh, "time/timmar");
-			}
-		}
-
-		if (minutes) {
-			say_num(sh, minutes, SSM_PRONOUNCED);
-			if (minutes == 1) {
-				switch_say_file(sh, "time/minut");
-			} else {
-				switch_say_file(sh, "time/minuter");
-			}
-		} else {
-			switch_say_file(sh, "digits/0");
-			switch_say_file(sh, "time/minuter");
-		}
-
-		if (seconds) {
-			say_num(sh, seconds, SSM_PRONOUNCED);
-			if (seconds == 1) {
-				switch_say_file(sh, "time/sekund");
-			} else {
-				switch_say_file(sh, "time/sekunder");
-			}
-		} else {
-			switch_say_file(sh, "digits/0");
-			switch_say_file(sh, "time/sekunder");
-		}
-
-		return SWITCH_STATUS_SUCCESS;
-	}
 
 	if ((t = atol(tosay)) > 0) {
 		target = switch_time_make(t, 0);
@@ -426,127 +352,6 @@ static switch_status_t nb_say_time(switch_say_file_handle_t *sh, char *tosay, sw
 	return SWITCH_STATUS_SUCCESS;
 }
 
-
-static switch_status_t nb_say_money(switch_say_file_handle_t *sh, char *tosay, switch_say_args_t *say_args)
-{
-	char sbuf[16] = "";			/* enough for 999,999,999,999.99 (w/o the commas or leading $) */
-	char *dollars = NULL;
-	char *cents = NULL;
-
-	if (strlen(tosay) > 15 || !switch_strip_nonnumerics(tosay, sbuf, sizeof(sbuf)-1)) {
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Parse Error!\n");
-		return SWITCH_STATUS_GENERR;
-	}
-
-	dollars = sbuf;
-
-	if ((cents = strchr(sbuf, '.'))) {
-		*cents++ = '\0';
-		if (strlen(cents) > 2) {
-			cents[2] = '\0';
-		}
-	}
-
-	/* If positive sign - skip over" */
-	if (sbuf[0] == '+') {
-		dollars++;
-	}
-
-	/* If negative say "negative" */
-	if (sbuf[0] == '-') {
-		switch_say_file(sh, "currency/negativ");
-		dollars++;
-	}
-
-	/* Say dollar amount */
-	nb_say_general_count(sh, dollars, say_args);
-	if (atoi(dollars) == 1) {
-		switch_say_file(sh, "currency/krona");
-	} else {
-		switch_say_file(sh, "currency/kronor");
-	}
-
-	/* Say "and" */
-	switch_say_file(sh, "currency/och");
-
-	/* Say cents */
-	if (cents) {
-		nb_say_general_count(sh, cents, say_args);
-		if (atoi(cents) == 1) {
-			switch_say_file(sh, "currency/ore");
-		} else {
-			switch_say_file(sh, "currency/oren");
-		}
-	} else {
-		switch_say_file(sh, "digits/0");
-		switch_say_file(sh, "currency/ore");
-	}
-
-	return SWITCH_STATUS_SUCCESS;
-}
-
-static switch_status_t say_ip(switch_say_file_handle_t *sh, char *tosay, switch_say_args_t *say_args)
-{
-        char *a, *b, *c, *d;
-        switch_status_t status = SWITCH_STATUS_FALSE;
-
-        if (!(a = strdup(tosay))) {
-                abort();
-        }
-
-        if (!(b = strchr(a, '.'))) {
-                goto end;
-        }
-
-        *b++ = '\0';
-
-        if (!(c = strchr(b, '.'))) {
-                goto end;
-        }
-
-        *c++ = '\0';
-
-        if (!(d = strchr(c, '.'))) {
-                goto end;
-        }
-
-        *d++ = '\0';
-
-        say_num(sh, atoi(a), say_args->method);
-        switch_say_file(sh, "digits/punkt");
-        say_num(sh, atoi(b), say_args->method);
-        switch_say_file(sh, "digits/punkt");
-        say_num(sh, atoi(c), say_args->method);
-        switch_say_file(sh, "digits/punkt");
-        say_num(sh, atoi(d), say_args->method);
-
- end:
-
-        free(a);
-
-        return status;
-}
-
-static switch_status_t say_spell(switch_say_file_handle_t *sh, char *tosay, switch_say_args_t *say_args)
-{
-        char *p;
-
-        for (p = tosay; p && *p; p++) {
-                int a = tolower((int) *p);
-                if (a >= '0' && a <= '9') {
-                        switch_say_file(sh, "digits/%c", a);
-                } else {
-                        if (say_args->type == SST_NAME_SPELLED) {
-                                switch_say_file(sh, "ascii/%d", a);
-                        } else if (say_args->type == SST_NAME_PHONETIC) {
-                                switch_say_file(sh, "phonetic-ascii/%d", a);
-                        }
-                }
-        }
-
-        return SWITCH_STATUS_SUCCESS;
-}
-
 static switch_new_say_callback_t choose_callback(switch_say_args_t *say_args)
 {
         switch_new_say_callback_t say_cb = NULL;
@@ -554,27 +359,16 @@ static switch_new_say_callback_t choose_callback(switch_say_args_t *say_args)
         switch (say_args->type) {
         case SST_NUMBER:
         case SST_ITEMS:
-        case SST_PERSONS:
         case SST_MESSAGES:
                 say_cb = nb_say_general_count;
                 break;
-        case SST_TIME_MEASUREMENT:
         case SST_CURRENT_DATE:
         case SST_CURRENT_TIME:
         case SST_CURRENT_DATE_TIME:
         case SST_SHORT_DATE_TIME:
                 say_cb = nb_say_time;
                 break;
-        case SST_IP_ADDRESS:
-                say_cb = say_ip;
-                break;
         case SST_NAME_SPELLED:
-        case SST_NAME_PHONETIC:
-                say_cb = say_spell;
-                break;
-        case SST_CURRENCY:
-                say_cb = nb_say_money;
-                break;
         default:
                 switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Unknown Say type=[%d]\n", say_args->type);
                 break;
