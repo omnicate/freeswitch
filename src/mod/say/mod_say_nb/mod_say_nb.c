@@ -348,6 +348,26 @@ static switch_status_t nb_say_time(switch_say_file_handle_t *sh, char *tosay, sw
 	return SWITCH_STATUS_SUCCESS;
 }
 
+static switch_status_t say_spell(switch_say_file_handle_t *sh, char *tosay, switch_say_args_t *say_args)
+{
+        char *p;
+
+        for (p = tosay; p && *p; p++) {
+                int a = tolower((int) *p);
+                if (a >= '0' && a <= '9') {
+                        switch_say_file(sh, "digits/%c", a);
+                } else {
+                        if (say_args->type == SST_NAME_SPELLED) {
+                                switch_say_file(sh, "ascii/%d", a);
+                        } else if (say_args->type == SST_NAME_PHONETIC) {
+                                switch_say_file(sh, "phonetic-ascii/%d", a);
+                        }
+                }
+        }
+
+        return SWITCH_STATUS_SUCCESS;
+}
+
 static switch_new_say_callback_t choose_callback(switch_say_args_t *say_args)
 {
         switch_new_say_callback_t say_cb = NULL;
@@ -365,6 +385,9 @@ static switch_new_say_callback_t choose_callback(switch_say_args_t *say_args)
                 say_cb = nb_say_time;
                 break;
         case SST_NAME_SPELLED:
+        case SST_NAME_PHONETIC:
+                say_cb = say_spell;
+                break;
         default:
                 switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Unknown Say type=[%d]\n", say_args->type);
                 break;
