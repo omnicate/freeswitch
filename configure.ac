@@ -1977,6 +1977,7 @@ AC_CONFIG_FILES([Makefile
 		src/mod/say/mod_say_hu/Makefile
 		src/mod/say/mod_say_it/Makefile
 		src/mod/say/mod_say_ja/Makefile
+		src/mod/say/mod_say_nb/Makefile
 		src/mod/say/mod_say_nl/Makefile
 		src/mod/say/mod_say_pl/Makefile
 		src/mod/say/mod_say_pt/Makefile
