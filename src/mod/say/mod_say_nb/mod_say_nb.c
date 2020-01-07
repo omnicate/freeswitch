@@ -310,7 +310,7 @@ static switch_status_t nb_say_time(switch_say_file_handle_t *sh, char *tosay, sw
                 switch_say_file(sh, "time/idag");
         }
         if (say_yesterday) {
-                switch_say_file(sh, "time/igår");
+                switch_say_file(sh, "time/igar");
         }
         if (say_date) {
                 say_year = say_month = say_day = say_dow = 1;
