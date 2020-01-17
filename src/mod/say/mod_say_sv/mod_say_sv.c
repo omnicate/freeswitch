@@ -205,14 +205,21 @@ static switch_status_t sv_say_general_count(switch_say_file_handle_t *sh, char *
 					return status;
 				}
 			} else {
-				if ((status = play_group(SSM_PRONOUNCED, SSG_UTRUM, places[8], places[7], places[6], "digits/miljoner",
-										 sh)) != SWITCH_STATUS_SUCCESS) {
+				if ((status = play_group(SSM_PRONOUNCED, say_args->gender, places[8], places[7], places[6],
+										 "digits/miljoner", sh)) != SWITCH_STATUS_SUCCESS) {
 					return status;
 				}
 			}
-			if ((status = play_group(SSM_PRONOUNCED, say_args->gender, places[5], places[4], places[3], "digits/tusen",
-									 sh)) != SWITCH_STATUS_SUCCESS) {
-				return status;
+			if (places[3] == 1 && places[4] == 0 && places[5] == 0) {
+				if ((status = play_group(SSM_PRONOUNCED, SSG_NEUTER, places[5], places[4], places[3], "digits/tusen",
+										 sh)) != SWITCH_STATUS_SUCCESS) {
+					return status;
+				}
+			} else {
+				if ((status = play_group(SSM_PRONOUNCED, say_args->gender, places[5], places[4], places[3],
+										 "digits/tusen", sh)) != SWITCH_STATUS_SUCCESS) {
+					return status;
+				}
 			}
 			if ((status = play_group(say_args->method, say_args->gender, places[2], places[1], places[0], NULL, sh)) !=
 				SWITCH_STATUS_SUCCESS) {
