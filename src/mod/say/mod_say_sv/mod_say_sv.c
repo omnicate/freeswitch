@@ -110,7 +110,7 @@ static switch_status_t play_group(switch_say_method_t method, switch_say_gender_
 		}
 	}
 
-	if (c) {							  /* 0 < 9 */
+	if (c) { /* 0 < 9 */
 		if (c == 1) {
 			if (method == SSM_COUNTED) {
 				switch_say_file(sh, "digits/r-1");
