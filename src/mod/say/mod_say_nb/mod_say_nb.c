@@ -44,9 +44,9 @@
  *
  */
 
-#include <ctype.h>
-#include <math.h>
 #include <switch.h>
+#include <math.h>
+#include <ctype.h>
 
 SWITCH_MODULE_LOAD_FUNCTION(mod_say_nb_load);
 SWITCH_MODULE_DEFINITION(mod_say_nb, mod_say_nb_load, NULL, NULL);
