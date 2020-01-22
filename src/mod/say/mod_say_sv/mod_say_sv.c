@@ -111,29 +111,16 @@ static switch_status_t play_group(switch_say_method_t method, switch_say_gender_
 	}
 
 	if (c) {							  /* 0 < 9 */
-		if (c == 1 && b == 0 && c == 0) { // 001
+		if (c == 1) {
 			if (method == SSM_COUNTED) {
 				switch_say_file(sh, "digits/r-1");
 			} else {
 				if (gender == SSG_UTRUM) {
-					switch_say_file(sh, "digits/u-1"); // 'miljon'/'miljoner' is in utrum
+					switch_say_file(sh, "digits/u-1"); // 'miljon' is in utrum
 				} else {
 					switch_say_file(sh, "digits/n-1"); // 'tusen' is in neutrum
 				}
 			}
-		}
-
-		else if (c == 1 && (b || a)) { // xx1
-			if (method == SSM_COUNTED) {
-				switch_say_file(sh, "digits/r-1");
-			} else {
-				if (gender == SSG_UTRUM) {
-					switch_say_file(sh, "digits/u-1"); // 'tjugoen' (21) is in utrum
-				} else {
-					switch_say_file(sh, "digits/n-1");
-				}
-			}
-
 		} else {
 			if (method == SSM_COUNTED) {
 				switch_say_file(sh, "digits/r-%d", c);
